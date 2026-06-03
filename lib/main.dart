@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'src/chat/data/backend_chat_client.dart';
+import 'src/chat/data/chat_service.dart';
 import 'src/chat/data/local_chat_repository.dart';
 import 'src/chat/ui/main_screen.dart';
 import 'src/core/storage/json_file_store.dart';
@@ -19,12 +21,14 @@ class DjinnApp extends StatefulWidget {
   const DjinnApp({
     super.key,
     this.chatRepository,
+    this.chatService,
     this.knowledgeRepository,
     this.pdfImportService,
     this.knowledgeSyncService,
   });
 
   final LocalChatRepository? chatRepository;
+  final ChatService? chatService;
   final KnowledgeDocumentRepository? knowledgeRepository;
   final PdfImportService? pdfImportService;
   final KnowledgeSyncService? knowledgeSyncService;
@@ -42,6 +46,12 @@ class _DjinnAppState extends State<DjinnApp> {
         widget.pdfImportService != null) {
       return _AppDependencies(
         chatRepository: widget.chatRepository!,
+        chatService:
+            widget.chatService ??
+            ChatService(
+              repository: widget.chatRepository!,
+              backend: BackendChatClient(baseUri: _backendUri()),
+            ),
         knowledgeRepository: widget.knowledgeRepository!,
         pdfImportService: widget.pdfImportService!,
         knowledgeSyncService:
@@ -60,6 +70,13 @@ class _DjinnAppState extends State<DjinnApp> {
           store: JsonFileStore(File('${directory.path}/chat.json')),
         );
     await chatRepository.load();
+
+    final chatService =
+        widget.chatService ??
+        ChatService(
+          repository: chatRepository,
+          backend: BackendChatClient(baseUri: _backendUri()),
+        );
 
     final knowledgeRepository =
         widget.knowledgeRepository ??
@@ -85,6 +102,7 @@ class _DjinnAppState extends State<DjinnApp> {
 
     return _AppDependencies(
       chatRepository: chatRepository,
+      chatService: chatService,
       knowledgeRepository: knowledgeRepository,
       pdfImportService: pdfImportService,
       knowledgeSyncService: knowledgeSyncService,
@@ -127,6 +145,7 @@ class _DjinnAppState extends State<DjinnApp> {
           }
           return MainScreen(
             repository: dependencies.chatRepository,
+            chatService: dependencies.chatService,
             knowledgeRepository: dependencies.knowledgeRepository,
             pdfImportService: dependencies.pdfImportService,
             knowledgeSyncService: dependencies.knowledgeSyncService,
@@ -140,12 +159,14 @@ class _DjinnAppState extends State<DjinnApp> {
 class _AppDependencies {
   const _AppDependencies({
     required this.chatRepository,
+    required this.chatService,
     required this.knowledgeRepository,
     required this.pdfImportService,
     required this.knowledgeSyncService,
   });
 
   final LocalChatRepository chatRepository;
+  final ChatService chatService;
   final KnowledgeDocumentRepository knowledgeRepository;
   final PdfImportService pdfImportService;
   final KnowledgeSyncService knowledgeSyncService;

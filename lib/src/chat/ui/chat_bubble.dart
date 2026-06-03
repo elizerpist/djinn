@@ -37,6 +37,17 @@ class ChatBubble extends StatelessWidget {
                 message.text,
                 style: TextStyle(color: textColor, fontSize: 15, height: 1.35),
               ),
+              if (!isUser && message.citations.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                for (final citation in message.citations)
+                  Text(
+                    '${citation.title}${citation.page == null ? '' : ' p.${citation.page}'}',
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
               if (message.status != null) ...[
                 const SizedBox(height: 6),
                 Text(

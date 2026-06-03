@@ -1,4 +1,5 @@
 import '../../core/storage/json_file_store.dart';
+import '../models/chat_citation.dart';
 import '../models/chat_conversation.dart';
 import '../models/chat_message.dart';
 
@@ -63,45 +64,55 @@ class LocalChatRepository {
     return List.unmodifiable(conversation.messages);
   }
 
-  Future<ChatMessage> sendMessage(String conversationId, String text) async {
+  Future<ChatMessage> appendUserMessage(
+    String conversationId,
+    String text,
+  ) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) {
       throw ArgumentError('message text must not be blank');
     }
-
-    final conversation = _findConversation(conversationId);
-    final now = _clock();
-    final userMessage = ChatMessage(
+    final message = ChatMessage(
       id: 'message-${_nextMessageId++}',
       conversationId: conversationId,
       sender: ChatSender.user,
       text: trimmed,
-      createdAt: now,
+      createdAt: _clock(),
     );
-    final assistantMessage = ChatMessage(
+    await _appendMessage(conversationId, message, titleSeed: trimmed);
+    return message;
+  }
+
+  Future<ChatMessage> appendAssistantMessage(
+    String conversationId, {
+    required String text,
+    required String status,
+    String? refusalReason,
+    List<ChatCitation> citations = const [],
+  }) async {
+    final message = ChatMessage(
       id: 'message-${_nextMessageId++}',
       conversationId: conversationId,
       sender: ChatSender.assistant,
+      text: text,
+      createdAt: _clock(),
+      status: status,
+      refusalReason: refusalReason,
+      citations: citations,
+    );
+    await _appendMessage(conversationId, message);
+    return message;
+  }
+
+  Future<ChatMessage> sendMessage(String conversationId, String text) async {
+    await appendUserMessage(conversationId, text);
+    return appendAssistantMessage(
+      conversationId,
       text:
           'A tudasbazisban nincs elegendo hitelesitett forras ehhez a valaszhoz. Csak az alkalmazas dokumentumai alapjan tudok valaszolni.',
-      createdAt: now,
       status: 'insufficient_evidence',
+      refusalReason: 'insufficient_evidence',
     );
-
-    final messages = [...conversation.messages, userMessage, assistantMessage];
-    final updated = conversation.copyWith(
-      title: conversation.title == 'Uj chat'
-          ? _titleFrom(trimmed)
-          : conversation.title,
-      updatedAt: now,
-      messages: messages,
-    );
-    final index = _conversations.indexWhere(
-      (item) => item.id == conversationId,
-    );
-    _conversations[index] = updated;
-    await _persist();
-    return assistantMessage;
   }
 
   ChatConversation _findConversation(String conversationId) {
@@ -109,6 +120,27 @@ class LocalChatRepository {
       (conversation) => conversation.id == conversationId,
       orElse: () => throw StateError('conversation not found: $conversationId'),
     );
+  }
+
+  Future<void> _appendMessage(
+    String conversationId,
+    ChatMessage message, {
+    String? titleSeed,
+  }) async {
+    final conversation = _findConversation(conversationId);
+    final messages = [...conversation.messages, message];
+    final updated = conversation.copyWith(
+      title: titleSeed != null && conversation.title == 'Uj chat'
+          ? _titleFrom(titleSeed)
+          : conversation.title,
+      updatedAt: message.createdAt,
+      messages: messages,
+    );
+    final index = _conversations.indexWhere(
+      (item) => item.id == conversationId,
+    );
+    _conversations[index] = updated;
+    await _persist();
   }
 
   Future<void> _persist() async {

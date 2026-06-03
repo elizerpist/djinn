@@ -4,6 +4,7 @@ import '../../knowledge/data/knowledge_document_repository.dart';
 import '../../knowledge/data/pdf_import_service.dart';
 import '../../knowledge/data/knowledge_sync_service.dart';
 import '../../knowledge/ui/knowledge_base_screen.dart';
+import '../data/chat_service.dart';
 import '../data/local_chat_repository.dart';
 import '../models/chat_conversation.dart';
 import 'chat_screen.dart';
@@ -12,12 +13,14 @@ class MainScreen extends StatefulWidget {
   const MainScreen({
     super.key,
     required this.repository,
+    required this.chatService,
     required this.knowledgeRepository,
     required this.pdfImportService,
     required this.knowledgeSyncService,
   });
 
   final LocalChatRepository repository;
+  final ChatService chatService;
   final KnowledgeDocumentRepository knowledgeRepository;
   final PdfImportService pdfImportService;
   final KnowledgeSyncService knowledgeSyncService;
@@ -64,6 +67,7 @@ class _MainScreenState extends State<MainScreen> {
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           repository: widget.repository,
+          chatService: widget.chatService,
           knowledgeSyncService: widget.knowledgeSyncService,
           conversation: conversation,
         ),
@@ -77,6 +81,7 @@ class _MainScreenState extends State<MainScreen> {
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           repository: widget.repository,
+          chatService: widget.chatService,
           knowledgeSyncService: widget.knowledgeSyncService,
           conversation: conversation,
         ),

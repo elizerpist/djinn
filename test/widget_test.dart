@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/main.dart';
+import 'package:djinn/src/chat/data/backend_chat_client.dart';
+import 'package:djinn/src/chat/data/chat_service.dart';
 import 'package:djinn/src/chat/data/local_chat_repository.dart';
+import 'package:djinn/src/chat/models/chat_citation.dart';
 import 'package:djinn/src/knowledge/data/knowledge_api_client.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/data/knowledge_sync_service.dart';
@@ -40,6 +43,34 @@ void main() {
 
     expect(find.text('Mi az ellatasi algoritmus?'), findsOneWidget);
     expect(find.textContaining('tudasbazis'), findsOneWidget);
+  });
+
+  testWidgets('Djinn renders backend chat response text', (tester) async {
+    final chatRepository = LocalChatRepository();
+    final chatService = ChatService(
+      repository: chatRepository,
+      backend: _BackendAnswerClient(),
+    );
+
+    await tester.pumpWidget(
+      _testApp(chatRepository: chatRepository, chatService: chatService),
+    );
+    await _pumpUntilFound(tester, find.text('Djinn'));
+
+    await tester.tap(find.byTooltip('Uj chat'));
+    await _pumpUntilFound(tester, find.byKey(const ValueKey('message-input')));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('message-input')),
+      'Mi a teendo?',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('send-message')));
+    await _pumpUntilFound(tester, find.text('Forrasbol valaszolok.'));
+
+    expect(find.text('Forrasbol valaszolok.'), findsOneWidget);
+    expect(find.text('omsz.pdf p.1'), findsOneWidget);
   });
 
   testWidgets('Djinn refreshes knowledge readiness before sending', (
@@ -96,13 +127,21 @@ void main() {
 
 DjinnApp _testApp({
   LocalChatRepository? chatRepository,
+  ChatService? chatService,
   KnowledgeDocumentRepository? knowledgeRepository,
   KnowledgeSyncService? knowledgeSyncService,
 }) {
+  final resolvedChatRepository = chatRepository ?? LocalChatRepository();
   final resolvedKnowledgeRepository =
       knowledgeRepository ?? KnowledgeDocumentRepository();
   return DjinnApp(
-    chatRepository: chatRepository ?? LocalChatRepository(),
+    chatRepository: resolvedChatRepository,
+    chatService:
+        chatService ??
+        ChatService(
+          repository: resolvedChatRepository,
+          backend: _DefaultRefusalClient(),
+        ),
     knowledgeRepository: resolvedKnowledgeRepository,
     pdfImportService: PdfImportService(importDirectory: Directory('/memory')),
     knowledgeSyncService: knowledgeSyncService,
@@ -142,6 +181,50 @@ class _SequencedKnowledgeSyncService extends KnowledgeSyncService {
         : states.length - 1;
     refreshReadinessCalls += 1;
     return states[index];
+  }
+}
+
+class _DefaultRefusalClient extends BackendChatClient {
+  _DefaultRefusalClient() : super(baseUri: Uri.parse('http://localhost'));
+
+  @override
+  Future<BackendChatResponse> sendMessage({
+    required String message,
+    String? conversationId,
+  }) async {
+    return const BackendChatResponse(
+      conversationId: 'backend-conversation-1',
+      answer:
+          'A tudasbazisban nincs elegendo hitelesitett forras ehhez a valaszhoz. Csak az alkalmazas dokumentumai alapjan tudok valaszolni.',
+      status: 'insufficient_evidence',
+      citations: [],
+      refusalReason: 'insufficient_evidence',
+    );
+  }
+}
+
+class _BackendAnswerClient extends BackendChatClient {
+  _BackendAnswerClient() : super(baseUri: Uri.parse('http://localhost'));
+
+  @override
+  Future<BackendChatResponse> sendMessage({
+    required String message,
+    String? conversationId,
+  }) async {
+    return const BackendChatResponse(
+      conversationId: 'backend-conversation-1',
+      answer: 'Forrasbol valaszolok.',
+      status: 'grounded',
+      citations: [
+        ChatCitation(
+          documentId: 'backend-doc-1',
+          title: 'omsz.pdf',
+          page: 1,
+          section: null,
+          excerpt: 'Forrasbol valaszolok.',
+        ),
+      ],
+    );
   }
 }
 
