@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'package:djinn/src/core/storage/json_file_store.dart';
 
 import 'package:djinn/src/chat/data/local_chat_repository.dart';
 import 'package:djinn/src/chat/models/chat_message.dart';
@@ -32,5 +35,31 @@ void main() {
     expect(messages.last.sender, ChatSender.assistant);
     expect(messages.last.status, 'insufficient_evidence');
     expect(messages.last.text, contains('tudasbazis'));
+  });
+
+  test('persists conversations across repository reload', () async {
+    final directory = await Directory.systemTemp.createTemp('djinn-chat-test-');
+    addTearDown(() => directory.delete(recursive: true));
+    final store = JsonFileStore(File('${directory.path}/chat.json'));
+
+    final firstRepository = LocalChatRepository(
+      clock: () => DateTime.utc(2026, 1, 1, 12),
+      store: store,
+    );
+    await firstRepository.load();
+    final conversation = await firstRepository.createConversation();
+    await firstRepository.sendMessage(conversation.id, 'Mellkasi fajdalom protokoll?');
+
+    final secondRepository = LocalChatRepository(
+      clock: () => DateTime.utc(2026, 1, 1, 13),
+      store: store,
+    );
+    await secondRepository.load();
+
+    final conversations = await secondRepository.listConversations();
+    final messages = await secondRepository.getMessages(conversation.id);
+    expect(conversations, hasLength(1));
+    expect(conversations.single.title, 'Mellkasi fajdalom protokoll?');
+    expect(messages, hasLength(2));
   });
 }

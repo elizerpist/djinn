@@ -1,13 +1,34 @@
+import '../../core/storage/json_file_store.dart';
 import '../models/chat_conversation.dart';
 import '../models/chat_message.dart';
 
 class LocalChatRepository {
-  LocalChatRepository({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
+  LocalChatRepository({DateTime Function()? clock, JsonFileStore? store})
+      : _clock = clock ?? DateTime.now,
+        _store = store;
 
   final DateTime Function() _clock;
+  final JsonFileStore? _store;
   final List<ChatConversation> _conversations = [];
   int _nextConversationId = 1;
   int _nextMessageId = 1;
+
+  Future<void> load() async {
+    final store = _store;
+    if (store == null) {
+      return;
+    }
+    final items = await store.readList();
+    _conversations
+      ..clear()
+      ..addAll(items.map(ChatConversation.fromJson));
+    _nextConversationId = _nextNumericSuffix(_conversations.map((item) => item.id), 'conversation-') + 1;
+    _nextMessageId = _nextNumericSuffix(
+          _conversations.expand((conversation) => conversation.messages).map((item) => item.id),
+          'message-',
+        ) +
+        1;
+  }
 
   Future<List<ChatConversation>> listConversations() async {
     return List.unmodifiable(_conversations);
@@ -23,6 +44,7 @@ class LocalChatRepository {
       messages: const [],
     );
     _conversations.insert(0, conversation);
+    await _persist();
     return conversation;
   }
 
@@ -63,6 +85,7 @@ class LocalChatRepository {
     );
     final index = _conversations.indexWhere((item) => item.id == conversationId);
     _conversations[index] = updated;
+    await _persist();
     return assistantMessage;
   }
 
@@ -71,6 +94,28 @@ class LocalChatRepository {
       (conversation) => conversation.id == conversationId,
       orElse: () => throw StateError('conversation not found: $conversationId'),
     );
+  }
+
+  Future<void> _persist() async {
+    final store = _store;
+    if (store == null) {
+      return;
+    }
+    await store.writeList(_conversations.map((item) => item.toJson()).toList());
+  }
+
+  int _nextNumericSuffix(Iterable<String> ids, String prefix) {
+    var max = 0;
+    for (final id in ids) {
+      if (!id.startsWith(prefix)) {
+        continue;
+      }
+      final value = int.tryParse(id.substring(prefix.length));
+      if (value != null && value > max) {
+        max = value;
+      }
+    }
+    return max;
   }
 
   String _titleFrom(String text) {
