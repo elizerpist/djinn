@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../knowledge/data/knowledge_document_repository.dart';
 import '../../knowledge/data/pdf_import_service.dart';
+import '../../knowledge/data/knowledge_sync_service.dart';
 import '../../knowledge/ui/knowledge_base_screen.dart';
 import '../data/local_chat_repository.dart';
 import '../models/chat_conversation.dart';
@@ -13,11 +14,13 @@ class MainScreen extends StatefulWidget {
     required this.repository,
     required this.knowledgeRepository,
     required this.pdfImportService,
+    required this.knowledgeSyncService,
   });
 
   final LocalChatRepository repository;
   final KnowledgeDocumentRepository knowledgeRepository;
   final PdfImportService pdfImportService;
+  final KnowledgeSyncService knowledgeSyncService;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -46,6 +49,7 @@ class _MainScreenState extends State<MainScreen> {
         builder: (_) => KnowledgeBaseScreen(
           repository: widget.knowledgeRepository,
           importService: widget.pdfImportService,
+          syncService: widget.knowledgeSyncService,
         ),
       ),
     );

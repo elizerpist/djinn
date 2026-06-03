@@ -6,7 +6,9 @@ import 'package:path_provider/path_provider.dart';
 import 'src/chat/data/local_chat_repository.dart';
 import 'src/chat/ui/main_screen.dart';
 import 'src/core/storage/json_file_store.dart';
+import 'src/knowledge/data/knowledge_api_client.dart';
 import 'src/knowledge/data/knowledge_document_repository.dart';
+import 'src/knowledge/data/knowledge_sync_service.dart';
 import 'src/knowledge/data/pdf_import_service.dart';
 
 void main() {
@@ -19,11 +21,13 @@ class DjinnApp extends StatefulWidget {
     this.chatRepository,
     this.knowledgeRepository,
     this.pdfImportService,
+    this.knowledgeSyncService,
   });
 
   final LocalChatRepository? chatRepository;
   final KnowledgeDocumentRepository? knowledgeRepository;
   final PdfImportService? pdfImportService;
+  final KnowledgeSyncService? knowledgeSyncService;
 
   @override
   State<DjinnApp> createState() => _DjinnAppState();
@@ -40,6 +44,12 @@ class _DjinnAppState extends State<DjinnApp> {
         chatRepository: widget.chatRepository!,
         knowledgeRepository: widget.knowledgeRepository!,
         pdfImportService: widget.pdfImportService!,
+        knowledgeSyncService:
+            widget.knowledgeSyncService ??
+            KnowledgeSyncService(
+              repository: widget.knowledgeRepository!,
+              client: KnowledgeApiClient(baseUri: _backendUri()),
+            ),
       );
     }
 
@@ -66,10 +76,27 @@ class _DjinnAppState extends State<DjinnApp> {
           importDirectory: Directory('${directory.path}/knowledge_pdfs'),
         );
 
+    final knowledgeSyncService =
+        widget.knowledgeSyncService ??
+        KnowledgeSyncService(
+          repository: knowledgeRepository,
+          client: KnowledgeApiClient(baseUri: _backendUri()),
+        );
+
     return _AppDependencies(
       chatRepository: chatRepository,
       knowledgeRepository: knowledgeRepository,
       pdfImportService: pdfImportService,
+      knowledgeSyncService: knowledgeSyncService,
+    );
+  }
+
+  Uri _backendUri() {
+    return Uri.parse(
+      const String.fromEnvironment(
+        'DJINN_BACKEND_URL',
+        defaultValue: 'http://10.0.2.2:8000',
+      ),
     );
   }
 
@@ -102,6 +129,7 @@ class _DjinnAppState extends State<DjinnApp> {
             repository: dependencies.chatRepository,
             knowledgeRepository: dependencies.knowledgeRepository,
             pdfImportService: dependencies.pdfImportService,
+            knowledgeSyncService: dependencies.knowledgeSyncService,
           );
         },
       ),
@@ -114,11 +142,13 @@ class _AppDependencies {
     required this.chatRepository,
     required this.knowledgeRepository,
     required this.pdfImportService,
+    required this.knowledgeSyncService,
   });
 
   final LocalChatRepository chatRepository;
   final KnowledgeDocumentRepository knowledgeRepository;
   final PdfImportService pdfImportService;
+  final KnowledgeSyncService knowledgeSyncService;
 }
 
 class MyApp extends DjinnApp {
