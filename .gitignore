@@ -45,3 +45,6 @@ app.*.map.json
 /android/app/release
 # Python virtual environments
 backend/.venv/
+# Runtime/imported knowledge-base documents
+backend/corpus/omsz/*
+!backend/corpus/omsz/.gitkeep
