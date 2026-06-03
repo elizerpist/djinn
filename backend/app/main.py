@@ -1,13 +1,23 @@
 from fastapi import FastAPI, UploadFile
 
-from app.schemas import ChatRequest, ChatResponse, ConversationSummary, KnowledgeDocumentRecord, KnowledgeStatusResponse, MessageRecord
+from app.schemas import (
+    ChatRequest,
+    ChatResponse,
+    ConversationSummary,
+    KnowledgeDocumentRecord,
+    KnowledgeStatusResponse,
+    MessageRecord,
+)
+from app.services.chunk_repository import ChunkRepository
 from app.services.conversation_store import ConversationStore
 from app.services.document_registry import DocumentRegistry
+from app.services.pdf_text_extractor import PdfTextExtractor
 from app.services.safety import answer_without_corpus
 
 app = FastAPI(title='Djinn Backend', version='0.1.0')
 store = ConversationStore()
-documents = DocumentRegistry()
+chunks = ChunkRepository()
+documents = DocumentRegistry(chunk_repository=chunks, extractor=PdfTextExtractor())
 
 
 @app.get('/health')

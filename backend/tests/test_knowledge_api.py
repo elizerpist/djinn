@@ -1,8 +1,9 @@
+import fitz
 from fastapi.testclient import TestClient
 
-from app.main import app
+import app.main as main
 
-client = TestClient(app)
+client = TestClient(main.app)
 
 
 def test_upload_rejects_non_pdf_file():
@@ -48,36 +49,34 @@ def test_knowledge_status_is_not_ready_while_documents_are_pending():
     assert body['processed_count'] == 0
 
 
-def test_ingest_endpoint_uses_dry_processed_transition():
+def test_ingest_extracts_pdf_text_and_marks_processed():
+    pdf_bytes = _pdf_bytes('Mellkasi fajdalom ABCDE vizsgalat')
     upload = client.post(
         '/knowledge/documents',
-        files={'file': ('manual-validation.pdf', b'%PDF-1.4\n%%EOF', 'application/pdf')},
-    )
-    document_id = upload.json()['id']
+        files={'file': ('protocol.pdf', pdf_bytes, 'application/pdf')},
+    ).json()
 
-    response = client.post(f'/knowledge/documents/{document_id}/ingest')
+    response = client.post(f"/knowledge/documents/{upload['id']}/ingest")
 
     assert response.status_code == 200
     body = response.json()
     assert body['status'] == 'processed'
     assert body['error_message'] is None
+    assert main.chunks.count_document_chunks(upload['id']) == 1
 
 
-def test_start_ingest_marks_uploaded_pdf_processed():
-    response = client.post(
+def test_ingest_marks_unreadable_pdf_failed():
+    upload = client.post(
         '/knowledge/documents',
-        files={'file': ('protocol.pdf', b'%PDF-1.4 test', 'application/pdf')},
-    )
+        files={'file': ('broken.pdf', b'%PDF-1.4 broken', 'application/pdf')},
+    ).json()
+
+    response = client.post(f"/knowledge/documents/{upload['id']}/ingest")
+
     assert response.status_code == 200
-    document_id = response.json()['id']
-
-    ingest_response = client.post(f'/knowledge/documents/{document_id}/ingest')
-
-    assert ingest_response.status_code == 200
-    body = ingest_response.json()
-    assert body['id'] == document_id
-    assert body['status'] == 'processed'
-    assert body['error_message'] is None
+    body = response.json()
+    assert body['status'] == 'failed'
+    assert body['error_message']
 
 
 def test_knowledge_status_counts_processed_pending_and_failed():
@@ -87,7 +86,7 @@ def test_knowledge_status_counts_processed_pending_and_failed():
     ).json()
     second = client.post(
         '/knowledge/documents',
-        files={'file': ('processed.pdf', b'%PDF-1.4 processed', 'application/pdf')},
+        files={'file': ('processed.pdf', _pdf_bytes('ABCDE'), 'application/pdf')},
     ).json()
     client.post(f"/knowledge/documents/{second['id']}/ingest")
 
@@ -101,3 +100,12 @@ def test_knowledge_status_counts_processed_pending_and_failed():
     assert body['processed_count'] == 1
     assert body['failed_count'] == 0
     assert first['status'] == 'pending_ingest'
+
+
+def _pdf_bytes(text: str) -> bytes:
+    document = fitz.open()
+    page = document.new_page()
+    page.insert_text((72, 72), text)
+    data = document.tobytes()
+    document.close()
+    return data

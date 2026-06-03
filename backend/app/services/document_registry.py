@@ -10,12 +10,22 @@ from app.schemas import (
     KnowledgeDocumentStatus,
     KnowledgeStatusResponse,
 )
+from app.services.chunk_repository import ChunkRepository
+from app.services.chunking import chunk_pages
+from app.services.pdf_text_extractor import PdfExtractionError, PdfTextExtractor
 
 
 class DocumentRegistry:
-    def __init__(self, storage_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        storage_dir: Path | None = None,
+        chunk_repository: ChunkRepository | None = None,
+        extractor: PdfTextExtractor | None = None,
+    ) -> None:
         self._storage_dir = storage_dir or Path('corpus/omsz')
         self._storage_dir.mkdir(parents=True, exist_ok=True)
+        self._chunk_repository = chunk_repository or ChunkRepository()
+        self._extractor = extractor or PdfTextExtractor()
         self._documents: dict[str, KnowledgeDocumentRecord] = {}
 
     def list_documents(self) -> list[KnowledgeDocumentRecord]:
@@ -55,14 +65,24 @@ class DocumentRegistry:
             raise HTTPException(status_code=404, detail='Document not found')
         stored_path = Path(record.stored_path)
         if not stored_path.exists():
-            updated = record.model_copy(
-                update={
-                    'status': KnowledgeDocumentStatus.failed,
-                    'error_message': 'Stored PDF file is missing.',
-                }
+            return self._mark_failed(document_id, record, 'Stored PDF file is missing.')
+        try:
+            pages = self._extractor.extract_pages(stored_path)
+        except PdfExtractionError as error:
+            return self._mark_failed(document_id, record, str(error))
+        chunks = chunk_pages(
+            document_id=record.id,
+            filename=record.filename,
+            source_path=str(stored_path),
+            pages=pages,
+        )
+        if not chunks:
+            return self._mark_failed(
+                document_id,
+                record,
+                'No extractable text was found in the PDF.',
             )
-            self._documents[document_id] = updated
-            return updated
+        self._chunk_repository.replace_document_chunks(document_id, chunks)
         updated = record.model_copy(
             update={
                 'status': KnowledgeDocumentStatus.processed,
@@ -84,6 +104,22 @@ class DocumentRegistry:
             processed_count=len(processed),
             failed_count=len(failed),
         )
+
+    def _mark_failed(
+        self,
+        document_id: str,
+        record: KnowledgeDocumentRecord,
+        error_message: str,
+    ) -> KnowledgeDocumentRecord:
+        self._chunk_repository.replace_document_chunks(document_id, [])
+        updated = record.model_copy(
+            update={
+                'status': KnowledgeDocumentStatus.failed,
+                'error_message': error_message,
+            }
+        )
+        self._documents[document_id] = updated
+        return updated
 
     @staticmethod
     def _safe_filename(filename: str) -> str:

@@ -1,3 +1,4 @@
+import fitz
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -55,7 +56,7 @@ def test_chat_with_pending_documents_mentions_ingest_pending():
 def test_chat_refuses_when_documents_processed_but_retrieval_is_not_available():
     upload = client.post(
         '/knowledge/documents',
-        files={'file': ('protocol.pdf', b'%PDF-1.4 processed', 'application/pdf')},
+        files={'file': ('protocol.pdf', _pdf_bytes('Ellatasi algoritmus'), 'application/pdf')},
     ).json()
     client.post(f"/knowledge/documents/{upload['id']}/ingest")
 
@@ -66,3 +67,12 @@ def test_chat_refuses_when_documents_processed_but_retrieval_is_not_available():
     assert body['status'] == 'insufficient_evidence'
     assert body['refusal_reason'] == 'retrieval_not_available'
     assert body['citations'] == []
+
+
+def _pdf_bytes(text: str) -> bytes:
+    document = fitz.open()
+    page = document.new_page()
+    page.insert_text((72, 72), text)
+    data = document.tobytes()
+    document.close()
+    return data
