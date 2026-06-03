@@ -1,11 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile
 
-from app.schemas import ChatRequest, ChatResponse, ConversationSummary, MessageRecord
+from app.schemas import ChatRequest, ChatResponse, ConversationSummary, KnowledgeDocumentRecord, KnowledgeStatusResponse, MessageRecord
 from app.services.conversation_store import ConversationStore
+from app.services.document_registry import DocumentRegistry
 from app.services.safety import answer_without_corpus
 
 app = FastAPI(title='Djinn Backend', version='0.1.0')
 store = ConversationStore()
+documents = DocumentRegistry()
 
 
 @app.get('/health')
@@ -28,6 +30,28 @@ def list_messages(conversation_id: str) -> list[MessageRecord]:
     return store.list_messages(conversation_id)
 
 
+
+
+@app.get('/knowledge/documents', response_model=list[KnowledgeDocumentRecord])
+def list_knowledge_documents() -> list[KnowledgeDocumentRecord]:
+    return documents.list_documents()
+
+
+@app.post('/knowledge/documents', response_model=KnowledgeDocumentRecord)
+async def upload_knowledge_document(file: UploadFile) -> KnowledgeDocumentRecord:
+    return await documents.register_upload(file)
+
+
+@app.post('/knowledge/documents/{document_id}/ingest', response_model=KnowledgeDocumentRecord)
+def start_knowledge_ingest(document_id: str) -> KnowledgeDocumentRecord:
+    return documents.start_ingest(document_id)
+
+
+@app.get('/knowledge/status', response_model=KnowledgeStatusResponse)
+def knowledge_status() -> KnowledgeStatusResponse:
+    return documents.status()
+
+
 @app.post('/chat', response_model=ChatResponse)
 def chat(request: ChatRequest) -> ChatResponse:
     conversation_id = store.ensure_conversation(request.conversation_id)
@@ -36,7 +60,7 @@ def chat(request: ChatRequest) -> ChatResponse:
         sender='user',
         text=request.message,
     )
-    response = answer_without_corpus(conversation_id)
+    response = answer_without_corpus(conversation_id, ingest_pending=documents.status().pending_count > 0)
     store.append_message(
         conversation_id=conversation_id,
         sender='assistant',

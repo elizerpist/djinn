@@ -45,3 +45,29 @@ class ConversationSummary(BaseModel):
     created_at: str
     updated_at: str
     message_count: int
+
+
+class KnowledgeDocumentStatus(StrEnum):
+    pending_ingest = 'pending_ingest'
+    uploading = 'uploading'
+    processed = 'processed'
+    failed = 'failed'
+
+
+class KnowledgeDocumentRecord(BaseModel):
+    id: str
+    filename: str
+    stored_path: str
+    size_bytes: int
+    status: KnowledgeDocumentStatus
+    imported_at: str
+    backend_document_id: str | None = None
+    error_message: str | None = None
+
+
+class KnowledgeStatusResponse(BaseModel):
+    ready: bool
+    document_count: int
+    pending_count: int
+    processed_count: int
+    failed_count: int
