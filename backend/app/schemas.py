@@ -30,6 +30,20 @@ class ChatResponse(BaseModel):
     refusal_reason: str | None = None
 
 
+class SourceChunk(BaseModel):
+    id: str
+    document_id: str
+    title: str
+    page: int | None = None
+    text: str
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class RetrievalResult(BaseModel):
+    chunks: list[SourceChunk] = Field(default_factory=list)
+    citations: list[Citation] = Field(default_factory=list)
+
+
 class MessageRecord(BaseModel):
     id: str
     conversation_id: str
