@@ -1,30 +1,30 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutteetest/main.dart';
+import 'package:djinn/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Djinn opens a new chat and sends a text message', (tester) async {
+    await tester.pumpWidget(const DjinnApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.text('Djinn'), findsOneWidget);
+    expect(find.text('Nincs meg chat'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    await tester.tap(find.byTooltip('Uj chat'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Uj chat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('message-input')), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('message-input')),
+      'Mi az ellatasi algoritmus?',
+    );
     await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('send-message')));
+    await tester.pumpAndSettle();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Mi az ellatasi algoritmus?'), findsOneWidget);
+    expect(find.textContaining('tudasbazis'), findsOneWidget);
   });
 }
