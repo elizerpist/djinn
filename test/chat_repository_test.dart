@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:djinn/src/core/storage/json_file_store.dart';
 
 import 'package:djinn/src/chat/data/local_chat_repository.dart';
+import 'package:djinn/src/chat/models/chat_citation.dart';
 import 'package:djinn/src/chat/models/chat_message.dart';
 
 void main() {
@@ -35,6 +36,33 @@ void main() {
     expect(messages.last.sender, ChatSender.assistant);
     expect(messages.last.status, 'insufficient_evidence');
     expect(messages.last.text, contains('tudasbazis'));
+  });
+
+  test('reloads messages with citations and refusal reason', () async {
+    final message = ChatMessage(
+      id: 'message-1',
+      conversationId: 'conversation-1',
+      sender: ChatSender.assistant,
+      text: 'Valasz forrassal',
+      createdAt: DateTime.utc(2026, 1, 1, 12),
+      status: 'grounded',
+      refusalReason: null,
+      citations: const [
+        ChatCitation(
+          documentId: 'backend-doc-1',
+          title: 'omsz.pdf',
+          page: 2,
+          section: null,
+          excerpt: 'Valasz forrassal',
+        ),
+      ],
+    );
+
+    final reloaded = ChatMessage.fromJson(message.toJson());
+
+    expect(reloaded.citations.single.documentId, 'backend-doc-1');
+    expect(reloaded.citations.single.page, 2);
+    expect(reloaded.refusalReason, isNull);
   });
 
   test('persists conversations across repository reload', () async {
