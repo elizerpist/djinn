@@ -64,7 +64,7 @@ class _MainScreenState extends State<MainScreen> {
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           repository: widget.repository,
-          knowledgeRepository: widget.knowledgeRepository,
+          knowledgeSyncService: widget.knowledgeSyncService,
           conversation: conversation,
         ),
       ),
@@ -77,7 +77,7 @@ class _MainScreenState extends State<MainScreen> {
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           repository: widget.repository,
-          knowledgeRepository: widget.knowledgeRepository,
+          knowledgeSyncService: widget.knowledgeSyncService,
           conversation: conversation,
         ),
       ),

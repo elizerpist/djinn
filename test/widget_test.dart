@@ -5,8 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/main.dart';
 import 'package:djinn/src/chat/data/local_chat_repository.dart';
+import 'package:djinn/src/knowledge/data/knowledge_api_client.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
+import 'package:djinn/src/knowledge/data/knowledge_sync_service.dart';
 import 'package:djinn/src/knowledge/data/pdf_import_service.dart';
+import 'package:djinn/src/knowledge/models/knowledge_document.dart';
 
 void main() {
   testWidgets('Djinn opens a new chat and sends a text message', (
@@ -39,6 +42,42 @@ void main() {
     expect(find.textContaining('tudasbazis'), findsOneWidget);
   });
 
+  testWidgets('Djinn refreshes knowledge readiness before sending', (
+    tester,
+  ) async {
+    final knowledgeRepository = KnowledgeDocumentRepository();
+    final syncService = _SequencedKnowledgeSyncService(
+      repository: knowledgeRepository,
+      states: [
+        KnowledgeBaseState.fromDocuments(const []),
+        KnowledgeBaseState.fromDocuments([_processedDocument()]),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _testApp(
+        knowledgeRepository: knowledgeRepository,
+        knowledgeSyncService: syncService,
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('Djinn'));
+
+    await tester.tap(find.byTooltip('Uj chat'));
+    await _pumpUntilFound(tester, find.byKey(const ValueKey('message-input')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await _pumpUntilFound(tester, find.text('Nincs betoltott tudastar'));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('message-input')),
+      'Mit mond a protokoll?',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('send-message')));
+    await _pumpUntilFound(tester, find.text('Tudastar kesz: 1 PDF'));
+
+    expect(syncService.refreshReadinessCalls, 2);
+  });
+
   testWidgets('Djinn opens the knowledge base screen from the folder button', (
     tester,
   ) async {
@@ -55,12 +94,55 @@ void main() {
   });
 }
 
-DjinnApp _testApp() {
+DjinnApp _testApp({
+  LocalChatRepository? chatRepository,
+  KnowledgeDocumentRepository? knowledgeRepository,
+  KnowledgeSyncService? knowledgeSyncService,
+}) {
+  final resolvedKnowledgeRepository =
+      knowledgeRepository ?? KnowledgeDocumentRepository();
   return DjinnApp(
-    chatRepository: LocalChatRepository(),
-    knowledgeRepository: KnowledgeDocumentRepository(),
+    chatRepository: chatRepository ?? LocalChatRepository(),
+    knowledgeRepository: resolvedKnowledgeRepository,
     pdfImportService: PdfImportService(importDirectory: Directory('/memory')),
+    knowledgeSyncService: knowledgeSyncService,
   );
+}
+
+KnowledgeDocument _processedDocument() {
+  return KnowledgeDocument(
+    id: 'document-1',
+    filename: 'omsz.pdf',
+    localPath: '/memory/omsz.pdf',
+    sizeBytes: 4,
+    importedAt: DateTime.utc(2026, 1, 1, 12),
+    status: KnowledgeDocumentStatus.processed,
+    backendDocumentId: 'backend-1',
+  );
+}
+
+class _SequencedKnowledgeSyncService extends KnowledgeSyncService {
+  _SequencedKnowledgeSyncService({
+    required super.repository,
+    required this.states,
+  }) : super(
+         client: KnowledgeApiClient(baseUri: Uri.parse('http://localhost')),
+       );
+
+  final List<KnowledgeBaseState> states;
+  int refreshReadinessCalls = 0;
+
+  @override
+  Future<KnowledgeBaseState> refreshReadiness() async {
+    if (states.isEmpty) {
+      return repository.state();
+    }
+    final index = refreshReadinessCalls < states.length
+        ? refreshReadinessCalls
+        : states.length - 1;
+    refreshReadinessCalls += 1;
+    return states[index];
+  }
 }
 
 Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
