@@ -2,18 +2,27 @@ import '../../core/storage/json_file_store.dart';
 import '../models/knowledge_document.dart';
 
 class KnowledgeDocumentRepository {
-  KnowledgeDocumentRepository({required JsonFileStore store}) : _store = store;
+  KnowledgeDocumentRepository({JsonFileStore? store}) : _store = store;
 
-  final JsonFileStore _store;
+  final JsonFileStore? _store;
   final List<KnowledgeDocument> _documents = [];
   int _nextDocumentId = 1;
 
   Future<void> load() async {
-    final items = await _store.readList();
+    final store = _store;
+    if (store == null) {
+      return;
+    }
+    final items = await store.readList();
     _documents
       ..clear()
       ..addAll(items.map(KnowledgeDocument.fromJson));
-    _nextDocumentId = _nextNumericSuffix(_documents.map((document) => document.id), 'document-') + 1;
+    _nextDocumentId =
+        _nextNumericSuffix(
+          _documents.map((document) => document.id),
+          'document-',
+        ) +
+        1;
   }
 
   Future<List<KnowledgeDocument>> listDocuments() async {
@@ -49,7 +58,9 @@ class KnowledgeDocumentRepository {
     String? backendDocumentId,
     String? errorMessage,
   }) async {
-    final index = _documents.indexWhere((document) => document.id == documentId);
+    final index = _documents.indexWhere(
+      (document) => document.id == documentId,
+    );
     if (index == -1) {
       throw StateError('knowledge document not found: $documentId');
     }
@@ -64,7 +75,13 @@ class KnowledgeDocumentRepository {
   }
 
   Future<void> _persist() async {
-    await _store.writeList(_documents.map((document) => document.toJson()).toList());
+    final store = _store;
+    if (store == null) {
+      return;
+    }
+    await store.writeList(
+      _documents.map((document) => document.toJson()).toList(),
+    );
   }
 
   int _nextNumericSuffix(Iterable<String> ids, String prefix) {

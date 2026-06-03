@@ -4,8 +4,8 @@ import '../models/chat_message.dart';
 
 class LocalChatRepository {
   LocalChatRepository({DateTime Function()? clock, JsonFileStore? store})
-      : _clock = clock ?? DateTime.now,
-        _store = store;
+    : _clock = clock ?? DateTime.now,
+      _store = store;
 
   final DateTime Function() _clock;
   final JsonFileStore? _store;
@@ -22,9 +22,17 @@ class LocalChatRepository {
     _conversations
       ..clear()
       ..addAll(items.map(ChatConversation.fromJson));
-    _nextConversationId = _nextNumericSuffix(_conversations.map((item) => item.id), 'conversation-') + 1;
-    _nextMessageId = _nextNumericSuffix(
-          _conversations.expand((conversation) => conversation.messages).map((item) => item.id),
+    _nextConversationId =
+        _nextNumericSuffix(
+          _conversations.map((item) => item.id),
+          'conversation-',
+        ) +
+        1;
+    _nextMessageId =
+        _nextNumericSuffix(
+          _conversations
+              .expand((conversation) => conversation.messages)
+              .map((item) => item.id),
           'message-',
         ) +
         1;
@@ -34,7 +42,9 @@ class LocalChatRepository {
     return List.unmodifiable(_conversations);
   }
 
-  Future<ChatConversation> createConversation({String title = 'Uj chat'}) async {
+  Future<ChatConversation> createConversation({
+    String title = 'Uj chat',
+  }) async {
     final now = _clock();
     final conversation = ChatConversation(
       id: 'conversation-${_nextConversationId++}',
@@ -72,18 +82,23 @@ class LocalChatRepository {
       id: 'message-${_nextMessageId++}',
       conversationId: conversationId,
       sender: ChatSender.assistant,
-      text: 'A tudasbazisban nincs elegendo hitelesitett forras ehhez a valaszhoz. Csak az alkalmazas dokumentumai alapjan tudok valaszolni.',
+      text:
+          'A tudasbazisban nincs elegendo hitelesitett forras ehhez a valaszhoz. Csak az alkalmazas dokumentumai alapjan tudok valaszolni.',
       createdAt: now,
       status: 'insufficient_evidence',
     );
 
     final messages = [...conversation.messages, userMessage, assistantMessage];
     final updated = conversation.copyWith(
-      title: conversation.title == 'Uj chat' ? _titleFrom(trimmed) : conversation.title,
+      title: conversation.title == 'Uj chat'
+          ? _titleFrom(trimmed)
+          : conversation.title,
       updatedAt: now,
       messages: messages,
     );
-    final index = _conversations.indexWhere((item) => item.id == conversationId);
+    final index = _conversations.indexWhere(
+      (item) => item.id == conversationId,
+    );
     _conversations[index] = updated;
     await _persist();
     return assistantMessage;

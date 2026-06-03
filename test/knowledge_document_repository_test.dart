@@ -37,7 +37,9 @@ void main() {
   });
 
   test('derives knowledge readiness from document statuses', () async {
-    final directory = await Directory.systemTemp.createTemp('djinn-docs-state-');
+    final directory = await Directory.systemTemp.createTemp(
+      'djinn-docs-state-',
+    );
     addTearDown(() => directory.delete(recursive: true));
     final repository = KnowledgeDocumentRepository(
       store: JsonFileStore(File('${directory.path}/documents.json')),
@@ -52,9 +54,15 @@ void main() {
       sizeBytes: 12,
       importedAt: DateTime.utc(2026, 1, 1, 12),
     );
-    expect((await repository.state()).readiness, KnowledgeBaseReadiness.pendingIngest);
+    expect(
+      (await repository.state()).readiness,
+      KnowledgeBaseReadiness.pendingIngest,
+    );
 
-    await repository.updateStatus(pending.id, KnowledgeDocumentStatus.processed);
+    await repository.updateStatus(
+      pending.id,
+      KnowledgeDocumentStatus.processed,
+    );
     expect((await repository.state()).readiness, KnowledgeBaseReadiness.ready);
   });
 }

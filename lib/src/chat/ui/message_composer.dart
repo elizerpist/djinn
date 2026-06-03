@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
 class MessageComposer extends StatefulWidget {
-  const MessageComposer({super.key, required this.onSend, required this.sending});
+  const MessageComposer({
+    super.key,
+    required this.onSend,
+    required this.sending,
+  });
 
   final Future<void> Function(String text) onSend;
   final bool sending;
@@ -53,7 +57,10 @@ class _MessageComposerState extends State<MessageComposer> {
                     borderRadius: BorderRadius.circular(22),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ),

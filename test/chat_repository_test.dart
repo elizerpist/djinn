@@ -48,7 +48,10 @@ void main() {
     );
     await firstRepository.load();
     final conversation = await firstRepository.createConversation();
-    await firstRepository.sendMessage(conversation.id, 'Mellkasi fajdalom protokoll?');
+    await firstRepository.sendMessage(
+      conversation.id,
+      'Mellkasi fajdalom protokoll?',
+    );
 
     final secondRepository = LocalChatRepository(
       clock: () => DateTime.utc(2026, 1, 1, 13),

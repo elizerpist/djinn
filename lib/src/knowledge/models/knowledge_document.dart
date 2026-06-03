@@ -26,12 +26,7 @@ enum KnowledgeDocumentStatus {
   }
 }
 
-enum KnowledgeBaseReadiness {
-  empty,
-  pendingIngest,
-  ready,
-  failed,
-}
+enum KnowledgeBaseReadiness { empty, pendingIngest, ready, failed }
 
 class KnowledgeDocument {
   const KnowledgeDocument({
@@ -95,7 +90,9 @@ class KnowledgeDocument {
       filename: json['filename'] as String? ?? '',
       localPath: json['localPath'] as String? ?? '',
       sizeBytes: json['sizeBytes'] as int? ?? 0,
-      importedAt: DateTime.tryParse(json['importedAt'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+      importedAt:
+          DateTime.tryParse(json['importedAt'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
       status: KnowledgeDocumentStatus.fromWireName(json['status'] as String?),
       backendDocumentId: json['backendDocumentId'] as String?,
       errorMessage: json['errorMessage'] as String?,
@@ -104,37 +101,47 @@ class KnowledgeDocument {
 }
 
 class KnowledgeBaseState {
-  const KnowledgeBaseState({
-    required this.documents,
-    required this.readiness,
-  });
+  const KnowledgeBaseState({required this.documents, required this.readiness});
 
   final List<KnowledgeDocument> documents;
   final KnowledgeBaseReadiness readiness;
 
   int get pendingCount => documents
-      .where((document) =>
-          document.status == KnowledgeDocumentStatus.imported ||
-          document.status == KnowledgeDocumentStatus.pendingIngest ||
-          document.status == KnowledgeDocumentStatus.uploading)
+      .where(
+        (document) =>
+            document.status == KnowledgeDocumentStatus.imported ||
+            document.status == KnowledgeDocumentStatus.pendingIngest ||
+            document.status == KnowledgeDocumentStatus.uploading,
+      )
       .length;
 
-  int get processedCount => documents.where((document) => document.status == KnowledgeDocumentStatus.processed).length;
+  int get processedCount => documents
+      .where((document) => document.status == KnowledgeDocumentStatus.processed)
+      .length;
 
   static KnowledgeBaseState fromDocuments(List<KnowledgeDocument> documents) {
     final immutableDocuments = List<KnowledgeDocument>.unmodifiable(documents);
     final readiness = _deriveReadiness(immutableDocuments);
-    return KnowledgeBaseState(documents: immutableDocuments, readiness: readiness);
+    return KnowledgeBaseState(
+      documents: immutableDocuments,
+      readiness: readiness,
+    );
   }
 
-  static KnowledgeBaseReadiness _deriveReadiness(List<KnowledgeDocument> documents) {
+  static KnowledgeBaseReadiness _deriveReadiness(
+    List<KnowledgeDocument> documents,
+  ) {
     if (documents.isEmpty) {
       return KnowledgeBaseReadiness.empty;
     }
-    if (documents.any((document) => document.status == KnowledgeDocumentStatus.processed)) {
+    if (documents.any(
+      (document) => document.status == KnowledgeDocumentStatus.processed,
+    )) {
       return KnowledgeBaseReadiness.ready;
     }
-    if (documents.every((document) => document.status == KnowledgeDocumentStatus.failed)) {
+    if (documents.every(
+      (document) => document.status == KnowledgeDocumentStatus.failed,
+    )) {
       return KnowledgeBaseReadiness.failed;
     }
     return KnowledgeBaseReadiness.pendingIngest;

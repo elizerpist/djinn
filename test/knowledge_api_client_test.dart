@@ -8,7 +8,9 @@ import 'package:djinn/src/knowledge/models/knowledge_document.dart';
 
 void main() {
   test('uploads a PDF to the backend knowledge document endpoint', () async {
-    final directory = await Directory.systemTemp.createTemp('djinn-api-client-');
+    final directory = await Directory.systemTemp.createTemp(
+      'djinn-api-client-',
+    );
     addTearDown(() => directory.delete(recursive: true));
     final pdf = File('${directory.path}/protocol.pdf');
     await pdf.writeAsBytes([37, 80, 68, 70]);
@@ -24,21 +26,26 @@ void main() {
       request.response
         ..statusCode = HttpStatus.created
         ..headers.contentType = ContentType.json
-        ..write(jsonEncode({
-          'id': 'backend-1',
-          'filename': 'protocol.pdf',
-          'status': 'pending_ingest',
-          'size_bytes': 4,
-          'imported_at': '2026-01-01T12:00:00Z',
-          'source_path': '/corpus/protocol.pdf',
-        }));
+        ..write(
+          jsonEncode({
+            'id': 'backend-1',
+            'filename': 'protocol.pdf',
+            'status': 'pending_ingest',
+            'size_bytes': 4,
+            'imported_at': '2026-01-01T12:00:00Z',
+            'source_path': '/corpus/protocol.pdf',
+          }),
+        );
       await request.response.close();
     });
 
     final client = KnowledgeApiClient(
       baseUri: Uri.parse('http://${server.address.host}:${server.port}'),
     );
-    final result = await client.uploadDocument(localPath: pdf.path, filename: 'protocol.pdf');
+    final result = await client.uploadDocument(
+      localPath: pdf.path,
+      filename: 'protocol.pdf',
+    );
 
     expect(result.id, 'backend-1');
     expect(result.status, KnowledgeDocumentStatus.pendingIngest);

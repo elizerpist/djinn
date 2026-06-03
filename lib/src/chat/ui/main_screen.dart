@@ -1,13 +1,23 @@
 import 'package:flutter/material.dart';
 
+import '../../knowledge/data/knowledge_document_repository.dart';
+import '../../knowledge/data/pdf_import_service.dart';
+import '../../knowledge/ui/knowledge_base_screen.dart';
 import '../data/local_chat_repository.dart';
 import '../models/chat_conversation.dart';
 import 'chat_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key, required this.repository});
+  const MainScreen({
+    super.key,
+    required this.repository,
+    required this.knowledgeRepository,
+    required this.pdfImportService,
+  });
 
   final LocalChatRepository repository;
+  final KnowledgeDocumentRepository knowledgeRepository;
+  final PdfImportService pdfImportService;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -30,6 +40,17 @@ class _MainScreenState extends State<MainScreen> {
     setState(() => _conversations = conversations);
   }
 
+  Future<void> _openKnowledgeBase() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => KnowledgeBaseScreen(
+          repository: widget.knowledgeRepository,
+          importService: widget.pdfImportService,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openNewChat() async {
     final conversation = await widget.repository.createConversation();
     if (!mounted) {
@@ -39,6 +60,7 @@ class _MainScreenState extends State<MainScreen> {
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           repository: widget.repository,
+          knowledgeRepository: widget.knowledgeRepository,
           conversation: conversation,
         ),
       ),
@@ -51,6 +73,7 @@ class _MainScreenState extends State<MainScreen> {
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           repository: widget.repository,
+          knowledgeRepository: widget.knowledgeRepository,
           conversation: conversation,
         ),
       ),
@@ -65,6 +88,13 @@ class _MainScreenState extends State<MainScreen> {
         title: const Text('Djinn'),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Tudastar',
+            onPressed: _openKnowledgeBase,
+            icon: const Icon(Icons.folder),
+          ),
+        ],
       ),
       body: _conversations.isEmpty
           ? const Center(
@@ -81,7 +111,9 @@ class _MainScreenState extends State<MainScreen> {
                 final conversation = _conversations[index];
                 return ListTile(
                   tileColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   title: Text(conversation.title),
                   subtitle: Text('${conversation.messages.length} uzenet'),
                   trailing: const Icon(Icons.chevron_right),

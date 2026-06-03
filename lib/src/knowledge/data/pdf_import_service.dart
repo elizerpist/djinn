@@ -46,15 +46,22 @@ class PdfImportService {
     var candidate = File(p.join(importDirectory.path, filename));
     var suffix = 2;
     while (await candidate.exists()) {
-      candidate = File(p.join(importDirectory.path, '${basename}_$suffix$extension'));
+      candidate = File(
+        p.join(importDirectory.path, '${basename}_$suffix$extension'),
+      );
       suffix += 1;
     }
     return candidate;
   }
 
   String _safePdfFilename(String filename) {
-    final basename = p.basename(filename).trim().replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_');
-    final normalized = basename.isEmpty || basename == '.pdf' ? 'document.pdf' : basename;
+    final basename = p
+        .basename(filename)
+        .trim()
+        .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_');
+    final normalized = basename.isEmpty || basename == '.pdf'
+        ? 'document.pdf'
+        : basename;
     if (p.extension(normalized).toLowerCase() == '.pdf') {
       return normalized;
     }

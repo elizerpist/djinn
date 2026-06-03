@@ -6,7 +6,9 @@ import 'package:djinn/src/knowledge/data/pdf_import_service.dart';
 
 void main() {
   test('copies selected PDF into the app knowledge directory', () async {
-    final directory = await Directory.systemTemp.createTemp('djinn-pdf-import-');
+    final directory = await Directory.systemTemp.createTemp(
+      'djinn-pdf-import-',
+    );
     addTearDown(() => directory.delete(recursive: true));
     final source = File('${directory.path}/source.pdf');
     await source.writeAsBytes([37, 80, 68, 70]);
@@ -24,7 +26,9 @@ void main() {
   test('copies picked PDF bytes with a safe filename', () async {
     final directory = await Directory.systemTemp.createTemp('djinn-pdf-bytes-');
     addTearDown(() => directory.delete(recursive: true));
-    final service = PdfImportService(importDirectory: Directory('${directory.path}/knowledge'));
+    final service = PdfImportService(
+      importDirectory: Directory('${directory.path}/knowledge'),
+    );
 
     final result = await service.copyPdfBytes(
       filename: '../OMSZ protocol.pdf',
