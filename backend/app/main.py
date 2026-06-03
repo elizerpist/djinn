@@ -8,15 +8,18 @@ from app.schemas import (
     KnowledgeStatusResponse,
     MessageRecord,
 )
+from app.services.answer_service import AnswerService
 from app.services.chunk_repository import ChunkRepository
 from app.services.conversation_store import ConversationStore
 from app.services.document_registry import DocumentRegistry
 from app.services.pdf_text_extractor import PdfTextExtractor
-from app.services.safety import answer_without_corpus
+from app.services.retrieval import RetrievalService
 
 app = FastAPI(title='Djinn Backend', version='0.1.0')
 store = ConversationStore()
 chunks = ChunkRepository()
+retrieval = RetrievalService(repository=chunks, minimum_score=1)
+answers = AnswerService(retrieval=retrieval)
 documents = DocumentRegistry(chunk_repository=chunks, extractor=PdfTextExtractor())
 
 
@@ -71,10 +74,10 @@ def chat(request: ChatRequest) -> ChatResponse:
         text=request.message,
     )
     knowledge = documents.status()
-    response = answer_without_corpus(
-        conversation_id,
-        ingest_pending=knowledge.pending_count > 0 and knowledge.processed_count == 0,
-        retrieval_unavailable=knowledge.processed_count > 0,
+    response = answers.answer(
+        conversation_id=conversation_id,
+        message=request.message,
+        knowledge=knowledge,
     )
     store.append_message(
         conversation_id=conversation_id,

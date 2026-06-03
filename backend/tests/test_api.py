@@ -53,20 +53,43 @@ def test_chat_with_pending_documents_mentions_ingest_pending():
     assert body['refusal_reason'] == 'knowledge_base_ingest_pending'
 
 
-def test_chat_refuses_when_documents_processed_but_retrieval_is_not_available():
+def test_chat_returns_grounded_answer_with_citation_after_ingest():
+    pdf_bytes = _pdf_bytes('Mellkasi fajdalom eseten ABCDE vizsgalat szukseges.')
     upload = client.post(
         '/knowledge/documents',
-        files={'file': ('protocol.pdf', _pdf_bytes('Ellatasi algoritmus'), 'application/pdf')},
+        files={'file': ('protocol.pdf', pdf_bytes, 'application/pdf')},
     ).json()
     client.post(f"/knowledge/documents/{upload['id']}/ingest")
 
-    response = client.post('/chat', json={'message': 'Mi az ellatasi algoritmus?'})
+    response = client.post(
+        '/chat',
+        json={'message': 'Mi a teendo mellkasi fajdalom eseten?'},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body['status'] == 'grounded'
+    assert 'ABCDE' in body['answer']
+    assert body['citations'][0]['document_id'] == upload['id']
+    assert body['citations'][0]['page'] == 1
+    assert body['refusal_reason'] is None
+
+
+def test_chat_refuses_when_processed_chunks_do_not_match_question():
+    pdf_bytes = _pdf_bytes('Lazcsillapitas gyermekkorban.')
+    upload = client.post(
+        '/knowledge/documents',
+        files={'file': ('fever.pdf', pdf_bytes, 'application/pdf')},
+    ).json()
+    client.post(f"/knowledge/documents/{upload['id']}/ingest")
+
+    response = client.post('/chat', json={'message': 'Trauma immobilizalas?'})
 
     assert response.status_code == 200
     body = response.json()
     assert body['status'] == 'insufficient_evidence'
-    assert body['refusal_reason'] == 'retrieval_not_available'
     assert body['citations'] == []
+    assert body['refusal_reason'] == 'insufficient_retrieval_evidence'
 
 
 def _pdf_bytes(text: str) -> bytes:
