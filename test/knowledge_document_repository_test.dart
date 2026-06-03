@@ -65,4 +65,32 @@ void main() {
     );
     expect((await repository.state()).readiness, KnowledgeBaseReadiness.ready);
   });
+
+  test('reconciles a local document with a backend record', () async {
+    final repository = KnowledgeDocumentRepository();
+    final local = await repository.addDocument(
+      filename: 'protocol.pdf',
+      localPath: '/local/protocol.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 1, 1, 12),
+    );
+
+    await repository.reconcileBackendDocument(
+      localDocumentId: local.id,
+      backendDocument: KnowledgeDocument(
+        id: 'backend-1',
+        filename: 'protocol.pdf',
+        localPath: 'corpus/omsz/backend-1-protocol.pdf',
+        sizeBytes: 4,
+        importedAt: DateTime.utc(2026, 1, 1, 12),
+        status: KnowledgeDocumentStatus.processed,
+        backendDocumentId: 'backend-1',
+      ),
+    );
+
+    final documents = await repository.listDocuments();
+    expect(documents.single.id, local.id);
+    expect(documents.single.backendDocumentId, 'backend-1');
+    expect(documents.single.status, KnowledgeDocumentStatus.processed);
+  });
 }

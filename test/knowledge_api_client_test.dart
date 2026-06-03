@@ -51,4 +51,82 @@ void main() {
     expect(result.status, KnowledgeDocumentStatus.pendingIngest);
     await requestSeen;
   });
+
+  test('fetches status lists documents and starts ingest', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    final requests = <String>[];
+    server.listen((request) async {
+      requests.add('${request.method} ${request.uri.path}');
+      request.response.headers.contentType = ContentType.json;
+      if (request.method == 'GET' && request.uri.path == '/knowledge/status') {
+        request.response.write(
+          jsonEncode({
+            'ready': true,
+            'document_count': 1,
+            'pending_count': 0,
+            'processed_count': 1,
+            'failed_count': 0,
+          }),
+        );
+      } else if (request.method == 'GET' &&
+          request.uri.path == '/knowledge/documents') {
+        request.response.write(
+          jsonEncode([
+            {
+              'id': 'backend-1',
+              'filename': 'protocol.pdf',
+              'stored_path': 'corpus/omsz/backend-1-protocol.pdf',
+              'size_bytes': 11,
+              'status': 'processed',
+              'imported_at': '2026-01-01T12:00:00Z',
+              'backend_document_id': 'backend-1',
+              'error_message': null,
+            },
+          ]),
+        );
+      } else if (request.method == 'POST' &&
+          request.uri.path == '/knowledge/documents/backend-1/ingest') {
+        request.response.write(
+          jsonEncode({
+            'id': 'backend-1',
+            'filename': 'protocol.pdf',
+            'stored_path': 'corpus/omsz/backend-1-protocol.pdf',
+            'size_bytes': 11,
+            'status': 'processed',
+            'imported_at': '2026-01-01T12:00:00Z',
+            'backend_document_id': 'backend-1',
+            'error_message': null,
+          }),
+        );
+      } else {
+        request.response.statusCode = HttpStatus.notFound;
+        request.response.write('{}');
+      }
+      await request.response.close();
+    });
+
+    final client = KnowledgeApiClient(
+      baseUri: Uri.parse('http://${server.address.host}:${server.port}'),
+    );
+
+    final status = await client.getStatus();
+    final documents = await client.listDocuments();
+    final ingested = await client.startIngest('backend-1');
+
+    expect(status.ready, isTrue);
+    expect(status.processedCount, 1);
+    expect(documents.single.status, KnowledgeDocumentStatus.processed);
+    expect(documents.single.backendDocumentId, 'backend-1');
+    expect(documents.single.localPath, 'corpus/omsz/backend-1-protocol.pdf');
+    expect(ingested.status, KnowledgeDocumentStatus.processed);
+    expect(
+      requests,
+      containsAll([
+        'GET /knowledge/status',
+        'GET /knowledge/documents',
+        'POST /knowledge/documents/backend-1/ingest',
+      ]),
+    );
+  });
 }

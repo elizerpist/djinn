@@ -18,7 +18,7 @@ enum KnowledgeDocumentStatus {
   static KnowledgeDocumentStatus fromWireName(String? value) {
     return switch (value) {
       'imported' => KnowledgeDocumentStatus.imported,
-      'uploading' => KnowledgeDocumentStatus.uploading,
+      'uploading' || 'processing' => KnowledgeDocumentStatus.uploading,
       'processed' => KnowledgeDocumentStatus.processed,
       'failed' => KnowledgeDocumentStatus.failed,
       _ => KnowledgeDocumentStatus.pendingIngest,

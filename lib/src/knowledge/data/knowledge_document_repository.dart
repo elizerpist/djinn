@@ -74,6 +74,43 @@ class KnowledgeDocumentRepository {
     return updated;
   }
 
+  Future<KnowledgeDocument> reconcileBackendDocument({
+    required String localDocumentId,
+    required KnowledgeDocument backendDocument,
+  }) async {
+    final index = _documents.indexWhere(
+      (document) => document.id == localDocumentId,
+    );
+    if (index == -1) {
+      throw StateError('knowledge document not found: $localDocumentId');
+    }
+    final current = _documents[index];
+    final updated = current.copyWith(
+      filename: backendDocument.filename.isEmpty
+          ? current.filename
+          : backendDocument.filename,
+      sizeBytes: backendDocument.sizeBytes == 0
+          ? current.sizeBytes
+          : backendDocument.sizeBytes,
+      status: backendDocument.status,
+      backendDocumentId:
+          backendDocument.backendDocumentId ?? backendDocument.id,
+      errorMessage: backendDocument.errorMessage,
+    );
+    _documents[index] = updated;
+    await _persist();
+    return updated;
+  }
+
+  KnowledgeDocument? findByBackendDocumentId(String backendDocumentId) {
+    for (final document in _documents) {
+      if (document.backendDocumentId == backendDocumentId) {
+        return document;
+      }
+    }
+    return null;
+  }
+
   Future<void> _persist() async {
     final store = _store;
     if (store == null) {
