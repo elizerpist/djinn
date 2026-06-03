@@ -53,10 +53,20 @@ class DocumentRegistry:
         record = self._documents.get(document_id)
         if record is None:
             raise HTTPException(status_code=404, detail='Document not found')
+        stored_path = Path(record.stored_path)
+        if not stored_path.exists():
+            updated = record.model_copy(
+                update={
+                    'status': KnowledgeDocumentStatus.failed,
+                    'error_message': 'Stored PDF file is missing.',
+                }
+            )
+            self._documents[document_id] = updated
+            return updated
         updated = record.model_copy(
             update={
-                'status': KnowledgeDocumentStatus.pending_ingest,
-                'error_message': 'Manual clinical validation is required before this document can be used for answers.',
+                'status': KnowledgeDocumentStatus.processed,
+                'error_message': None,
             }
         )
         self._documents[document_id] = updated

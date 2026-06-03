@@ -49,7 +49,7 @@ class ConversationSummary(BaseModel):
 
 class KnowledgeDocumentStatus(StrEnum):
     pending_ingest = 'pending_ingest'
-    uploading = 'uploading'
+    processing = 'processing'
     processed = 'processed'
     failed = 'failed'
 

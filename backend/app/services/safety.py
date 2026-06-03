@@ -7,7 +7,19 @@ REFUSAL_TEXT = (
 )
 
 
-def answer_without_corpus(conversation_id: str, ingest_pending: bool = False) -> ChatResponse:
+def answer_without_corpus(
+    conversation_id: str,
+    ingest_pending: bool = False,
+    retrieval_unavailable: bool = False,
+) -> ChatResponse:
+    if retrieval_unavailable:
+        return ChatResponse(
+            conversation_id=conversation_id,
+            answer='A tudasbazis feldolgozott dokumentumot jelez, de a visszakereso RAG reteg meg nincs bekotve. Klinikai valaszt csak feldolgozott es visszakeresheto forras alapjan adhatok.',
+            status=GroundingStatus.insufficient_evidence,
+            citations=[],
+            refusal_reason='retrieval_not_available',
+        )
     if ingest_pending:
         return ChatResponse(
             conversation_id=conversation_id,

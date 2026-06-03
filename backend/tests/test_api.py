@@ -50,3 +50,19 @@ def test_chat_with_pending_documents_mentions_ingest_pending():
     assert body['status'] == 'insufficient_evidence'
     assert 'ingest' in body['answer'].lower()
     assert body['refusal_reason'] == 'knowledge_base_ingest_pending'
+
+
+def test_chat_refuses_when_documents_processed_but_retrieval_is_not_available():
+    upload = client.post(
+        '/knowledge/documents',
+        files={'file': ('protocol.pdf', b'%PDF-1.4 processed', 'application/pdf')},
+    ).json()
+    client.post(f"/knowledge/documents/{upload['id']}/ingest")
+
+    response = client.post('/chat', json={'message': 'Mi az ellatasi algoritmus?'})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body['status'] == 'insufficient_evidence'
+    assert body['refusal_reason'] == 'retrieval_not_available'
+    assert body['citations'] == []

@@ -60,7 +60,12 @@ def chat(request: ChatRequest) -> ChatResponse:
         sender='user',
         text=request.message,
     )
-    response = answer_without_corpus(conversation_id, ingest_pending=documents.status().pending_count > 0)
+    knowledge = documents.status()
+    response = answer_without_corpus(
+        conversation_id,
+        ingest_pending=knowledge.pending_count > 0 and knowledge.processed_count == 0,
+        retrieval_unavailable=knowledge.processed_count > 0,
+    )
     store.append_message(
         conversation_id=conversation_id,
         sender='assistant',
