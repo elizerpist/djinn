@@ -48,3 +48,8 @@ backend/.venv/
 # Runtime/imported knowledge-base documents
 backend/corpus/omsz/*
 !backend/corpus/omsz/.gitkeep
+
+# Local runtime secrets
+.env
+.env.*
+!.env.example

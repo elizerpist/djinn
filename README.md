@@ -1,59 +1,100 @@
 # Djinn
 
-Djinn is a Flutter + local backend skeleton for an AI-assisted decision-support
-chat app over approved OMSZ procedure documents.
+Djinn is a Flutter mobile chat client with a strict FastAPI RAG backend for
+AI-assisted decision support over imported procedure PDFs.
 
-This repository is not clinically validated. The current backend refuses to
-answer clinical questions unless validated corpus evidence is available.
+This is a non-clinically-validated prototype. It must not be used as the sole
+basis for patient-care decisions. The current trusted ingest path supports
+text-bearing PDFs only; OCR and flowchart interpretation are not yet trusted or
+included in answers.
 
-## Project Layout
+## Architecture
 
-- `lib/` - Flutter text-only chat application.
-- `backend/` - FastAPI backend and RAG pipeline skeleton.
-- `docs/superpowers/specs/` - approved design spec.
-- `docs/superpowers/plans/` - implementation plan.
-- `docker-compose.yml` - local Qdrant and PostgreSQL services.
+- Flutter stores local conversations and imports PDFs from the phone.
+- FastAPI extracts text, chunks it, and writes OpenAI embeddings to Qdrant.
+- PostgreSQL stores durable source-chunk and indexing audit metadata.
+- LangGraph orchestrates retrieval, generation, citation verification, and
+  fail-closed refusals.
+- NeMo Guardrails checks input, retrieved evidence, output, and source-bounded
+  facts.
+- OpenAI is called only by the backend. The API key is never stored in Flutter,
+  compiled into an APK, or provided to GitHub Actions.
 
-## Flutter Setup
+## Local Backend
 
-Run from the project root inside the Ubuntu/proot Flutter environment:
-
-```bash
-export PATH=/home/flutteruser/flutter/bin:$PATH
-flutter pub get
-flutter test
-flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080
-```
-
-From Termux, use:
+Prerequisites: Python 3.12+, Docker Compose, and a valid OpenAI API key.
 
 ```bash
-proot-distro login ubuntu --user flutteruser -- bash -lc 'export PATH=/home/flutteruser/flutter/bin:$PATH && cd /home/flutteruser/flutterapps/djinn && flutter test'
-```
+cp .env.example .env
+# Edit .env and set OPENAI_API_KEY. Never commit .env.
+docker compose up -d qdrant postgres
 
-## Backend Setup
-
-```bash
 cd backend
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 PYTHONPATH=. pytest -q
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn app.main:app --env-file ../.env --host 127.0.0.1 --port 8000
 ```
 
-## Local RAG Infrastructure
+Verify all strict components before importing documents or chatting:
 
 ```bash
-cp .env.example .env
-docker compose up -d qdrant postgres
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/system/readiness
 ```
 
-Qdrant listens on `127.0.0.1:6333`. PostgreSQL uses the local development
-credentials from `.env.example`.
+`/system/readiness` must return `"ready": true`. A missing OpenAI key or
+unreachable Qdrant/PostgreSQL/guardrails component blocks AI answers and ingest
+instead of falling back to an ungrounded answer.
 
-## Safety Boundary
+## Phone Trial APK
 
-The assistant must answer only from validated app documents. If retrieval does
-not provide enough support, the system returns `insufficient_evidence` with no
-citations instead of guessing.
+GitHub Actions publishes two artifacts after every push to `main`:
+
+- `djinn-trial-apk`: debug APK configured for `http://127.0.0.1:8000` and
+  cleartext localhost access. Use this when FastAPI runs in Termux on the same
+  phone. Qdrant and PostgreSQL may be local or remote, but must be reachable by
+  that backend.
+- `djinn-release-apk`: release APK. Set the repository variable
+  `DJINN_BACKEND_URL` to a reachable HTTPS backend before treating it as a
+  usable release build.
+
+Download and install the same-phone trial:
+
+```bash
+gh -R elizerpist/djinn run list --limit 1
+gh -R elizerpist/djinn run download <RUN_ID> -n djinn-trial-apk
+adb install -r app-debug.apk
+```
+
+The trial APK can open without a backend, but strict AI answers require a valid
+backend `OPENAI_API_KEY`, reachable Qdrant and PostgreSQL, initialized NeMo
+Guardrails, at least one successfully ingested text PDF, and a ready
+`/system/readiness` response.
+
+## Flutter Development
+
+```bash
+export PATH=/home/flutteruser/flutter/bin:$PATH
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --debug --dart-define=DJINN_BACKEND_URL=http://127.0.0.1:8000
+```
+
+For an Android emulator backend running on the host, the app default remains
+`http://10.0.2.2:8000`. Release builds should receive an HTTPS URL through
+`DJINN_BACKEND_URL`.
+
+## Project Layout
+
+- `lib/` - Flutter messenger-style mobile client.
+- `backend/app/` - strict RAG runtime, adapters, graph, and FastAPI routes.
+- `backend/guardrails/` - versioned NeMo Guardrails policies.
+- `backend/tests/` - offline provider/adapter/workflow/API tests.
+- `docs/superpowers/` - approved architecture spec and implementation plan.
+- `docker-compose.yml` - local Qdrant and PostgreSQL services.
+
+Default CI uses injected fakes and never calls live OpenAI, Qdrant, or
+PostgreSQL services, so it does not spend OpenAI credits.
