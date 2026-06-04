@@ -14,10 +14,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: pip
@@ -42,10 +42,10 @@ jobs:
       DJINN_RELEASE_BACKEND_URL: ${{ vars.DJINN_BACKEND_URL || 'https://example.invalid' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -76,14 +76,14 @@ jobs:
           --dart-define=DJINN_BACKEND_URL=http://127.0.0.1:8000
 
       - name: Upload release APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: djinn-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
       - name: Upload trial APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: djinn-trial-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
