@@ -44,6 +44,17 @@ class RetrievalResult(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
 
 
+class ComponentReadiness(BaseModel):
+    ready: bool
+    detail: str
+
+
+class SystemReadinessResponse(BaseModel):
+    ready: bool
+    strict_mode: bool
+    components: dict[str, ComponentReadiness]
+
+
 class MessageRecord(BaseModel):
     id: str
     conversation_id: str
