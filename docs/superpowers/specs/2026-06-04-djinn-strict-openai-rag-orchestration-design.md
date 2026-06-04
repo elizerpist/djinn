@@ -270,8 +270,10 @@ The OpenAI key is never accepted in Flutter UI or compiled into the APK.
 The generated APK can be installed and opened without a backend. To exercise AI
 answers, the configured backend URL must be reachable from the phone and the
 backend must have OpenAI/Qdrant/PostgreSQL/guardrail configuration. Release builds
-receive Android internet permission and require an HTTPS backend for a realistic
-trial; insecure local HTTP is limited to development builds.
+receive Android internet permission and require an HTTPS backend. GitHub Actions
+also produces a clearly named trial debug APK configured for
+`http://127.0.0.1:8000`, allowing the app to reach a backend running in Termux on
+the same phone; cleartext HTTP is allowed only in that debug manifest.
 
 ## Testing And Verification
 
@@ -292,8 +294,9 @@ credentials. Default CI never spends OpenAI credits.
 Flutter tests cover readiness parsing, strict refusal rendering, grounded
 citations, and backend-unavailable behavior.
 
-GitHub Actions runs backend tests, Flutter analyze/tests, and builds/uploads the
-release APK. No OpenAI secret is required for the build.
+GitHub Actions runs backend tests, Flutter analyze/tests, and builds/uploads both
+the HTTPS-oriented release APK and a localhost-configured trial debug APK. No
+OpenAI secret is required for either build.
 
 ## Deployment And Trial Flow
 
@@ -302,8 +305,11 @@ For a functional trial:
 1. Set backend environment variables, including `OPENAI_API_KEY`.
 2. Start Qdrant and PostgreSQL with Docker Compose.
 3. Install backend dependencies and start FastAPI on a phone-reachable address.
-4. Build the APK with the reachable `DJINN_BACKEND_URL`.
-5. Install the APK, import a PDF, sync it, and ask a source-covered question.
+4. For a same-phone Termux trial, run FastAPI on `127.0.0.1:8000` and install
+   the GitHub `djinn-trial-apk` artifact. For a remote HTTPS backend, build the
+   release APK with its reachable `DJINN_BACKEND_URL`.
+5. Install the selected APK, import a PDF, sync it, and ask a source-covered
+   question.
 
 Production deployment requires HTTPS, secret management, authentication,
 authorization, audit review, clinical validation, and operational monitoring.
