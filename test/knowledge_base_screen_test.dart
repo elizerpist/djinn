@@ -65,6 +65,26 @@ void main() {
     expect(find.text('Backend nem erheto el'), findsOneWidget);
   });
 
+  testWidgets('shows strict AI backend not configured status', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          syncService: _NotReadyKnowledgeSyncService(
+            repository: repository,
+            client: KnowledgeApiClient(baseUri: Uri.parse('http://localhost')),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('AI backend nincs beallitva'));
+
+    expect(find.text('AI backend nincs beallitva'), findsOneWidget);
+    expect(find.textContaining('openai: not configured'), findsOneWidget);
+  });
+
   testWidgets('sync action processes a pending PDF row', (tester) async {
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
@@ -112,6 +132,31 @@ class _FakeKnowledgeSyncService extends KnowledgeSyncService {
       localDocumentId,
       KnowledgeDocumentStatus.processed,
       backendDocumentId: 'backend-1',
+    );
+  }
+}
+
+class _NotReadyKnowledgeSyncService extends KnowledgeSyncService {
+  _NotReadyKnowledgeSyncService({
+    required super.repository,
+    required super.client,
+  });
+
+  @override
+  Future<KnowledgeRefreshResult> refresh() async {
+    return KnowledgeRefreshResult(
+      state: await repository.state(),
+      backendAvailable: true,
+      systemReadiness: const BackendSystemReadiness(
+        ready: false,
+        strictMode: true,
+        components: {
+          'openai': BackendComponentReadiness(
+            ready: false,
+            detail: 'not configured',
+          ),
+        },
+      ),
     );
   }
 }

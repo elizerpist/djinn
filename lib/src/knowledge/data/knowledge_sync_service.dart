@@ -8,11 +8,13 @@ class KnowledgeRefreshResult {
   const KnowledgeRefreshResult({
     required this.state,
     required this.backendAvailable,
+    this.systemReadiness,
     this.errorMessage,
   });
 
   final KnowledgeBaseState state;
   final bool backendAvailable;
+  final BackendSystemReadiness? systemReadiness;
   final String? errorMessage;
 }
 
@@ -88,9 +90,11 @@ class KnowledgeSyncService {
           );
         }
       }
+      final systemReadiness = await client.getSystemReadiness();
       return KnowledgeRefreshResult(
         state: await repository.state(),
         backendAvailable: true,
+        systemReadiness: systemReadiness,
       );
     } catch (error) {
       return KnowledgeRefreshResult(

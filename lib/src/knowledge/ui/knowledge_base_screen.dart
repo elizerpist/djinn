@@ -41,6 +41,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   bool _importing = false;
   String? _syncingDocumentId;
   String _backendStatusText = 'Backend nincs ellenorizve';
+  String? _backendDetailText;
 
   @override
   void initState() {
@@ -61,7 +62,10 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     final syncService = widget.syncService;
     if (syncService == null) {
       if (mounted) {
-        setState(() => _backendStatusText = 'Backend nincs beallitva');
+        setState(() {
+          _backendStatusText = 'Backend nincs beallitva';
+          _backendDetailText = null;
+        });
       }
       return;
     }
@@ -70,9 +74,22 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       return;
     }
     setState(() {
-      _backendStatusText = result.backendAvailable
-          ? _statusText(result.state.readiness)
-          : 'Backend nem erheto el';
+      if (!result.backendAvailable) {
+        _backendStatusText = 'Backend nem erheto el';
+        _backendDetailText = null;
+        return;
+      }
+      final readiness = result.systemReadiness;
+      if (readiness?.ready == true) {
+        _backendStatusText = 'AI backend kesz';
+        _backendDetailText = null;
+        return;
+      }
+      _backendStatusText = 'AI backend nincs beallitva';
+      _backendDetailText = readiness?.components.entries
+          .where((entry) => !entry.value.ready)
+          .map((entry) => '${entry.key}: ${entry.value.detail}')
+          .join(', ');
     });
     await _loadDocuments();
   }
@@ -169,9 +186,24 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text(
-                _backendStatusText,
-                style: const TextStyle(color: Color(0xFF6B7280)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _backendStatusText,
+                    style: const TextStyle(color: Color(0xFF6B7280)),
+                  ),
+                  if (_backendDetailText case final detail?) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      detail,
+                      style: const TextStyle(
+                        color: Color(0xFF991B1B),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
@@ -218,15 +250,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
             : const Icon(Icons.upload_file),
       ),
     );
-  }
-
-  String _statusText(KnowledgeBaseReadiness readiness) {
-    return switch (readiness) {
-      KnowledgeBaseReadiness.empty => 'Nincs betoltott tudastar',
-      KnowledgeBaseReadiness.pendingIngest => 'Feldolgozas folyamatban',
-      KnowledgeBaseReadiness.ready => 'Tudastar kesz',
-      KnowledgeBaseReadiness.failed => 'Tudastar hiba',
-    };
   }
 }
 

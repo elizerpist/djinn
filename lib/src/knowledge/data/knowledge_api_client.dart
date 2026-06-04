@@ -4,6 +4,48 @@ import 'package:http/http.dart' as http;
 
 import '../models/knowledge_document.dart';
 
+class BackendComponentReadiness {
+  const BackendComponentReadiness({required this.ready, required this.detail});
+
+  final bool ready;
+  final String detail;
+
+  factory BackendComponentReadiness.fromJson(Map<String, Object?> json) {
+    return BackendComponentReadiness(
+      ready: json['ready'] as bool? ?? false,
+      detail: json['detail'] as String? ?? 'unavailable',
+    );
+  }
+}
+
+class BackendSystemReadiness {
+  const BackendSystemReadiness({
+    required this.ready,
+    required this.strictMode,
+    required this.components,
+  });
+
+  final bool ready;
+  final bool strictMode;
+  final Map<String, BackendComponentReadiness> components;
+
+  factory BackendSystemReadiness.fromJson(Map<String, Object?> json) {
+    final rawComponents = json['components'] as Map? ?? const {};
+    return BackendSystemReadiness(
+      ready: json['ready'] as bool? ?? false,
+      strictMode: json['strict_mode'] as bool? ?? true,
+      components: rawComponents.map(
+        (key, value) => MapEntry(
+          key.toString(),
+          BackendComponentReadiness.fromJson(
+            (value as Map).cast<String, Object?>(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class BackendKnowledgeStatus {
   const BackendKnowledgeStatus({
     required this.ready,
@@ -63,6 +105,16 @@ class KnowledgeApiClient {
       decoded,
       fallbackFilename: filename,
       fallbackLocalPath: localPath,
+    );
+  }
+
+  Future<BackendSystemReadiness> getSystemReadiness() async {
+    final response = await _client.get(_baseUri.resolve('/system/readiness'));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('system readiness failed: ${response.statusCode}');
+    }
+    return BackendSystemReadiness.fromJson(
+      jsonDecode(response.body) as Map<String, Object?>,
     );
   }
 

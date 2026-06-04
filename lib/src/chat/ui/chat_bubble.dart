@@ -12,6 +12,7 @@ class ChatBubble extends StatelessWidget {
     final isUser = message.sender == ChatSender.user;
     final color = isUser ? const Color(0xFF155EEF) : Colors.white;
     final textColor = isUser ? Colors.white : const Color(0xFF1F2937);
+    final statusLabel = _statusLabel(message);
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -48,10 +49,10 @@ class ChatBubble extends StatelessWidget {
                     ),
                   ),
               ],
-              if (message.status != null) ...[
+              if (statusLabel != null) ...[
                 const SizedBox(height: 6),
                 Text(
-                  message.status!,
+                  statusLabel,
                   style: TextStyle(
                     color: isUser ? Colors.white70 : const Color(0xFF6B7280),
                     fontSize: 11,
@@ -63,5 +64,33 @@ class ChatBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String? _statusLabel(ChatMessage message) {
+    final reason = message.refusalReason;
+    if (reason != null) {
+      return switch (reason) {
+        'backend_unavailable' => 'Backend nem erheto el',
+        'ai_backend_not_configured' => 'AI backend nincs beallitva',
+        'vector_store_unavailable' => 'Tudastar kereso nem erheto el',
+        'guardrails_unavailable' => 'Biztonsagi ellenorzes nem erheto el',
+        'input_blocked' => 'Biztonsagi szabaly blokkolta',
+        'insufficient_evidence' => 'Nincs elegendo forras',
+        'knowledge_base_ingest_pending' => 'Feldolgozas folyamatban',
+        'insufficient_retrieval_evidence' => 'Nincs elegendo forras',
+        'retrieval_guard_blocked' => 'Forrasellenorzes blokkolta',
+        'model_refused' => 'A modell nem adott forrasolt valaszt',
+        'citation_verification_failed' => 'Hivatkozasellenorzes sikertelen',
+        'groundedness_verification_failed' => 'Nem tamaszthato ala teljesen',
+        'output_guard_blocked' => 'Valaszellenorzes blokkolta',
+        'answer_pipeline_failed' => 'Valaszfolyamat hiba',
+        _ => reason,
+      };
+    }
+    return switch (message.status) {
+      'grounded' => 'Forrasokkal ellenorizve',
+      final status? => status,
+      null => null,
+    };
   }
 }

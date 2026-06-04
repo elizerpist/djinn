@@ -8,6 +8,8 @@ import 'package:djinn/src/chat/data/backend_chat_client.dart';
 import 'package:djinn/src/chat/data/chat_service.dart';
 import 'package:djinn/src/chat/data/local_chat_repository.dart';
 import 'package:djinn/src/chat/models/chat_citation.dart';
+import 'package:djinn/src/chat/models/chat_message.dart';
+import 'package:djinn/src/chat/ui/chat_bubble.dart';
 import 'package:djinn/src/knowledge/data/knowledge_api_client.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/data/knowledge_sync_service.dart';
@@ -107,6 +109,28 @@ void main() {
     await _pumpUntilFound(tester, find.text('Tudastar kesz: 1 PDF'));
 
     expect(syncService.refreshReadinessCalls, 2);
+  });
+
+  testWidgets('Djinn renders a friendly strict refusal label', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(
+            message: ChatMessage(
+              id: 'message-1',
+              conversationId: 'conversation-1',
+              sender: ChatSender.assistant,
+              text: 'A valasz allitasai nem voltak teljesen alatamaszthatok.',
+              createdAt: DateTime.utc(2026, 1, 1),
+              status: 'insufficient_evidence',
+              refusalReason: 'groundedness_verification_failed',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Nem tamaszthato ala teljesen'), findsOneWidget);
   });
 
   testWidgets('Djinn opens the knowledge base screen from the folder button', (

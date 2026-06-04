@@ -16,6 +16,15 @@ class _FakeKnowledgeApiClient extends KnowledgeApiClient {
   final uploadedPaths = <String>[];
 
   @override
+  Future<BackendSystemReadiness> getSystemReadiness() async {
+    return const BackendSystemReadiness(
+      ready: true,
+      strictMode: true,
+      components: {},
+    );
+  }
+
+  @override
   Future<KnowledgeDocument> uploadDocument({
     required String localPath,
     required String filename,
@@ -106,6 +115,20 @@ void main() {
       expect(result.state.readiness, KnowledgeBaseReadiness.empty);
     },
   );
+
+  test('refresh carries strict AI system readiness', () async {
+    final repository = KnowledgeDocumentRepository();
+    final service = KnowledgeSyncService(
+      repository: repository,
+      client: _FakeKnowledgeApiClient(),
+    );
+
+    final result = await service.refresh();
+
+    expect(result.backendAvailable, isTrue);
+    expect(result.systemReadiness?.ready, isTrue);
+    expect(result.systemReadiness?.strictMode, isTrue);
+  });
 
   test('records upload failure without deleting local metadata', () async {
     final directory = await Directory.systemTemp.createTemp('djinn-sync-fail-');

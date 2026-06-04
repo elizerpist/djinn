@@ -129,4 +129,32 @@ void main() {
       ]),
     );
   });
+
+  test('fetches strict AI system readiness', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) async {
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(
+        jsonEncode({
+          'ready': false,
+          'strict_mode': true,
+          'components': {
+            'openai': {'ready': false, 'detail': 'not configured'},
+            'qdrant': {'ready': true, 'detail': 'ready'},
+          },
+        }),
+      );
+      await request.response.close();
+    });
+    final client = KnowledgeApiClient(
+      baseUri: Uri.parse('http://${server.address.host}:${server.port}'),
+    );
+
+    final readiness = await client.getSystemReadiness();
+
+    expect(readiness.ready, isFalse);
+    expect(readiness.strictMode, isTrue);
+    expect(readiness.components['openai']?.detail, 'not configured');
+  });
 }
