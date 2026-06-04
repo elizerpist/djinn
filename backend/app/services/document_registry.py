@@ -10,21 +10,22 @@ from app.schemas import (
     KnowledgeDocumentStatus,
     KnowledgeStatusResponse,
 )
-from app.services.chunk_repository import ChunkRepository
 from app.services.chunking import chunk_pages
+from app.services.indexing_service import IndexingError, IndexingService
 from app.services.pdf_text_extractor import PdfExtractionError, PdfTextExtractor
 
 
 class DocumentRegistry:
     def __init__(
         self,
+        *,
+        indexing_service: IndexingService,
         storage_dir: Path | None = None,
-        chunk_repository: ChunkRepository | None = None,
         extractor: PdfTextExtractor | None = None,
     ) -> None:
         self._storage_dir = storage_dir or Path('corpus/omsz')
         self._storage_dir.mkdir(parents=True, exist_ok=True)
-        self._chunk_repository = chunk_repository or ChunkRepository()
+        self._indexing_service = indexing_service
         self._extractor = extractor or PdfTextExtractor()
         self._documents: dict[str, KnowledgeDocumentRecord] = {}
 
@@ -63,6 +64,14 @@ class DocumentRegistry:
         record = self._documents.get(document_id)
         if record is None:
             raise HTTPException(status_code=404, detail='Document not found')
+
+        record = record.model_copy(
+            update={
+                'status': KnowledgeDocumentStatus.processing,
+                'error_message': None,
+            }
+        )
+        self._documents[document_id] = record
         stored_path = Path(record.stored_path)
         if not stored_path.exists():
             return self._mark_failed(document_id, record, 'Stored PDF file is missing.')
@@ -82,7 +91,15 @@ class DocumentRegistry:
                 record,
                 'No extractable text was found in the PDF.',
             )
-        self._chunk_repository.replace_document_chunks(document_id, chunks)
+        try:
+            self._indexing_service.replace_document_chunks(document_id, chunks)
+        except IndexingError as error:
+            return self._mark_failed(
+                document_id,
+                record,
+                str(error),
+                clear_index=False,
+            )
         updated = record.model_copy(
             update={
                 'status': KnowledgeDocumentStatus.processed,
@@ -110,8 +127,14 @@ class DocumentRegistry:
         document_id: str,
         record: KnowledgeDocumentRecord,
         error_message: str,
+        *,
+        clear_index: bool = True,
     ) -> KnowledgeDocumentRecord:
-        self._chunk_repository.replace_document_chunks(document_id, [])
+        if clear_index:
+            try:
+                self._indexing_service.replace_document_chunks(document_id, [])
+            except IndexingError:
+                pass
         updated = record.model_copy(
             update={
                 'status': KnowledgeDocumentStatus.failed,

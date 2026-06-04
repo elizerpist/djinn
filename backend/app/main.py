@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile
 
+from app.infra.metadata_store import LocalMetadataStore
 from app.schemas import (
     ChatRequest,
     ChatResponse,
@@ -12,15 +13,22 @@ from app.services.answer_service import AnswerService
 from app.services.chunk_repository import ChunkRepository
 from app.services.conversation_store import ConversationStore
 from app.services.document_registry import DocumentRegistry
+from app.services.indexing_service import IndexingService
 from app.services.pdf_text_extractor import PdfTextExtractor
 from app.services.retrieval import RetrievalService
 
 app = FastAPI(title='Djinn Backend', version='0.1.0')
 store = ConversationStore()
 chunks = ChunkRepository()
+metadata = LocalMetadataStore()
+indexing = IndexingService(
+    vector_index=chunks,
+    metadata_store=metadata,
+    embedding_model='local-test',
+)
 retrieval = RetrievalService(repository=chunks, minimum_score=1)
 answers = AnswerService(retrieval=retrieval)
-documents = DocumentRegistry(chunk_repository=chunks, extractor=PdfTextExtractor())
+documents = DocumentRegistry(indexing_service=indexing, extractor=PdfTextExtractor())
 
 
 @app.get('/health')
