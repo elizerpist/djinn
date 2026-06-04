@@ -44,6 +44,18 @@ class RetrievalResult(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
 
 
+class AnswerDraft(BaseModel):
+    answer: str
+    cited_chunk_ids: list[str] = Field(default_factory=list)
+    abstain: bool
+    refusal_reason: str | None = None
+
+
+class GroundednessVerdict(BaseModel):
+    supported: bool
+    unsupported_claims: list[str] = Field(default_factory=list)
+
+
 class ComponentReadiness(BaseModel):
     ready: bool
     detail: str
