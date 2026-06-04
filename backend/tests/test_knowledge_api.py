@@ -1,12 +1,5 @@
 import fitz
-from fastapi.testclient import TestClient
-
-import app.main as main
-
-client = TestClient(main.app)
-
-
-def test_upload_rejects_non_pdf_file():
+def test_upload_rejects_non_pdf_file(client):
     response = client.post(
         '/knowledge/documents',
         files={'file': ('notes.txt', b'not a pdf', 'text/plain')},
@@ -16,7 +9,7 @@ def test_upload_rejects_non_pdf_file():
     assert 'PDF' in response.json()['detail']
 
 
-def test_pdf_upload_registers_pending_document_and_lists_it():
+def test_pdf_upload_registers_pending_document_and_lists_it(client):
     response = client.post(
         '/knowledge/documents',
         files={'file': ('omsz-protocol.pdf', b'%PDF-1.4\n%%EOF', 'application/pdf')},
@@ -33,7 +26,7 @@ def test_pdf_upload_registers_pending_document_and_lists_it():
     assert any(item['id'] == body['id'] for item in list_response.json())
 
 
-def test_knowledge_status_is_not_ready_while_documents_are_pending():
+def test_knowledge_status_is_not_ready_while_documents_are_pending(client):
     client.post(
         '/knowledge/documents',
         files={'file': ('pending.pdf', b'%PDF-1.4\n%%EOF', 'application/pdf')},
@@ -49,7 +42,7 @@ def test_knowledge_status_is_not_ready_while_documents_are_pending():
     assert body['processed_count'] == 0
 
 
-def test_ingest_extracts_pdf_text_and_marks_processed():
+def test_ingest_extracts_pdf_text_and_marks_processed(client, fake_runtime):
     pdf_bytes = _pdf_bytes('Mellkasi fajdalom ABCDE vizsgalat')
     upload = client.post(
         '/knowledge/documents',
@@ -62,10 +55,10 @@ def test_ingest_extracts_pdf_text_and_marks_processed():
     body = response.json()
     assert body['status'] == 'processed'
     assert body['error_message'] is None
-    assert main.chunks.count_document_chunks(upload['id']) == 1
+    assert len(fake_runtime.metadata_store.list_document_chunks(upload['id'])) == 1
 
 
-def test_ingest_marks_unreadable_pdf_failed():
+def test_ingest_marks_unreadable_pdf_failed(client):
     upload = client.post(
         '/knowledge/documents',
         files={'file': ('broken.pdf', b'%PDF-1.4 broken', 'application/pdf')},
@@ -79,7 +72,7 @@ def test_ingest_marks_unreadable_pdf_failed():
     assert body['error_message']
 
 
-def test_knowledge_status_counts_processed_pending_and_failed():
+def test_knowledge_status_counts_processed_pending_and_failed(client):
     first = client.post(
         '/knowledge/documents',
         files={'file': ('pending.pdf', b'%PDF-1.4 pending', 'application/pdf')},

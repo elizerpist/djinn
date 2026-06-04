@@ -1,11 +1,22 @@
-from app.schemas import ChatResponse, GroundingStatus, KnowledgeStatusResponse
-from app.services.retrieval import RetrievalService
-from app.services.safety import answer_without_corpus
+from typing import Protocol
+
+from app.schemas import ChatResponse, KnowledgeStatusResponse, SystemReadinessResponse
+from app.services.answer_graph import AnswerGraph
+
+
+class ReadinessProvider(Protocol):
+    def status(self) -> SystemReadinessResponse: ...
 
 
 class AnswerService:
-    def __init__(self, *, retrieval: RetrievalService) -> None:
-        self._retrieval = retrieval
+    def __init__(
+        self,
+        *,
+        graph: AnswerGraph,
+        readiness: ReadinessProvider,
+    ) -> None:
+        self._graph = graph
+        self._readiness = readiness
 
     def answer(
         self,
@@ -14,24 +25,9 @@ class AnswerService:
         message: str,
         knowledge: KnowledgeStatusResponse,
     ) -> ChatResponse:
-        if knowledge.pending_count > 0 and knowledge.processed_count == 0:
-            return answer_without_corpus(conversation_id, ingest_pending=True)
-        if knowledge.processed_count == 0:
-            return answer_without_corpus(conversation_id)
-        result = self._retrieval.retrieve(message)
-        if not result.chunks:
-            return ChatResponse(
-                conversation_id=conversation_id,
-                answer='A feldolgozott tudasbazisban nincs elegendo idezett forras ehhez a valaszhoz.',
-                status=GroundingStatus.insufficient_evidence,
-                citations=[],
-                refusal_reason='insufficient_retrieval_evidence',
-            )
-        top_chunk = result.chunks[0]
-        return ChatResponse(
+        return self._graph.answer(
             conversation_id=conversation_id,
-            answer=top_chunk.text,
-            status=GroundingStatus.grounded,
-            citations=result.citations,
-            refusal_reason=None,
+            message=message,
+            knowledge=knowledge,
+            runtime_ready=self._readiness.status().ready,
         )

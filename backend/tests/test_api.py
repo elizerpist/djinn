@@ -1,12 +1,5 @@
 import fitz
-from fastapi.testclient import TestClient
-
-from app.main import app
-
-client = TestClient(app)
-
-
-def test_health():
+def test_health(client):
     response = client.get('/health')
 
     assert response.status_code == 200
@@ -14,7 +7,7 @@ def test_health():
     assert response.json()['service'] == 'djinn-backend'
 
 
-def test_chat_without_corpus_refuses_with_contract_shape():
+def test_chat_without_corpus_refuses_with_contract_shape(client):
     response = client.post(
         '/chat',
         json={
@@ -32,7 +25,7 @@ def test_chat_without_corpus_refuses_with_contract_shape():
     assert body['conversation_id']
 
 
-def test_chat_with_pending_documents_mentions_ingest_pending():
+def test_chat_with_pending_documents_mentions_ingest_pending(client):
     client.post(
         '/knowledge/documents',
         files={'file': ('pending-chat.pdf', b'%PDF-1.4\n%%EOF', 'application/pdf')},
@@ -49,11 +42,11 @@ def test_chat_with_pending_documents_mentions_ingest_pending():
     body = response.json()
     assert response.status_code == 200
     assert body['status'] == 'insufficient_evidence'
-    assert 'ingest' in body['answer'].lower()
+    assert 'feldolgozas' in body['answer'].lower()
     assert body['refusal_reason'] == 'knowledge_base_ingest_pending'
 
 
-def test_chat_returns_grounded_answer_with_citation_after_ingest():
+def test_chat_returns_grounded_answer_with_citation_after_ingest(client):
     pdf_bytes = _pdf_bytes('Mellkasi fajdalom eseten ABCDE vizsgalat szukseges.')
     upload = client.post(
         '/knowledge/documents',
@@ -75,7 +68,7 @@ def test_chat_returns_grounded_answer_with_citation_after_ingest():
     assert body['refusal_reason'] is None
 
 
-def test_chat_refuses_when_processed_chunks_do_not_match_question():
+def test_chat_refuses_when_processed_chunks_do_not_match_question(client):
     pdf_bytes = _pdf_bytes('Lazcsillapitas gyermekkorban.')
     upload = client.post(
         '/knowledge/documents',
