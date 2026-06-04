@@ -1,0 +1,6 @@
+import nemoguardrails.library.self_check.output_check
+import nemoguardrails.library.self_check.facts
+
+flow output rails $output_text
+  self check output
+  self check facts
