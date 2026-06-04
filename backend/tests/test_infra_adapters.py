@@ -24,10 +24,10 @@ def test_local_vector_index_returns_upserted_chunk_ids():
         metadata={},
     )
 
-    index.upsert_chunks([chunk])
+    index.replace_document_chunks('backend-doc-1', [chunk])
     results = index.search('mellkasi fajdalom')
 
-    assert results == ['chunk-1']
+    assert [match.chunk.id for match in results] == ['chunk-1']
 
 
 def test_local_metadata_store_records_chunks_by_document():
@@ -41,6 +41,10 @@ def test_local_metadata_store_records_chunks_by_document():
         metadata={},
     )
 
-    store.replace_document_chunks('backend-doc-1', [chunk])
+    store.replace_document_chunks(
+        'backend-doc-1',
+        [chunk],
+        embedding_model='text-embedding-3-large',
+    )
 
     assert store.list_document_chunks('backend-doc-1') == [chunk]

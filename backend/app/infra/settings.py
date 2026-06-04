@@ -13,6 +13,7 @@ class BackendSettings:
     openai_api_key: str | None
     openai_chat_model: str
     openai_embedding_model: str
+    openai_embedding_dimensions: int
     strict_mode: bool
     retrieval_min_score: float
     retrieval_limit: int
@@ -45,6 +46,9 @@ class BackendSettings:
             openai_embedding_model=values.get(
                 'DJINN_OPENAI_EMBEDDING_MODEL',
                 'text-embedding-3-large',
+            ),
+            openai_embedding_dimensions=int(
+                values.get('DJINN_OPENAI_EMBEDDING_DIMENSIONS', '3072')
             ),
             strict_mode=values.get('DJINN_STRICT_MODE', 'true').lower() == 'true',
             retrieval_min_score=float(

@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import StrEnum
 from pydantic import BaseModel, Field
 
@@ -37,6 +38,18 @@ class SourceChunk(BaseModel):
     page: int | None = None
     text: str
     metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class VectorSearchMatch(BaseModel):
+    chunk: SourceChunk
+    score: float
+
+
+class DocumentIndexAudit(BaseModel):
+    document_id: str
+    embedding_model: str
+    indexed_at: datetime
+    chunk_count: int
 
 
 class RetrievalResult(BaseModel):
