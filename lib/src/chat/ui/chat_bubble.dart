@@ -34,6 +34,14 @@ class ChatBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (!isUser && message.hasValidationWarning) ...[
+                _ValidationWarning(
+                  text:
+                      message.warningText ??
+                      'A válasz nem validált flowchart elemet használ.',
+                ),
+                const SizedBox(height: 8),
+              ],
               Text(
                 message.text,
                 style: TextStyle(color: textColor, fontSize: 15, height: 1.35),
@@ -41,12 +49,10 @@ class ChatBubble extends StatelessWidget {
               if (!isUser && message.citations.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 for (final citation in message.citations)
-                  Text(
-                    '${citation.title}${citation.page == null ? '' : ' p.${citation.page}'}',
-                    style: const TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 11,
-                    ),
+                  _CitationRow(
+                    sourceLabel: citation.sourceLabel,
+                    title: citation.title,
+                    page: citation.page,
                   ),
               ],
               if (statusLabel != null) ...[
@@ -92,5 +98,81 @@ class ChatBubble extends StatelessWidget {
       final status? => status,
       null => null,
     };
+  }
+}
+
+class _ValidationWarning extends StatelessWidget {
+  const _ValidationWarning({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFBBF24)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Color(0xFF92400E),
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          height: 1.25,
+        ),
+      ),
+    );
+  }
+}
+
+class _CitationRow extends StatelessWidget {
+  const _CitationRow({
+    required this.sourceLabel,
+    required this.title,
+    required this.page,
+  });
+
+  final String? sourceLabel;
+  final String title;
+  final int? page;
+
+  @override
+  Widget build(BuildContext context) {
+    final titleText = '$title${page == null ? '' : ' p.$page'}';
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (sourceLabel case final label?)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF1D4ED8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          Text(
+            titleText,
+            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11),
+          ),
+        ],
+      ),
+    );
   }
 }
