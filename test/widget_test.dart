@@ -15,6 +15,8 @@ import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/data/knowledge_sync_service.dart';
 import 'package:djinn/src/knowledge/data/pdf_import_service.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
+import 'package:djinn/src/settings/data/api_key_store.dart';
+import 'package:djinn/src/settings/models/app_settings.dart';
 
 void main() {
   testWidgets('Djinn opens a new chat and sends a text message', (
@@ -147,6 +149,19 @@ void main() {
     expect(find.text('Nincs importalt PDF'), findsOneWidget);
     expect(find.byTooltip('PDF hozzaadasa'), findsOneWidget);
   });
+
+  testWidgets('Djinn opens settings from the hamburger menu', (tester) async {
+    await tester.pumpWidget(_testApp());
+    await _pumpUntilFound(tester, find.text('Djinn'));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OpenAI kapcsolat'), findsOneWidget);
+    expect(find.byKey(const Key('openai-api-key-field')), findsOneWidget);
+  });
 }
 
 DjinnApp _testApp({
@@ -158,6 +173,7 @@ DjinnApp _testApp({
   final resolvedChatRepository = chatRepository ?? LocalChatRepository();
   final resolvedKnowledgeRepository =
       knowledgeRepository ?? KnowledgeDocumentRepository();
+  var settings = AppSettings.defaults();
   return DjinnApp(
     chatRepository: resolvedChatRepository,
     chatService:
@@ -169,6 +185,10 @@ DjinnApp _testApp({
     knowledgeRepository: resolvedKnowledgeRepository,
     pdfImportService: PdfImportService(importDirectory: Directory('/memory')),
     knowledgeSyncService: knowledgeSyncService,
+    apiKeyStore: MemoryApiKeyStore(),
+    loadSettings: () async => settings,
+    saveSettings: (value) async => settings = value,
+    testApiKey: () async => true,
   );
 }
 

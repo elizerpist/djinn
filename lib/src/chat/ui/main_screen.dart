@@ -4,6 +4,9 @@ import '../../knowledge/data/knowledge_document_repository.dart';
 import '../../knowledge/data/pdf_import_service.dart';
 import '../../knowledge/data/knowledge_sync_service.dart';
 import '../../knowledge/ui/knowledge_base_screen.dart';
+import '../../settings/data/api_key_store.dart';
+import '../../settings/models/app_settings.dart';
+import '../../settings/ui/settings_screen.dart';
 import '../data/chat_service.dart';
 import '../data/local_chat_repository.dart';
 import '../models/chat_conversation.dart';
@@ -17,6 +20,10 @@ class MainScreen extends StatefulWidget {
     required this.knowledgeRepository,
     required this.pdfImportService,
     required this.knowledgeSyncService,
+    required this.apiKeyStore,
+    required this.loadSettings,
+    required this.saveSettings,
+    required this.testApiKey,
   });
 
   final LocalChatRepository repository;
@@ -24,6 +31,10 @@ class MainScreen extends StatefulWidget {
   final KnowledgeDocumentRepository knowledgeRepository;
   final PdfImportService pdfImportService;
   final KnowledgeSyncService knowledgeSyncService;
+  final ApiKeyStore apiKeyStore;
+  final Future<AppSettings> Function() loadSettings;
+  final Future<void> Function(AppSettings settings) saveSettings;
+  final Future<bool> Function() testApiKey;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -53,6 +64,19 @@ class _MainScreenState extends State<MainScreen> {
           repository: widget.knowledgeRepository,
           importService: widget.pdfImportService,
           syncService: widget.knowledgeSyncService,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SettingsScreen(
+          apiKeyStore: widget.apiKeyStore,
+          loadSettings: widget.loadSettings,
+          saveSettings: widget.saveSettings,
+          testApiKey: widget.testApiKey,
         ),
       ),
     );
@@ -93,6 +117,35 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: Drawer(
+        child: SafeArea(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              const ListTile(
+                title: Text('Djinn'),
+                subtitle: Text('Local ObjectBox mód'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings),
+                title: const Text('Beállítások'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _openSettings();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder),
+                title: const Text('Tudástár'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _openKnowledgeBase();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
       appBar: AppBar(
         title: const Text('Djinn'),
         backgroundColor: Colors.white,

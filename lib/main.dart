@@ -12,6 +12,10 @@ import 'src/knowledge/data/knowledge_api_client.dart';
 import 'src/knowledge/data/knowledge_document_repository.dart';
 import 'src/knowledge/data/knowledge_sync_service.dart';
 import 'src/knowledge/data/pdf_import_service.dart';
+import 'src/openai/openai_client.dart';
+import 'src/openai/openai_http_client.dart';
+import 'src/settings/data/api_key_store.dart';
+import 'src/settings/models/app_settings.dart';
 
 void main() {
   runApp(const DjinnApp());
@@ -25,6 +29,10 @@ class DjinnApp extends StatefulWidget {
     this.knowledgeRepository,
     this.pdfImportService,
     this.knowledgeSyncService,
+    this.apiKeyStore,
+    this.loadSettings,
+    this.saveSettings,
+    this.testApiKey,
   });
 
   final LocalChatRepository? chatRepository;
@@ -32,6 +40,10 @@ class DjinnApp extends StatefulWidget {
   final KnowledgeDocumentRepository? knowledgeRepository;
   final PdfImportService? pdfImportService;
   final KnowledgeSyncService? knowledgeSyncService;
+  final ApiKeyStore? apiKeyStore;
+  final Future<AppSettings> Function()? loadSettings;
+  final Future<void> Function(AppSettings settings)? saveSettings;
+  final Future<bool> Function()? testApiKey;
 
   @override
   State<DjinnApp> createState() => _DjinnAppState();
@@ -41,6 +53,12 @@ class _DjinnAppState extends State<DjinnApp> {
   late final Future<_AppDependencies> _dependencies = _loadDependencies();
 
   Future<_AppDependencies> _loadDependencies() async {
+    final apiKeyStore = widget.apiKeyStore ?? SecureApiKeyStore();
+    final settingsStore = _MemoryAppSettingsStore();
+    final loadSettings = widget.loadSettings ?? settingsStore.load;
+    final saveSettings = widget.saveSettings ?? settingsStore.save;
+    final testApiKey = widget.testApiKey ?? _buildOpenAiKeyTester(apiKeyStore);
+
     if (widget.chatRepository != null &&
         widget.knowledgeRepository != null &&
         widget.pdfImportService != null) {
@@ -60,6 +78,10 @@ class _DjinnAppState extends State<DjinnApp> {
               repository: widget.knowledgeRepository!,
               client: KnowledgeApiClient(baseUri: _backendUri()),
             ),
+        apiKeyStore: apiKeyStore,
+        loadSettings: loadSettings,
+        saveSettings: saveSettings,
+        testApiKey: testApiKey,
       );
     }
 
@@ -106,6 +128,10 @@ class _DjinnAppState extends State<DjinnApp> {
       knowledgeRepository: knowledgeRepository,
       pdfImportService: pdfImportService,
       knowledgeSyncService: knowledgeSyncService,
+      apiKeyStore: apiKeyStore,
+      loadSettings: loadSettings,
+      saveSettings: saveSettings,
+      testApiKey: testApiKey,
     );
   }
 
@@ -149,6 +175,10 @@ class _DjinnAppState extends State<DjinnApp> {
             knowledgeRepository: dependencies.knowledgeRepository,
             pdfImportService: dependencies.pdfImportService,
             knowledgeSyncService: dependencies.knowledgeSyncService,
+            apiKeyStore: dependencies.apiKeyStore,
+            loadSettings: dependencies.loadSettings,
+            saveSettings: dependencies.saveSettings,
+            testApiKey: dependencies.testApiKey,
           );
         },
       ),
@@ -163,6 +193,10 @@ class _AppDependencies {
     required this.knowledgeRepository,
     required this.pdfImportService,
     required this.knowledgeSyncService,
+    required this.apiKeyStore,
+    required this.loadSettings,
+    required this.saveSettings,
+    required this.testApiKey,
   });
 
   final LocalChatRepository chatRepository;
@@ -170,6 +204,36 @@ class _AppDependencies {
   final KnowledgeDocumentRepository knowledgeRepository;
   final PdfImportService pdfImportService;
   final KnowledgeSyncService knowledgeSyncService;
+  final ApiKeyStore apiKeyStore;
+  final Future<AppSettings> Function() loadSettings;
+  final Future<void> Function(AppSettings settings) saveSettings;
+  final Future<bool> Function() testApiKey;
+}
+
+Future<bool> Function() _buildOpenAiKeyTester(ApiKeyStore apiKeyStore) {
+  final client = OpenAiHttpClient(apiKeyStore: apiKeyStore);
+  return () async {
+    final key = await apiKeyStore.readKey();
+    if (key == null || key.trim().isEmpty) {
+      return false;
+    }
+    try {
+      await client.testApiKey(apiKey: key);
+      return true;
+    } on OpenAiException {
+      return false;
+    }
+  };
+}
+
+class _MemoryAppSettingsStore {
+  AppSettings _settings = AppSettings.defaults();
+
+  Future<AppSettings> load() async => _settings;
+
+  Future<void> save(AppSettings settings) async {
+    _settings = settings;
+  }
 }
 
 class MyApp extends DjinnApp {
