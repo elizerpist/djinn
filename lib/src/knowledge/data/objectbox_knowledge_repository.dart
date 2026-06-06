@@ -2,6 +2,8 @@ import 'package:uuid/uuid.dart';
 
 import '../../../objectbox.g.dart';
 import '../../local_store/entities.dart';
+import '../../openai/openai_client.dart';
+import 'document_processing_service.dart';
 
 abstract class KnowledgeRepository {
   Future<KnowledgeDocumentEntity> addImportedDocument({
@@ -26,7 +28,8 @@ abstract class KnowledgeRepository {
   Future<bool> hasReadyDocuments();
 }
 
-class ObjectBoxKnowledgeRepository implements KnowledgeRepository {
+class ObjectBoxKnowledgeRepository
+    implements KnowledgeRepository, ProcessingRepository {
   ObjectBoxKnowledgeRepository({required Store store, Uuid? uuid})
     : _documentBox = store.box<KnowledgeDocumentEntity>(),
       _chunkBox = store.box<DocumentChunkEntity>(),
@@ -75,6 +78,54 @@ class ObjectBoxKnowledgeRepository implements KnowledgeRepository {
     document.processingState = state.wireName;
     document.errorMessage = errorMessage;
     _documentBox.put(document);
+  }
+
+  @override
+  Future<String> localPathForDocument(String documentPublicId) async {
+    final document = _findDocument(documentPublicId);
+    if (document == null) {
+      throw StateError('knowledge document not found: $documentPublicId');
+    }
+    return document.localPath;
+  }
+
+  @override
+  Future<void> markState(
+    String documentPublicId,
+    ProcessingState state, {
+    String? errorMessage,
+  }) {
+    return updateProcessingState(
+      documentPublicId,
+      state,
+      errorMessage: errorMessage,
+    );
+  }
+
+  @override
+  Future<void> saveExtractedChunk({
+    required String documentPublicId,
+    required OpenAiExtractedChunk chunk,
+    required List<double> embedding,
+    required String embeddingModel,
+  }) async {
+    final sourceId = '$documentPublicId:${chunk.id}';
+    await saveChunk(
+      DocumentChunkEntity(
+        publicId: sourceId,
+        documentPublicId: documentPublicId,
+        text: chunk.text,
+        pageNumber: chunk.pageNumber,
+        sectionTitle: chunk.sectionTitle,
+      ),
+      ChunkEmbeddingEntity(
+        sourceId: sourceId,
+        sourceType: EvidenceSourceType.textChunk.wireName,
+        vector: embedding,
+        model: embeddingModel,
+        createdAtMillis: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
   }
 
   @override
