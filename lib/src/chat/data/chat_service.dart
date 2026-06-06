@@ -1,11 +1,12 @@
-import 'backend_chat_client.dart';
+import '../../openai/openai_client.dart';
+import 'local_answer_service.dart';
 import 'local_chat_repository.dart';
 
 class ChatService {
-  ChatService({required this.repository, required this.backend});
+  ChatService({required this.repository, required this.answerService});
 
   final LocalChatRepository repository;
-  final BackendChatClient backend;
+  final AnswerService answerService;
 
   Future<void> sendMessage(String conversationId, String text) async {
     final userMessage = await repository.appendUserMessage(
@@ -13,24 +14,23 @@ class ChatService {
       text,
     );
     try {
-      final response = await backend.sendMessage(
-        message: userMessage.text,
-        conversationId: conversationId,
-      );
+      final response = await answerService.answer(userMessage.text);
       await repository.appendAssistantMessage(
         conversationId,
-        text: response.answer,
+        text: response.text,
         status: response.status,
         refusalReason: response.refusalReason,
         citations: response.citations,
+        hasValidationWarning: response.hasValidationWarning,
+        warningText: response.warningText,
       );
-    } on BackendChatException {
+    } on OpenAiException {
       await repository.appendAssistantMessage(
         conversationId,
         text:
-            'Backend nem erheto el. A kerdes megmaradt a chatben, probald ujra kesobb.',
-        status: 'backend_unavailable',
-        refusalReason: 'backend_unavailable',
+            'OpenAI hiba történt. A kérdés megmaradt a chatben, próbáld újra később.',
+        status: 'openai_error',
+        refusalReason: 'openai_error',
       );
     }
   }

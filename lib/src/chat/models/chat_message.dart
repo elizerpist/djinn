@@ -12,6 +12,8 @@ class ChatMessage {
     this.status,
     this.refusalReason,
     this.citations = const [],
+    this.hasValidationWarning = false,
+    this.warningText,
   });
 
   final String id;
@@ -22,6 +24,8 @@ class ChatMessage {
   final String? status;
   final String? refusalReason;
   final List<ChatCitation> citations;
+  final bool hasValidationWarning;
+  final String? warningText;
 
   Map<String, Object?> toJson() {
     return {
@@ -33,6 +37,8 @@ class ChatMessage {
       'status': status,
       'refusalReason': refusalReason,
       'citations': citations.map((citation) => citation.toJson()).toList(),
+      'hasValidationWarning': hasValidationWarning,
+      'warningText': warningText,
     };
   }
 
@@ -50,6 +56,8 @@ class ChatMessage {
       status: json['status'] as String?,
       refusalReason: json['refusalReason'] as String?,
       citations: citationItems,
+      hasValidationWarning: json['hasValidationWarning'] as bool? ?? false,
+      warningText: json['warningText'] as String?,
     );
   }
 }

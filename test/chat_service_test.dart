@@ -1,31 +1,34 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:djinn/src/chat/data/backend_chat_client.dart';
 import 'package:djinn/src/chat/data/chat_service.dart';
+import 'package:djinn/src/chat/data/local_answer_service.dart';
 import 'package:djinn/src/chat/data/local_chat_repository.dart';
 import 'package:djinn/src/chat/models/chat_citation.dart';
 import 'package:djinn/src/chat/models/chat_message.dart';
+import 'package:djinn/src/openai/openai_client.dart';
 
 void main() {
-  test('persists user message and backend assistant response', () async {
+  test('persists user message and local grounded assistant response', () async {
     final repository = LocalChatRepository(
       clock: () => DateTime.utc(2026, 1, 1, 12),
     );
     final conversation = await repository.createConversation();
     final service = ChatService(
       repository: repository,
-      backend: _FakeBackendChatClient(
-        response: const BackendChatResponse(
-          conversationId: 'backend-conversation-1',
-          answer: 'Forrasbol valaszolok.',
+      answerService: const _FakeAnswerService(
+        response: LocalAnswerResult(
+          text: 'Forrasbol valaszolok.',
           status: 'grounded',
           citations: [
             ChatCitation(
-              documentId: 'backend-doc-1',
+              documentId: 'local-doc-1',
               title: 'omsz.pdf',
               page: 1,
               section: null,
               excerpt: 'Forrasbol valaszolok.',
+              sourceId: 'chunk-1',
+              sourceLabel: 'Szöveges PDF-részlet',
+              validationState: 'validated',
             ),
           ],
         ),
@@ -41,17 +44,17 @@ void main() {
     expect(messages.last.sender, ChatSender.assistant);
     expect(messages.last.text, 'Forrasbol valaszolok.');
     expect(messages.last.status, 'grounded');
-    expect(messages.last.citations.single.documentId, 'backend-doc-1');
+    expect(messages.last.citations.single.sourceId, 'chunk-1');
   });
 
-  test('records backend unavailable assistant message', () async {
+  test('records OpenAI provider error assistant message', () async {
     final repository = LocalChatRepository(
       clock: () => DateTime.utc(2026, 1, 1, 12),
     );
     final conversation = await repository.createConversation();
     final service = ChatService(
       repository: repository,
-      backend: _FailingBackendChatClient(),
+      answerService: _FailingAnswerService(),
     );
 
     await service.sendMessage(conversation.id, 'Mi a teendo?');
@@ -59,35 +62,24 @@ void main() {
 
     expect(messages, hasLength(2));
     expect(messages.last.sender, ChatSender.assistant);
-    expect(messages.last.status, 'backend_unavailable');
-    expect(messages.last.refusalReason, 'backend_unavailable');
-    expect(messages.last.text, contains('Backend'));
+    expect(messages.last.status, 'openai_error');
+    expect(messages.last.refusalReason, 'openai_error');
+    expect(messages.last.text, contains('OpenAI'));
   });
 }
 
-class _FakeBackendChatClient extends BackendChatClient {
-  _FakeBackendChatClient({required this.response})
-    : super(baseUri: Uri.parse('http://localhost'));
+class _FakeAnswerService implements AnswerService {
+  const _FakeAnswerService({required this.response});
 
-  final BackendChatResponse response;
+  final LocalAnswerResult response;
 
   @override
-  Future<BackendChatResponse> sendMessage({
-    required String message,
-    String? conversationId,
-  }) async {
-    return response;
-  }
+  Future<LocalAnswerResult> answer(String question) async => response;
 }
 
-class _FailingBackendChatClient extends BackendChatClient {
-  _FailingBackendChatClient() : super(baseUri: Uri.parse('http://localhost'));
-
+class _FailingAnswerService implements AnswerService {
   @override
-  Future<BackendChatResponse> sendMessage({
-    required String message,
-    String? conversationId,
-  }) async {
-    throw BackendChatException('backend chat failed: 503');
+  Future<LocalAnswerResult> answer(String question) async {
+    throw const OpenAiException('provider failed');
   }
 }

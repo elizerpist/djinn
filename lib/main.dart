@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'src/chat/data/backend_chat_client.dart';
 import 'src/chat/data/chat_service.dart';
+import 'src/chat/data/local_answer_service.dart';
 import 'src/chat/data/local_chat_repository.dart';
 import 'src/chat/ui/main_screen.dart';
 import 'src/core/storage/json_file_store.dart';
@@ -50,7 +50,7 @@ class _DjinnAppState extends State<DjinnApp> {
             widget.chatService ??
             ChatService(
               repository: widget.chatRepository!,
-              backend: BackendChatClient(baseUri: _backendUri()),
+              answerService: const _UnavailableAnswerService(),
             ),
         knowledgeRepository: widget.knowledgeRepository!,
         pdfImportService: widget.pdfImportService!,
@@ -75,7 +75,7 @@ class _DjinnAppState extends State<DjinnApp> {
         widget.chatService ??
         ChatService(
           repository: chatRepository,
-          backend: BackendChatClient(baseUri: _backendUri()),
+          answerService: const _UnavailableAnswerService(),
         );
 
     final knowledgeRepository =
@@ -174,4 +174,19 @@ class _AppDependencies {
 
 class MyApp extends DjinnApp {
   const MyApp({super.key});
+}
+
+class _UnavailableAnswerService implements AnswerService {
+  const _UnavailableAnswerService();
+
+  @override
+  Future<LocalAnswerResult> answer(String question) async {
+    return const LocalAnswerResult(
+      text:
+          'A helyi B mód még nincs teljesen inicializálva. Importálj PDF-et és állítsd be az OpenAI kulcsot.',
+      status: 'local_mode_not_ready',
+      refusalReason: 'local_mode_not_ready',
+      citations: [],
+    );
+  }
 }

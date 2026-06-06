@@ -89,6 +89,8 @@ class LocalChatRepository {
     required String status,
     String? refusalReason,
     List<ChatCitation> citations = const [],
+    bool hasValidationWarning = false,
+    String? warningText,
   }) async {
     final message = ChatMessage(
       id: 'message-${_nextMessageId++}',
@@ -99,6 +101,8 @@ class LocalChatRepository {
       status: status,
       refusalReason: refusalReason,
       citations: citations,
+      hasValidationWarning: hasValidationWarning,
+      warningText: warningText,
     );
     await _appendMessage(conversationId, message);
     return message;

@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/main.dart';
-import 'package:djinn/src/chat/data/backend_chat_client.dart';
 import 'package:djinn/src/chat/data/chat_service.dart';
+import 'package:djinn/src/chat/data/local_answer_service.dart';
 import 'package:djinn/src/chat/data/local_chat_repository.dart';
 import 'package:djinn/src/chat/models/chat_citation.dart';
 import 'package:djinn/src/chat/models/chat_message.dart';
@@ -51,7 +51,7 @@ void main() {
     final chatRepository = LocalChatRepository();
     final chatService = ChatService(
       repository: chatRepository,
-      backend: _BackendAnswerClient(),
+      answerService: const _BackendAnswerService(),
     );
 
     await tester.pumpWidget(
@@ -164,7 +164,7 @@ DjinnApp _testApp({
         chatService ??
         ChatService(
           repository: resolvedChatRepository,
-          backend: _DefaultRefusalClient(),
+          answerService: const _DefaultRefusalService(),
         ),
     knowledgeRepository: resolvedKnowledgeRepository,
     pdfImportService: PdfImportService(importDirectory: Directory('/memory')),
@@ -208,17 +208,13 @@ class _SequencedKnowledgeSyncService extends KnowledgeSyncService {
   }
 }
 
-class _DefaultRefusalClient extends BackendChatClient {
-  _DefaultRefusalClient() : super(baseUri: Uri.parse('http://localhost'));
+class _DefaultRefusalService implements AnswerService {
+  const _DefaultRefusalService();
 
   @override
-  Future<BackendChatResponse> sendMessage({
-    required String message,
-    String? conversationId,
-  }) async {
-    return const BackendChatResponse(
-      conversationId: 'backend-conversation-1',
-      answer:
+  Future<LocalAnswerResult> answer(String question) async {
+    return const LocalAnswerResult(
+      text:
           'A tudasbazisban nincs elegendo hitelesitett forras ehhez a valaszhoz. Csak az alkalmazas dokumentumai alapjan tudok valaszolni.',
       status: 'insufficient_evidence',
       citations: [],
@@ -227,17 +223,13 @@ class _DefaultRefusalClient extends BackendChatClient {
   }
 }
 
-class _BackendAnswerClient extends BackendChatClient {
-  _BackendAnswerClient() : super(baseUri: Uri.parse('http://localhost'));
+class _BackendAnswerService implements AnswerService {
+  const _BackendAnswerService();
 
   @override
-  Future<BackendChatResponse> sendMessage({
-    required String message,
-    String? conversationId,
-  }) async {
-    return const BackendChatResponse(
-      conversationId: 'backend-conversation-1',
-      answer: 'Forrasbol valaszolok.',
+  Future<LocalAnswerResult> answer(String question) async {
+    return const LocalAnswerResult(
+      text: 'Forrasbol valaszolok.',
       status: 'grounded',
       citations: [
         ChatCitation(
