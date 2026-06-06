@@ -1,0 +1,599 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:273186095957995459",
+      "lastPropertyId": "10:4974685060174619275",
+      "name": "AppSettingsEntity",
+      "properties": [
+        {
+          "id": "1:6151654332411899331",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4870439738623681667",
+          "name": "runtimeMode",
+          "type": 9
+        },
+        {
+          "id": "3:2689516764677915094",
+          "name": "answerModel",
+          "type": 9
+        },
+        {
+          "id": "4:823185486034734900",
+          "name": "extractionModel",
+          "type": 9
+        },
+        {
+          "id": "5:7708937587965630938",
+          "name": "groundednessModel",
+          "type": 9
+        },
+        {
+          "id": "6:1134803171024918487",
+          "name": "embeddingModel",
+          "type": 9
+        },
+        {
+          "id": "7:3480948655704252683",
+          "name": "deleteOpenAiFilesAfterProcessing",
+          "type": 1
+        },
+        {
+          "id": "8:8183084045610728334",
+          "name": "groundednessCheckEnabled",
+          "type": 1
+        },
+        {
+          "id": "9:7429739853728458970",
+          "name": "retrievalLimit",
+          "type": 6
+        },
+        {
+          "id": "10:4974685060174619275",
+          "name": "minimumSimilarity",
+          "type": 8
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:5820756277407453353",
+      "lastPropertyId": "10:3834798967049747048",
+      "name": "ChatMessageEntity",
+      "properties": [
+        {
+          "id": "1:1239454640375525512",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:1481141814642834213",
+          "name": "publicId",
+          "indexId": "1:7104952893324674412",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:3479927539872829088",
+          "name": "threadPublicId",
+          "indexId": "2:7573213395152556153",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:4823379341156395219",
+          "name": "sender",
+          "type": 9
+        },
+        {
+          "id": "5:8088500521866011778",
+          "name": "text",
+          "type": 9
+        },
+        {
+          "id": "6:8436095980946832476",
+          "name": "createdAtMillis",
+          "type": 6
+        },
+        {
+          "id": "7:7874787853865112690",
+          "name": "status",
+          "type": 9
+        },
+        {
+          "id": "8:8847774522795458262",
+          "name": "refusalReason",
+          "type": 9
+        },
+        {
+          "id": "9:853991707939113464",
+          "name": "hasValidationWarning",
+          "type": 1
+        },
+        {
+          "id": "10:3834798967049747048",
+          "name": "warningText",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:971375568611496488",
+      "lastPropertyId": "5:6408779749700127604",
+      "name": "ChatThreadEntity",
+      "properties": [
+        {
+          "id": "1:5754319873734364330",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6799272137713985053",
+          "name": "publicId",
+          "indexId": "3:3321809719620362846",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:1766271467511992035",
+          "name": "title",
+          "type": 9
+        },
+        {
+          "id": "4:9066549958708376142",
+          "name": "createdAtMillis",
+          "type": 6
+        },
+        {
+          "id": "5:6408779749700127604",
+          "name": "updatedAtMillis",
+          "type": 6
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "4:5900457559156482000",
+      "lastPropertyId": "6:6413981021026356748",
+      "name": "ChunkEmbeddingEntity",
+      "properties": [
+        {
+          "id": "1:6556681889606672404",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4474674955037704815",
+          "name": "sourceId",
+          "indexId": "4:402113048354199375",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:14984194624066992",
+          "name": "sourceType",
+          "type": 9
+        },
+        {
+          "id": "4:6456488215719235560",
+          "name": "vector",
+          "indexId": "5:5204830089907731185",
+          "type": 28,
+          "flags": 8
+        },
+        {
+          "id": "5:1640760635370399152",
+          "name": "model",
+          "type": 9
+        },
+        {
+          "id": "6:6413981021026356748",
+          "name": "createdAtMillis",
+          "type": 6
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "5:2835970348795291073",
+      "lastPropertyId": "9:8182112017704924585",
+      "name": "CitationEntity",
+      "properties": [
+        {
+          "id": "1:8676979959152515161",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8522252519736762089",
+          "name": "publicId",
+          "indexId": "6:5381871697716329763",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:4126409159189696406",
+          "name": "messagePublicId",
+          "indexId": "7:4909169522223840535",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:4323778465106549661",
+          "name": "sourceId",
+          "indexId": "8:6188981945236455199",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "5:5940150031219381010",
+          "name": "sourceType",
+          "type": 9
+        },
+        {
+          "id": "6:4676993803606790384",
+          "name": "sourceLabel",
+          "type": 9
+        },
+        {
+          "id": "7:4146089689161092435",
+          "name": "documentPublicId",
+          "type": 9
+        },
+        {
+          "id": "8:7736663679092013391",
+          "name": "pageNumber",
+          "type": 6
+        },
+        {
+          "id": "9:8182112017704924585",
+          "name": "excerpt",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "6:9012920818068651330",
+      "lastPropertyId": "7:6184607323443707496",
+      "name": "DocumentChunkEntity",
+      "properties": [
+        {
+          "id": "1:5206250045140841812",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:1628053356831854107",
+          "name": "publicId",
+          "indexId": "9:5968809646666895316",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:8638837129045034888",
+          "name": "documentPublicId",
+          "indexId": "10:7237428048621886160",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:5697290722411591078",
+          "name": "text",
+          "type": 9
+        },
+        {
+          "id": "5:7701346108871482881",
+          "name": "pageNumber",
+          "type": 6
+        },
+        {
+          "id": "6:1063090330926866476",
+          "name": "sectionTitle",
+          "type": 9
+        },
+        {
+          "id": "7:6184607323443707496",
+          "name": "sourceRectJson",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "7:1380656129107944180",
+      "lastPropertyId": "8:4415689705722391472",
+      "name": "FlowchartEdgeEntity",
+      "properties": [
+        {
+          "id": "1:7388369756181216034",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7479145569352808172",
+          "name": "publicId",
+          "indexId": "11:7686138038136824239",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:2758892422504889195",
+          "name": "flowchartPublicId",
+          "indexId": "12:110937085109048497",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:6242049840779187114",
+          "name": "fromNodePublicId",
+          "indexId": "13:5229898192111188069",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "5:681085543244684237",
+          "name": "toNodePublicId",
+          "indexId": "14:9153381040733100664",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "6:2167330231405372595",
+          "name": "label",
+          "type": 9
+        },
+        {
+          "id": "7:8344310248615376906",
+          "name": "validationState",
+          "indexId": "15:8736082283656258084",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "8:4415689705722391472",
+          "name": "rejectionReason",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "8:5224985862224986658",
+      "lastPropertyId": "7:6900534565950075870",
+      "name": "FlowchartEntity",
+      "properties": [
+        {
+          "id": "1:8420234669820551985",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7905891858769764136",
+          "name": "publicId",
+          "indexId": "16:6889876402607771318",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:4641309630125911843",
+          "name": "documentPublicId",
+          "indexId": "17:3529231849908932421",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:5673228613423518257",
+          "name": "pageNumber",
+          "type": 6
+        },
+        {
+          "id": "5:3430430742670588819",
+          "name": "validationState",
+          "indexId": "18:4907545513841456243",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "6:2042409891874930596",
+          "name": "sourceRectJson",
+          "type": 9
+        },
+        {
+          "id": "7:6900534565950075870",
+          "name": "extractionConfidence",
+          "type": 8
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "9:8189989850069876083",
+      "lastPropertyId": "8:7047686114766363714",
+      "name": "FlowchartNodeEntity",
+      "properties": [
+        {
+          "id": "1:3809450008516868147",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5946470280488378442",
+          "name": "publicId",
+          "indexId": "19:8403852432553652729",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:6469772974842693295",
+          "name": "flowchartPublicId",
+          "indexId": "20:5562207467015221186",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:5772003807181961769",
+          "name": "label",
+          "type": 9
+        },
+        {
+          "id": "5:2805332220168215896",
+          "name": "validationState",
+          "indexId": "21:9108477623800392369",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "6:3082480403551302333",
+          "name": "rejectionReason",
+          "type": 9
+        },
+        {
+          "id": "7:5003843109152425586",
+          "name": "positionX",
+          "type": 8
+        },
+        {
+          "id": "8:7047686114766363714",
+          "name": "positionY",
+          "type": 8
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "10:3835227895295506301",
+      "lastPropertyId": "9:3427317077375592081",
+      "name": "KnowledgeDocumentEntity",
+      "properties": [
+        {
+          "id": "1:4678741659041516704",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:88649406242999106",
+          "name": "publicId",
+          "indexId": "22:3670981183639069265",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:3964283411306006332",
+          "name": "filename",
+          "type": 9
+        },
+        {
+          "id": "4:9144691853718936988",
+          "name": "localPath",
+          "type": 9
+        },
+        {
+          "id": "5:6719209927533881780",
+          "name": "sizeBytes",
+          "type": 6
+        },
+        {
+          "id": "6:3342914424157633728",
+          "name": "importedAtMillis",
+          "type": 6
+        },
+        {
+          "id": "7:4880907321942637558",
+          "name": "processingState",
+          "indexId": "23:4726824978689913267",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "8:8596181767817437087",
+          "name": "errorMessage",
+          "type": 9
+        },
+        {
+          "id": "9:3427317077375592081",
+          "name": "openAiFileId",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "11:7309319277825706740",
+      "lastPropertyId": "7:3924378542852389945",
+      "name": "ProcessingJobEntity",
+      "properties": [
+        {
+          "id": "1:5820039981620720752",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3025497669755157454",
+          "name": "publicId",
+          "indexId": "24:3177623305391312732",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:6678687660226771157",
+          "name": "documentPublicId",
+          "indexId": "25:263402484209870658",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:7538025831003002037",
+          "name": "state",
+          "indexId": "26:6263710456666240614",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "5:8117369331642433838",
+          "name": "createdAtMillis",
+          "type": 6
+        },
+        {
+          "id": "6:8327205169060449651",
+          "name": "updatedAtMillis",
+          "type": 6
+        },
+        {
+          "id": "7:3924378542852389945",
+          "name": "errorMessage",
+          "type": 9
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "11:7309319277825706740",
+  "lastIndexId": "26:6263710456666240614",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}
