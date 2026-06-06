@@ -1,26 +1,28 @@
 enum KnowledgeDocumentStatus {
-  imported,
-  pendingIngest,
-  uploading,
-  processed,
-  failed;
+  imported('imported'),
+  pendingIngest('pending_ingest'),
+  blockedMissingApiKey('blocked_missing_api_key'),
+  blockedOffline('blocked_offline'),
+  uploading('uploading'),
+  processing('processing'),
+  embedded('embedded'),
+  ready('ready'),
+  needsReview('needs_review'),
+  processed('processed'),
+  failed('failed');
 
-  String get wireName {
-    return switch (this) {
-      KnowledgeDocumentStatus.imported => 'imported',
-      KnowledgeDocumentStatus.pendingIngest => 'pending_ingest',
-      KnowledgeDocumentStatus.uploading => 'uploading',
-      KnowledgeDocumentStatus.processed => 'processed',
-      KnowledgeDocumentStatus.failed => 'failed',
-    };
-  }
+  const KnowledgeDocumentStatus(this.wireName);
+
+  final String wireName;
 
   static KnowledgeDocumentStatus fromWireName(String? value) {
+    for (final status in KnowledgeDocumentStatus.values) {
+      if (status.wireName == value) {
+        return status;
+      }
+    }
     return switch (value) {
-      'imported' => KnowledgeDocumentStatus.imported,
-      'uploading' || 'processing' => KnowledgeDocumentStatus.uploading,
-      'processed' => KnowledgeDocumentStatus.processed,
-      'failed' => KnowledgeDocumentStatus.failed,
+      'processing' => KnowledgeDocumentStatus.processing,
       _ => KnowledgeDocumentStatus.pendingIngest,
     };
   }
@@ -67,7 +69,7 @@ class KnowledgeDocument {
       importedAt: importedAt ?? this.importedAt,
       status: status ?? this.status,
       backendDocumentId: backendDocumentId ?? this.backendDocumentId,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: errorMessage,
     );
   }
 
@@ -106,18 +108,11 @@ class KnowledgeBaseState {
   final List<KnowledgeDocument> documents;
   final KnowledgeBaseReadiness readiness;
 
-  int get pendingCount => documents
-      .where(
-        (document) =>
-            document.status == KnowledgeDocumentStatus.imported ||
-            document.status == KnowledgeDocumentStatus.pendingIngest ||
-            document.status == KnowledgeDocumentStatus.uploading,
-      )
-      .length;
+  int get pendingCount =>
+      documents.where((document) => document.status.isPending).length;
 
-  int get processedCount => documents
-      .where((document) => document.status == KnowledgeDocumentStatus.processed)
-      .length;
+  int get processedCount =>
+      documents.where((document) => document.status.isReady).length;
 
   static KnowledgeBaseState fromDocuments(List<KnowledgeDocument> documents) {
     final immutableDocuments = List<KnowledgeDocument>.unmodifiable(documents);
@@ -134,9 +129,7 @@ class KnowledgeBaseState {
     if (documents.isEmpty) {
       return KnowledgeBaseReadiness.empty;
     }
-    if (documents.any(
-      (document) => document.status == KnowledgeDocumentStatus.processed,
-    )) {
+    if (documents.any((document) => document.status.isReady)) {
       return KnowledgeBaseReadiness.ready;
     }
     if (documents.every(
@@ -145,5 +138,34 @@ class KnowledgeBaseState {
       return KnowledgeBaseReadiness.failed;
     }
     return KnowledgeBaseReadiness.pendingIngest;
+  }
+}
+
+extension KnowledgeDocumentStatusFlags on KnowledgeDocumentStatus {
+  bool get isReady {
+    return this == KnowledgeDocumentStatus.ready ||
+        this == KnowledgeDocumentStatus.processed;
+  }
+
+  bool get isPending {
+    return switch (this) {
+      KnowledgeDocumentStatus.imported ||
+      KnowledgeDocumentStatus.pendingIngest ||
+      KnowledgeDocumentStatus.blockedMissingApiKey ||
+      KnowledgeDocumentStatus.blockedOffline ||
+      KnowledgeDocumentStatus.uploading ||
+      KnowledgeDocumentStatus.processing ||
+      KnowledgeDocumentStatus.embedded ||
+      KnowledgeDocumentStatus.needsReview => true,
+      KnowledgeDocumentStatus.ready ||
+      KnowledgeDocumentStatus.processed ||
+      KnowledgeDocumentStatus.failed => false,
+    };
+  }
+
+  bool get canRetry {
+    return this == KnowledgeDocumentStatus.failed ||
+        this == KnowledgeDocumentStatus.blockedMissingApiKey ||
+        this == KnowledgeDocumentStatus.blockedOffline;
   }
 }

@@ -146,8 +146,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('Tudastar'), findsOneWidget);
-    expect(find.text('Nincs importalt PDF'), findsOneWidget);
-    expect(find.byTooltip('PDF hozzaadasa'), findsOneWidget);
+    expect(find.text('Nincs importált PDF'), findsOneWidget);
+    expect(find.byTooltip('PDF hozzáadása'), findsOneWidget);
   });
 
   testWidgets('Djinn opens settings from the hamburger menu', (tester) async {

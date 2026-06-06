@@ -3,14 +3,31 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:djinn/src/knowledge/data/knowledge_api_client.dart';
+import 'package:djinn/src/knowledge/data/document_processing_service.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
-import 'package:djinn/src/knowledge/data/knowledge_sync_service.dart';
 import 'package:djinn/src/knowledge/data/pdf_import_service.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
 import 'package:djinn/src/knowledge/ui/knowledge_base_screen.dart';
+import 'package:djinn/src/openai/openai_client.dart';
+import 'package:djinn/src/settings/models/app_settings.dart';
 
 void main() {
+  testWidgets('shows local ObjectBox empty state', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: KnowledgeDocumentRepository(),
+          importService: _FakePdfImportService(),
+        ),
+      ),
+    );
+
+    await _pumpUntilFound(tester, find.text('Helyi ObjectBox tudástár'));
+
+    expect(find.text('Helyi ObjectBox tudástár'), findsOneWidget);
+    expect(find.text('Nincs importált PDF'), findsOneWidget);
+  });
+
   testWidgets('imports picked PDFs into the local knowledge base', (
     tester,
   ) async {
@@ -29,63 +46,55 @@ void main() {
         ),
       ),
     );
-    await _pumpUntilFound(tester, find.text('Nincs importalt PDF'));
+    await _pumpUntilFound(tester, find.text('Nincs importált PDF'));
 
-    await tester.tap(find.byTooltip('PDF hozzaadasa'));
+    await tester.tap(find.byTooltip('PDF hozzáadása'));
     await _pumpUntilFound(tester, find.text('omsz.pdf'));
 
     expect(find.text('omsz.pdf'), findsOneWidget);
-    expect(find.text('Feldolgozasra var'), findsOneWidget);
+    expect(find.text('Feldolgozásra vár'), findsOneWidget);
 
     final documents = await repository.listDocuments();
     expect(documents, hasLength(1));
     expect(documents.single.filename, 'omsz.pdf');
-    expect(documents.single.status, KnowledgeDocumentStatus.pendingIngest);
     expect(documents.single.localPath, '/memory/omsz.pdf');
   });
 
-  testWidgets('shows backend unavailable status when refresh fails', (
+  testWidgets('shows missing OpenAI key after local processing starts', (
     tester,
   ) async {
     final repository = KnowledgeDocumentRepository();
+
     await tester.pumpWidget(
       MaterialApp(
         home: KnowledgeBaseScreen(
           repository: repository,
           importService: _FakePdfImportService(),
-          syncService: _UnavailableKnowledgeSyncService(
+          processingService: DocumentProcessingService(
+            openAiClient: FakeOpenAiClient(),
+            loadSettings: () async => AppSettings.defaults(),
+            hasApiKey: () async => false,
             repository: repository,
-            client: KnowledgeApiClient(baseUri: Uri.parse('http://localhost')),
           ),
+          pickPdfs: () async => [
+            PickedPdfFile(filename: 'omsz.pdf', bytes: [37, 80, 68, 70]),
+          ],
+          clock: () => DateTime.utc(2026, 1, 1, 12),
         ),
       ),
     );
-    await _pumpUntilFound(tester, find.text('Backend nem erheto el'));
+    await _pumpUntilFound(tester, find.text('Nincs importált PDF'));
 
-    expect(find.text('Backend nem erheto el'), findsOneWidget);
-  });
+    await tester.tap(find.byTooltip('PDF hozzáadása'));
+    await _pumpUntilFound(tester, find.text('OpenAI API kulcs szükséges'));
 
-  testWidgets('shows strict AI backend not configured status', (tester) async {
-    final repository = KnowledgeDocumentRepository();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: KnowledgeBaseScreen(
-          repository: repository,
-          importService: _FakePdfImportService(),
-          syncService: _NotReadyKnowledgeSyncService(
-            repository: repository,
-            client: KnowledgeApiClient(baseUri: Uri.parse('http://localhost')),
-          ),
-        ),
-      ),
+    expect(
+      (await repository.listDocuments()).single.status,
+      KnowledgeDocumentStatus.blockedMissingApiKey,
     );
-    await _pumpUntilFound(tester, find.text('AI backend nincs beallitva'));
-
-    expect(find.text('AI backend nincs beallitva'), findsOneWidget);
-    expect(find.textContaining('openai: not configured'), findsOneWidget);
   });
 
-  testWidgets('sync action processes a pending PDF row', (tester) async {
+  testWidgets('retry action processes a blocked PDF row', (tester) async {
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
       filename: 'protocol.pdf',
@@ -93,9 +102,9 @@ void main() {
       sizeBytes: 4,
       importedAt: DateTime.utc(2026, 1, 1, 12),
     );
-    final syncService = _FakeKnowledgeSyncService(
-      repository: repository,
-      client: KnowledgeApiClient(baseUri: Uri.parse('http://localhost')),
+    await repository.updateStatus(
+      document.id,
+      KnowledgeDocumentStatus.blockedMissingApiKey,
     );
 
     await tester.pumpWidget(
@@ -103,76 +112,37 @@ void main() {
         home: KnowledgeBaseScreen(
           repository: repository,
           importService: _FakePdfImportService(),
-          syncService: syncService,
+          processingService: DocumentProcessingService(
+            openAiClient: _ExtractingOpenAiClient(),
+            loadSettings: () async => AppSettings.defaults(),
+            hasApiKey: () async => true,
+            repository: repository,
+          ),
         ),
       ),
     );
     await _pumpUntilFound(tester, find.text('protocol.pdf'));
 
-    await tester.tap(find.byTooltip('Szinkronizalas'));
-    await _pumpUntilFound(tester, find.text('Feldolgozva'));
+    await tester.tap(find.byTooltip('Újrapróbálás'));
+    await _pumpUntilFound(tester, find.text('Kész'));
 
-    expect(syncService.syncCalls, [document.id]);
     expect(
       (await repository.listDocuments()).single.status,
-      KnowledgeDocumentStatus.processed,
+      KnowledgeDocumentStatus.ready,
     );
   });
 }
 
-class _FakeKnowledgeSyncService extends KnowledgeSyncService {
-  _FakeKnowledgeSyncService({required super.repository, required super.client});
-
-  final syncCalls = <String>[];
-
+class _ExtractingOpenAiClient extends FakeOpenAiClient {
   @override
-  Future<KnowledgeDocument> syncDocument(String localDocumentId) async {
-    syncCalls.add(localDocumentId);
-    return repository.updateStatus(
-      localDocumentId,
-      KnowledgeDocumentStatus.processed,
-      backendDocumentId: 'backend-1',
-    );
-  }
-}
-
-class _NotReadyKnowledgeSyncService extends KnowledgeSyncService {
-  _NotReadyKnowledgeSyncService({
-    required super.repository,
-    required super.client,
-  });
-
-  @override
-  Future<KnowledgeRefreshResult> refresh() async {
-    return KnowledgeRefreshResult(
-      state: await repository.state(),
-      backendAvailable: true,
-      systemReadiness: const BackendSystemReadiness(
-        ready: false,
-        strictMode: true,
-        components: {
-          'openai': BackendComponentReadiness(
-            ready: false,
-            detail: 'not configured',
-          ),
-        },
-      ),
-    );
-  }
-}
-
-class _UnavailableKnowledgeSyncService extends KnowledgeSyncService {
-  _UnavailableKnowledgeSyncService({
-    required super.repository,
-    required super.client,
-  });
-
-  @override
-  Future<KnowledgeRefreshResult> refresh() async {
-    return KnowledgeRefreshResult(
-      state: await repository.state(),
-      backendAvailable: false,
-      errorMessage: 'backend unavailable',
+  Future<OpenAiExtractionResult> extractDocument({
+    required String pdfPath,
+    required String model,
+  }) async {
+    return const OpenAiExtractionResult(
+      chunks: [
+        OpenAiExtractedChunk(id: 'c1', text: 'ABCDE protokoll', pageNumber: 1),
+      ],
     );
   }
 }

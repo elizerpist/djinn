@@ -1,8 +1,8 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../data/document_processing_service.dart';
 import '../data/knowledge_document_repository.dart';
-import '../data/knowledge_sync_service.dart';
 import '../data/pdf_import_service.dart';
 import '../models/knowledge_document.dart';
 
@@ -21,14 +21,14 @@ class KnowledgeBaseScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.importService,
-    this.syncService,
+    this.processingService,
     this.pickPdfs,
     this.clock,
   });
 
   final KnowledgeDocumentRepository repository;
   final PdfImportService importService;
-  final KnowledgeSyncService? syncService;
+  final DocumentProcessingService? processingService;
   final PickPdfs? pickPdfs;
   final DateTime Function()? clock;
 
@@ -39,15 +39,12 @@ class KnowledgeBaseScreen extends StatefulWidget {
 class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   List<KnowledgeDocument> _documents = const [];
   bool _importing = false;
-  String? _syncingDocumentId;
-  String _backendStatusText = 'Backend nincs ellenorizve';
-  String? _backendDetailText;
+  String? _processingDocumentId;
 
   @override
   void initState() {
     super.initState();
     _loadDocuments();
-    _refreshBackendStatus();
   }
 
   Future<void> _loadDocuments() async {
@@ -56,42 +53,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       return;
     }
     setState(() => _documents = documents);
-  }
-
-  Future<void> _refreshBackendStatus() async {
-    final syncService = widget.syncService;
-    if (syncService == null) {
-      if (mounted) {
-        setState(() {
-          _backendStatusText = 'Backend nincs beallitva';
-          _backendDetailText = null;
-        });
-      }
-      return;
-    }
-    final result = await syncService.refresh();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      if (!result.backendAvailable) {
-        _backendStatusText = 'Backend nem erheto el';
-        _backendDetailText = null;
-        return;
-      }
-      final readiness = result.systemReadiness;
-      if (readiness?.ready == true) {
-        _backendStatusText = 'AI backend kesz';
-        _backendDetailText = null;
-        return;
-      }
-      _backendStatusText = 'AI backend nincs beallitva';
-      _backendDetailText = readiness?.components.entries
-          .where((entry) => !entry.value.ready)
-          .map((entry) => '${entry.key}: ${entry.value.detail}')
-          .join(', ');
-    });
-    await _loadDocuments();
   }
 
   Future<void> _importPdfs() async {
@@ -103,15 +64,17 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         if (imported == null) {
           continue;
         }
-        await widget.repository.addDocument(
+        final document = await widget.repository.addDocument(
           filename: imported.filename,
           localPath: imported.localPath,
           sizeBytes: imported.sizeBytes,
           importedAt: (widget.clock ?? DateTime.now)(),
         );
+        if (widget.processingService != null) {
+          await _processDocument(document.id);
+        }
       }
       await _loadDocuments();
-      await _refreshBackendStatus();
     } finally {
       if (mounted) {
         setState(() => _importing = false);
@@ -155,19 +118,18 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         .toList(growable: false);
   }
 
-  Future<void> _syncDocument(KnowledgeDocument document) async {
-    final syncService = widget.syncService;
-    if (syncService == null) {
+  Future<void> _processDocument(String documentId) async {
+    final processingService = widget.processingService;
+    if (processingService == null) {
       return;
     }
-    setState(() => _syncingDocumentId = document.id);
+    setState(() => _processingDocumentId = documentId);
     try {
-      await syncService.syncDocument(document.id);
+      await processingService.processDocument(documentId);
       await _loadDocuments();
-      await _refreshBackendStatus();
     } finally {
       if (mounted) {
-        setState(() => _syncingDocumentId = null);
+        setState(() => _processingDocumentId = null);
       }
     }
   }
@@ -182,28 +144,16 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _backendStatusText,
-                    style: const TextStyle(color: Color(0xFF6B7280)),
-                  ),
-                  if (_backendDetailText case final detail?) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      detail,
-                      style: const TextStyle(
-                        color: Color(0xFF991B1B),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ],
+              child: Text(
+                'Helyi ObjectBox tudástár',
+                style: TextStyle(
+                  color: Color(0xFF166534),
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -211,7 +161,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
             child: _documents.isEmpty
                 ? const Center(
                     child: Text(
-                      'Nincs importalt PDF',
+                      'Nincs importált PDF',
                       style: TextStyle(color: Color(0xFF6B7280)),
                     ),
                   )
@@ -231,10 +181,12 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
                         subtitle: Text('${document.sizeBytes} byte'),
                         trailing: _DocumentAction(
                           document: document,
-                          syncing: _syncingDocumentId == document.id,
-                          onSync: widget.syncService == null
-                              ? null
-                              : () => _syncDocument(document),
+                          processing: _processingDocumentId == document.id,
+                          onRetry:
+                              document.status.canRetry &&
+                                  widget.processingService != null
+                              ? () => _processDocument(document.id)
+                              : null,
                         ),
                       );
                     },
@@ -243,7 +195,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'PDF hozzaadasa',
+        tooltip: 'PDF hozzáadása',
         onPressed: _importing ? null : _importPdfs,
         child: _importing
             ? const CircularProgressIndicator(strokeWidth: 2)
@@ -256,41 +208,37 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
 class _DocumentAction extends StatelessWidget {
   const _DocumentAction({
     required this.document,
-    required this.syncing,
-    required this.onSync,
+    required this.processing,
+    required this.onRetry,
   });
 
   final KnowledgeDocument document;
-  final bool syncing;
-  final VoidCallback? onSync;
+  final bool processing;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
-    if (syncing) {
+    if (processing) {
       return const SizedBox(
         width: 24,
         height: 24,
         child: CircularProgressIndicator(strokeWidth: 2),
       );
     }
-    if (document.status == KnowledgeDocumentStatus.processed) {
-      return const Text('Feldolgozva');
+    final label = _statusLabel(document.status);
+    if (onRetry == null) {
+      return Text(label, style: const TextStyle(fontSize: 12));
     }
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          _statusLabel(document.status),
-          style: const TextStyle(fontSize: 12),
-        ),
+        Text(label, style: const TextStyle(fontSize: 12)),
         const SizedBox(width: 4),
         IconButton(
-          tooltip: document.status == KnowledgeDocumentStatus.failed
-              ? 'Ujraprobalas'
-              : 'Szinkronizalas',
+          tooltip: 'Újrapróbálás',
           visualDensity: VisualDensity.compact,
-          onPressed: onSync,
-          icon: const Icon(Icons.sync),
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh),
         ),
       ],
     );
@@ -298,10 +246,17 @@ class _DocumentAction extends StatelessWidget {
 
   String _statusLabel(KnowledgeDocumentStatus status) {
     return switch (status) {
-      KnowledgeDocumentStatus.imported => 'Importalva',
-      KnowledgeDocumentStatus.pendingIngest => 'Feldolgozasra var',
-      KnowledgeDocumentStatus.uploading => 'Feltoltes',
-      KnowledgeDocumentStatus.processed => 'Feldolgozva',
+      KnowledgeDocumentStatus.imported ||
+      KnowledgeDocumentStatus.pendingIngest => 'Feldolgozásra vár',
+      KnowledgeDocumentStatus.blockedMissingApiKey =>
+        'OpenAI API kulcs szükséges',
+      KnowledgeDocumentStatus.blockedOffline => 'Offline állapot',
+      KnowledgeDocumentStatus.uploading ||
+      KnowledgeDocumentStatus.processing => 'Feldolgozás folyamatban',
+      KnowledgeDocumentStatus.embedded => 'Embedding kész',
+      KnowledgeDocumentStatus.ready ||
+      KnowledgeDocumentStatus.processed => 'Kész',
+      KnowledgeDocumentStatus.needsReview => 'Validáció szükséges',
       KnowledgeDocumentStatus.failed => 'Hiba',
     };
   }

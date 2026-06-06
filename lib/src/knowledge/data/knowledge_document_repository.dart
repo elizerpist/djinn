@@ -1,7 +1,10 @@
 import '../../core/storage/json_file_store.dart';
+import '../../local_store/entities.dart';
+import '../../openai/openai_client.dart';
 import '../models/knowledge_document.dart';
+import 'document_processing_service.dart';
 
-class KnowledgeDocumentRepository {
+class KnowledgeDocumentRepository implements ProcessingRepository {
   KnowledgeDocumentRepository({JsonFileStore? store}) : _store = store;
 
   final JsonFileStore? _store;
@@ -109,6 +112,59 @@ class KnowledgeDocumentRepository {
       }
     }
     return null;
+  }
+
+  @override
+  Future<String> localPathForDocument(String documentPublicId) async {
+    final document = _findDocument(documentPublicId);
+    return document.localPath;
+  }
+
+  @override
+  Future<void> markState(
+    String documentPublicId,
+    ProcessingState state, {
+    String? errorMessage,
+  }) async {
+    await updateStatus(
+      documentPublicId,
+      _statusFromProcessingState(state),
+      errorMessage: errorMessage,
+    );
+  }
+
+  @override
+  Future<void> saveExtractedChunk({
+    required String documentPublicId,
+    required OpenAiExtractedChunk chunk,
+    required List<double> embedding,
+    required String embeddingModel,
+  }) async {
+    // JSON repository is a test/transition adapter. ObjectBox stores chunks in production.
+  }
+
+  KnowledgeDocument _findDocument(String documentId) {
+    for (final document in _documents) {
+      if (document.id == documentId) {
+        return document;
+      }
+    }
+    throw StateError('knowledge document not found: $documentId');
+  }
+
+  KnowledgeDocumentStatus _statusFromProcessingState(ProcessingState state) {
+    return switch (state) {
+      ProcessingState.imported => KnowledgeDocumentStatus.imported,
+      ProcessingState.blockedMissingApiKey =>
+        KnowledgeDocumentStatus.blockedMissingApiKey,
+      ProcessingState.blockedOffline => KnowledgeDocumentStatus.blockedOffline,
+      ProcessingState.uploading => KnowledgeDocumentStatus.uploading,
+      ProcessingState.processing => KnowledgeDocumentStatus.processing,
+      ProcessingState.embedded => KnowledgeDocumentStatus.embedded,
+      ProcessingState.ready => KnowledgeDocumentStatus.ready,
+      ProcessingState.needsReview => KnowledgeDocumentStatus.needsReview,
+      ProcessingState.failed => KnowledgeDocumentStatus.failed,
+    };
   }
 
   Future<void> _persist() async {

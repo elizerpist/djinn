@@ -63,7 +63,6 @@ class _MainScreenState extends State<MainScreen> {
         builder: (_) => KnowledgeBaseScreen(
           repository: widget.knowledgeRepository,
           importService: widget.pdfImportService,
-          syncService: widget.knowledgeSyncService,
         ),
       ),
     );
