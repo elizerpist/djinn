@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../flowchart/data/flowchart_validation_repository.dart';
+import '../../flowchart/ui/flowchart_validation_screen.dart';
+import '../../knowledge/data/document_processing_service.dart';
 import '../../knowledge/data/knowledge_document_repository.dart';
 import '../../knowledge/data/pdf_import_service.dart';
-import '../../knowledge/data/knowledge_sync_service.dart';
+import '../../knowledge/models/knowledge_document.dart';
 import '../../knowledge/ui/knowledge_base_screen.dart';
 import '../../settings/data/api_key_store.dart';
 import '../../settings/models/app_settings.dart';
@@ -19,22 +22,26 @@ class MainScreen extends StatefulWidget {
     required this.chatService,
     required this.knowledgeRepository,
     required this.pdfImportService,
-    required this.knowledgeSyncService,
+    required this.refreshKnowledgeReadiness,
     required this.apiKeyStore,
     required this.loadSettings,
     required this.saveSettings,
     required this.testApiKey,
+    this.processingService,
+    this.flowchartValidationRepository,
   });
 
   final LocalChatRepository repository;
   final ChatService chatService;
   final KnowledgeDocumentRepository knowledgeRepository;
   final PdfImportService pdfImportService;
-  final KnowledgeSyncService knowledgeSyncService;
+  final Future<KnowledgeBaseState> Function() refreshKnowledgeReadiness;
   final ApiKeyStore apiKeyStore;
   final Future<AppSettings> Function() loadSettings;
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
+  final DocumentProcessingService? processingService;
+  final FlowchartValidationRepository? flowchartValidationRepository;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -63,7 +70,20 @@ class _MainScreenState extends State<MainScreen> {
         builder: (_) => KnowledgeBaseScreen(
           repository: widget.knowledgeRepository,
           importService: widget.pdfImportService,
+          processingService: widget.processingService,
         ),
+      ),
+    );
+  }
+
+  Future<void> _openFlowchartValidation() async {
+    final repository = widget.flowchartValidationRepository;
+    if (repository == null) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FlowchartValidationScreen(repository: repository),
       ),
     );
   }
@@ -91,7 +111,7 @@ class _MainScreenState extends State<MainScreen> {
         builder: (_) => ChatScreen(
           repository: widget.repository,
           chatService: widget.chatService,
-          knowledgeSyncService: widget.knowledgeSyncService,
+          refreshKnowledgeReadiness: widget.refreshKnowledgeReadiness,
           conversation: conversation,
         ),
       ),
@@ -105,7 +125,7 @@ class _MainScreenState extends State<MainScreen> {
         builder: (_) => ChatScreen(
           repository: widget.repository,
           chatService: widget.chatService,
-          knowledgeSyncService: widget.knowledgeSyncService,
+          refreshKnowledgeReadiness: widget.refreshKnowledgeReadiness,
           conversation: conversation,
         ),
       ),
@@ -126,12 +146,9 @@ class _MainScreenState extends State<MainScreen> {
                 subtitle: Text('Local ObjectBox mód'),
               ),
               ListTile(
-                leading: const Icon(Icons.settings),
-                title: const Text('Beállítások'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _openSettings();
-                },
+                leading: const Icon(Icons.chat),
+                title: const Text('Beszélgetések'),
+                onTap: () => Navigator.of(context).pop(),
               ),
               ListTile(
                 leading: const Icon(Icons.folder),
@@ -139,6 +156,25 @@ class _MainScreenState extends State<MainScreen> {
                 onTap: () {
                   Navigator.of(context).pop();
                   _openKnowledgeBase();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.account_tree),
+                title: const Text('Flowchart validáció'),
+                enabled: widget.flowchartValidationRepository != null,
+                onTap: widget.flowchartValidationRepository == null
+                    ? null
+                    : () {
+                        Navigator.of(context).pop();
+                        _openFlowchartValidation();
+                      },
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings),
+                title: const Text('Beállítások'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _openSettings();
                 },
               ),
             ],
@@ -160,7 +196,7 @@ class _MainScreenState extends State<MainScreen> {
       body: _conversations.isEmpty
           ? const Center(
               child: Text(
-                'Nincs meg chat',
+                'Nincs még beszélgetés',
                 style: TextStyle(color: Color(0xFF6B7280)),
               ),
             )
@@ -183,7 +219,7 @@ class _MainScreenState extends State<MainScreen> {
               },
             ),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'Uj chat',
+        tooltip: 'Új chat',
         onPressed: _openNewChat,
         child: const Icon(Icons.add_comment),
       ),

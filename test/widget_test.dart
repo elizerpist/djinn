@@ -26,14 +26,14 @@ void main() {
     await _pumpUntilFound(tester, find.text('Djinn'));
 
     expect(find.text('Djinn'), findsOneWidget);
-    expect(find.text('Nincs meg chat'), findsOneWidget);
+    expect(find.text('Nincs még beszélgetés'), findsOneWidget);
     expect(find.byTooltip('Tudastar'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Uj chat'));
+    await tester.tap(find.byTooltip('Új chat'));
     await _pumpUntilFound(tester, find.byKey(const ValueKey('message-input')));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Uj chat'), findsOneWidget);
+    expect(find.text('Új chat'), findsOneWidget);
     expect(find.text('Nincs betoltott tudastar'), findsOneWidget);
     expect(find.byKey(const ValueKey('message-input')), findsOneWidget);
 
@@ -61,7 +61,7 @@ void main() {
     );
     await _pumpUntilFound(tester, find.text('Djinn'));
 
-    await tester.tap(find.byTooltip('Uj chat'));
+    await tester.tap(find.byTooltip('Új chat'));
     await _pumpUntilFound(tester, find.byKey(const ValueKey('message-input')));
     await tester.pump(const Duration(milliseconds: 500));
 
@@ -97,7 +97,7 @@ void main() {
     );
     await _pumpUntilFound(tester, find.text('Djinn'));
 
-    await tester.tap(find.byTooltip('Uj chat'));
+    await tester.tap(find.byTooltip('Új chat'));
     await _pumpUntilFound(tester, find.byKey(const ValueKey('message-input')));
     await tester.pump(const Duration(milliseconds: 500));
     await _pumpUntilFound(tester, find.text('Nincs betoltott tudastar'));

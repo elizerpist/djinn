@@ -16,7 +16,7 @@ void main() {
     final conversation = await repository.createConversation();
     final conversations = await repository.listConversations();
 
-    expect(conversation.title, 'Uj chat');
+    expect(conversation.title, 'Új chat');
     expect(conversations, hasLength(1));
     expect(conversations.single.id, conversation.id);
   });

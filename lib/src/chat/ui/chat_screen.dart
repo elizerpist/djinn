@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../knowledge/data/knowledge_sync_service.dart';
 import '../../knowledge/models/knowledge_document.dart';
 import '../data/chat_service.dart';
 import '../data/local_chat_repository.dart';
@@ -14,13 +13,13 @@ class ChatScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.chatService,
-    required this.knowledgeSyncService,
+    required this.refreshKnowledgeReadiness,
     required this.conversation,
   });
 
   final LocalChatRepository repository;
   final ChatService chatService;
-  final KnowledgeSyncService knowledgeSyncService;
+  final Future<KnowledgeBaseState> Function() refreshKnowledgeReadiness;
   final ChatConversation conversation;
 
   @override
@@ -52,7 +51,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadKnowledgeState() async {
-    final state = await widget.knowledgeSyncService.refreshReadiness();
+    final state = await widget.refreshKnowledgeReadiness();
     if (!mounted) {
       return;
     }

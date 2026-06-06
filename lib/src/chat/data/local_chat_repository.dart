@@ -44,7 +44,7 @@ class LocalChatRepository {
   }
 
   Future<ChatConversation> createConversation({
-    String title = 'Uj chat',
+    String title = 'Új chat',
   }) async {
     final now = _clock();
     final conversation = ChatConversation(
@@ -134,7 +134,7 @@ class LocalChatRepository {
     final conversation = _findConversation(conversationId);
     final messages = [...conversation.messages, message];
     final updated = conversation.copyWith(
-      title: titleSeed != null && conversation.title == 'Uj chat'
+      title: titleSeed != null && conversation.title == 'Új chat'
           ? _titleFrom(titleSeed)
           : conversation.title,
       updatedAt: message.createdAt,
