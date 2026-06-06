@@ -1,0 +1,119 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:djinn/src/flowchart/data/flowchart_validation_repository.dart';
+import 'package:djinn/src/flowchart/models/flowchart_view_model.dart';
+import 'package:djinn/src/flowchart/ui/simple_flowchart_editor.dart';
+import 'package:djinn/src/local_store/entities.dart';
+
+void main() {
+  test('rejecting a node prevents it from being answerable', () async {
+    final repository = MemoryFlowchartValidationRepository();
+    repository.addNode('node-1', ValidationState.unreviewed);
+
+    await repository.updateNodeValidation(
+      nodePublicId: 'node-1',
+      state: ValidationState.rejected,
+      rejectionReason: 'Hibás OCR',
+    );
+
+    expect(await repository.isNodeAnswerable('node-1'), isFalse);
+  });
+
+  testWidgets('simple editor lists nodes and validates a node', (tester) async {
+    String? validatedNodeId;
+    final model = FlowchartViewModel(
+      id: 'flow-1',
+      nodes: const [
+        FlowchartNodeViewModel(
+          id: 'node-1',
+          label: 'Start',
+          x: 0,
+          y: 0,
+          validationState: ValidationState.unreviewed,
+        ),
+      ],
+      edges: const [
+        FlowchartEdgeViewModel(
+          id: 'edge-1',
+          fromNodeId: 'node-1',
+          toNodeId: 'node-2',
+          label: 'igen',
+          validationState: ValidationState.unreviewed,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SimpleFlowchartEditor(
+            model: model,
+            onNodeValidation:
+                ({
+                  required nodePublicId,
+                  required state,
+                  rejectionReason,
+                }) async {
+                  validatedNodeId = nodePublicId;
+                },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Start'), findsOneWidget);
+    expect(find.text('igen'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Validálás').first);
+    await tester.pump();
+
+    expect(validatedNodeId, 'node-1');
+  });
+}
+
+class MemoryFlowchartValidationRepository
+    implements FlowchartValidationRepository {
+  final _nodes = <String, ValidationState>{};
+  final _nodeRejectionReasons = <String, String?>{};
+
+  void addNode(String nodePublicId, ValidationState state) {
+    _nodes[nodePublicId] = state;
+  }
+
+  @override
+  Future<List<FlowchartEntity>> listFlowchartsNeedingReview() async {
+    return const [];
+  }
+
+  @override
+  Future<List<FlowchartNodeEntity>> listNodes(String flowchartPublicId) async {
+    return const [];
+  }
+
+  @override
+  Future<List<FlowchartEdgeEntity>> listEdges(String flowchartPublicId) async {
+    return const [];
+  }
+
+  @override
+  Future<void> updateNodeValidation({
+    required String nodePublicId,
+    required ValidationState state,
+    String? rejectionReason,
+  }) async {
+    _nodes[nodePublicId] = state;
+    _nodeRejectionReasons[nodePublicId] = rejectionReason;
+  }
+
+  @override
+  Future<void> updateEdgeValidation({
+    required String edgePublicId,
+    required ValidationState state,
+    String? rejectionReason,
+  }) async {}
+
+  @override
+  Future<bool> isNodeAnswerable(String nodePublicId) async {
+    return _nodes[nodePublicId] != ValidationState.rejected;
+  }
+}
