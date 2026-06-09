@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:djinn/src/ai/ai_error.dart';
+import 'package:djinn/src/ai/ai_provider.dart';
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/knowledge/data/document_processing_service.dart';
 import 'package:djinn/src/local_store/entities.dart';
@@ -87,6 +89,83 @@ void main() {
       contains('[AI Training] failed document=doc-1 error=extract failed'),
     );
   });
+
+  test('uses Gemini key and client when Gemini provider is active', () async {
+    final repository = MemoryProcessingRepository();
+    final usedProviders = <AiProvider>[];
+    final service = DocumentProcessingService(
+      clientForProvider: (AiProvider provider) {
+        usedProviders.add(provider);
+        return _ExtractingOpenAiClient();
+      },
+      loadSettings: () async =>
+          AppSettings.defaults().copyWith(activeProvider: AiProvider.gemini),
+      hasApiKeyForProvider: (provider) async => provider == AiProvider.gemini,
+      repository: repository,
+    );
+
+    final result = await service.processDocument('doc-1');
+
+    expect(result.state, 'ready');
+    expect(usedProviders, [AiProvider.gemini]);
+    expect(repository.states, [
+      ProcessingState.processing,
+      ProcessingState.embedded,
+      ProcessingState.ready,
+    ]);
+    expect(repository.savedEmbeddings.single.model, 'gemini-embedding-001');
+    expect(DebugConsole.allText, contains('provider=gemini'));
+    expect(DebugConsole.allText, isNot(contains('blocked missing_api_key')));
+  });
+
+  test('provider missing key log includes provider name', () async {
+    final repository = MemoryProcessingRepository();
+    final service = DocumentProcessingService(
+      clientForProvider: (AiProvider provider) => FakeOpenAiClient(),
+      loadSettings: () async =>
+          AppSettings.defaults().copyWith(activeProvider: AiProvider.gemini),
+      hasApiKeyForProvider: (provider) async => false,
+      repository: repository,
+    );
+
+    final result = await service.processDocument('doc-1');
+
+    expect(result.state, 'blocked_missing_api_key');
+    expect(repository.states, [ProcessingState.blockedMissingApiKey]);
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[AI Training] blocked missing_api_key provider=gemini document=doc-1',
+      ),
+    );
+  });
+
+  test('transient provider failure remains retryable', () async {
+    final repository = MemoryProcessingRepository();
+    final service = DocumentProcessingService(
+      clientForProvider: (AiProvider provider) => _FailingProviderAiClient(),
+      loadSettings: () async =>
+          AppSettings.defaults().copyWith(activeProvider: AiProvider.gemini),
+      hasApiKeyForProvider: (provider) async => true,
+      repository: repository,
+    );
+
+    final result = await service.processDocument('doc-1');
+
+    expect(result.state, 'failed');
+    expect(result.errorCode, 'networkAbort');
+    expect(result.retryable, isTrue);
+    expect(repository.states, [
+      ProcessingState.processing,
+      ProcessingState.failed,
+    ]);
+    expect(repository.errorMessages, [
+      'Halozati kapcsolat megszakadt. Ujraprobalhato.',
+    ]);
+    expect(DebugConsole.allText, contains('provider=gemini'));
+    expect(DebugConsole.allText, contains('code=networkAbort'));
+    expect(DebugConsole.allText, contains('retryable=true'));
+  });
 }
 
 class MemoryProcessingRepository implements ProcessingRepository {
@@ -153,5 +232,17 @@ class _FailingExtractionOpenAiClient extends FakeOpenAiClient {
     required String model,
   }) async {
     throw const OpenAiException('extract failed');
+  }
+}
+
+class _FailingProviderAiClient extends FakeOpenAiClient {
+  @override
+  Future<OpenAiExtractionResult> extractDocument({
+    required String pdfPath,
+    required String model,
+  }) async {
+    throw AiProviderException(
+      AiFailure.networkAbort(AiProvider.gemini, 'socket closed'),
+    );
   }
 }

@@ -1,3 +1,6 @@
+import '../../ai/ai_client.dart';
+import '../../ai/ai_client_resolver.dart';
+import '../../ai/ai_provider.dart';
 import '../../debug/debug_console.dart';
 import '../../openai/openai_client.dart';
 import '../../rag/models/source_evidence.dart';
@@ -36,31 +39,42 @@ typedef ReadinessCheck = Future<bool> Function();
 
 class LocalAnswerService implements AnswerService {
   LocalAnswerService({
-    required this.openAiClient,
+    AiClient? openAiClient,
+    AiClientForProvider? clientForProvider,
     required this.retriever,
     required this.citationVerifier,
     required this.loadSettings,
-    required this.hasApiKey,
+    ReadinessCheck? hasApiKey,
+    HasApiKeyForProvider? hasApiKeyForProvider,
     required this.hasReadyDocuments,
-  });
+  }) : _openAiClient = openAiClient,
+       _clientForProvider = clientForProvider,
+       _hasApiKey = hasApiKey,
+       _hasApiKeyForProvider = hasApiKeyForProvider;
 
-  final OpenAiClient openAiClient;
+  final AiClient? _openAiClient;
+  final AiClientForProvider? _clientForProvider;
   final LocalRetriever retriever;
   final CitationVerifier citationVerifier;
   final LoadSettings loadSettings;
-  final ReadinessCheck hasApiKey;
+  final ReadinessCheck? _hasApiKey;
+  final HasApiKeyForProvider? _hasApiKeyForProvider;
   final ReadinessCheck hasReadyDocuments;
 
   @override
   Future<LocalAnswerResult> answer(String question) async {
     DebugConsole.log('[Chat/RAG] answer start chars=${question.length}');
-    if (!await hasApiKey()) {
-      DebugConsole.log('[Chat/RAG] refused reason=missing_api_key');
-      return const LocalAnswerResult(
-        text: 'OpenAI API kulcs nincs beállítva.',
+    final settings = await loadSettings();
+    final provider = settings.activeProvider;
+    if (!await _hasKey(provider)) {
+      DebugConsole.log(
+        '[Chat/RAG] refused reason=missing_api_key provider=${provider.wireName}',
+      );
+      return LocalAnswerResult(
+        text: _missingApiKeyText(provider),
         status: 'missing_api_key',
         refusalReason: 'missing_api_key',
-        citations: [],
+        citations: const [],
       );
     }
     if (!await hasReadyDocuments()) {
@@ -73,11 +87,11 @@ class LocalAnswerService implements AnswerService {
       );
     }
 
-    final settings = await loadSettings();
+    final client = _clientFor(provider);
     DebugConsole.log(
       '[Chat/RAG] query embedding model=${settings.embeddingModel}',
     );
-    final queryVector = await openAiClient.createEmbedding(
+    final queryVector = await client.createEmbedding(
       input: question,
       model: settings.embeddingModel,
     );
@@ -97,7 +111,7 @@ class LocalAnswerService implements AnswerService {
       );
     }
 
-    final draft = await openAiClient.generateAnswer(
+    final draft = await client.generateAnswer(
       model: settings.answerModel,
       question: question,
       evidence: retrieved
@@ -137,7 +151,7 @@ class LocalAnswerService implements AnswerService {
     }
 
     if (settings.groundednessCheckEnabled) {
-      final grounded = await openAiClient.verifyGroundedness(
+      final grounded = await client.verifyGroundedness(
         model: settings.groundednessModel,
         answer: draft.answer,
         evidence: verification.citations
@@ -185,5 +199,33 @@ class LocalAnswerService implements AnswerService {
       sourceLabel: evidence.label,
       validationState: evidence.validationState.wireName,
     );
+  }
+
+  Future<bool> _hasKey(AiProvider provider) {
+    final providerAware = _hasApiKeyForProvider;
+    if (providerAware != null) {
+      return providerAware(provider);
+    }
+    final legacy = _hasApiKey;
+    if (legacy != null) {
+      return legacy();
+    }
+    throw StateError('No API key checker configured');
+  }
+
+  AiClient _clientFor(AiProvider provider) {
+    final providerAware = _clientForProvider;
+    if (providerAware != null) {
+      return providerAware(provider);
+    }
+    final legacy = _openAiClient;
+    if (legacy != null) {
+      return legacy;
+    }
+    throw StateError('No AI client configured');
+  }
+
+  String _missingApiKeyText(AiProvider provider) {
+    return '${provider.label} API kulcs nincs beállítva.';
   }
 }

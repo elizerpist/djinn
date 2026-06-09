@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:djinn/src/ai/ai_provider.dart';
 import 'package:djinn/src/chat/data/local_answer_service.dart';
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/local_store/entities.dart';
@@ -62,5 +63,61 @@ void main() {
     expect(result.citations.single.sourceId, 'node-1');
     expect(DebugConsole.allText, contains('[Chat/RAG] retrieved count=1'));
     expect(DebugConsole.allText, contains('[Chat/RAG] grounded citations=1'));
+  });
+
+  test('uses Gemini key and client when Gemini is active', () async {
+    final usedProviders = <AiProvider>[];
+    final service = LocalAnswerService(
+      clientForProvider: (AiProvider provider) {
+        usedProviders.add(provider);
+        return FakeOpenAiClient(answerText: 'Gemini valasz.');
+      },
+      retriever: MemoryLocalRetriever(const [
+        SourceEvidence(
+          id: 'chunk-1',
+          sourceType: EvidenceSourceType.textChunk,
+          text: 'Validalt PDF reszlet',
+          label: 'PDF reszlet',
+          validationState: ValidationState.validated,
+          score: 0.95,
+        ),
+      ]),
+      citationVerifier: CitationVerifier(),
+      loadSettings: () async =>
+          AppSettings.defaults().copyWith(activeProvider: AiProvider.gemini),
+      hasApiKeyForProvider: (provider) async => provider == AiProvider.gemini,
+      hasReadyDocuments: () async => true,
+    );
+
+    final result = await service.answer('Mi a teendo?');
+
+    expect(result.status, 'grounded');
+    expect(result.text, 'Gemini valasz.');
+    expect(usedProviders, [AiProvider.gemini]);
+    expect(
+      DebugConsole.allText,
+      contains('[Chat/RAG] query embedding model=gemini-embedding-001'),
+    );
+  });
+
+  test('missing provider key log includes provider name in chat', () async {
+    final service = LocalAnswerService(
+      clientForProvider: (AiProvider provider) => FakeOpenAiClient(),
+      retriever: MemoryLocalRetriever(const []),
+      citationVerifier: CitationVerifier(),
+      loadSettings: () async =>
+          AppSettings.defaults().copyWith(activeProvider: AiProvider.gemini),
+      hasApiKeyForProvider: (provider) async => false,
+      hasReadyDocuments: () async => true,
+    );
+
+    final result = await service.answer('Mi a teendo?');
+
+    expect(result.status, 'missing_api_key');
+    expect(result.text, 'Gemini API kulcs nincs beállítva.');
+    expect(
+      DebugConsole.allText,
+      contains('[Chat/RAG] refused reason=missing_api_key provider=gemini'),
+    );
   });
 }

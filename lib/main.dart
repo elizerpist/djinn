@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'src/ai/ai_client.dart';
+import 'src/ai/ai_provider.dart';
 import 'src/chat/data/chat_service.dart';
 import 'src/chat/data/local_answer_service.dart';
 import 'src/chat/data/local_chat_repository.dart';
@@ -18,6 +20,7 @@ import 'src/knowledge/data/objectbox_knowledge_document_repository.dart';
 import 'src/knowledge/data/objectbox_knowledge_repository.dart';
 import 'src/knowledge/data/pdf_import_service.dart';
 import 'src/local_store/objectbox_store.dart';
+import 'src/google/gemini_http_client.dart';
 import 'src/openai/openai_client.dart';
 import 'src/openai/openai_http_client.dart';
 import 'src/rag/retrieval/local_retriever.dart';
@@ -108,6 +111,18 @@ class _DjinnAppState extends State<DjinnApp> {
     final apiKeyStore = widget.apiKeyStore ?? SecureApiKeyStore();
     final settingsRepository = AppSettingsRepository(store: store);
     final openAiClient = OpenAiHttpClient(apiKeyStore: apiKeyStore);
+    final geminiClient = GeminiHttpClient(apiKeyStore: apiKeyStore);
+    AiClient clientForProvider(AiProvider provider) {
+      return switch (provider) {
+        AiProvider.openAi => openAiClient,
+        AiProvider.gemini => geminiClient,
+      };
+    }
+
+    Future<bool> hasKeyForProvider(AiProvider provider) {
+      return apiKeyStore.hasKeyForProvider(provider);
+    }
+
     final objectBoxKnowledgeRepository = ObjectBoxKnowledgeRepository(
       store: store,
     );
@@ -115,18 +130,18 @@ class _DjinnAppState extends State<DjinnApp> {
       repository: objectBoxKnowledgeRepository,
     );
     final processingService = DocumentProcessingService(
-      openAiClient: openAiClient,
+      clientForProvider: clientForProvider,
       loadSettings: settingsRepository.load,
-      hasApiKey: apiKeyStore.hasKey,
+      hasApiKeyForProvider: hasKeyForProvider,
       repository: knowledgeRepository,
     );
     final retriever = ObjectBoxLocalRetriever(store: store);
     final answerService = LocalAnswerService(
-      openAiClient: openAiClient,
+      clientForProvider: clientForProvider,
       retriever: retriever,
       citationVerifier: CitationVerifier(),
       loadSettings: settingsRepository.load,
-      hasApiKey: apiKeyStore.hasKey,
+      hasApiKeyForProvider: hasKeyForProvider,
       hasReadyDocuments: objectBoxKnowledgeRepository.hasReadyDocuments,
     );
     final chatRepository = ObjectBoxChatRepository(store: store);
