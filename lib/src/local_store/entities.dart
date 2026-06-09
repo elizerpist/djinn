@@ -342,6 +342,15 @@ class AppSettingsEntity {
   AppSettingsEntity({
     this.id = 0,
     required this.runtimeMode,
+    required this.activeProvider,
+    required this.openAiAnswerModel,
+    required this.openAiExtractionModel,
+    required this.openAiGroundednessModel,
+    required this.openAiEmbeddingModel,
+    required this.geminiAnswerModel,
+    required this.geminiExtractionModel,
+    required this.geminiGroundednessModel,
+    required this.geminiEmbeddingModel,
     required this.answerModel,
     required this.extractionModel,
     required this.groundednessModel,
@@ -350,12 +359,23 @@ class AppSettingsEntity {
     required this.groundednessCheckEnabled,
     required this.retrievalLimit,
     required this.minimumSimilarity,
+    required this.voiceMode,
+    required this.voiceLocale,
   });
 
   @Id()
   int id;
 
   String runtimeMode;
+  String activeProvider;
+  String openAiAnswerModel;
+  String openAiExtractionModel;
+  String openAiGroundednessModel;
+  String openAiEmbeddingModel;
+  String geminiAnswerModel;
+  String geminiExtractionModel;
+  String geminiGroundednessModel;
+  String geminiEmbeddingModel;
   String answerModel;
   String extractionModel;
   String groundednessModel;
@@ -364,4 +384,6 @@ class AppSettingsEntity {
   bool groundednessCheckEnabled;
   int retrievalLimit;
   double minimumSimilarity;
+  String voiceMode;
+  String voiceLocale;
 }

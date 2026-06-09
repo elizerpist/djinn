@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 273186095957995459),
     name: 'AppSettingsEntity',
-    lastPropertyId: const obx_int.IdUid(10, 4974685060174619275),
+    lastPropertyId: const obx_int.IdUid(21, 6426574414698199161),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -83,6 +83,72 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(10, 4974685060174619275),
         name: 'minimumSimilarity',
         type: 8,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 1667832177506930805),
+        name: 'activeProvider',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 1071311406819407556),
+        name: 'openAiAnswerModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(13, 4170766179930431758),
+        name: 'openAiExtractionModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(14, 8692620291714524788),
+        name: 'openAiGroundednessModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(15, 9049035414435053789),
+        name: 'openAiEmbeddingModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(16, 8971881285814950610),
+        name: 'geminiAnswerModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(17, 58424644763178777),
+        name: 'geminiExtractionModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(18, 2148224121699403889),
+        name: 'geminiGroundednessModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(19, 7871929055330479097),
+        name: 'geminiEmbeddingModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(20, 9075641455202048823),
+        name: 'voiceMode',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(21, 6426574414698199161),
+        name: 'voiceLocale',
+        type: 9,
         flags: 0,
       ),
     ],
@@ -747,7 +813,34 @@ obx_int.ModelDefinition getObjectBoxModel() {
           object.groundednessModel,
         );
         final embeddingModelOffset = fbb.writeString(object.embeddingModel);
-        fbb.startTable(11);
+        final activeProviderOffset = fbb.writeString(object.activeProvider);
+        final openAiAnswerModelOffset = fbb.writeString(
+          object.openAiAnswerModel,
+        );
+        final openAiExtractionModelOffset = fbb.writeString(
+          object.openAiExtractionModel,
+        );
+        final openAiGroundednessModelOffset = fbb.writeString(
+          object.openAiGroundednessModel,
+        );
+        final openAiEmbeddingModelOffset = fbb.writeString(
+          object.openAiEmbeddingModel,
+        );
+        final geminiAnswerModelOffset = fbb.writeString(
+          object.geminiAnswerModel,
+        );
+        final geminiExtractionModelOffset = fbb.writeString(
+          object.geminiExtractionModel,
+        );
+        final geminiGroundednessModelOffset = fbb.writeString(
+          object.geminiGroundednessModel,
+        );
+        final geminiEmbeddingModelOffset = fbb.writeString(
+          object.geminiEmbeddingModel,
+        );
+        final voiceModeOffset = fbb.writeString(object.voiceMode);
+        final voiceLocaleOffset = fbb.writeString(object.voiceLocale);
+        fbb.startTable(22);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, runtimeModeOffset);
         fbb.addOffset(2, answerModelOffset);
@@ -758,6 +851,17 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addBool(7, object.groundednessCheckEnabled);
         fbb.addInt64(8, object.retrievalLimit);
         fbb.addFloat64(9, object.minimumSimilarity);
+        fbb.addOffset(10, activeProviderOffset);
+        fbb.addOffset(11, openAiAnswerModelOffset);
+        fbb.addOffset(12, openAiExtractionModelOffset);
+        fbb.addOffset(13, openAiGroundednessModelOffset);
+        fbb.addOffset(14, openAiEmbeddingModelOffset);
+        fbb.addOffset(15, geminiAnswerModelOffset);
+        fbb.addOffset(16, geminiExtractionModelOffset);
+        fbb.addOffset(17, geminiGroundednessModelOffset);
+        fbb.addOffset(18, geminiEmbeddingModelOffset);
+        fbb.addOffset(19, voiceModeOffset);
+        fbb.addOffset(20, voiceLocaleOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -773,6 +877,33 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final runtimeModeParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 6, '');
+        final activeProviderParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 24, '');
+        final openAiAnswerModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 26, '');
+        final openAiExtractionModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 28, '');
+        final openAiGroundednessModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 30, '');
+        final openAiEmbeddingModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 32, '');
+        final geminiAnswerModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 34, '');
+        final geminiExtractionModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 36, '');
+        final geminiGroundednessModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 38, '');
+        final geminiEmbeddingModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 40, '');
         final answerModelParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 8, '');
@@ -805,9 +936,24 @@ obx_int.ModelDefinition getObjectBoxModel() {
           22,
           0,
         );
+        final voiceModeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 42, '');
+        final voiceLocaleParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 44, '');
         final object = AppSettingsEntity(
           id: idParam,
           runtimeMode: runtimeModeParam,
+          activeProvider: activeProviderParam,
+          openAiAnswerModel: openAiAnswerModelParam,
+          openAiExtractionModel: openAiExtractionModelParam,
+          openAiGroundednessModel: openAiGroundednessModelParam,
+          openAiEmbeddingModel: openAiEmbeddingModelParam,
+          geminiAnswerModel: geminiAnswerModelParam,
+          geminiExtractionModel: geminiExtractionModelParam,
+          geminiGroundednessModel: geminiGroundednessModelParam,
+          geminiEmbeddingModel: geminiEmbeddingModelParam,
           answerModel: answerModelParam,
           extractionModel: extractionModelParam,
           groundednessModel: groundednessModelParam,
@@ -817,6 +963,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           groundednessCheckEnabled: groundednessCheckEnabledParam,
           retrievalLimit: retrievalLimitParam,
           minimumSimilarity: minimumSimilarityParam,
+          voiceMode: voiceModeParam,
+          voiceLocale: voiceLocaleParam,
         );
 
         return object;
@@ -1629,6 +1777,55 @@ class AppSettingsEntity_ {
   /// See [AppSettingsEntity.minimumSimilarity].
   static final minimumSimilarity = obx.QueryDoubleProperty<AppSettingsEntity>(
     _entities[0].properties[9],
+  );
+
+  /// See [AppSettingsEntity.activeProvider].
+  static final activeProvider = obx.QueryStringProperty<AppSettingsEntity>(
+    _entities[0].properties[10],
+  );
+
+  /// See [AppSettingsEntity.openAiAnswerModel].
+  static final openAiAnswerModel = obx.QueryStringProperty<AppSettingsEntity>(
+    _entities[0].properties[11],
+  );
+
+  /// See [AppSettingsEntity.openAiExtractionModel].
+  static final openAiExtractionModel =
+      obx.QueryStringProperty<AppSettingsEntity>(_entities[0].properties[12]);
+
+  /// See [AppSettingsEntity.openAiGroundednessModel].
+  static final openAiGroundednessModel =
+      obx.QueryStringProperty<AppSettingsEntity>(_entities[0].properties[13]);
+
+  /// See [AppSettingsEntity.openAiEmbeddingModel].
+  static final openAiEmbeddingModel =
+      obx.QueryStringProperty<AppSettingsEntity>(_entities[0].properties[14]);
+
+  /// See [AppSettingsEntity.geminiAnswerModel].
+  static final geminiAnswerModel = obx.QueryStringProperty<AppSettingsEntity>(
+    _entities[0].properties[15],
+  );
+
+  /// See [AppSettingsEntity.geminiExtractionModel].
+  static final geminiExtractionModel =
+      obx.QueryStringProperty<AppSettingsEntity>(_entities[0].properties[16]);
+
+  /// See [AppSettingsEntity.geminiGroundednessModel].
+  static final geminiGroundednessModel =
+      obx.QueryStringProperty<AppSettingsEntity>(_entities[0].properties[17]);
+
+  /// See [AppSettingsEntity.geminiEmbeddingModel].
+  static final geminiEmbeddingModel =
+      obx.QueryStringProperty<AppSettingsEntity>(_entities[0].properties[18]);
+
+  /// See [AppSettingsEntity.voiceMode].
+  static final voiceMode = obx.QueryStringProperty<AppSettingsEntity>(
+    _entities[0].properties[19],
+  );
+
+  /// See [AppSettingsEntity.voiceLocale].
+  static final voiceLocale = obx.QueryStringProperty<AppSettingsEntity>(
+    _entities[0].properties[20],
   );
 }
 

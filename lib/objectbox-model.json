@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:273186095957995459",
-      "lastPropertyId": "10:4974685060174619275",
+      "lastPropertyId": "21:6426574414698199161",
       "name": "AppSettingsEntity",
       "properties": [
         {
@@ -58,6 +58,61 @@
           "id": "10:4974685060174619275",
           "name": "minimumSimilarity",
           "type": 8
+        },
+        {
+          "id": "11:1667832177506930805",
+          "name": "activeProvider",
+          "type": 9
+        },
+        {
+          "id": "12:1071311406819407556",
+          "name": "openAiAnswerModel",
+          "type": 9
+        },
+        {
+          "id": "13:4170766179930431758",
+          "name": "openAiExtractionModel",
+          "type": 9
+        },
+        {
+          "id": "14:8692620291714524788",
+          "name": "openAiGroundednessModel",
+          "type": 9
+        },
+        {
+          "id": "15:9049035414435053789",
+          "name": "openAiEmbeddingModel",
+          "type": 9
+        },
+        {
+          "id": "16:8971881285814950610",
+          "name": "geminiAnswerModel",
+          "type": 9
+        },
+        {
+          "id": "17:58424644763178777",
+          "name": "geminiExtractionModel",
+          "type": 9
+        },
+        {
+          "id": "18:2148224121699403889",
+          "name": "geminiGroundednessModel",
+          "type": 9
+        },
+        {
+          "id": "19:7871929055330479097",
+          "name": "geminiEmbeddingModel",
+          "type": 9
+        },
+        {
+          "id": "20:9075641455202048823",
+          "name": "voiceMode",
+          "type": 9
+        },
+        {
+          "id": "21:6426574414698199161",
+          "name": "voiceLocale",
+          "type": 9
         }
       ],
       "relations": []

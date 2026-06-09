@@ -1,6 +1,7 @@
 import 'package:objectbox/objectbox.dart';
 
 import '../../../objectbox.g.dart';
+import '../../ai/ai_provider.dart';
 import '../../local_store/entities.dart';
 import '../models/app_settings.dart';
 
@@ -27,31 +28,91 @@ class AppSettingsRepository {
   }
 
   AppSettings _fromEntity(AppSettingsEntity entity) {
+    final defaults = AppSettings.defaults();
+    final activeProvider = entity.activeProvider.trim().isEmpty
+        ? defaults.activeProvider
+        : AiProvider.fromWireName(entity.activeProvider);
+    final openAiAnswerModel = _fallback(
+      entity.openAiAnswerModel,
+      _fallback(entity.answerModel, defaults.openAiAnswerModel),
+    );
+    final openAiExtractionModel = _fallback(
+      entity.openAiExtractionModel,
+      _fallback(entity.extractionModel, defaults.openAiExtractionModel),
+    );
+    final openAiGroundednessModel = _fallback(
+      entity.openAiGroundednessModel,
+      _fallback(entity.groundednessModel, defaults.openAiGroundednessModel),
+    );
+    final openAiEmbeddingModel = _fallback(
+      entity.openAiEmbeddingModel,
+      _fallback(entity.embeddingModel, defaults.openAiEmbeddingModel),
+    );
+
     return AppSettings(
-      runtimeMode: entity.runtimeMode,
-      answerModel: entity.answerModel,
-      extractionModel: entity.extractionModel,
-      groundednessModel: entity.groundednessModel,
-      embeddingModel: entity.embeddingModel,
+      runtimeMode: _fallback(entity.runtimeMode, defaults.runtimeMode),
+      activeProvider: activeProvider,
+      openAiAnswerModel: openAiAnswerModel,
+      openAiExtractionModel: openAiExtractionModel,
+      openAiGroundednessModel: openAiGroundednessModel,
+      openAiEmbeddingModel: openAiEmbeddingModel,
+      geminiAnswerModel: _fallback(
+        entity.geminiAnswerModel,
+        defaults.geminiAnswerModel,
+      ),
+      geminiExtractionModel: _fallback(
+        entity.geminiExtractionModel,
+        defaults.geminiExtractionModel,
+      ),
+      geminiGroundednessModel: _fallback(
+        entity.geminiGroundednessModel,
+        defaults.geminiGroundednessModel,
+      ),
+      geminiEmbeddingModel: _fallback(
+        entity.geminiEmbeddingModel,
+        defaults.geminiEmbeddingModel,
+      ),
       deleteOpenAiFilesAfterProcessing: entity.deleteOpenAiFilesAfterProcessing,
       groundednessCheckEnabled: entity.groundednessCheckEnabled,
-      retrievalLimit: entity.retrievalLimit,
-      minimumSimilarity: entity.minimumSimilarity,
+      retrievalLimit: entity.retrievalLimit == 0
+          ? defaults.retrievalLimit
+          : entity.retrievalLimit,
+      minimumSimilarity: entity.minimumSimilarity == 0
+          ? defaults.minimumSimilarity
+          : entity.minimumSimilarity,
+      voiceMode: _fallback(entity.voiceMode, defaults.voiceMode),
+      voiceLocale: _fallback(entity.voiceLocale, defaults.voiceLocale),
     );
   }
 
   AppSettingsEntity _toEntity(AppSettings settings) {
     return AppSettingsEntity(
       runtimeMode: settings.runtimeMode,
-      answerModel: settings.answerModel,
-      extractionModel: settings.extractionModel,
-      groundednessModel: settings.groundednessModel,
-      embeddingModel: settings.embeddingModel,
+      activeProvider: settings.activeProvider.wireName,
+      openAiAnswerModel: settings.openAiAnswerModel,
+      openAiExtractionModel: settings.openAiExtractionModel,
+      openAiGroundednessModel: settings.openAiGroundednessModel,
+      openAiEmbeddingModel: settings.openAiEmbeddingModel,
+      geminiAnswerModel: settings.geminiAnswerModel,
+      geminiExtractionModel: settings.geminiExtractionModel,
+      geminiGroundednessModel: settings.geminiGroundednessModel,
+      geminiEmbeddingModel: settings.geminiEmbeddingModel,
+      answerModel: settings.openAiAnswerModel,
+      extractionModel: settings.openAiExtractionModel,
+      groundednessModel: settings.openAiGroundednessModel,
+      embeddingModel: settings.openAiEmbeddingModel,
       deleteOpenAiFilesAfterProcessing:
           settings.deleteOpenAiFilesAfterProcessing,
       groundednessCheckEnabled: settings.groundednessCheckEnabled,
       retrievalLimit: settings.retrievalLimit,
       minimumSimilarity: settings.minimumSimilarity,
+      voiceMode: settings.voiceMode,
+      voiceLocale: settings.voiceLocale,
     );
+  }
+
+  String _fallback(String value, String fallback) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? fallback : trimmed;
   }
 }
