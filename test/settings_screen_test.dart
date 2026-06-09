@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:djinn/src/ai/ai_provider.dart';
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/settings/data/api_key_store.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
@@ -8,7 +9,9 @@ import 'package:djinn/src/settings/ui/settings_screen.dart';
 void main() {
   setUp(DebugConsole.clear);
 
-  testWidgets('saves and deletes OpenAI API key', (tester) async {
+  testWidgets('shows AI block with provider pills and model dropdowns', (
+    tester,
+  ) async {
     final keyStore = MemoryApiKeyStore();
     var settings = AppSettings.defaults();
 
@@ -19,6 +22,109 @@ void main() {
           loadSettings: () async => settings,
           saveSettings: (value) async => settings = value,
           testApiKey: () async => true,
+          testApiKeyForProvider: (_) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('AI'), findsOneWidget);
+    expect(find.text('OpenAI'), findsOneWidget);
+    expect(find.text('Gemini'), findsOneWidget);
+    expect(find.text('Válaszadó modell'), findsOneWidget);
+    expect(find.text('PDF feldolgozó modell'), findsOneWidget);
+    expect(find.text('Groundedness modell'), findsOneWidget);
+    expect(find.text('Embedding modell'), findsOneWidget);
+    expect(find.text('Beszéd'), findsOneWidget);
+    expect(find.text('Működési mód'), findsOneWidget);
+    expect(find.text('Validálás'), findsOneWidget);
+    expect(find.text('Mentés'), findsNothing);
+    expect(find.text('Haladó modellbeállítások'), findsNothing);
+  });
+
+  testWidgets('provider pill changes API key field and autosaves', (
+    tester,
+  ) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gemini'));
+    await tester.pumpAndSettle();
+
+    expect(settings.activeProvider, AiProvider.gemini);
+    expect(find.byKey(const Key('gemini-api-key-field')), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('gemini-api-key-field')),
+      'AIza-test',
+    );
+    await tester.pumpAndSettle();
+
+    expect(await keyStore.readKeyForProvider(AiProvider.gemini), 'AIza-test');
+    expect(DebugConsole.allText, contains('[Google] api key saved length=9'));
+  });
+
+  testWidgets('model dropdown autosaves selected Gemini extraction model', (
+    tester,
+  ) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults().copyWith(
+      activeProvider: AiProvider.gemini,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('extraction-model-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('gemini-2.5-flash').last);
+    await tester.pumpAndSettle();
+
+    expect(settings.geminiExtractionModel, 'gemini-2.5-flash');
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[Google] model selected slot=extraction model=gemini-2.5-flash',
+      ),
+    );
+  });
+
+  testWidgets('tests and deletes active provider API key', (tester) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_) async => true,
         ),
       ),
     );
@@ -28,11 +134,9 @@ void main() {
       find.byKey(const Key('openai-api-key-field')),
       'sk-test',
     );
-    await tester.tap(find.text('Mentés'));
     await tester.pumpAndSettle();
 
     expect(await keyStore.readKey(), 'sk-test');
-    expect(DebugConsole.allText, contains('[OpenAI] api key saved'));
 
     await tester.tap(find.text('Kulcs tesztelése'));
     await tester.pumpAndSettle();
@@ -47,7 +151,7 @@ void main() {
     expect(DebugConsole.allText, contains('[OpenAI] api key deleted'));
   });
 
-  testWidgets('does not show API key save failure when settings save fails', (
+  testWidgets('API key autosave is independent from settings save failures', (
     tester,
   ) async {
     final keyStore = MemoryApiKeyStore();
@@ -59,6 +163,7 @@ void main() {
           loadSettings: () async => AppSettings.defaults(),
           saveSettings: (_) async => throw StateError('settings store failed'),
           testApiKey: () async => true,
+          testApiKeyForProvider: (_) async => true,
         ),
       ),
     );
@@ -68,22 +173,10 @@ void main() {
       find.byKey(const Key('openai-api-key-field')),
       'sk-test',
     );
-    await tester.tap(find.text('Mentés'));
     await tester.pumpAndSettle();
 
     expect(await keyStore.readKey(), 'sk-test');
-    expect(find.text('A mentés nem sikerült'), findsNothing);
-    expect(
-      find.text(
-        'OpenAI kulcs mentve, a modellbeállítások mentése nem sikerült',
-      ),
-      findsOneWidget,
-    );
-    expect(
-      DebugConsole.allText,
-      contains(
-        '[OpenAI] settings save failed error=Bad state: settings store failed',
-      ),
-    );
+    expect(DebugConsole.allText, contains('[OpenAI] api key saved length=7'));
+    expect(DebugConsole.allText, isNot(contains('settings save failed')));
   });
 }

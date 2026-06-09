@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../ai/ai_provider.dart';
 import '../../debug/debug_console.dart';
 import '../data/api_key_store.dart';
 import '../models/app_settings.dart';
+import '../models/model_catalog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -11,12 +13,14 @@ class SettingsScreen extends StatefulWidget {
     required this.loadSettings,
     required this.saveSettings,
     required this.testApiKey,
+    this.testApiKeyForProvider,
   });
 
   final ApiKeyStore apiKeyStore;
   final Future<AppSettings> Function() loadSettings;
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
+  final Future<bool> Function(AiProvider provider)? testApiKeyForProvider;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -24,14 +28,10 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _apiKeyController = TextEditingController();
-  final _answerModelController = TextEditingController();
-  final _extractionModelController = TextEditingController();
-  final _groundednessModelController = TextEditingController();
-  final _embeddingModelController = TextEditingController();
 
   AppSettings _settings = AppSettings.defaults();
   bool _loading = true;
-  bool _saving = false;
+  bool _testingKey = false;
   String? _statusText;
 
   @override
@@ -43,258 +43,355 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _apiKeyController.dispose();
-    _answerModelController.dispose();
-    _extractionModelController.dispose();
-    _groundednessModelController.dispose();
-    _embeddingModelController.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
     final settings = await widget.loadSettings();
-    final apiKey = await widget.apiKeyStore.readKey();
+    final apiKey = await widget.apiKeyStore.readKeyForProvider(
+      settings.activeProvider,
+    );
     if (!mounted) {
       return;
     }
     setState(() {
       _settings = settings;
       _apiKeyController.text = apiKey ?? '';
-      _answerModelController.text = settings.answerModel;
-      _extractionModelController.text = settings.extractionModel;
-      _groundednessModelController.text = settings.groundednessModel;
-      _embeddingModelController.text = settings.embeddingModel;
       _loading = false;
     });
   }
 
-  Future<void> _save() async {
+  Future<void> _selectProvider(AiProvider provider) async {
+    final next = _settings.copyWith(activeProvider: provider);
+    await _autoSave(next);
+    final apiKey = await widget.apiKeyStore.readKeyForProvider(provider);
+    if (!mounted) {
+      return;
+    }
     setState(() {
-      _saving = true;
+      _apiKeyController.text = apiKey ?? '';
       _statusText = null;
     });
-    var apiKeySaved = false;
-    final apiKey = _apiKeyController.text.trim();
-    if (apiKey.isNotEmpty) {
-      try {
-        await widget.apiKeyStore.saveKey(apiKey);
-        apiKeySaved = true;
-        DebugConsole.log('[OpenAI] api key saved length=${apiKey.length}');
-      } catch (error) {
-        DebugConsole.log('[OpenAI] api key save failed error=$error');
-        if (mounted) {
-          setState(() {
-            _statusText = 'OpenAI kulcs mentése nem sikerült';
-            _saving = false;
-          });
-        }
-        return;
-      }
+  }
+
+  Future<void> _autoSave(AppSettings settings) async {
+    if (mounted) {
+      setState(() => _settings = settings);
     }
     try {
-      final settings = _settings.copyWith(
-        answerModel: _answerModelController.text.trim().isEmpty
-            ? _settings.answerModel
-            : _answerModelController.text.trim(),
-        extractionModel: _extractionModelController.text.trim().isEmpty
-            ? _settings.extractionModel
-            : _extractionModelController.text.trim(),
-        groundednessModel: _groundednessModelController.text.trim().isEmpty
-            ? _settings.groundednessModel
-            : _groundednessModelController.text.trim(),
-        embeddingModel: _embeddingModelController.text.trim().isEmpty
-            ? _settings.embeddingModel
-            : _embeddingModelController.text.trim(),
-      );
       await widget.saveSettings(settings);
+    } catch (error) {
+      DebugConsole.log(
+        '${_providerLogPrefix(settings.activeProvider)} settings save failed error=$error',
+      );
       if (!mounted) {
         return;
       }
-      setState(() {
-        _settings = settings;
-        _statusText = 'Beállítások mentve';
-      });
+      setState(() => _statusText = 'A beállítások mentése nem sikerült');
+    }
+  }
+
+  Future<void> _saveProviderKey(AiProvider provider, String value) async {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    try {
+      await widget.apiKeyStore.saveKeyForProvider(provider, trimmed);
+      DebugConsole.log(
+        '${_providerLogPrefix(provider)} api key saved length=${trimmed.length}',
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _statusText = '${provider.label} kulcs mentve');
     } catch (error) {
-      DebugConsole.log('[OpenAI] settings save failed error=$error');
+      DebugConsole.log(
+        '${_providerLogPrefix(provider)} api key save failed error=$error',
+      );
       if (!mounted) {
         return;
       }
       setState(
-        () => _statusText = apiKeySaved
-            ? 'OpenAI kulcs mentve, a modellbeállítások mentése nem sikerült'
-            : 'A modellbeállítások mentése nem sikerült',
+        () => _statusText = '${provider.label} kulcs mentése nem sikerült',
       );
-    } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      }
     }
   }
 
   Future<void> _deleteKey() async {
-    await widget.apiKeyStore.deleteKey();
-    DebugConsole.log('[OpenAI] api key deleted');
+    final provider = _settings.activeProvider;
+    await widget.apiKeyStore.deleteKeyForProvider(provider);
+    DebugConsole.log('${_providerLogPrefix(provider)} api key deleted');
     if (!mounted) {
       return;
     }
     setState(() {
       _apiKeyController.clear();
-      _statusText = 'OpenAI kulcs törölve';
+      _statusText = '${provider.label} kulcs törölve';
     });
   }
 
   Future<void> _testKey() async {
-    DebugConsole.log('[OpenAI] api key test started');
-    final ok = await widget.testApiKey();
+    final provider = _settings.activeProvider;
+    setState(() {
+      _testingKey = true;
+      _statusText = null;
+    });
+    DebugConsole.log('${_providerLogPrefix(provider)} api key test started');
+    final ok = await _testProviderKey(provider);
     DebugConsole.log(
-      ok ? '[OpenAI] api key test succeeded' : '[OpenAI] api key test failed',
+      ok
+          ? '${_providerLogPrefix(provider)} api key test succeeded'
+          : '${_providerLogPrefix(provider)} api key test failed',
     );
     if (!mounted) {
       return;
     }
     setState(() {
-      _statusText = ok ? 'OpenAI kulcs működik' : 'OpenAI kulcs hibás';
+      _testingKey = false;
+      _statusText = ok
+          ? '${provider.label} kulcs működik'
+          : '${provider.label} kulcs hibás';
     });
   }
 
-  Future<void> _updateSettings(AppSettings settings) async {
-    setState(() => _settings = settings);
-    await widget.saveSettings(settings);
+  Future<bool> _testProviderKey(AiProvider provider) {
+    final providerTester = widget.testApiKeyForProvider;
+    if (providerTester != null) {
+      return providerTester(provider);
+    }
+    if (provider == AiProvider.openAi) {
+      return widget.testApiKey();
+    }
+    return Future.value(false);
+  }
+
+  Future<void> _updateModel(AiModelSlot slot, String model) async {
+    final provider = _settings.activeProvider;
+    final next = switch ((provider, slot)) {
+      (AiProvider.openAi, AiModelSlot.answer) => _settings.copyWith(
+        openAiAnswerModel: model,
+      ),
+      (AiProvider.openAi, AiModelSlot.extraction) => _settings.copyWith(
+        openAiExtractionModel: model,
+      ),
+      (AiProvider.openAi, AiModelSlot.groundedness) => _settings.copyWith(
+        openAiGroundednessModel: model,
+      ),
+      (AiProvider.openAi, AiModelSlot.embedding) => _settings.copyWith(
+        openAiEmbeddingModel: model,
+      ),
+      (AiProvider.gemini, AiModelSlot.answer) => _settings.copyWith(
+        geminiAnswerModel: model,
+      ),
+      (AiProvider.gemini, AiModelSlot.extraction) => _settings.copyWith(
+        geminiExtractionModel: model,
+      ),
+      (AiProvider.gemini, AiModelSlot.groundedness) => _settings.copyWith(
+        geminiGroundednessModel: model,
+      ),
+      (AiProvider.gemini, AiModelSlot.embedding) => _settings.copyWith(
+        geminiEmbeddingModel: model,
+      ),
+    };
+    await _autoSave(next);
+    DebugConsole.log(
+      '${_providerLogPrefix(provider)} model selected slot=${slot.wireName} model=$model',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final provider = _settings.activeProvider;
     return Scaffold(
       appBar: AppBar(title: const Text('Beállítások')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
+          : SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-              children: [
-                _Section(
-                  title: 'OpenAI kapcsolat',
-                  children: [
-                    TextField(
-                      key: const Key('openai-api-key-field'),
-                      controller: _apiKeyController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'OpenAI API kulcs',
-                        border: OutlineInputBorder(),
+              child: Column(
+                children: [
+                  _Section(
+                    title: 'AI',
+                    children: [
+                      SegmentedButton<AiProvider>(
+                        segments: const [
+                          ButtonSegment(
+                            value: AiProvider.openAi,
+                            label: Text('OpenAI'),
+                          ),
+                          ButtonSegment(
+                            value: AiProvider.gemini,
+                            label: Text('Gemini'),
+                          ),
+                        ],
+                        selected: {provider},
+                        onSelectionChanged: (selection) {
+                          _selectProvider(selection.single);
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton(
-                          onPressed: _saving ? null : _save,
-                          child: const Text('Mentés'),
+                      const SizedBox(height: 12),
+                      TextField(
+                        key: Key('${provider.wireName}-api-key-field'),
+                        controller: _apiKeyController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: '${provider.label} API kulcs',
+                          border: const OutlineInputBorder(),
                         ),
-                        OutlinedButton(
-                          onPressed: _testKey,
-                          child: const Text('Kulcs tesztelése'),
+                        onChanged: (value) => _saveProviderKey(provider, value),
+                        onSubmitted: (value) =>
+                            _saveProviderKey(provider, value),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton(
+                            onPressed: _testingKey ? null : _testKey,
+                            child: const Text('Kulcs tesztelése'),
+                          ),
+                          TextButton(
+                            onPressed: _deleteKey,
+                            child: const Text('Kulcs törlése'),
+                          ),
+                        ],
+                      ),
+                      _ModelDropdown(
+                        slot: AiModelSlot.answer,
+                        label: 'Válaszadó modell',
+                        provider: provider,
+                        value: _settings.modelFor(provider, AiModelSlot.answer),
+                        onChanged: (value) =>
+                            _updateModel(AiModelSlot.answer, value),
+                      ),
+                      _ModelDropdown(
+                        slot: AiModelSlot.extraction,
+                        label: 'PDF feldolgozó modell',
+                        provider: provider,
+                        value: _settings.modelFor(
+                          provider,
+                          AiModelSlot.extraction,
                         ),
-                        TextButton(
-                          onPressed: _deleteKey,
-                          child: const Text('Kulcs törlése'),
+                        onChanged: (value) =>
+                            _updateModel(AiModelSlot.extraction, value),
+                      ),
+                      _ModelDropdown(
+                        slot: AiModelSlot.groundedness,
+                        label: 'Groundedness modell',
+                        provider: provider,
+                        value: _settings.modelFor(
+                          provider,
+                          AiModelSlot.groundedness,
+                        ),
+                        onChanged: (value) =>
+                            _updateModel(AiModelSlot.groundedness, value),
+                      ),
+                      _ModelDropdown(
+                        slot: AiModelSlot.embedding,
+                        label: 'Embedding modell',
+                        provider: provider,
+                        value: _settings.modelFor(
+                          provider,
+                          AiModelSlot.embedding,
+                        ),
+                        onChanged: (value) =>
+                            _updateModel(AiModelSlot.embedding, value),
+                      ),
+                      if (_statusText != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _statusText!,
+                          style: const TextStyle(color: Color(0xFF166534)),
                         ),
                       ],
-                    ),
-                    if (_statusText != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _statusText!,
-                        style: const TextStyle(color: Color(0xFF166534)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _Section(
+                    title: 'Beszéd',
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.mic),
+                        title: const Text('Hangvezérlés'),
+                        subtitle: Text(_voiceModeLabel(_settings.voiceMode)),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.record_voice_over),
+                        title: const Text('Felolvasás'),
+                        subtitle: Text(_settings.voiceLocale),
                       ),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _Section(
-                  title: 'Működési mód',
-                  children: const [
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.phone_android),
-                      title: Text('B mód: Local ObjectBox'),
-                      subtitle: Text('Aktív'),
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.cloud_off),
-                      title: Text('A mód: Backend'),
-                      subtitle: Text('Jelenleg nincs bekötve'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _Section(
-                  title: 'Validálás és adatkezelés',
-                  children: [
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                        'OpenAI fájlok törlése feldolgozás után',
+                  ),
+                  const SizedBox(height: 12),
+                  _Section(
+                    title: 'Működési mód',
+                    children: const [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.phone_android),
+                        title: Text('B mód: Local ObjectBox'),
+                        subtitle: Text('Aktív'),
                       ),
-                      value: _settings.deleteOpenAiFilesAfterProcessing,
-                      onChanged: (value) => _updateSettings(
-                        _settings.copyWith(
-                          deleteOpenAiFilesAfterProcessing: value,
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.cloud_off),
+                        title: Text('A mód: Backend'),
+                        subtitle: Text('Jelenleg nincs bekötve'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _Section(
+                    title: 'Validálás',
+                    children: [
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('AI fájlok törlése feldolgozás után'),
+                        value: _settings.deleteOpenAiFilesAfterProcessing,
+                        onChanged: (value) => _autoSave(
+                          _settings.copyWith(
+                            deleteOpenAiFilesAfterProcessing: value,
+                          ),
                         ),
                       ),
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Második groundedness check'),
-                      value: _settings.groundednessCheckEnabled,
-                      onChanged: (value) => _updateSettings(
-                        _settings.copyWith(groundednessCheckEnabled: value),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Második groundedness check'),
+                        value: _settings.groundednessCheckEnabled,
+                        onChanged: (value) => _autoSave(
+                          _settings.copyWith(groundednessCheckEnabled: value),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _Section(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    ExpansionTile(
-                      tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      title: const Text('Haladó modellbeállítások'),
-                      children: [
-                        _ModelField(
-                          controller: _answerModelController,
-                          label: 'Válaszoló modell',
-                        ),
-                        _ModelField(
-                          controller: _extractionModelController,
-                          label: 'PDF feldolgozó modell',
-                        ),
-                        _ModelField(
-                          controller: _groundednessModelController,
-                          label: 'Groundedness modell',
-                        ),
-                        _ModelField(
-                          controller: _embeddingModelController,
-                          label: 'Embedding modell',
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
     );
+  }
+
+  String _providerLogPrefix(AiProvider provider) {
+    return provider == AiProvider.openAi ? '[OpenAI]' : '[Google]';
+  }
+
+  String _voiceModeLabel(String value) {
+    return switch (value) {
+      'conversation' => 'Párbeszéd',
+      'push_to_talk' => 'Push-to-talk',
+      _ => value,
+    };
   }
 }
 
 class _Section extends StatelessWidget {
-  const _Section({this.title, required this.children, this.padding});
+  const _Section({required this.title, required this.children});
 
-  final String? title;
+  final String title;
   final List<Widget> children;
-  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
@@ -302,14 +399,12 @@ class _Section extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
-        padding: padding ?? const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (title != null) ...[
-              Text(title!, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-            ],
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
             ...children,
           ],
         ),
@@ -318,22 +413,42 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _ModelField extends StatelessWidget {
-  const _ModelField({required this.controller, required this.label});
+class _ModelDropdown extends StatelessWidget {
+  const _ModelDropdown({
+    required this.slot,
+    required this.label,
+    required this.provider,
+    required this.value,
+    required this.onChanged,
+  });
 
-  final TextEditingController controller;
+  final AiModelSlot slot;
   final String label;
+  final AiProvider provider;
+  final String value;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final options = ModelCatalog.options(provider, slot);
     return Padding(
       padding: const EdgeInsets.only(top: 12),
-      child: TextField(
-        controller: controller,
+      child: DropdownButtonFormField<String>(
+        key: Key('${slot.wireName}-model-dropdown'),
+        initialValue: options.contains(value) ? value : options.first,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
         ),
+        items: [
+          for (final option in options)
+            DropdownMenuItem(value: option, child: Text(option)),
+        ],
+        onChanged: (value) {
+          if (value != null) {
+            onChanged(value);
+          }
+        },
       ),
     );
   }

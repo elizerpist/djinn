@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../ai/ai_provider.dart';
 import '../../flowchart/data/flowchart_validation_repository.dart';
 import '../../flowchart/ui/flowchart_validation_screen.dart';
 import '../../knowledge/data/document_processing_service.dart';
@@ -27,6 +28,7 @@ class MainScreen extends StatefulWidget {
     required this.loadSettings,
     required this.saveSettings,
     required this.testApiKey,
+    this.testApiKeyForProvider,
     this.processingService,
     this.flowchartValidationRepository,
   });
@@ -40,6 +42,7 @@ class MainScreen extends StatefulWidget {
   final Future<AppSettings> Function() loadSettings;
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
+  final Future<bool> Function(AiProvider provider)? testApiKeyForProvider;
   final DocumentProcessingService? processingService;
   final FlowchartValidationRepository? flowchartValidationRepository;
 
@@ -96,6 +99,7 @@ class _MainScreenState extends State<MainScreen> {
           loadSettings: widget.loadSettings,
           saveSettings: widget.saveSettings,
           testApiKey: widget.testApiKey,
+          testApiKeyForProvider: widget.testApiKeyForProvider,
         ),
       ),
     );

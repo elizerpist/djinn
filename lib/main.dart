@@ -48,6 +48,7 @@ class DjinnApp extends StatefulWidget {
     this.loadSettings,
     this.saveSettings,
     this.testApiKey,
+    this.testApiKeyForProvider,
   });
 
   final LocalChatRepository? chatRepository;
@@ -62,6 +63,7 @@ class DjinnApp extends StatefulWidget {
   final Future<AppSettings> Function()? loadSettings;
   final Future<void> Function(AppSettings settings)? saveSettings;
   final Future<bool> Function()? testApiKey;
+  final Future<bool> Function(AiProvider provider)? testApiKeyForProvider;
 
   @override
   State<DjinnApp> createState() => _DjinnAppState();
@@ -80,6 +82,8 @@ class _DjinnAppState extends State<DjinnApp> {
       final settingsStore = _MemoryAppSettingsStore();
       final loadSettings = widget.loadSettings ?? settingsStore.load;
       final saveSettings = widget.saveSettings ?? settingsStore.save;
+      final testApiKey =
+          widget.testApiKey ?? _buildOpenAiKeyTester(apiKeyStore);
       return _AppDependencies(
         chatRepository: widget.chatRepository!,
         chatService:
@@ -99,7 +103,10 @@ class _DjinnAppState extends State<DjinnApp> {
         apiKeyStore: apiKeyStore,
         loadSettings: loadSettings,
         saveSettings: saveSettings,
-        testApiKey: widget.testApiKey ?? _buildOpenAiKeyTester(apiKeyStore),
+        testApiKey: testApiKey,
+        testApiKeyForProvider:
+            widget.testApiKeyForProvider ??
+            _buildFallbackProviderKeyTester(testApiKey),
       );
     }
 
@@ -169,6 +176,11 @@ class _DjinnAppState extends State<DjinnApp> {
         await settingsRepository.save(settings);
       },
       testApiKey: _buildOpenAiKeyTester(apiKeyStore),
+      testApiKeyForProvider: _buildProviderKeyTester(
+        apiKeyStore: apiKeyStore,
+        openAiClient: openAiClient,
+        geminiClient: geminiClient,
+      ),
     );
   }
 
@@ -224,6 +236,7 @@ class _DjinnAppState extends State<DjinnApp> {
             loadSettings: dependencies.loadSettings,
             saveSettings: dependencies.saveSettings,
             testApiKey: dependencies.testApiKey,
+            testApiKeyForProvider: dependencies.testApiKeyForProvider,
             processingService: dependencies.processingService,
             flowchartValidationRepository:
                 dependencies.flowchartValidationRepository,
@@ -245,6 +258,7 @@ class _AppDependencies {
     required this.loadSettings,
     required this.saveSettings,
     required this.testApiKey,
+    required this.testApiKeyForProvider,
     this.processingService,
     this.flowchartValidationRepository,
   });
@@ -260,6 +274,7 @@ class _AppDependencies {
   final Future<AppSettings> Function() loadSettings;
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
+  final Future<bool> Function(AiProvider provider) testApiKeyForProvider;
 }
 
 Future<bool> Function() _buildOpenAiKeyTester(ApiKeyStore apiKeyStore) {
@@ -273,6 +288,41 @@ Future<bool> Function() _buildOpenAiKeyTester(ApiKeyStore apiKeyStore) {
       await client.testApiKey(apiKey: key);
       return true;
     } on OpenAiException {
+      return false;
+    }
+  };
+}
+
+Future<bool> Function(AiProvider provider) _buildFallbackProviderKeyTester(
+  Future<bool> Function() openAiTester,
+) {
+  return (provider) {
+    if (provider == AiProvider.openAi) {
+      return openAiTester();
+    }
+    return Future.value(false);
+  };
+}
+
+Future<bool> Function(AiProvider provider) _buildProviderKeyTester({
+  required ApiKeyStore apiKeyStore,
+  required OpenAiHttpClient openAiClient,
+  required GeminiHttpClient geminiClient,
+}) {
+  return (provider) async {
+    final key = await apiKeyStore.readKeyForProvider(provider);
+    if (key == null || key.trim().isEmpty) {
+      return false;
+    }
+    try {
+      switch (provider) {
+        case AiProvider.openAi:
+          await openAiClient.testApiKey(apiKey: key);
+        case AiProvider.gemini:
+          await geminiClient.testApiKey(apiKey: key);
+      }
+      return true;
+    } catch (_) {
       return false;
     }
   };
