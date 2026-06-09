@@ -8,13 +8,20 @@ class ChatService {
   final LocalChatRepository repository;
   final AnswerService answerService;
 
-  Future<void> sendMessage(String conversationId, String text) async {
+  Future<void> sendMessage(
+    String conversationId,
+    String text, {
+    String? collectionName,
+  }) async {
     final userMessage = await repository.appendUserMessage(
       conversationId,
       text,
     );
     try {
-      final response = await answerService.answer(userMessage.text);
+      final response = await answerService.answer(
+        userMessage.text,
+        collectionName: collectionName,
+      );
       await repository.appendAssistantMessage(
         conversationId,
         text: response.text,

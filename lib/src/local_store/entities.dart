@@ -3,6 +3,7 @@ import 'package:objectbox/objectbox.dart';
 enum ProcessingState {
   imported('imported'),
   blockedMissingApiKey('blocked_missing_api_key'),
+  blockedPaidAi('blocked_paid_ai'),
   blockedOffline('blocked_offline'),
   uploading('uploading'),
   processing('processing'),
@@ -103,6 +104,12 @@ class KnowledgeDocumentEntity {
     required this.processingState,
     this.errorMessage,
     this.openAiFileId,
+    this.contentHash,
+    this.ragEnabled = true,
+    this.collectionName = 'Alap',
+    this.ocrStatus = 'unknown',
+    this.trainedAtMillis,
+    this.packVersion,
   });
 
   @Id()
@@ -121,6 +128,18 @@ class KnowledgeDocumentEntity {
 
   String? errorMessage;
   String? openAiFileId;
+
+  @Index()
+  String? contentHash;
+
+  bool ragEnabled;
+
+  @Index()
+  String collectionName;
+
+  String ocrStatus;
+  int? trainedAtMillis;
+  int? packVersion;
 }
 
 @Entity()
@@ -342,26 +361,46 @@ class AppSettingsEntity {
   AppSettingsEntity({
     this.id = 0,
     required this.runtimeMode,
+    required this.aiProvider,
     required this.answerModel,
     required this.extractionModel,
     required this.groundednessModel,
     required this.embeddingModel,
+    required this.googleAnswerModel,
+    required this.googleExtractionModel,
+    required this.googleGroundednessModel,
+    required this.googleEmbeddingModel,
     required this.deleteOpenAiFilesAfterProcessing,
     required this.groundednessCheckEnabled,
     required this.retrievalLimit,
     required this.minimumSimilarity,
+    required this.allowPaidAi,
+    required this.confirmBeforeAiProcessing,
+    required this.voiceLocale,
+    required this.ttsSpeechRate,
+    required this.ttsPitch,
   });
 
   @Id()
   int id;
 
   String runtimeMode;
+  String aiProvider;
   String answerModel;
   String extractionModel;
   String groundednessModel;
   String embeddingModel;
+  String googleAnswerModel;
+  String googleExtractionModel;
+  String googleGroundednessModel;
+  String googleEmbeddingModel;
   bool deleteOpenAiFilesAfterProcessing;
   bool groundednessCheckEnabled;
   int retrievalLimit;
   double minimumSimilarity;
+  bool allowPaidAi;
+  bool confirmBeforeAiProcessing;
+  String voiceLocale;
+  double ttsSpeechRate;
+  double ttsPitch;
 }

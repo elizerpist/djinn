@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../../voice/voice_input_service.dart';
+
 class MessageComposer extends StatefulWidget {
   const MessageComposer({
     super.key,
     required this.onSend,
     required this.sending,
+    this.voiceInputService,
+    this.voiceLocale = 'hu-HU',
   });
 
   final Future<void> Function(String text) onSend;
   final bool sending;
+  final VoiceInputService? voiceInputService;
+  final String voiceLocale;
 
   @override
   State<MessageComposer> createState() => _MessageComposerState();
@@ -17,6 +23,7 @@ class MessageComposer extends StatefulWidget {
 class _MessageComposerState extends State<MessageComposer> {
   final TextEditingController _controller = TextEditingController();
   String _draft = '';
+  bool _listening = false;
 
   @override
   void dispose() {
@@ -65,6 +72,21 @@ class _MessageComposerState extends State<MessageComposer> {
               ),
             ),
             const SizedBox(width: 8),
+            if (widget.voiceInputService != null) ...[
+              IconButton(
+                key: const ValueKey('voice-input-toggle'),
+                tooltip: 'Diktálás',
+                onPressed: widget.sending || _listening ? null : _listen,
+                icon: _listening
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.mic),
+              ),
+              const SizedBox(width: 4),
+            ],
             IconButton.filled(
               key: const ValueKey('send-message'),
               tooltip: 'Kuldes',
@@ -81,6 +103,29 @@ class _MessageComposerState extends State<MessageComposer> {
         ),
       ),
     );
+  }
+
+  Future<void> _listen() async {
+    final service = widget.voiceInputService;
+    if (service == null) {
+      return;
+    }
+    setState(() => _listening = true);
+    try {
+      final transcript = await service.listen(locale: widget.voiceLocale);
+      if (transcript == null || transcript.trim().isEmpty) {
+        return;
+      }
+      _controller.text = transcript;
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+      setState(() => _draft = transcript);
+    } finally {
+      if (mounted) {
+        setState(() => _listening = false);
+      }
+    }
   }
 
   Future<void> _send() async {

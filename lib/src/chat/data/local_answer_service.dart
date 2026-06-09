@@ -10,7 +10,7 @@ const insufficientEvidenceText =
     'A helyi tudásbázisban nincs elég forrás ehhez a válaszhoz.';
 
 abstract class AnswerService {
-  Future<LocalAnswerResult> answer(String question);
+  Future<LocalAnswerResult> answer(String question, {String? collectionName});
 }
 
 class LocalAnswerResult {
@@ -52,7 +52,10 @@ class LocalAnswerService implements AnswerService {
   final ReadinessCheck hasReadyDocuments;
 
   @override
-  Future<LocalAnswerResult> answer(String question) async {
+  Future<LocalAnswerResult> answer(
+    String question, {
+    String? collectionName,
+  }) async {
     DebugConsole.log('[Chat/RAG] answer start chars=${question.length}');
     if (!await hasApiKey()) {
       DebugConsole.log('[Chat/RAG] refused reason=missing_api_key');
@@ -75,16 +78,17 @@ class LocalAnswerService implements AnswerService {
 
     final settings = await loadSettings();
     DebugConsole.log(
-      '[Chat/RAG] query embedding model=${settings.embeddingModel}',
+      '[Chat/RAG] query embedding model=${settings.activeEmbeddingModel}',
     );
     final queryVector = await openAiClient.createEmbedding(
       input: question,
-      model: settings.embeddingModel,
+      model: settings.activeEmbeddingModel,
     );
     final retrieved = await retriever.retrieve(
       queryVector: queryVector,
       limit: settings.retrievalLimit,
       minimumSimilarity: settings.minimumSimilarity,
+      collectionName: collectionName,
     );
     DebugConsole.log('[Chat/RAG] retrieved count=${retrieved.length}');
     if (retrieved.isEmpty) {
@@ -98,7 +102,7 @@ class LocalAnswerService implements AnswerService {
     }
 
     final draft = await openAiClient.generateAnswer(
-      model: settings.answerModel,
+      model: settings.activeAnswerModel,
       question: question,
       evidence: retrieved
           .map(
@@ -138,7 +142,7 @@ class LocalAnswerService implements AnswerService {
 
     if (settings.groundednessCheckEnabled) {
       final grounded = await openAiClient.verifyGroundedness(
-        model: settings.groundednessModel,
+        model: settings.activeGroundednessModel,
         answer: draft.answer,
         evidence: verification.citations
             .map(

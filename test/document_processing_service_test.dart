@@ -31,9 +31,13 @@ void main() {
     final repository = MemoryProcessingRepository();
     final service = DocumentProcessingService(
       openAiClient: _ExtractingOpenAiClient(),
-      loadSettings: () async => AppSettings.defaults(),
+      loadSettings: () async => AppSettings.defaults().copyWith(
+        allowPaidAi: true,
+        confirmBeforeAiProcessing: false,
+      ),
       hasApiKey: () async => true,
       repository: repository,
+      pdfExists: (_) async => true,
     );
 
     final result = await service.processDocument('doc-1');
@@ -44,6 +48,7 @@ void main() {
       ProcessingState.embedded,
       ProcessingState.ready,
     ]);
+    expect(repository.clearedDocuments, ['doc-1']);
     expect(repository.savedChunks, hasLength(1));
     expect(repository.savedEmbeddings.single.vector, hasLength(3072));
     expect(repository.savedEmbeddings.single.model, 'text-embedding-3-large');
@@ -64,13 +69,48 @@ void main() {
     );
   });
 
+  test('stores extracted flowcharts and marks document for review', () async {
+    final repository = MemoryProcessingRepository();
+    final service = DocumentProcessingService(
+      openAiClient: _FlowchartExtractingOpenAiClient(),
+      loadSettings: () async => AppSettings.defaults().copyWith(
+        allowPaidAi: true,
+        confirmBeforeAiProcessing: false,
+      ),
+      hasApiKey: () async => true,
+      repository: repository,
+      pdfExists: (_) async => true,
+    );
+
+    final result = await service.processDocument('doc-1');
+
+    expect(result.state, 'needs_review');
+    expect(repository.states, [
+      ProcessingState.processing,
+      ProcessingState.embedded,
+      ProcessingState.needsReview,
+    ]);
+    expect(repository.savedFlowcharts, hasLength(1));
+    expect(repository.savedFlowcharts.single.nodes, hasLength(2));
+    expect(repository.savedFlowcharts.single.edges.single.label, 'then');
+    expect(repository.savedEmbeddings, hasLength(4));
+    expect(
+      DebugConsole.allText,
+      contains('[AI Training] extraction chunks=1 flowcharts=1'),
+    );
+  });
+
   test('marks document failed when OpenAI extraction fails', () async {
     final repository = MemoryProcessingRepository();
     final service = DocumentProcessingService(
       openAiClient: _FailingExtractionOpenAiClient(),
-      loadSettings: () async => AppSettings.defaults(),
+      loadSettings: () async => AppSettings.defaults().copyWith(
+        allowPaidAi: true,
+        confirmBeforeAiProcessing: false,
+      ),
       hasApiKey: () async => true,
       repository: repository,
+      pdfExists: (_) async => true,
     );
 
     final result = await service.processDocument('doc-1');
@@ -87,13 +127,105 @@ void main() {
       contains('[AI Training] failed document=doc-1 error=extract failed'),
     );
   });
+
+  test('blocks paid AI processing before extraction when disabled', () async {
+    final repository = MemoryProcessingRepository();
+    final openAiClient = _CountingOpenAiClient();
+    final service = DocumentProcessingService(
+      openAiClient: openAiClient,
+      loadSettings: () async => AppSettings.defaults().copyWith(
+        allowPaidAi: false,
+        confirmBeforeAiProcessing: true,
+      ),
+      hasApiKey: () async => true,
+      repository: repository,
+      pdfExists: (_) async => true,
+    );
+
+    final result = await service.processDocument('doc-1');
+
+    expect(result.state, 'blocked_paid_ai');
+    expect(openAiClient.extractCalls, 0);
+    expect(repository.states, [ProcessingState.blockedPaidAi]);
+    expect(
+      DebugConsole.allText,
+      contains('[AI Training] blocked paid_ai_disabled document=doc-1'),
+    );
+  });
+
+  test('marks document failed when PDF file is missing', () async {
+    final repository = MemoryProcessingRepository();
+    final openAiClient = _CountingOpenAiClient();
+    final service = DocumentProcessingService(
+      openAiClient: openAiClient,
+      loadSettings: () async => AppSettings.defaults().copyWith(
+        allowPaidAi: true,
+        confirmBeforeAiProcessing: false,
+      ),
+      hasApiKey: () async => true,
+      repository: repository,
+      pdfExists: (_) async => false,
+    );
+
+    final result = await service.processDocument('doc-1');
+
+    expect(result.state, 'failed');
+    expect(result.errorMessage, contains('PDF file not found'));
+    expect(openAiClient.extractCalls, 0);
+    expect(repository.states, [ProcessingState.failed]);
+  });
+
+  test('marks document failed when non-OpenAI extraction throws', () async {
+    final repository = MemoryProcessingRepository();
+    final service = DocumentProcessingService(
+      openAiClient: _ThrowingExtractionClient(),
+      loadSettings: () async => AppSettings.defaults().copyWith(
+        allowPaidAi: true,
+        confirmBeforeAiProcessing: false,
+      ),
+      hasApiKey: () async => true,
+      repository: repository,
+      pdfExists: (_) async => true,
+    );
+
+    final result = await service.processDocument('doc-1');
+
+    expect(result.state, 'failed');
+    expect(result.errorMessage, contains('Bad state: parser failed'));
+    expect(repository.states, [
+      ProcessingState.processing,
+      ProcessingState.failed,
+    ]);
+  });
+
+  test('clears previous evidence before retrying processing', () async {
+    final repository = MemoryProcessingRepository();
+    final service = DocumentProcessingService(
+      openAiClient: _ExtractingOpenAiClient(),
+      loadSettings: () async => AppSettings.defaults().copyWith(
+        allowPaidAi: true,
+        confirmBeforeAiProcessing: false,
+      ),
+      hasApiKey: () async => true,
+      repository: repository,
+      pdfExists: (_) async => true,
+    );
+
+    await service.processDocument('doc-1');
+    await service.processDocument('doc-1');
+
+    expect(repository.clearedDocuments, ['doc-1', 'doc-1']);
+    expect(repository.savedChunks.map((chunk) => chunk.id), ['c1', 'c1']);
+  });
 }
 
 class MemoryProcessingRepository implements ProcessingRepository {
   final states = <ProcessingState>[];
   final savedChunks = <OpenAiExtractedChunk>[];
+  final savedFlowcharts = <OpenAiExtractedFlowchart>[];
   final savedEmbeddings = <ChunkEmbeddingEntity>[];
   final errorMessages = <String?>[];
+  final clearedDocuments = <String>[];
 
   @override
   Future<String> localPathForDocument(String documentPublicId) async {
@@ -110,6 +242,11 @@ class MemoryProcessingRepository implements ProcessingRepository {
     if (errorMessage != null) {
       errorMessages.add(errorMessage);
     }
+  }
+
+  @override
+  Future<void> clearEvidence(String documentPublicId) async {
+    clearedDocuments.add(documentPublicId);
   }
 
   @override
@@ -130,6 +267,29 @@ class MemoryProcessingRepository implements ProcessingRepository {
       ),
     );
   }
+
+  @override
+  Future<void> saveExtractedFlowchart({
+    required String documentPublicId,
+    required OpenAiExtractedFlowchart flowchart,
+    required Map<String, List<double>> embeddingsBySourceId,
+    required String embeddingModel,
+  }) async {
+    savedFlowcharts.add(flowchart);
+    for (final entry in embeddingsBySourceId.entries) {
+      savedEmbeddings.add(
+        ChunkEmbeddingEntity(
+          sourceId: entry.key,
+          sourceType: entry.key.contains(':edge:')
+              ? EvidenceSourceType.flowchartEdge.wireName
+              : EvidenceSourceType.flowchartNode.wireName,
+          vector: entry.value,
+          model: embeddingModel,
+          createdAtMillis: 1760000000000,
+        ),
+      );
+    }
+  }
 }
 
 class _ExtractingOpenAiClient extends FakeOpenAiClient {
@@ -146,6 +306,19 @@ class _ExtractingOpenAiClient extends FakeOpenAiClient {
   }
 }
 
+class _CountingOpenAiClient extends FakeOpenAiClient {
+  int extractCalls = 0;
+
+  @override
+  Future<OpenAiExtractionResult> extractDocument({
+    required String pdfPath,
+    required String model,
+  }) async {
+    extractCalls += 1;
+    return const OpenAiExtractionResult(chunks: []);
+  }
+}
+
 class _FailingExtractionOpenAiClient extends FakeOpenAiClient {
   @override
   Future<OpenAiExtractionResult> extractDocument({
@@ -153,5 +326,49 @@ class _FailingExtractionOpenAiClient extends FakeOpenAiClient {
     required String model,
   }) async {
     throw const OpenAiException('extract failed');
+  }
+}
+
+class _ThrowingExtractionClient extends FakeOpenAiClient {
+  @override
+  Future<OpenAiExtractionResult> extractDocument({
+    required String pdfPath,
+    required String model,
+  }) async {
+    throw StateError('parser failed');
+  }
+}
+
+class _FlowchartExtractingOpenAiClient extends FakeOpenAiClient {
+  @override
+  Future<OpenAiExtractionResult> extractDocument({
+    required String pdfPath,
+    required String model,
+  }) async {
+    return const OpenAiExtractionResult(
+      chunks: [
+        OpenAiExtractedChunk(id: 'c1', text: 'ABCDE protokoll', pageNumber: 1),
+      ],
+      flowcharts: [
+        OpenAiExtractedFlowchart(
+          id: 'flow-1',
+          title: 'ABCDE flow',
+          pageNumber: 2,
+          confidence: 0.9,
+          nodes: [
+            OpenAiExtractedFlowchartNode(id: 'a', label: 'Airway'),
+            OpenAiExtractedFlowchartNode(id: 'b', label: 'Breathing'),
+          ],
+          edges: [
+            OpenAiExtractedFlowchartEdge(
+              id: 'a-b',
+              fromNodeId: 'a',
+              toNodeId: 'b',
+              label: 'then',
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }

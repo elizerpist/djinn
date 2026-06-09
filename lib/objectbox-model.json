@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:273186095957995459",
-      "lastPropertyId": "10:4974685060174619275",
+      "lastPropertyId": "20:8688992324953563660",
       "name": "AppSettingsEntity",
       "properties": [
         {
@@ -57,6 +57,56 @@
         {
           "id": "10:4974685060174619275",
           "name": "minimumSimilarity",
+          "type": 8
+        },
+        {
+          "id": "11:4417885656887396502",
+          "name": "aiProvider",
+          "type": 9
+        },
+        {
+          "id": "12:7289548356109153677",
+          "name": "googleAnswerModel",
+          "type": 9
+        },
+        {
+          "id": "13:2327825887271763899",
+          "name": "googleExtractionModel",
+          "type": 9
+        },
+        {
+          "id": "14:3268349873698949825",
+          "name": "googleGroundednessModel",
+          "type": 9
+        },
+        {
+          "id": "15:4706452592029187333",
+          "name": "googleEmbeddingModel",
+          "type": 9
+        },
+        {
+          "id": "16:5952079327188458571",
+          "name": "allowPaidAi",
+          "type": 1
+        },
+        {
+          "id": "17:60219847525944580",
+          "name": "confirmBeforeAiProcessing",
+          "type": 1
+        },
+        {
+          "id": "18:1348561904637652968",
+          "name": "voiceLocale",
+          "type": 9
+        },
+        {
+          "id": "19:3221045018684509383",
+          "name": "ttsSpeechRate",
+          "type": 8
+        },
+        {
+          "id": "20:8688992324953563660",
+          "name": "ttsPitch",
           "type": 8
         }
       ],
@@ -478,7 +528,7 @@
     },
     {
       "id": "10:3835227895295506301",
-      "lastPropertyId": "9:3427317077375592081",
+      "lastPropertyId": "15:3259534002406852090",
       "name": "KnowledgeDocumentEntity",
       "properties": [
         {
@@ -530,6 +580,40 @@
           "id": "9:3427317077375592081",
           "name": "openAiFileId",
           "type": 9
+        },
+        {
+          "id": "10:8507981245552866522",
+          "name": "contentHash",
+          "indexId": "27:4219054409213291281",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "11:5066384777251788674",
+          "name": "ragEnabled",
+          "type": 1
+        },
+        {
+          "id": "12:2193039131946614546",
+          "name": "collectionName",
+          "indexId": "28:3173998271400784017",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "13:3453527026676434593",
+          "name": "ocrStatus",
+          "type": 9
+        },
+        {
+          "id": "14:3861515850565867503",
+          "name": "trainedAtMillis",
+          "type": 6
+        },
+        {
+          "id": "15:3259534002406852090",
+          "name": "packVersion",
+          "type": 6
         }
       ],
       "relations": []
@@ -586,7 +670,7 @@
     }
   ],
   "lastEntityId": "11:7309319277825706740",
-  "lastIndexId": "26:6263710456666240614",
+  "lastIndexId": "28:3173998271400784017",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

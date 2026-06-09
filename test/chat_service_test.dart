@@ -74,12 +74,18 @@ class _FakeAnswerService implements AnswerService {
   final LocalAnswerResult response;
 
   @override
-  Future<LocalAnswerResult> answer(String question) async => response;
+  Future<LocalAnswerResult> answer(
+    String question, {
+    String? collectionName,
+  }) async => response;
 }
 
 class _FailingAnswerService implements AnswerService {
   @override
-  Future<LocalAnswerResult> answer(String question) async {
+  Future<LocalAnswerResult> answer(
+    String question, {
+    String? collectionName,
+  }) async {
     throw const OpenAiException('provider failed');
   }
 }

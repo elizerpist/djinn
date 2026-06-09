@@ -8,6 +8,7 @@ abstract class LocalRetriever {
     required List<double> queryVector,
     required int limit,
     required double minimumSimilarity,
+    String? collectionName,
   });
 }
 
@@ -21,6 +22,7 @@ class MemoryLocalRetriever implements LocalRetriever {
     required List<double> queryVector,
     required int limit,
     required double minimumSimilarity,
+    String? collectionName,
   }) async {
     DebugConsole.log(
       '[VectorGraph] memory retrieval start dim=${queryVector.length} '
@@ -32,6 +34,17 @@ class MemoryLocalRetriever implements LocalRetriever {
         DebugConsole.log(
           '[VectorGraph] memory skipped rejected source=${item.id}',
         );
+        continue;
+      }
+      if (!item.ragEnabled) {
+        DebugConsole.log(
+          '[VectorGraph] memory skipped disabled source=${item.id}',
+        );
+        continue;
+      }
+      if (collectionName != null &&
+          collectionName.isNotEmpty &&
+          item.collectionName != collectionName) {
         continue;
       }
       if ((item.score ?? 1) < minimumSimilarity) {
@@ -52,12 +65,14 @@ class MemoryLocalRetriever implements LocalRetriever {
 class ObjectBoxLocalRetriever implements LocalRetriever {
   ObjectBoxLocalRetriever({required Store store})
     : _embeddingBox = store.box<ChunkEmbeddingEntity>(),
+      _documentBox = store.box<KnowledgeDocumentEntity>(),
       _chunkBox = store.box<DocumentChunkEntity>(),
       _flowchartBox = store.box<FlowchartEntity>(),
       _nodeBox = store.box<FlowchartNodeEntity>(),
       _edgeBox = store.box<FlowchartEdgeEntity>();
 
   final Box<ChunkEmbeddingEntity> _embeddingBox;
+  final Box<KnowledgeDocumentEntity> _documentBox;
   final Box<DocumentChunkEntity> _chunkBox;
   final Box<FlowchartEntity> _flowchartBox;
   final Box<FlowchartNodeEntity> _nodeBox;
@@ -68,14 +83,19 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     required List<double> queryVector,
     required int limit,
     required double minimumSimilarity,
+    String? collectionName,
   }) async {
     DebugConsole.log(
       '[VectorGraph] objectbox retrieval start dim=${queryVector.length} '
       'limit=$limit min=$minimumSimilarity',
     );
+    final searchLimit = limit < 10 ? 50 : limit * 5;
     final query = _embeddingBox
         .query(
-          ChunkEmbeddingEntity_.vector.nearestNeighborsF32(queryVector, limit),
+          ChunkEmbeddingEntity_.vector.nearestNeighborsF32(
+            queryVector,
+            searchLimit,
+          ),
         )
         .build();
     try {
@@ -86,7 +106,7 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
         if (similarity < minimumSimilarity) {
           continue;
         }
-        final mapped = _mapEmbedding(item.object, similarity);
+        final mapped = _mapEmbedding(item.object, similarity, collectionName);
         if (mapped != null) {
           DebugConsole.log(
             '[VectorGraph] match source=${mapped.id} '
@@ -105,21 +125,33 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     }
   }
 
-  SourceEvidence? _mapEmbedding(ChunkEmbeddingEntity embedding, double score) {
+  SourceEvidence? _mapEmbedding(
+    ChunkEmbeddingEntity embedding,
+    double score,
+    String? collectionName,
+  ) {
     switch (embedding.sourceType) {
       case 'text_chunk':
-        return _mapChunk(embedding.sourceId, score);
+        return _mapChunk(embedding.sourceId, score, collectionName);
       case 'flowchart_node':
-        return _mapNode(embedding.sourceId, score);
+        return _mapNode(embedding.sourceId, score, collectionName);
       case 'flowchart_edge':
-        return _mapEdge(embedding.sourceId, score);
+        return _mapEdge(embedding.sourceId, score, collectionName);
     }
     return null;
   }
 
-  SourceEvidence? _mapChunk(String publicId, double score) {
+  SourceEvidence? _mapChunk(
+    String publicId,
+    double score,
+    String? collectionName,
+  ) {
     final chunk = _findChunk(publicId);
     if (chunk == null) {
+      return null;
+    }
+    final document = _findDocument(chunk.documentPublicId);
+    if (!_documentAllowed(document, collectionName)) {
       return null;
     }
     return SourceEvidence(
@@ -130,11 +162,17 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
       validationState: ValidationState.validated,
       documentId: chunk.documentPublicId,
       pageNumber: chunk.pageNumber,
+      ragEnabled: document?.ragEnabled ?? true,
+      collectionName: document?.collectionName ?? 'Alap',
       score: score,
     );
   }
 
-  SourceEvidence? _mapNode(String publicId, double score) {
+  SourceEvidence? _mapNode(
+    String publicId,
+    double score,
+    String? collectionName,
+  ) {
     final node = _findNode(publicId);
     if (node == null) {
       return null;
@@ -145,17 +183,32 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
       DebugConsole.log('[VectorGraph] skipped rejected node=${node.publicId}');
       return null;
     }
+    final flowchart = _findFlowchart(node.flowchartPublicId);
+    final document = flowchart == null
+        ? null
+        : _findDocument(flowchart.documentPublicId);
+    if (!_documentAllowed(document, collectionName)) {
+      return null;
+    }
     return SourceEvidence(
       id: node.publicId,
       sourceType: EvidenceSourceType.flowchartNode,
       text: node.label,
       label: _flowchartLabel(validationState),
       validationState: validationState,
+      documentId: document?.publicId,
+      pageNumber: flowchart?.pageNumber,
+      ragEnabled: document?.ragEnabled ?? true,
+      collectionName: document?.collectionName ?? 'Alap',
       score: score,
     );
   }
 
-  SourceEvidence? _mapEdge(String publicId, double score) {
+  SourceEvidence? _mapEdge(
+    String publicId,
+    double score,
+    String? collectionName,
+  ) {
     final edge = _findEdge(publicId);
     if (edge == null) {
       return null;
@@ -166,12 +219,23 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
       DebugConsole.log('[VectorGraph] skipped rejected edge=${edge.publicId}');
       return null;
     }
+    final flowchart = _findFlowchart(edge.flowchartPublicId);
+    final document = flowchart == null
+        ? null
+        : _findDocument(flowchart.documentPublicId);
+    if (!_documentAllowed(document, collectionName)) {
+      return null;
+    }
     return SourceEvidence(
       id: edge.publicId,
       sourceType: EvidenceSourceType.flowchartEdge,
       text: edge.label,
       label: _flowchartLabel(validationState),
       validationState: validationState,
+      documentId: document?.publicId,
+      pageNumber: flowchart?.pageNumber,
+      ragEnabled: document?.ragEnabled ?? true,
+      collectionName: document?.collectionName ?? 'Alap',
       score: score,
     );
   }
@@ -179,6 +243,28 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
   DocumentChunkEntity? _findChunk(String publicId) {
     final query = _chunkBox
         .query(DocumentChunkEntity_.publicId.equals(publicId))
+        .build();
+    try {
+      return query.findFirst();
+    } finally {
+      query.close();
+    }
+  }
+
+  KnowledgeDocumentEntity? _findDocument(String publicId) {
+    final query = _documentBox
+        .query(KnowledgeDocumentEntity_.publicId.equals(publicId))
+        .build();
+    try {
+      return query.findFirst();
+    } finally {
+      query.close();
+    }
+  }
+
+  FlowchartEntity? _findFlowchart(String publicId) {
+    final query = _flowchartBox
+        .query(FlowchartEntity_.publicId.equals(publicId))
         .build();
     try {
       return query.findFirst();
@@ -210,15 +296,29 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
   }
 
   bool _flowchartRejected(String publicId) {
-    final query = _flowchartBox
-        .query(FlowchartEntity_.publicId.equals(publicId))
-        .build();
-    try {
-      final flowchart = query.findFirst();
-      return flowchart?.validationState == ValidationState.rejected.wireName;
-    } finally {
-      query.close();
+    final flowchart = _findFlowchart(publicId);
+    return flowchart?.validationState == ValidationState.rejected.wireName;
+  }
+
+  bool _documentAllowed(
+    KnowledgeDocumentEntity? document,
+    String? collectionName,
+  ) {
+    if (document == null) {
+      return true;
     }
+    if (!document.ragEnabled) {
+      DebugConsole.log(
+        '[VectorGraph] skipped disabled document=${document.publicId}',
+      );
+      return false;
+    }
+    if (collectionName != null &&
+        collectionName.isNotEmpty &&
+        document.collectionName != collectionName) {
+      return false;
+    }
+    return true;
   }
 
   double _similarityFromCosineDistance(double distance) {

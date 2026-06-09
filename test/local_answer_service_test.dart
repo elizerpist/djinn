@@ -63,4 +63,48 @@ void main() {
     expect(DebugConsole.allText, contains('[Chat/RAG] retrieved count=1'));
     expect(DebugConsole.allText, contains('[Chat/RAG] grounded citations=1'));
   });
+
+  test('passes selected collection to retriever', () async {
+    final retriever = _RecordingRetriever();
+    final service = LocalAnswerService(
+      openAiClient: FakeOpenAiClient(answerText: 'Stroke protokoll.'),
+      retriever: retriever,
+      citationVerifier: CitationVerifier(),
+      loadSettings: () async => AppSettings.defaults(),
+      hasApiKey: () async => true,
+      hasReadyDocuments: () async => true,
+    );
+
+    final result = await service.answer(
+      'Mi a teendo?',
+      collectionName: 'Stroke',
+    );
+
+    expect(result.status, 'grounded');
+    expect(retriever.collectionNames, ['Stroke']);
+  });
+}
+
+class _RecordingRetriever implements LocalRetriever {
+  final collectionNames = <String?>[];
+
+  @override
+  Future<List<SourceEvidence>> retrieve({
+    required List<double> queryVector,
+    required int limit,
+    required double minimumSimilarity,
+    String? collectionName,
+  }) async {
+    collectionNames.add(collectionName);
+    return const [
+      SourceEvidence(
+        id: 'stroke-chunk',
+        sourceType: EvidenceSourceType.textChunk,
+        text: 'Stroke protocol',
+        label: 'Szöveges PDF-részlet',
+        validationState: ValidationState.validated,
+        score: 0.9,
+      ),
+    ];
+  }
 }

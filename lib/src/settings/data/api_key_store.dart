@@ -1,62 +1,92 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+enum ApiKeyProvider {
+  openai('openai', 'openai_api_key'),
+  google('google', 'google_api_key');
+
+  const ApiKeyProvider(this.wireName, this.storageKey);
+
+  final String wireName;
+  final String storageKey;
+}
+
 abstract class ApiKeyStore {
-  Future<bool> hasKey();
-  Future<String?> readKey();
-  Future<void> saveKey(String value);
-  Future<void> deleteKey();
+  Future<bool> hasKey({ApiKeyProvider provider = ApiKeyProvider.openai});
+  Future<String?> readKey({ApiKeyProvider provider = ApiKeyProvider.openai});
+  Future<void> saveKey(
+    String value, {
+    ApiKeyProvider provider = ApiKeyProvider.openai,
+  });
+  Future<void> deleteKey({ApiKeyProvider provider = ApiKeyProvider.openai});
 }
 
 class SecureApiKeyStore implements ApiKeyStore {
   SecureApiKeyStore({FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
 
-  static const _key = 'openai_api_key';
-
   final FlutterSecureStorage _storage;
 
   @override
-  Future<bool> hasKey() async {
-    final value = await readKey();
+  Future<bool> hasKey({ApiKeyProvider provider = ApiKeyProvider.openai}) async {
+    final value = await readKey(provider: provider);
     return value != null && value.trim().isNotEmpty;
   }
 
   @override
-  Future<String?> readKey() => _storage.read(key: _key);
-
-  @override
-  Future<void> saveKey(String value) async {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      throw ArgumentError('OpenAI API key must not be blank');
-    }
-    await _storage.write(key: _key, value: trimmed);
+  Future<String?> readKey({ApiKeyProvider provider = ApiKeyProvider.openai}) {
+    return _storage.read(key: provider.storageKey);
   }
 
   @override
-  Future<void> deleteKey() => _storage.delete(key: _key);
+  Future<void> saveKey(
+    String value, {
+    ApiKeyProvider provider = ApiKeyProvider.openai,
+  }) async {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('${provider.wireName} API key must not be blank');
+    }
+    await _storage.write(key: provider.storageKey, value: trimmed);
+  }
+
+  @override
+  Future<void> deleteKey({ApiKeyProvider provider = ApiKeyProvider.openai}) {
+    return _storage.delete(key: provider.storageKey);
+  }
 }
 
 class MemoryApiKeyStore implements ApiKeyStore {
-  String? _value;
+  final Map<ApiKeyProvider, String> _values = {};
 
   @override
-  Future<bool> hasKey() async => _value != null && _value!.isNotEmpty;
-
-  @override
-  Future<String?> readKey() async => _value;
-
-  @override
-  Future<void> saveKey(String value) async {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      throw ArgumentError('OpenAI API key must not be blank');
-    }
-    _value = trimmed;
+  Future<bool> hasKey({ApiKeyProvider provider = ApiKeyProvider.openai}) async {
+    final value = _values[provider];
+    return value != null && value.isNotEmpty;
   }
 
   @override
-  Future<void> deleteKey() async {
-    _value = null;
+  Future<String?> readKey({
+    ApiKeyProvider provider = ApiKeyProvider.openai,
+  }) async {
+    return _values[provider];
+  }
+
+  @override
+  Future<void> saveKey(
+    String value, {
+    ApiKeyProvider provider = ApiKeyProvider.openai,
+  }) async {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('${provider.wireName} API key must not be blank');
+    }
+    _values[provider] = trimmed;
+  }
+
+  @override
+  Future<void> deleteKey({
+    ApiKeyProvider provider = ApiKeyProvider.openai,
+  }) async {
+    _values.remove(provider);
   }
 }

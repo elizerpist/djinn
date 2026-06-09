@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../knowledge/models/knowledge_document.dart';
+import '../../knowledge/ui/source_page_screen.dart';
+import '../../settings/models/app_settings.dart';
+import '../../voice/text_to_speech_service.dart';
+import '../../voice/voice_input_service.dart';
 import '../data/chat_service.dart';
 import '../data/local_chat_repository.dart';
 import '../models/chat_conversation.dart';
@@ -15,12 +19,18 @@ class ChatScreen extends StatefulWidget {
     required this.chatService,
     required this.refreshKnowledgeReadiness,
     required this.conversation,
+    this.loadSettings,
+    this.voiceInputService,
+    this.textToSpeechService,
   });
 
   final LocalChatRepository repository;
   final ChatService chatService;
   final Future<KnowledgeBaseState> Function() refreshKnowledgeReadiness;
   final ChatConversation conversation;
+  final Future<AppSettings> Function()? loadSettings;
+  final VoiceInputService? voiceInputService;
+  final TextToSpeechService? textToSpeechService;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -32,6 +42,7 @@ class _ChatScreenState extends State<ChatScreen> {
     const [],
   );
   bool _sending = false;
+  String? _selectedCollection;
 
   @override
   void initState() {
@@ -62,7 +73,11 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _sending = true);
     try {
       await _loadKnowledgeState();
-      await widget.chatService.sendMessage(widget.conversation.id, text);
+      await widget.chatService.sendMessage(
+        widget.conversation.id,
+        text,
+        collectionName: _selectedCollection,
+      );
       await _loadMessages();
     } finally {
       if (mounted) {
@@ -71,8 +86,36 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<AppSettings> _settings() async {
+    final loader = widget.loadSettings;
+    return loader == null ? AppSettings.defaults() : loader();
+  }
+
+  Future<void> _speak(ChatMessage message) async {
+    final service = widget.textToSpeechService;
+    if (service == null) {
+      return;
+    }
+    final settings = await _settings();
+    await service.speak(
+      text: message.text,
+      locale: settings.voiceLocale,
+      speechRate: settings.ttsSpeechRate,
+      pitch: settings.ttsPitch,
+    );
+  }
+
+  Future<void> _pauseTts() async {
+    await widget.textToSpeechService?.pause();
+  }
+
+  Future<void> _stopTts() async {
+    await widget.textToSpeechService?.stop();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final collectionOptions = _collectionOptions();
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.conversation.title),
@@ -82,20 +125,103 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           KnowledgeStatusBanner(state: _knowledgeState),
+          if (collectionOptions.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: DropdownButtonFormField<String>(
+                initialValue: _selectedCollection ?? '',
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Gyűjtemény',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                items: [
+                  const DropdownMenuItem(
+                    value: '',
+                    child: Text('Minden gyűjtemény'),
+                  ),
+                  for (final collection in collectionOptions)
+                    DropdownMenuItem(
+                      value: collection,
+                      child: Text(collection),
+                    ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedCollection = value == null || value.isEmpty
+                        ? null
+                        : value;
+                  });
+                },
+              ),
+            ),
           Expanded(
             child: _messages.isEmpty
                 ? const Center(child: Text('Ird be az elso kerdest'))
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     itemCount: _messages.length,
-                    itemBuilder: (context, index) =>
-                        ChatBubble(message: _messages[index]),
+                    itemBuilder: (context, index) {
+                      final message = _messages[index];
+                      return ChatBubble(
+                        message: message,
+                        onCitationTap: (citation) => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                SourcePageScreen(citation: citation),
+                          ),
+                        ),
+                        onSpeak:
+                            message.sender == ChatSender.assistant &&
+                                widget.textToSpeechService != null
+                            ? () => _speak(message)
+                            : null,
+                        onPause:
+                            message.sender == ChatSender.assistant &&
+                                widget.textToSpeechService != null
+                            ? _pauseTts
+                            : null,
+                        onStop:
+                            message.sender == ChatSender.assistant &&
+                                widget.textToSpeechService != null
+                            ? _stopTts
+                            : null,
+                      );
+                    },
                   ),
           ),
-          MessageComposer(onSend: _send, sending: _sending),
+          FutureBuilder<AppSettings>(
+            future: _settings(),
+            builder: (context, snapshot) {
+              return MessageComposer(
+                onSend: _send,
+                sending: _sending,
+                voiceInputService: widget.voiceInputService,
+                voiceLocale: snapshot.data?.voiceLocale ?? 'hu-HU',
+              );
+            },
+          ),
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    widget.textToSpeechService?.stop();
+    super.dispose();
+  }
+
+  List<String> _collectionOptions() {
+    final collections =
+        _knowledgeState.documents
+            .map((document) => document.collectionName.trim())
+            .where((collection) => collection.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    return collections;
   }
 }
 

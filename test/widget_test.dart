@@ -113,6 +113,46 @@ void main() {
     expect(syncService.refreshReadinessCalls, 2);
   });
 
+  testWidgets('Djinn passes selected collection to chat answer service', (
+    tester,
+  ) async {
+    final knowledgeRepository = KnowledgeDocumentRepository();
+    await knowledgeRepository.addDocument(
+      filename: 'stroke.pdf',
+      localPath: '/memory/stroke.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 1, 1, 12),
+      collectionName: 'Stroke',
+    );
+    final chatRepository = LocalChatRepository();
+    final answerService = _RecordingAnswerService();
+
+    await tester.pumpWidget(
+      _testApp(
+        chatRepository: chatRepository,
+        chatService: ChatService(
+          repository: chatRepository,
+          answerService: answerService,
+        ),
+        knowledgeRepository: knowledgeRepository,
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('Djinn'));
+
+    await tester.tap(find.byTooltip('Új chat'));
+    await _pumpUntilFound(tester, find.text('Minden gyűjtemény'));
+    await tester.tap(find.text('Minden gyűjtemény'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Stroke').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('message-input')), 'ABC?');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('send-message')));
+    await _pumpUntilFound(tester, find.text('collection=Stroke'));
+
+    expect(answerService.collectionNames, ['Stroke']);
+  });
+
   testWidgets('Djinn renders a friendly strict refusal label', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -259,7 +299,10 @@ class _DefaultRefusalService implements AnswerService {
   const _DefaultRefusalService();
 
   @override
-  Future<LocalAnswerResult> answer(String question) async {
+  Future<LocalAnswerResult> answer(
+    String question, {
+    String? collectionName,
+  }) async {
     return const LocalAnswerResult(
       text:
           'A tudasbazisban nincs elegendo hitelesitett forras ehhez a valaszhoz. Csak az alkalmazas dokumentumai alapjan tudok valaszolni.',
@@ -274,7 +317,10 @@ class _BackendAnswerService implements AnswerService {
   const _BackendAnswerService();
 
   @override
-  Future<LocalAnswerResult> answer(String question) async {
+  Future<LocalAnswerResult> answer(
+    String question, {
+    String? collectionName,
+  }) async {
     return const LocalAnswerResult(
       text: 'Forrasbol valaszolok.',
       status: 'grounded',
@@ -287,6 +333,23 @@ class _BackendAnswerService implements AnswerService {
           excerpt: 'Forrasbol valaszolok.',
         ),
       ],
+    );
+  }
+}
+
+class _RecordingAnswerService implements AnswerService {
+  final collectionNames = <String?>[];
+
+  @override
+  Future<LocalAnswerResult> answer(
+    String question, {
+    String? collectionName,
+  }) async {
+    collectionNames.add(collectionName);
+    return LocalAnswerResult(
+      text: 'collection=$collectionName',
+      status: 'grounded',
+      citations: const [],
     );
   }
 }

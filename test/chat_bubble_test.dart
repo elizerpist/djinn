@@ -38,4 +38,45 @@ void main() {
     expect(find.textContaining('nem validált'), findsWidgets);
     expect(find.text('Nem validált flowchart'), findsOneWidget);
   });
+
+  testWidgets('citation tap reports selected citation for source page', (
+    tester,
+  ) async {
+    ChatCitation? opened;
+    final message = ChatMessage(
+      id: 'm1',
+      conversationId: 'c1',
+      sender: ChatSender.assistant,
+      text: 'Válasz.',
+      createdAt: DateTime.utc(2026),
+      status: 'grounded',
+      citations: const [
+        ChatCitation(
+          documentId: 'doc-1',
+          title: 'omsz.pdf',
+          page: 3,
+          section: null,
+          excerpt: 'Forrás',
+          sourceId: 'chunk-1',
+          sourceLabel: 'Szöveges PDF-részlet',
+          validationState: 'validated',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(
+            message: message,
+            onCitationTap: (value) => opened = value,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('omsz.pdf p.3'));
+
+    expect(opened?.sourceId, 'chunk-1');
+  });
 }

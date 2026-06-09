@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../admin/ui/admin_screen.dart';
 import '../../flowchart/data/flowchart_validation_repository.dart';
 import '../../flowchart/ui/flowchart_validation_screen.dart';
 import '../../knowledge/data/document_processing_service.dart';
@@ -10,6 +11,8 @@ import '../../knowledge/ui/knowledge_base_screen.dart';
 import '../../settings/data/api_key_store.dart';
 import '../../settings/models/app_settings.dart';
 import '../../settings/ui/settings_screen.dart';
+import '../../voice/text_to_speech_service.dart';
+import '../../voice/voice_input_service.dart';
 import '../data/chat_service.dart';
 import '../data/local_chat_repository.dart';
 import '../models/chat_conversation.dart';
@@ -27,8 +30,15 @@ class MainScreen extends StatefulWidget {
     required this.loadSettings,
     required this.saveSettings,
     required this.testApiKey,
+    required this.testGoogleApiKey,
     this.processingService,
     this.flowchartValidationRepository,
+    this.voiceInputService,
+    this.textToSpeechService,
+    this.loadAdminSummary,
+    this.clearKnowledgeBase,
+    this.exportTrainingPack,
+    this.importTrainingPack,
   });
 
   final LocalChatRepository repository;
@@ -40,8 +50,15 @@ class MainScreen extends StatefulWidget {
   final Future<AppSettings> Function() loadSettings;
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
+  final Future<bool> Function() testGoogleApiKey;
   final DocumentProcessingService? processingService;
   final FlowchartValidationRepository? flowchartValidationRepository;
+  final VoiceInputService? voiceInputService;
+  final TextToSpeechService? textToSpeechService;
+  final Future<AdminSummary> Function()? loadAdminSummary;
+  final Future<void> Function()? clearKnowledgeBase;
+  final Future<String?> Function()? exportTrainingPack;
+  final Future<String?> Function()? importTrainingPack;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -71,6 +88,7 @@ class _MainScreenState extends State<MainScreen> {
           repository: widget.knowledgeRepository,
           importService: widget.pdfImportService,
           processingService: widget.processingService,
+          loadSettings: widget.loadSettings,
         ),
       ),
     );
@@ -96,6 +114,29 @@ class _MainScreenState extends State<MainScreen> {
           loadSettings: widget.loadSettings,
           saveSettings: widget.saveSettings,
           testApiKey: widget.testApiKey,
+          testGoogleApiKey: widget.testGoogleApiKey,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAdmin() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AdminScreen(
+          loadSummary:
+              widget.loadAdminSummary ??
+              () async {
+                final state = await widget.knowledgeRepository.state();
+                return AdminSummary(
+                  documentCount: state.documents.length,
+                  chunkCount: 0,
+                  flowchartCount: 0,
+                );
+              },
+          clearKnowledgeBase: widget.clearKnowledgeBase ?? () async {},
+          exportTrainingPack: widget.exportTrainingPack,
+          importTrainingPack: widget.importTrainingPack,
         ),
       ),
     );
@@ -113,6 +154,9 @@ class _MainScreenState extends State<MainScreen> {
           chatService: widget.chatService,
           refreshKnowledgeReadiness: widget.refreshKnowledgeReadiness,
           conversation: conversation,
+          loadSettings: widget.loadSettings,
+          voiceInputService: widget.voiceInputService,
+          textToSpeechService: widget.textToSpeechService,
         ),
       ),
     );
@@ -127,6 +171,9 @@ class _MainScreenState extends State<MainScreen> {
           chatService: widget.chatService,
           refreshKnowledgeReadiness: widget.refreshKnowledgeReadiness,
           conversation: conversation,
+          loadSettings: widget.loadSettings,
+          voiceInputService: widget.voiceInputService,
+          textToSpeechService: widget.textToSpeechService,
         ),
       ),
     );
@@ -175,6 +222,14 @@ class _MainScreenState extends State<MainScreen> {
                 onTap: () {
                   Navigator.of(context).pop();
                   _openSettings();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.admin_panel_settings),
+                title: const Text('Admin'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _openAdmin();
                 },
               ),
             ],

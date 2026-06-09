@@ -2,6 +2,7 @@ enum KnowledgeDocumentStatus {
   imported('imported'),
   pendingIngest('pending_ingest'),
   blockedMissingApiKey('blocked_missing_api_key'),
+  blockedPaidAi('blocked_paid_ai'),
   blockedOffline('blocked_offline'),
   uploading('uploading'),
   processing('processing'),
@@ -40,6 +41,12 @@ class KnowledgeDocument {
     required this.status,
     this.backendDocumentId,
     this.errorMessage,
+    this.contentHash,
+    this.ragEnabled = true,
+    this.collectionName = 'Alap',
+    this.ocrStatus = 'unknown',
+    this.trainedAt,
+    this.packVersion,
   });
 
   final String id;
@@ -50,6 +57,12 @@ class KnowledgeDocument {
   final KnowledgeDocumentStatus status;
   final String? backendDocumentId;
   final String? errorMessage;
+  final String? contentHash;
+  final bool ragEnabled;
+  final String collectionName;
+  final String ocrStatus;
+  final DateTime? trainedAt;
+  final int? packVersion;
 
   KnowledgeDocument copyWith({
     String? id,
@@ -60,6 +73,12 @@ class KnowledgeDocument {
     KnowledgeDocumentStatus? status,
     String? backendDocumentId,
     String? errorMessage,
+    String? contentHash,
+    bool? ragEnabled,
+    String? collectionName,
+    String? ocrStatus,
+    DateTime? trainedAt,
+    int? packVersion,
   }) {
     return KnowledgeDocument(
       id: id ?? this.id,
@@ -70,6 +89,12 @@ class KnowledgeDocument {
       status: status ?? this.status,
       backendDocumentId: backendDocumentId ?? this.backendDocumentId,
       errorMessage: errorMessage,
+      contentHash: contentHash ?? this.contentHash,
+      ragEnabled: ragEnabled ?? this.ragEnabled,
+      collectionName: collectionName ?? this.collectionName,
+      ocrStatus: ocrStatus ?? this.ocrStatus,
+      trainedAt: trainedAt ?? this.trainedAt,
+      packVersion: packVersion ?? this.packVersion,
     );
   }
 
@@ -83,6 +108,12 @@ class KnowledgeDocument {
       'status': status.wireName,
       'backendDocumentId': backendDocumentId,
       'errorMessage': errorMessage,
+      'contentHash': contentHash,
+      'ragEnabled': ragEnabled,
+      'collectionName': collectionName,
+      'ocrStatus': ocrStatus,
+      'trainedAt': trainedAt?.toIso8601String(),
+      'packVersion': packVersion,
     };
   }
 
@@ -98,6 +129,12 @@ class KnowledgeDocument {
       status: KnowledgeDocumentStatus.fromWireName(json['status'] as String?),
       backendDocumentId: json['backendDocumentId'] as String?,
       errorMessage: json['errorMessage'] as String?,
+      contentHash: json['contentHash'] as String?,
+      ragEnabled: json['ragEnabled'] as bool? ?? true,
+      collectionName: json['collectionName'] as String? ?? 'Alap',
+      ocrStatus: json['ocrStatus'] as String? ?? 'unknown',
+      trainedAt: DateTime.tryParse(json['trainedAt'] as String? ?? ''),
+      packVersion: json['packVersion'] as int?,
     );
   }
 }
@@ -152,6 +189,7 @@ extension KnowledgeDocumentStatusFlags on KnowledgeDocumentStatus {
       KnowledgeDocumentStatus.imported ||
       KnowledgeDocumentStatus.pendingIngest ||
       KnowledgeDocumentStatus.blockedMissingApiKey ||
+      KnowledgeDocumentStatus.blockedPaidAi ||
       KnowledgeDocumentStatus.blockedOffline ||
       KnowledgeDocumentStatus.uploading ||
       KnowledgeDocumentStatus.processing ||
@@ -166,6 +204,12 @@ extension KnowledgeDocumentStatusFlags on KnowledgeDocumentStatus {
   bool get canRetry {
     return this == KnowledgeDocumentStatus.failed ||
         this == KnowledgeDocumentStatus.blockedMissingApiKey ||
+        this == KnowledgeDocumentStatus.blockedPaidAi ||
         this == KnowledgeDocumentStatus.blockedOffline;
+  }
+
+  bool get canStartTraining {
+    return this == KnowledgeDocumentStatus.imported ||
+        this == KnowledgeDocumentStatus.pendingIngest;
   }
 }

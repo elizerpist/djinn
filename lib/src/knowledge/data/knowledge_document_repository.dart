@@ -41,6 +41,10 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     required String localPath,
     required int sizeBytes,
     required DateTime importedAt,
+    String? contentHash,
+    String ocrStatus = 'unknown',
+    String collectionName = 'Alap',
+    bool ragEnabled = true,
   }) async {
     final document = KnowledgeDocument(
       id: 'document-${_nextDocumentId++}',
@@ -49,10 +53,58 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       sizeBytes: sizeBytes,
       importedAt: importedAt,
       status: KnowledgeDocumentStatus.pendingIngest,
+      contentHash: contentHash,
+      ocrStatus: ocrStatus,
+      collectionName: collectionName,
+      ragEnabled: ragEnabled,
     );
     _documents.insert(0, document);
     await _persist();
     return document;
+  }
+
+  Future<KnowledgeDocument?> findByContentHash(String contentHash) async {
+    for (final document in _documents) {
+      if (document.contentHash == contentHash) {
+        return document;
+      }
+    }
+    return null;
+  }
+
+  Future<KnowledgeDocument> updateRagEnabled(
+    String documentId,
+    bool enabled,
+  ) async {
+    final index = _documents.indexWhere(
+      (document) => document.id == documentId,
+    );
+    if (index == -1) {
+      throw StateError('knowledge document not found: $documentId');
+    }
+    final updated = _documents[index].copyWith(ragEnabled: enabled);
+    _documents[index] = updated;
+    await _persist();
+    return updated;
+  }
+
+  Future<KnowledgeDocument> updateCollection(
+    String documentId,
+    String collectionName,
+  ) async {
+    final index = _documents.indexWhere(
+      (document) => document.id == documentId,
+    );
+    if (index == -1) {
+      throw StateError('knowledge document not found: $documentId');
+    }
+    final normalized = collectionName.trim().isEmpty
+        ? 'Alap'
+        : collectionName.trim();
+    final updated = _documents[index].copyWith(collectionName: normalized);
+    _documents[index] = updated;
+    await _persist();
+    return updated;
   }
 
   Future<KnowledgeDocument> updateStatus(
@@ -134,6 +186,11 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
   }
 
   @override
+  Future<void> clearEvidence(String documentPublicId) async {
+    // JSON repository is a test/transition adapter. ObjectBox stores evidence in production.
+  }
+
+  @override
   Future<void> saveExtractedChunk({
     required String documentPublicId,
     required OpenAiExtractedChunk chunk,
@@ -141,6 +198,16 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     required String embeddingModel,
   }) async {
     // JSON repository is a test/transition adapter. ObjectBox stores chunks in production.
+  }
+
+  @override
+  Future<void> saveExtractedFlowchart({
+    required String documentPublicId,
+    required OpenAiExtractedFlowchart flowchart,
+    required Map<String, List<double>> embeddingsBySourceId,
+    required String embeddingModel,
+  }) async {
+    // JSON repository is a test/transition adapter. ObjectBox stores flowcharts in production.
   }
 
   KnowledgeDocument _findDocument(String documentId) {
@@ -157,6 +224,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       ProcessingState.imported => KnowledgeDocumentStatus.imported,
       ProcessingState.blockedMissingApiKey =>
         KnowledgeDocumentStatus.blockedMissingApiKey,
+      ProcessingState.blockedPaidAi => KnowledgeDocumentStatus.blockedPaidAi,
       ProcessingState.blockedOffline => KnowledgeDocumentStatus.blockedOffline,
       ProcessingState.uploading => KnowledgeDocumentStatus.uploading,
       ProcessingState.processing => KnowledgeDocumentStatus.processing,

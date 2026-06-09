@@ -1,83 +1,21 @@
-class OpenAiEvidence {
-  const OpenAiEvidence({
-    required this.id,
-    required this.label,
-    required this.text,
-  });
+import '../ai/ai_client.dart';
 
-  final String id;
-  final String label;
-  final String text;
-}
+typedef OpenAiEvidence = AiEvidence;
+typedef OpenAiAnswer = AiAnswer;
+typedef OpenAiExtractedChunk = AiExtractedChunk;
+typedef OpenAiExtractedFlowchart = AiExtractedFlowchart;
+typedef OpenAiExtractedFlowchartNode = AiExtractedFlowchartNode;
+typedef OpenAiExtractedFlowchartEdge = AiExtractedFlowchartEdge;
+typedef OpenAiExtractionResult = AiExtractionResult;
 
-class OpenAiAnswer {
-  const OpenAiAnswer({
-    required this.answer,
-    required this.citedSourceIds,
-    this.abstain = false,
-    this.refusalReason,
-  });
-
-  final String answer;
-  final List<String> citedSourceIds;
-  final bool abstain;
-  final String? refusalReason;
-}
-
-class OpenAiExtractedChunk {
-  const OpenAiExtractedChunk({
-    required this.id,
-    required this.text,
-    required this.pageNumber,
-    this.sectionTitle,
-  });
-
-  final String id;
-  final String text;
-  final int pageNumber;
-  final String? sectionTitle;
-}
-
-class OpenAiExtractionResult {
-  const OpenAiExtractionResult({required this.chunks});
-
-  final List<OpenAiExtractedChunk> chunks;
-}
-
-class OpenAiException implements Exception {
-  const OpenAiException(this.message);
-
-  final String message;
+class OpenAiException extends AiException {
+  const OpenAiException(super.message);
 
   @override
   String toString() => 'OpenAiException: $message';
 }
 
-abstract class OpenAiClient {
-  Future<void> testApiKey({required String apiKey});
-
-  Future<List<double>> createEmbedding({
-    required String input,
-    required String model,
-  });
-
-  Future<OpenAiExtractionResult> extractDocument({
-    required String pdfPath,
-    required String model,
-  });
-
-  Future<OpenAiAnswer> generateAnswer({
-    required String model,
-    required String question,
-    required List<OpenAiEvidence> evidence,
-  });
-
-  Future<bool> verifyGroundedness({
-    required String model,
-    required String answer,
-    required List<OpenAiEvidence> evidence,
-  });
-}
+abstract class OpenAiClient implements AiClient {}
 
 class FakeOpenAiClient implements OpenAiClient {
   FakeOpenAiClient({

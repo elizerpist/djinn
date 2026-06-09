@@ -93,20 +93,12 @@ class OpenAiHttpClient implements OpenAiClient {
     if (chunks is! List) {
       throw const OpenAiException('invalid OpenAI extraction response');
     }
+    final flowcharts = json['flowcharts'];
     return OpenAiExtractionResult(
-      chunks: chunks
-          .map((item) {
-            if (item is! Map) {
-              throw const OpenAiException('invalid OpenAI extraction chunk');
-            }
-            return OpenAiExtractedChunk(
-              id: item['id'] as String? ?? '',
-              text: item['text'] as String? ?? '',
-              pageNumber: (item['page_number'] as num?)?.toInt() ?? 0,
-              sectionTitle: item['section_title'] as String?,
-            );
-          })
-          .toList(growable: false),
+      chunks: chunks.map(_parseExtractedChunk).toList(growable: false),
+      flowcharts: flowcharts is List
+          ? flowcharts.map(_parseExtractedFlowchart).toList(growable: false)
+          : const [],
     );
   }
 
@@ -269,6 +261,62 @@ class OpenAiHttpClient implements OpenAiClient {
     return decoded;
   }
 
+  OpenAiExtractedChunk _parseExtractedChunk(Object? item) {
+    if (item is! Map) {
+      throw const OpenAiException('invalid OpenAI extraction chunk');
+    }
+    return OpenAiExtractedChunk(
+      id: item['id'] as String? ?? '',
+      text: item['text'] as String? ?? '',
+      pageNumber: (item['page_number'] as num?)?.toInt() ?? 0,
+      sectionTitle: item['section_title'] as String?,
+    );
+  }
+
+  OpenAiExtractedFlowchart _parseExtractedFlowchart(Object? item) {
+    if (item is! Map) {
+      throw const OpenAiException('invalid OpenAI extraction flowchart');
+    }
+    final nodes = item['nodes'];
+    final edges = item['edges'];
+    return OpenAiExtractedFlowchart(
+      id: item['id'] as String? ?? '',
+      title: item['title'] as String?,
+      pageNumber: (item['page_number'] as num?)?.toInt() ?? 0,
+      confidence: (item['confidence'] as num?)?.toDouble(),
+      nodes: nodes is List
+          ? nodes.map(_parseExtractedFlowchartNode).toList(growable: false)
+          : const [],
+      edges: edges is List
+          ? edges.map(_parseExtractedFlowchartEdge).toList(growable: false)
+          : const [],
+    );
+  }
+
+  OpenAiExtractedFlowchartNode _parseExtractedFlowchartNode(Object? item) {
+    if (item is! Map) {
+      throw const OpenAiException('invalid OpenAI extraction flowchart node');
+    }
+    return OpenAiExtractedFlowchartNode(
+      id: item['id'] as String? ?? '',
+      label: item['label'] as String? ?? '',
+      positionX: (item['x'] as num?)?.toDouble() ?? 0,
+      positionY: (item['y'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  OpenAiExtractedFlowchartEdge _parseExtractedFlowchartEdge(Object? item) {
+    if (item is! Map) {
+      throw const OpenAiException('invalid OpenAI extraction flowchart edge');
+    }
+    return OpenAiExtractedFlowchartEdge(
+      id: item['id'] as String? ?? '',
+      fromNodeId: item['from_node_id'] as String? ?? '',
+      toNodeId: item['to_node_id'] as String? ?? '',
+      label: item['label'] as String? ?? '',
+    );
+  }
+
   String _extractOutputText(Map<String, Object?> response) {
     final direct = response['output_text'];
     if (direct is String && direct.trim().isNotEmpty) {
@@ -327,8 +375,61 @@ const Map<String, Object?> _documentExtractionSchema = {
         'required': ['id', 'text', 'page_number', 'section_title'],
       },
     },
+    'flowcharts': {
+      'type': 'array',
+      'items': {
+        'type': 'object',
+        'additionalProperties': false,
+        'properties': {
+          'id': {'type': 'string'},
+          'title': {
+            'type': ['string', 'null'],
+          },
+          'page_number': {'type': 'integer'},
+          'confidence': {
+            'type': ['number', 'null'],
+          },
+          'nodes': {
+            'type': 'array',
+            'items': {
+              'type': 'object',
+              'additionalProperties': false,
+              'properties': {
+                'id': {'type': 'string'},
+                'label': {'type': 'string'},
+                'x': {'type': 'number'},
+                'y': {'type': 'number'},
+              },
+              'required': ['id', 'label', 'x', 'y'],
+            },
+          },
+          'edges': {
+            'type': 'array',
+            'items': {
+              'type': 'object',
+              'additionalProperties': false,
+              'properties': {
+                'id': {'type': 'string'},
+                'from_node_id': {'type': 'string'},
+                'to_node_id': {'type': 'string'},
+                'label': {'type': 'string'},
+              },
+              'required': ['id', 'from_node_id', 'to_node_id', 'label'],
+            },
+          },
+        },
+        'required': [
+          'id',
+          'title',
+          'page_number',
+          'confidence',
+          'nodes',
+          'edges',
+        ],
+      },
+    },
   },
-  'required': ['chunks'],
+  'required': ['chunks', 'flowcharts'],
 };
 
 const Map<String, Object?> _answerSchema = {

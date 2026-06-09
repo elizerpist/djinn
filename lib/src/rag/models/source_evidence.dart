@@ -9,6 +9,8 @@ class SourceEvidence {
     required this.validationState,
     this.documentId,
     this.pageNumber,
+    this.ragEnabled = true,
+    this.collectionName = 'Alap',
     this.score,
   });
 
@@ -19,6 +21,8 @@ class SourceEvidence {
   final ValidationState validationState;
   final String? documentId;
   final int? pageNumber;
+  final bool ragEnabled;
+  final String collectionName;
   final double? score;
 }
 

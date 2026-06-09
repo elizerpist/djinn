@@ -34,13 +34,53 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
     required String localPath,
     required int sizeBytes,
     required DateTime importedAt,
+    String? contentHash,
+    String ocrStatus = 'unknown',
+    String collectionName = 'Alap',
+    bool ragEnabled = true,
   }) async {
     final entity = await _repository.addImportedDocument(
       filename: filename,
       localPath: localPath,
       sizeBytes: sizeBytes,
+      contentHash: contentHash,
+      ocrStatus: ocrStatus,
+      collectionName: collectionName,
+      ragEnabled: ragEnabled,
     );
     return _fromEntity(entity);
+  }
+
+  @override
+  Future<KnowledgeDocument?> findByContentHash(String contentHash) async {
+    final entity = await _repository.findDocumentByContentHash(contentHash);
+    return entity == null ? null : _fromEntity(entity);
+  }
+
+  @override
+  Future<KnowledgeDocument> updateRagEnabled(
+    String documentId,
+    bool enabled,
+  ) async {
+    await _repository.updateRagEnabled(documentId, enabled);
+    final updated = await _repository.findDocumentByPublicId(documentId);
+    if (updated == null) {
+      throw StateError('knowledge document not found: $documentId');
+    }
+    return _fromEntity(updated);
+  }
+
+  @override
+  Future<KnowledgeDocument> updateCollection(
+    String documentId,
+    String collectionName,
+  ) async {
+    await _repository.updateCollection(documentId, collectionName);
+    final updated = await _repository.findDocumentByPublicId(documentId);
+    if (updated == null) {
+      throw StateError('knowledge document not found: $documentId');
+    }
+    return _fromEntity(updated);
   }
 
   @override
@@ -82,6 +122,11 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
   }
 
   @override
+  Future<void> clearEvidence(String documentPublicId) {
+    return _repository.clearEvidence(documentPublicId);
+  }
+
+  @override
   Future<void> saveExtractedChunk({
     required String documentPublicId,
     required OpenAiExtractedChunk chunk,
@@ -96,6 +141,21 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
     );
   }
 
+  @override
+  Future<void> saveExtractedFlowchart({
+    required String documentPublicId,
+    required OpenAiExtractedFlowchart flowchart,
+    required Map<String, List<double>> embeddingsBySourceId,
+    required String embeddingModel,
+  }) {
+    return _repository.saveExtractedFlowchart(
+      documentPublicId: documentPublicId,
+      flowchart: flowchart,
+      embeddingsBySourceId: embeddingsBySourceId,
+      embeddingModel: embeddingModel,
+    );
+  }
+
   KnowledgeDocument _fromEntity(local.KnowledgeDocumentEntity entity) {
     return KnowledgeDocument(
       id: entity.publicId,
@@ -105,6 +165,14 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
       importedAt: DateTime.fromMillisecondsSinceEpoch(entity.importedAtMillis),
       status: KnowledgeDocumentStatus.fromWireName(entity.processingState),
       errorMessage: entity.errorMessage,
+      contentHash: entity.contentHash,
+      ragEnabled: entity.ragEnabled,
+      collectionName: entity.collectionName,
+      ocrStatus: entity.ocrStatus,
+      trainedAt: entity.trainedAtMillis == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(entity.trainedAtMillis!),
+      packVersion: entity.packVersion,
     );
   }
 
@@ -116,6 +184,8 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
       KnowledgeDocumentStatus.pendingIngest => local.ProcessingState.imported,
       KnowledgeDocumentStatus.blockedMissingApiKey =>
         local.ProcessingState.blockedMissingApiKey,
+      KnowledgeDocumentStatus.blockedPaidAi =>
+        local.ProcessingState.blockedPaidAi,
       KnowledgeDocumentStatus.blockedOffline =>
         local.ProcessingState.blockedOffline,
       KnowledgeDocumentStatus.uploading => local.ProcessingState.uploading,

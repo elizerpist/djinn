@@ -17,6 +17,31 @@ void main() {
     expect(entity.model, 'text-embedding-3-large');
   });
 
+  test('knowledge document entity keeps RAG and pack metadata', () {
+    final entity = KnowledgeDocumentEntity(
+      publicId: 'doc-1',
+      filename: 'protocol.pdf',
+      localPath: '/memory/protocol.pdf',
+      sizeBytes: 123,
+      importedAtMillis: 1760000000000,
+      processingState: ProcessingState.blockedPaidAi.wireName,
+      contentHash: 'hash-1',
+      ragEnabled: false,
+      collectionName: 'Stroke',
+      ocrStatus: 'image_heavy',
+      trainedAtMillis: 1760000000100,
+      packVersion: 2,
+    );
+
+    expect(entity.contentHash, 'hash-1');
+    expect(entity.ragEnabled, isFalse);
+    expect(entity.collectionName, 'Stroke');
+    expect(entity.ocrStatus, 'image_heavy');
+    expect(entity.trainedAtMillis, 1760000000100);
+    expect(entity.packVersion, 2);
+    expect(entity.processingState, 'blocked_paid_ai');
+  });
+
   test('validation state wire names are stable', () {
     expect(ValidationState.unreviewed.wireName, 'unreviewed');
     expect(ValidationState.partiallyValidated.wireName, 'partially_validated');

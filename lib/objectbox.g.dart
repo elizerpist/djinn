@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 273186095957995459),
     name: 'AppSettingsEntity',
-    lastPropertyId: const obx_int.IdUid(10, 4974685060174619275),
+    lastPropertyId: const obx_int.IdUid(20, 8688992324953563660),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -82,6 +82,66 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(10, 4974685060174619275),
         name: 'minimumSimilarity',
+        type: 8,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 4417885656887396502),
+        name: 'aiProvider',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 7289548356109153677),
+        name: 'googleAnswerModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(13, 2327825887271763899),
+        name: 'googleExtractionModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(14, 3268349873698949825),
+        name: 'googleGroundednessModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(15, 4706452592029187333),
+        name: 'googleEmbeddingModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(16, 5952079327188458571),
+        name: 'allowPaidAi',
+        type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(17, 60219847525944580),
+        name: 'confirmBeforeAiProcessing',
+        type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(18, 1348561904637652968),
+        name: 'voiceLocale',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(19, 3221045018684509383),
+        name: 'ttsSpeechRate',
+        type: 8,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(20, 8688992324953563660),
+        name: 'ttsPitch',
         type: 8,
         flags: 0,
       ),
@@ -554,7 +614,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(10, 3835227895295506301),
     name: 'KnowledgeDocumentEntity',
-    lastPropertyId: const obx_int.IdUid(9, 3427317077375592081),
+    lastPropertyId: const obx_int.IdUid(15, 3259534002406852090),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -611,6 +671,44 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(9, 3427317077375592081),
         name: 'openAiFileId',
         type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(10, 8507981245552866522),
+        name: 'contentHash',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(27, 4219054409213291281),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 5066384777251788674),
+        name: 'ragEnabled',
+        type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 2193039131946614546),
+        name: 'collectionName',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(28, 3173998271400784017),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(13, 3453527026676434593),
+        name: 'ocrStatus',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(14, 3861515850565867503),
+        name: 'trainedAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(15, 3259534002406852090),
+        name: 'packVersion',
+        type: 6,
         flags: 0,
       ),
     ],
@@ -718,7 +816,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
     lastEntityId: const obx_int.IdUid(11, 7309319277825706740),
-    lastIndexId: const obx_int.IdUid(26, 6263710456666240614),
+    lastIndexId: const obx_int.IdUid(28, 3173998271400784017),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -747,7 +845,21 @@ obx_int.ModelDefinition getObjectBoxModel() {
           object.groundednessModel,
         );
         final embeddingModelOffset = fbb.writeString(object.embeddingModel);
-        fbb.startTable(11);
+        final aiProviderOffset = fbb.writeString(object.aiProvider);
+        final googleAnswerModelOffset = fbb.writeString(
+          object.googleAnswerModel,
+        );
+        final googleExtractionModelOffset = fbb.writeString(
+          object.googleExtractionModel,
+        );
+        final googleGroundednessModelOffset = fbb.writeString(
+          object.googleGroundednessModel,
+        );
+        final googleEmbeddingModelOffset = fbb.writeString(
+          object.googleEmbeddingModel,
+        );
+        final voiceLocaleOffset = fbb.writeString(object.voiceLocale);
+        fbb.startTable(21);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, runtimeModeOffset);
         fbb.addOffset(2, answerModelOffset);
@@ -758,6 +870,16 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addBool(7, object.groundednessCheckEnabled);
         fbb.addInt64(8, object.retrievalLimit);
         fbb.addFloat64(9, object.minimumSimilarity);
+        fbb.addOffset(10, aiProviderOffset);
+        fbb.addOffset(11, googleAnswerModelOffset);
+        fbb.addOffset(12, googleExtractionModelOffset);
+        fbb.addOffset(13, googleGroundednessModelOffset);
+        fbb.addOffset(14, googleEmbeddingModelOffset);
+        fbb.addBool(15, object.allowPaidAi);
+        fbb.addBool(16, object.confirmBeforeAiProcessing);
+        fbb.addOffset(17, voiceLocaleOffset);
+        fbb.addFloat64(18, object.ttsSpeechRate);
+        fbb.addFloat64(19, object.ttsPitch);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -773,6 +895,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final runtimeModeParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 6, '');
+        final aiProviderParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 24, '');
         final answerModelParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 8, '');
@@ -785,6 +910,18 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final embeddingModelParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 14, '');
+        final googleAnswerModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 26, '');
+        final googleExtractionModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 28, '');
+        final googleGroundednessModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 30, '');
+        final googleEmbeddingModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 32, '');
         final deleteOpenAiFilesAfterProcessingParam = const fb.BoolReader()
             .vTableGet(buffer, rootOffset, 16, false);
         final groundednessCheckEnabledParam = const fb.BoolReader().vTableGet(
@@ -805,18 +942,55 @@ obx_int.ModelDefinition getObjectBoxModel() {
           22,
           0,
         );
+        final allowPaidAiParam = const fb.BoolReader().vTableGet(
+          buffer,
+          rootOffset,
+          34,
+          false,
+        );
+        final confirmBeforeAiProcessingParam = const fb.BoolReader().vTableGet(
+          buffer,
+          rootOffset,
+          36,
+          false,
+        );
+        final voiceLocaleParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 38, '');
+        final ttsSpeechRateParam = const fb.Float64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          40,
+          0,
+        );
+        final ttsPitchParam = const fb.Float64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          42,
+          0,
+        );
         final object = AppSettingsEntity(
           id: idParam,
           runtimeMode: runtimeModeParam,
+          aiProvider: aiProviderParam,
           answerModel: answerModelParam,
           extractionModel: extractionModelParam,
           groundednessModel: groundednessModelParam,
           embeddingModel: embeddingModelParam,
+          googleAnswerModel: googleAnswerModelParam,
+          googleExtractionModel: googleExtractionModelParam,
+          googleGroundednessModel: googleGroundednessModelParam,
+          googleEmbeddingModel: googleEmbeddingModelParam,
           deleteOpenAiFilesAfterProcessing:
               deleteOpenAiFilesAfterProcessingParam,
           groundednessCheckEnabled: groundednessCheckEnabledParam,
           retrievalLimit: retrievalLimitParam,
           minimumSimilarity: minimumSimilarityParam,
+          allowPaidAi: allowPaidAiParam,
+          confirmBeforeAiProcessing: confirmBeforeAiProcessingParam,
+          voiceLocale: voiceLocaleParam,
+          ttsSpeechRate: ttsSpeechRateParam,
+          ttsPitch: ttsPitchParam,
         );
 
         return object;
@@ -1437,7 +1611,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final openAiFileIdOffset = object.openAiFileId == null
             ? null
             : fbb.writeString(object.openAiFileId!);
-        fbb.startTable(10);
+        final contentHashOffset = object.contentHash == null
+            ? null
+            : fbb.writeString(object.contentHash!);
+        final collectionNameOffset = fbb.writeString(object.collectionName);
+        final ocrStatusOffset = fbb.writeString(object.ocrStatus);
+        fbb.startTable(16);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, publicIdOffset);
         fbb.addOffset(2, filenameOffset);
@@ -1447,6 +1626,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(6, processingStateOffset);
         fbb.addOffset(7, errorMessageOffset);
         fbb.addOffset(8, openAiFileIdOffset);
+        fbb.addOffset(9, contentHashOffset);
+        fbb.addBool(10, object.ragEnabled);
+        fbb.addOffset(11, collectionNameOffset);
+        fbb.addOffset(12, ocrStatusOffset);
+        fbb.addInt64(13, object.trainedAtMillis);
+        fbb.addInt64(14, object.packVersion);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1489,6 +1674,31 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final openAiFileIdParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 20);
+        final contentHashParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 22);
+        final ragEnabledParam = const fb.BoolReader().vTableGet(
+          buffer,
+          rootOffset,
+          24,
+          false,
+        );
+        final collectionNameParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 26, '');
+        final ocrStatusParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 28, '');
+        final trainedAtMillisParam = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          30,
+        );
+        final packVersionParam = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          32,
+        );
         final object = KnowledgeDocumentEntity(
           id: idParam,
           publicId: publicIdParam,
@@ -1499,6 +1709,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
           processingState: processingStateParam,
           errorMessage: errorMessageParam,
           openAiFileId: openAiFileIdParam,
+          contentHash: contentHashParam,
+          ragEnabled: ragEnabledParam,
+          collectionName: collectionNameParam,
+          ocrStatus: ocrStatusParam,
+          trainedAtMillis: trainedAtMillisParam,
+          packVersion: packVersionParam,
         );
 
         return object;
@@ -1629,6 +1845,52 @@ class AppSettingsEntity_ {
   /// See [AppSettingsEntity.minimumSimilarity].
   static final minimumSimilarity = obx.QueryDoubleProperty<AppSettingsEntity>(
     _entities[0].properties[9],
+  );
+
+  /// See [AppSettingsEntity.aiProvider].
+  static final aiProvider = obx.QueryStringProperty<AppSettingsEntity>(
+    _entities[0].properties[10],
+  );
+
+  /// See [AppSettingsEntity.googleAnswerModel].
+  static final googleAnswerModel = obx.QueryStringProperty<AppSettingsEntity>(
+    _entities[0].properties[11],
+  );
+
+  /// See [AppSettingsEntity.googleExtractionModel].
+  static final googleExtractionModel =
+      obx.QueryStringProperty<AppSettingsEntity>(_entities[0].properties[12]);
+
+  /// See [AppSettingsEntity.googleGroundednessModel].
+  static final googleGroundednessModel =
+      obx.QueryStringProperty<AppSettingsEntity>(_entities[0].properties[13]);
+
+  /// See [AppSettingsEntity.googleEmbeddingModel].
+  static final googleEmbeddingModel =
+      obx.QueryStringProperty<AppSettingsEntity>(_entities[0].properties[14]);
+
+  /// See [AppSettingsEntity.allowPaidAi].
+  static final allowPaidAi = obx.QueryBooleanProperty<AppSettingsEntity>(
+    _entities[0].properties[15],
+  );
+
+  /// See [AppSettingsEntity.confirmBeforeAiProcessing].
+  static final confirmBeforeAiProcessing =
+      obx.QueryBooleanProperty<AppSettingsEntity>(_entities[0].properties[16]);
+
+  /// See [AppSettingsEntity.voiceLocale].
+  static final voiceLocale = obx.QueryStringProperty<AppSettingsEntity>(
+    _entities[0].properties[17],
+  );
+
+  /// See [AppSettingsEntity.ttsSpeechRate].
+  static final ttsSpeechRate = obx.QueryDoubleProperty<AppSettingsEntity>(
+    _entities[0].properties[18],
+  );
+
+  /// See [AppSettingsEntity.ttsPitch].
+  static final ttsPitch = obx.QueryDoubleProperty<AppSettingsEntity>(
+    _entities[0].properties[19],
   );
 }
 
@@ -2002,6 +2264,38 @@ class KnowledgeDocumentEntity_ {
   /// See [KnowledgeDocumentEntity.openAiFileId].
   static final openAiFileId = obx.QueryStringProperty<KnowledgeDocumentEntity>(
     _entities[9].properties[8],
+  );
+
+  /// See [KnowledgeDocumentEntity.contentHash].
+  static final contentHash = obx.QueryStringProperty<KnowledgeDocumentEntity>(
+    _entities[9].properties[9],
+  );
+
+  /// See [KnowledgeDocumentEntity.ragEnabled].
+  static final ragEnabled = obx.QueryBooleanProperty<KnowledgeDocumentEntity>(
+    _entities[9].properties[10],
+  );
+
+  /// See [KnowledgeDocumentEntity.collectionName].
+  static final collectionName =
+      obx.QueryStringProperty<KnowledgeDocumentEntity>(
+        _entities[9].properties[11],
+      );
+
+  /// See [KnowledgeDocumentEntity.ocrStatus].
+  static final ocrStatus = obx.QueryStringProperty<KnowledgeDocumentEntity>(
+    _entities[9].properties[12],
+  );
+
+  /// See [KnowledgeDocumentEntity.trainedAtMillis].
+  static final trainedAtMillis =
+      obx.QueryIntegerProperty<KnowledgeDocumentEntity>(
+        _entities[9].properties[13],
+      );
+
+  /// See [KnowledgeDocumentEntity.packVersion].
+  static final packVersion = obx.QueryIntegerProperty<KnowledgeDocumentEntity>(
+    _entities[9].properties[14],
   );
 }
 

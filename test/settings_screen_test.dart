@@ -28,19 +28,19 @@ void main() {
       find.byKey(const Key('openai-api-key-field')),
       'sk-test',
     );
-    await tester.tap(find.text('Mentés'));
+    await _tapVisible(tester, find.text('Mentés'));
     await tester.pumpAndSettle();
 
     expect(await keyStore.readKey(), 'sk-test');
     expect(DebugConsole.allText, contains('[OpenAI] api key saved'));
 
-    await tester.tap(find.text('Kulcs tesztelése'));
+    await _tapVisible(tester, find.text('Kulcs tesztelése'));
     await tester.pumpAndSettle();
 
     expect(DebugConsole.allText, contains('[OpenAI] api key test started'));
     expect(DebugConsole.allText, contains('[OpenAI] api key test succeeded'));
 
-    await tester.tap(find.text('Kulcs törlése'));
+    await _tapVisible(tester, find.text('Kulcs törlése'));
     await tester.pumpAndSettle();
 
     expect(await keyStore.hasKey(), isFalse);
@@ -68,7 +68,7 @@ void main() {
       find.byKey(const Key('openai-api-key-field')),
       'sk-test',
     );
-    await tester.tap(find.text('Mentés'));
+    await _tapVisible(tester, find.text('Mentés'));
     await tester.pumpAndSettle();
 
     expect(await keyStore.readKey(), 'sk-test');
@@ -86,4 +86,73 @@ void main() {
       ),
     );
   });
+
+  testWidgets('saves Google key and Gemini provider settings', (tester) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.byKey(const Key('ai-provider-google')));
+    await tester.enterText(
+      find.byKey(const Key('google-api-key-field')),
+      'google-test',
+    );
+    await _tapVisible(tester, find.text('Mentés'));
+    await tester.pumpAndSettle();
+
+    expect(settings.aiProvider, 'google');
+    expect(
+      await keyStore.readKey(provider: ApiKeyProvider.google),
+      'google-test',
+    );
+    expect(DebugConsole.allText, contains('[Google] api key saved'));
+  });
+
+  testWidgets('renders and persists voice and TTS settings', (tester) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('Beszéd'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('voice-locale-field')),
+      'en-US',
+    );
+    await tester.enterText(find.byKey(const Key('tts-rate-field')), '0.75');
+    await tester.enterText(find.byKey(const Key('tts-pitch-field')), '1.2');
+    await _tapVisible(tester, find.text('Mentés'));
+    await tester.pumpAndSettle();
+
+    expect(settings.voiceLocale, 'en-US');
+    expect(settings.ttsSpeechRate, 0.75);
+    expect(settings.ttsPitch, 1.2);
+  });
+}
+
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
 }

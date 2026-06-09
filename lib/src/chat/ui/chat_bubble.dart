@@ -1,11 +1,23 @@
 import 'package:flutter/material.dart';
 
+import '../models/chat_citation.dart';
 import '../models/chat_message.dart';
 
 class ChatBubble extends StatelessWidget {
-  const ChatBubble({super.key, required this.message});
+  const ChatBubble({
+    super.key,
+    required this.message,
+    this.onCitationTap,
+    this.onSpeak,
+    this.onPause,
+    this.onStop,
+  });
 
   final ChatMessage message;
+  final ValueChanged<ChatCitation>? onCitationTap;
+  final VoidCallback? onSpeak;
+  final VoidCallback? onPause;
+  final VoidCallback? onStop;
 
   @override
   Widget build(BuildContext context) {
@@ -46,13 +58,27 @@ class ChatBubble extends StatelessWidget {
                 message.text,
                 style: TextStyle(color: textColor, fontSize: 15, height: 1.35),
               ),
+              if (!isUser &&
+                  (onSpeak != null || onPause != null || onStop != null)) ...[
+                const SizedBox(height: 8),
+                _TtsControls(
+                  messageId: message.id,
+                  onSpeak: onSpeak,
+                  onPause: onPause,
+                  onStop: onStop,
+                ),
+              ],
               if (!isUser && message.citations.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 for (final citation in message.citations)
                   _CitationRow(
+                    citation: citation,
                     sourceLabel: citation.sourceLabel,
                     title: citation.title,
                     page: citation.page,
+                    onTap: onCitationTap == null
+                        ? null
+                        : () => onCitationTap!(citation),
                   ),
               ],
               if (statusLabel != null) ...[
@@ -101,6 +127,50 @@ class ChatBubble extends StatelessWidget {
   }
 }
 
+class _TtsControls extends StatelessWidget {
+  const _TtsControls({
+    required this.messageId,
+    required this.onSpeak,
+    required this.onPause,
+    required this.onStop,
+  });
+
+  final String messageId;
+  final VoidCallback? onSpeak;
+  final VoidCallback? onPause;
+  final VoidCallback? onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 4,
+      children: [
+        IconButton(
+          key: ValueKey('tts-play-$messageId'),
+          tooltip: 'Felolvasás',
+          visualDensity: VisualDensity.compact,
+          onPressed: onSpeak,
+          icon: const Icon(Icons.play_arrow, size: 18),
+        ),
+        IconButton(
+          key: ValueKey('tts-pause-$messageId'),
+          tooltip: 'Szünet',
+          visualDensity: VisualDensity.compact,
+          onPressed: onPause,
+          icon: const Icon(Icons.pause, size: 18),
+        ),
+        IconButton(
+          key: ValueKey('tts-stop-$messageId'),
+          tooltip: 'Leállítás',
+          visualDensity: VisualDensity.compact,
+          onPressed: onStop,
+          icon: const Icon(Icons.stop, size: 18),
+        ),
+      ],
+    );
+  }
+}
+
 class _ValidationWarning extends StatelessWidget {
   const _ValidationWarning({required this.text});
 
@@ -131,47 +201,54 @@ class _ValidationWarning extends StatelessWidget {
 
 class _CitationRow extends StatelessWidget {
   const _CitationRow({
+    required this.citation,
     required this.sourceLabel,
     required this.title,
     required this.page,
+    this.onTap,
   });
 
+  final ChatCitation citation;
   final String? sourceLabel;
   final String title;
   final int? page;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final titleText = '$title${page == null ? '' : ' p.$page'}';
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          if (sourceLabel case final label?)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: const Color(0xFFBFDBFE)),
-              ),
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF1D4ED8),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (sourceLabel case final label?)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF1D4ED8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
+            Text(
+              titleText,
+              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11),
             ),
-          Text(
-            titleText,
-            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 class PdfImportResult {
@@ -7,11 +8,15 @@ class PdfImportResult {
     required this.filename,
     required this.localPath,
     required this.sizeBytes,
+    required this.contentHash,
+    required this.ocrStatus,
   });
 
   final String filename;
   final String localPath;
   final int sizeBytes;
+  final String contentHash;
+  final String ocrStatus;
 }
 
 class PdfImportService {
@@ -37,6 +42,42 @@ class PdfImportService {
       filename: p.basename(target.path),
       localPath: target.path,
       sizeBytes: bytes.length,
+      contentHash: sha256.convert(bytes).toString(),
+      ocrStatus: _ocrStatus(bytes),
+    );
+  }
+
+  Future<void> deleteImportedFile(PdfImportResult result) async {
+    final file = File(result.localPath);
+    if (await file.exists()) {
+      await file.delete();
+    }
+  }
+
+  String _ocrStatus(List<int> bytes) {
+    if (bytes.isEmpty) {
+      return 'unknown';
+    }
+    final sample = bytes.take(8192).toList(growable: false);
+    final textMarkers =
+        utf8Safe(sample).contains('/Text') ||
+        utf8Safe(sample).contains('BT') ||
+        utf8Safe(sample).contains('/Font');
+    final imageMarkers =
+        utf8Safe(sample).contains('/Image') ||
+        utf8Safe(sample).contains('/XObject');
+    if (textMarkers) {
+      return 'text_available';
+    }
+    if (imageMarkers || bytes.length > 1024 * 1024) {
+      return 'image_heavy';
+    }
+    return 'unknown';
+  }
+
+  String utf8Safe(List<int> bytes) {
+    return String.fromCharCodes(
+      bytes.where((value) => value >= 9 && value <= 126),
     );
   }
 
