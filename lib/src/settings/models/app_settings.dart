@@ -100,27 +100,45 @@ class AppSettings {
     String? voiceMode,
     String? voiceLocale,
   }) {
+    final effectiveProvider = activeProvider ?? this.activeProvider;
+    final aliasesTargetOpenAi = effectiveProvider == AiProvider.openAi;
+    final aliasesTargetGemini = effectiveProvider == AiProvider.gemini;
+
     return AppSettings(
       runtimeMode: runtimeMode ?? this.runtimeMode,
-      activeProvider: activeProvider ?? this.activeProvider,
+      activeProvider: effectiveProvider,
       openAiAnswerModel:
-          openAiAnswerModel ?? answerModel ?? this.openAiAnswerModel,
+          openAiAnswerModel ??
+          (aliasesTargetOpenAi ? answerModel : null) ??
+          this.openAiAnswerModel,
       openAiExtractionModel:
           openAiExtractionModel ??
-          extractionModel ??
+          (aliasesTargetOpenAi ? extractionModel : null) ??
           this.openAiExtractionModel,
       openAiGroundednessModel:
           openAiGroundednessModel ??
-          groundednessModel ??
+          (aliasesTargetOpenAi ? groundednessModel : null) ??
           this.openAiGroundednessModel,
       openAiEmbeddingModel:
-          openAiEmbeddingModel ?? embeddingModel ?? this.openAiEmbeddingModel,
-      geminiAnswerModel: geminiAnswerModel ?? this.geminiAnswerModel,
+          openAiEmbeddingModel ??
+          (aliasesTargetOpenAi ? embeddingModel : null) ??
+          this.openAiEmbeddingModel,
+      geminiAnswerModel:
+          geminiAnswerModel ??
+          (aliasesTargetGemini ? answerModel : null) ??
+          this.geminiAnswerModel,
       geminiExtractionModel:
-          geminiExtractionModel ?? this.geminiExtractionModel,
+          geminiExtractionModel ??
+          (aliasesTargetGemini ? extractionModel : null) ??
+          this.geminiExtractionModel,
       geminiGroundednessModel:
-          geminiGroundednessModel ?? this.geminiGroundednessModel,
-      geminiEmbeddingModel: geminiEmbeddingModel ?? this.geminiEmbeddingModel,
+          geminiGroundednessModel ??
+          (aliasesTargetGemini ? groundednessModel : null) ??
+          this.geminiGroundednessModel,
+      geminiEmbeddingModel:
+          geminiEmbeddingModel ??
+          (aliasesTargetGemini ? embeddingModel : null) ??
+          this.geminiEmbeddingModel,
       deleteOpenAiFilesAfterProcessing:
           deleteOpenAiFilesAfterProcessing ??
           this.deleteOpenAiFilesAfterProcessing,

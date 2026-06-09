@@ -3,7 +3,7 @@ import '../../ai/ai_provider.dart';
 class ModelCatalog {
   const ModelCatalog._();
 
-  static const openAiAnswerModels = ['gpt-5.5', 'gpt-5.5-mini', 'gpt-4.1'];
+  static const openAiAnswerModels = ['gpt-5.5', 'gpt-5-mini', 'gpt-4.1'];
   static const openAiEmbeddingModels = [
     'text-embedding-3-large',
     'text-embedding-3-small',

@@ -44,6 +44,53 @@ void main() {
     expect(settings.groundednessCheckEnabled, isFalse);
   });
 
+  test('legacy model aliases update Gemini slots when Gemini is active', () {
+    final settings = AppSettings.defaults().copyWith(
+      activeProvider: AiProvider.gemini,
+      openAiAnswerModel: 'gpt-openai-answer',
+      openAiExtractionModel: 'gpt-openai-extraction',
+      geminiAnswerModel: 'gemini-old-answer',
+      geminiExtractionModel: 'gemini-old-extraction',
+    );
+
+    final updated = settings.copyWith(
+      answerModel: 'gemini-2.5-pro',
+      extractionModel: 'gemini-2.5-flash',
+    );
+
+    expect(updated.geminiAnswerModel, 'gemini-2.5-pro');
+    expect(updated.geminiExtractionModel, 'gemini-2.5-flash');
+    expect(updated.openAiAnswerModel, 'gpt-openai-answer');
+    expect(updated.openAiExtractionModel, 'gpt-openai-extraction');
+  });
+
+  test('legacy model aliases update OpenAI slots when OpenAI is active', () {
+    final settings = AppSettings.defaults().copyWith(
+      activeProvider: AiProvider.openAi,
+      openAiAnswerModel: 'gpt-old-answer',
+      openAiExtractionModel: 'gpt-old-extraction',
+      geminiAnswerModel: 'gemini-2.5-pro',
+      geminiExtractionModel: 'gemini-2.5-flash',
+    );
+
+    final updated = settings.copyWith(
+      answerModel: 'gpt-4.1',
+      extractionModel: 'gpt-5-mini',
+    );
+
+    expect(updated.openAiAnswerModel, 'gpt-4.1');
+    expect(updated.openAiExtractionModel, 'gpt-5-mini');
+    expect(updated.geminiAnswerModel, 'gemini-2.5-pro');
+    expect(updated.geminiExtractionModel, 'gemini-2.5-flash');
+  });
+
+  test('OpenAI answer catalog includes valid mini model name', () {
+    final options = ModelCatalog.options(AiProvider.openAi, AiModelSlot.answer);
+
+    expect(options, contains('gpt-5-mini'));
+    expect(options, isNot(contains('gpt-5.5-mini')));
+  });
+
   test('memory API key store can save, read, and delete key', () async {
     final store = MemoryApiKeyStore();
 
@@ -89,9 +136,9 @@ void main() {
     final repository = AppSettingsRepository(store: objectBox.store);
     final settings = AppSettings.defaults().copyWith(
       activeProvider: AiProvider.gemini,
-      openAiAnswerModel: 'gpt-5.5-mini',
+      openAiAnswerModel: 'gpt-5-mini',
       openAiExtractionModel: 'gpt-4.1',
-      openAiGroundednessModel: 'gpt-5.5-mini',
+      openAiGroundednessModel: 'gpt-5-mini',
       openAiEmbeddingModel: 'text-embedding-3-small',
       geminiAnswerModel: 'gemini-2.5-pro',
       geminiExtractionModel: 'gemini-2.5-flash',
@@ -109,7 +156,7 @@ void main() {
     expect(loaded.extractionModel, 'gemini-2.5-flash');
     expect(
       loaded.modelFor(AiProvider.openAi, AiModelSlot.answer),
-      'gpt-5.5-mini',
+      'gpt-5-mini',
     );
     expect(loaded.openAiExtractionModel, 'gpt-4.1');
     expect(loaded.openAiEmbeddingModel, 'text-embedding-3-small');
