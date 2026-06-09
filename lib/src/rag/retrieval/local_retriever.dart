@@ -1,4 +1,5 @@
 import '../../../objectbox.g.dart';
+import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
 import '../models/source_evidence.dart';
 
@@ -21,11 +22,30 @@ class MemoryLocalRetriever implements LocalRetriever {
     required int limit,
     required double minimumSimilarity,
   }) async {
-    return _items
-        .where((item) => item.validationState != ValidationState.rejected)
-        .where((item) => (item.score ?? 1) >= minimumSimilarity)
-        .take(limit)
-        .toList(growable: false);
+    DebugConsole.log(
+      '[VectorGraph] memory retrieval start dim=${queryVector.length} '
+      'limit=$limit min=$minimumSimilarity',
+    );
+    final evidence = <SourceEvidence>[];
+    for (final item in _items) {
+      if (item.validationState == ValidationState.rejected) {
+        DebugConsole.log(
+          '[VectorGraph] memory skipped rejected source=${item.id}',
+        );
+        continue;
+      }
+      if ((item.score ?? 1) < minimumSimilarity) {
+        continue;
+      }
+      evidence.add(item);
+      if (evidence.length >= limit) {
+        break;
+      }
+    }
+    DebugConsole.log(
+      '[VectorGraph] memory retrieval matches=${evidence.length}',
+    );
+    return evidence;
   }
 }
 
@@ -49,6 +69,10 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     required int limit,
     required double minimumSimilarity,
   }) async {
+    DebugConsole.log(
+      '[VectorGraph] objectbox retrieval start dim=${queryVector.length} '
+      'limit=$limit min=$minimumSimilarity',
+    );
     final query = _embeddingBox
         .query(
           ChunkEmbeddingEntity_.vector.nearestNeighborsF32(queryVector, limit),
@@ -64,10 +88,18 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
         }
         final mapped = _mapEmbedding(item.object, similarity);
         if (mapped != null) {
+          DebugConsole.log(
+            '[VectorGraph] match source=${mapped.id} '
+            'type=${mapped.sourceType.wireName} score=${similarity.toStringAsFixed(3)}',
+          );
           evidence.add(mapped);
         }
       }
-      return evidence.take(limit).toList(growable: false);
+      final limited = evidence.take(limit).toList(growable: false);
+      DebugConsole.log(
+        '[VectorGraph] objectbox retrieval matches=${limited.length}',
+      );
+      return limited;
     } finally {
       query.close();
     }
@@ -110,6 +142,7 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     final validationState = _validationStateFromWire(node.validationState);
     if (validationState == ValidationState.rejected ||
         _flowchartRejected(node.flowchartPublicId)) {
+      DebugConsole.log('[VectorGraph] skipped rejected node=${node.publicId}');
       return null;
     }
     return SourceEvidence(
@@ -130,6 +163,7 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     final validationState = _validationStateFromWire(edge.validationState);
     if (validationState == ValidationState.rejected ||
         _flowchartRejected(edge.flowchartPublicId)) {
+      DebugConsole.log('[VectorGraph] skipped rejected edge=${edge.publicId}');
       return null;
     }
     return SourceEvidence(

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/flowchart/data/flowchart_validation_repository.dart';
 import 'package:djinn/src/flowchart/models/flowchart_view_model.dart';
 import 'package:djinn/src/flowchart/ui/simple_flowchart_editor.dart';
 import 'package:djinn/src/local_store/entities.dart';
 
 void main() {
+  setUp(DebugConsole.clear);
+
   test('rejecting a node prevents it from being answerable', () async {
     final repository = MemoryFlowchartValidationRepository();
     repository.addNode('node-1', ValidationState.unreviewed);
@@ -17,6 +20,10 @@ void main() {
     );
 
     expect(await repository.isNodeAnswerable('node-1'), isFalse);
+    expect(
+      DebugConsole.allText,
+      contains('[Flowchart] node validation node=node-1 state=rejected'),
+    );
   });
 
   testWidgets('simple editor lists nodes and validates a node', (tester) async {
@@ -68,6 +75,12 @@ void main() {
     await tester.pump();
 
     expect(validatedNodeId, 'node-1');
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[Flowchart] node validation requested node=node-1 state=validated',
+      ),
+    );
   });
 }
 
@@ -101,6 +114,9 @@ class MemoryFlowchartValidationRepository
     required ValidationState state,
     String? rejectionReason,
   }) async {
+    DebugConsole.log(
+      '[Flowchart] node validation node=$nodePublicId state=${state.wireName}',
+    );
     _nodes[nodePublicId] = state;
     _nodeRejectionReasons[nodePublicId] = rejectionReason;
   }

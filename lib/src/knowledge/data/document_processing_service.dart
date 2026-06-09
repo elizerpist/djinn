@@ -1,3 +1,4 @@
+import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
 import '../../settings/models/app_settings.dart';
@@ -41,6 +42,9 @@ class DocumentProcessingService {
 
   Future<ProcessingResult> processDocument(String documentPublicId) async {
     if (!await hasApiKey()) {
+      DebugConsole.log(
+        '[AI Training] blocked missing_api_key document=$documentPublicId',
+      );
       await repository.markState(
         documentPublicId,
         ProcessingState.blockedMissingApiKey,
@@ -51,6 +55,7 @@ class DocumentProcessingService {
     }
 
     try {
+      DebugConsole.log('[AI Training] start document=$documentPublicId');
       final settings = await loadSettings();
       final pdfPath = await repository.localPathForDocument(documentPublicId);
       await repository.markState(documentPublicId, ProcessingState.processing);
@@ -59,10 +64,18 @@ class DocumentProcessingService {
         pdfPath: pdfPath,
         model: settings.extractionModel,
       );
+      DebugConsole.log(
+        '[AI Training] extraction chunks=${extraction.chunks.length} '
+        'model=${settings.extractionModel}',
+      );
       for (final chunk in extraction.chunks) {
         final embedding = await openAiClient.createEmbedding(
           input: chunk.text,
           model: settings.embeddingModel,
+        );
+        DebugConsole.log(
+          '[AI Training] embedding chunk=${chunk.id} '
+          'model=${settings.embeddingModel} dim=${embedding.length}',
         );
         await repository.saveExtractedChunk(
           documentPublicId: documentPublicId,
@@ -74,8 +87,12 @@ class DocumentProcessingService {
 
       await repository.markState(documentPublicId, ProcessingState.embedded);
       await repository.markState(documentPublicId, ProcessingState.ready);
+      DebugConsole.log('[AI Training] complete document=$documentPublicId');
       return ProcessingResult(state: ProcessingState.ready.wireName);
     } on OpenAiException catch (error) {
+      DebugConsole.log(
+        '[AI Training] failed document=$documentPublicId error=${error.message}',
+      );
       await repository.markState(
         documentPublicId,
         ProcessingState.failed,

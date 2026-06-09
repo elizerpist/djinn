@@ -8,6 +8,7 @@ import 'src/chat/data/local_answer_service.dart';
 import 'src/chat/data/local_chat_repository.dart';
 import 'src/chat/data/objectbox_chat_repository.dart';
 import 'src/chat/ui/main_screen.dart';
+import 'src/debug/debug_floating_button.dart';
 import 'src/flowchart/data/flowchart_validation_repository.dart';
 import 'src/knowledge/data/document_processing_service.dart';
 import 'src/knowledge/data/knowledge_document_repository.dart';
@@ -186,19 +187,25 @@ class _DjinnAppState extends State<DjinnApp> {
           if (dependencies == null) {
             return const Scaffold(body: Center(child: Text('Inditasi hiba')));
           }
-          return MainScreen(
-            repository: dependencies.chatRepository,
-            chatService: dependencies.chatService,
-            knowledgeRepository: dependencies.knowledgeRepository,
-            pdfImportService: dependencies.pdfImportService,
-            refreshKnowledgeReadiness: dependencies.refreshKnowledgeReadiness,
-            apiKeyStore: dependencies.apiKeyStore,
-            loadSettings: dependencies.loadSettings,
-            saveSettings: dependencies.saveSettings,
-            testApiKey: dependencies.testApiKey,
-            processingService: dependencies.processingService,
-            flowchartValidationRepository:
-                dependencies.flowchartValidationRepository,
+          return Stack(
+            children: [
+              MainScreen(
+                repository: dependencies.chatRepository,
+                chatService: dependencies.chatService,
+                knowledgeRepository: dependencies.knowledgeRepository,
+                pdfImportService: dependencies.pdfImportService,
+                refreshKnowledgeReadiness:
+                    dependencies.refreshKnowledgeReadiness,
+                apiKeyStore: dependencies.apiKeyStore,
+                loadSettings: dependencies.loadSettings,
+                saveSettings: dependencies.saveSettings,
+                testApiKey: dependencies.testApiKey,
+                processingService: dependencies.processingService,
+                flowchartValidationRepository:
+                    dependencies.flowchartValidationRepository,
+              ),
+              const DebugFloatingButton(),
+            ],
           );
         },
       ),

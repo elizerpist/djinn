@@ -1,3 +1,4 @@
+import '../../debug/debug_console.dart';
 import '../../openai/openai_client.dart';
 import '../../rag/models/source_evidence.dart';
 import '../../rag/retrieval/local_retriever.dart';
@@ -52,7 +53,9 @@ class LocalAnswerService implements AnswerService {
 
   @override
   Future<LocalAnswerResult> answer(String question) async {
+    DebugConsole.log('[Chat/RAG] answer start chars=${question.length}');
     if (!await hasApiKey()) {
+      DebugConsole.log('[Chat/RAG] refused reason=missing_api_key');
       return const LocalAnswerResult(
         text: 'OpenAI API kulcs nincs beállítva.',
         status: 'missing_api_key',
@@ -61,6 +64,7 @@ class LocalAnswerService implements AnswerService {
       );
     }
     if (!await hasReadyDocuments()) {
+      DebugConsole.log('[Chat/RAG] refused reason=empty_knowledge_base');
       return const LocalAnswerResult(
         text: 'Nincs feldolgozott helyi tudásbázis.',
         status: 'empty_knowledge_base',
@@ -70,6 +74,9 @@ class LocalAnswerService implements AnswerService {
     }
 
     final settings = await loadSettings();
+    DebugConsole.log(
+      '[Chat/RAG] query embedding model=${settings.embeddingModel}',
+    );
     final queryVector = await openAiClient.createEmbedding(
       input: question,
       model: settings.embeddingModel,
@@ -79,7 +86,9 @@ class LocalAnswerService implements AnswerService {
       limit: settings.retrievalLimit,
       minimumSimilarity: settings.minimumSimilarity,
     );
+    DebugConsole.log('[Chat/RAG] retrieved count=${retrieved.length}');
     if (retrieved.isEmpty) {
+      DebugConsole.log('[Chat/RAG] refused reason=insufficient_evidence');
       return const LocalAnswerResult(
         text: insufficientEvidenceText,
         status: 'insufficient_evidence',
@@ -99,6 +108,9 @@ class LocalAnswerService implements AnswerService {
           .toList(growable: false),
     );
     if (draft.abstain) {
+      DebugConsole.log(
+        '[Chat/RAG] refused reason=${draft.refusalReason ?? 'model_refused'}',
+      );
       return LocalAnswerResult(
         text: draft.answer.isEmpty ? insufficientEvidenceText : draft.answer,
         status: 'model_refused',
@@ -112,6 +124,9 @@ class LocalAnswerService implements AnswerService {
       retrieved: retrieved,
     );
     if (!verification.accepted) {
+      DebugConsole.log(
+        '[Chat/RAG] refused reason=${verification.refusalReason ?? 'citation_verification_failed'}',
+      );
       return LocalAnswerResult(
         text: insufficientEvidenceText,
         status: 'citation_verification_failed',
@@ -136,6 +151,7 @@ class LocalAnswerService implements AnswerService {
             .toList(growable: false),
       );
       if (!grounded) {
+        DebugConsole.log('[Chat/RAG] refused reason=groundedness_failed');
         return const LocalAnswerResult(
           text: insufficientEvidenceText,
           status: 'groundedness_failed',
@@ -145,6 +161,10 @@ class LocalAnswerService implements AnswerService {
       }
     }
 
+    DebugConsole.log(
+      '[Chat/RAG] grounded citations=${verification.citations.length} '
+      'warning=${verification.hasValidationWarning}',
+    );
     return LocalAnswerResult(
       text: draft.answer,
       status: 'grounded',

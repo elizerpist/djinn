@@ -1,10 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/knowledge/data/document_processing_service.dart';
 import 'package:djinn/src/local_store/entities.dart';
 import 'package:djinn/src/openai/openai_client.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
 
 void main() {
+  setUp(DebugConsole.clear);
+
   test('blocks processing when API key is missing', () async {
     final repository = MemoryProcessingRepository();
     final service = DocumentProcessingService(
@@ -18,6 +21,10 @@ void main() {
 
     expect(result.state, 'blocked_missing_api_key');
     expect(repository.states, [ProcessingState.blockedMissingApiKey]);
+    expect(
+      DebugConsole.allText,
+      contains('[AI Training] blocked missing_api_key'),
+    );
   });
 
   test('stores extracted chunks and embeddings', () async {
@@ -40,6 +47,21 @@ void main() {
     expect(repository.savedChunks, hasLength(1));
     expect(repository.savedEmbeddings.single.vector, hasLength(3072));
     expect(repository.savedEmbeddings.single.model, 'text-embedding-3-large');
+    expect(
+      DebugConsole.allText,
+      contains('[AI Training] start document=doc-1'),
+    );
+    expect(DebugConsole.allText, contains('[AI Training] extraction chunks=1'));
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[AI Training] embedding chunk=c1 model=text-embedding-3-large dim=3072',
+      ),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[AI Training] complete document=doc-1'),
+    );
   });
 
   test('marks document failed when OpenAI extraction fails', () async {
@@ -60,6 +82,10 @@ void main() {
       ProcessingState.failed,
     ]);
     expect(repository.errorMessages, ['extract failed']);
+    expect(
+      DebugConsole.allText,
+      contains('[AI Training] failed document=doc-1 error=extract failed'),
+    );
   });
 }
 

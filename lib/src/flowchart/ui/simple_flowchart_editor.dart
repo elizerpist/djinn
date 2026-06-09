@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
 import '../models/flowchart_view_model.dart';
 
@@ -60,15 +61,25 @@ class _NodeValidationRow extends StatelessWidget {
       title: 'Node',
       initialValue: node.label,
       validationState: node.validationState,
-      onValidate: () => onChanged?.call(
-        nodePublicId: node.id,
-        state: ValidationState.validated,
-      ),
-      onReject: () => onChanged?.call(
-        nodePublicId: node.id,
-        state: ValidationState.rejected,
-        rejectionReason: 'Kézi elutasítás',
-      ),
+      onValidate: () {
+        DebugConsole.log(
+          '[Flowchart] node validation requested node=${node.id} state=validated',
+        );
+        onChanged?.call(
+          nodePublicId: node.id,
+          state: ValidationState.validated,
+        );
+      },
+      onReject: () {
+        DebugConsole.log(
+          '[Flowchart] node validation requested node=${node.id} state=rejected',
+        );
+        onChanged?.call(
+          nodePublicId: node.id,
+          state: ValidationState.rejected,
+          rejectionReason: 'Kézi elutasítás',
+        );
+      },
     );
   }
 }
@@ -85,15 +96,25 @@ class _EdgeValidationRow extends StatelessWidget {
       title: '${edge.fromNodeId} → ${edge.toNodeId}',
       initialValue: edge.label,
       validationState: edge.validationState,
-      onValidate: () => onChanged?.call(
-        edgePublicId: edge.id,
-        state: ValidationState.validated,
-      ),
-      onReject: () => onChanged?.call(
-        edgePublicId: edge.id,
-        state: ValidationState.rejected,
-        rejectionReason: 'Kézi elutasítás',
-      ),
+      onValidate: () {
+        DebugConsole.log(
+          '[Flowchart] edge validation requested edge=${edge.id} state=validated',
+        );
+        onChanged?.call(
+          edgePublicId: edge.id,
+          state: ValidationState.validated,
+        );
+      },
+      onReject: () {
+        DebugConsole.log(
+          '[Flowchart] edge validation requested edge=${edge.id} state=rejected',
+        );
+        onChanged?.call(
+          edgePublicId: edge.id,
+          state: ValidationState.rejected,
+          rejectionReason: 'Kézi elutasítás',
+        );
+      },
     );
   }
 }

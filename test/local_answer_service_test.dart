@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/src/chat/data/local_answer_service.dart';
+import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/local_store/entities.dart';
 import 'package:djinn/src/openai/openai_client.dart';
 import 'package:djinn/src/rag/models/source_evidence.dart';
@@ -9,6 +10,8 @@ import 'package:djinn/src/rag/verification/citation_verifier.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
 
 void main() {
+  setUp(DebugConsole.clear);
+
   test(
     'returns insufficient evidence before generation when retrieval is empty',
     () async {
@@ -25,6 +28,11 @@ void main() {
 
       expect(result.status, 'insufficient_evidence');
       expect(result.refusalReason, 'insufficient_evidence');
+      expect(DebugConsole.allText, contains('[Chat/RAG] answer start'));
+      expect(
+        DebugConsole.allText,
+        contains('[Chat/RAG] refused reason=insufficient_evidence'),
+      );
     },
   );
 
@@ -52,5 +60,7 @@ void main() {
     expect(result.status, 'grounded');
     expect(result.hasValidationWarning, isTrue);
     expect(result.citations.single.sourceId, 'node-1');
+    expect(DebugConsole.allText, contains('[Chat/RAG] retrieved count=1'));
+    expect(DebugConsole.allText, contains('[Chat/RAG] grounded citations=1'));
   });
 }

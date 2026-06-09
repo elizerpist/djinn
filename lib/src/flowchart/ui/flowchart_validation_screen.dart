@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
 import '../data/flowchart_validation_repository.dart';
 import '../models/flowchart_view_model.dart';
@@ -27,6 +28,9 @@ class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
 
   Future<void> _load() async {
     final flowcharts = await widget.repository.listFlowchartsNeedingReview();
+    DebugConsole.log(
+      '[Flowchart] validation screen loaded count=${flowcharts.length}',
+    );
     if (!mounted) {
       return;
     }
@@ -37,6 +41,9 @@ class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
   }
 
   Future<void> _openFlowchart(FlowchartEntity flowchart) async {
+    DebugConsole.log(
+      '[Flowchart] open flowchart=${flowchart.publicId} page=${flowchart.pageNumber}',
+    );
     final nodes = await widget.repository.listNodes(flowchart.publicId);
     final edges = await widget.repository.listEdges(flowchart.publicId);
     if (!mounted) {

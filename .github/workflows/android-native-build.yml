@@ -33,13 +33,11 @@ jobs:
         run: pytest -q
 
   android-apk:
-    name: Build Android APKs
+    name: Build debug APK
     needs: backend-tests
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-    env:
-      DJINN_RELEASE_BACKEND_URL: ${{ vars.DJINN_BACKEND_URL || 'https://example.invalid' }}
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -65,26 +63,33 @@ jobs:
       - name: Test Flutter app
         run: flutter test
 
-      - name: Build release APK
-        run: >-
-          flutter build apk --release
-          --dart-define=DJINN_BACKEND_URL=$DJINN_RELEASE_BACKEND_URL
+      - name: Build debug APK
+        run: flutter build apk --debug
 
-      - name: Build same-phone trial APK
-        run: >-
-          flutter build apk --debug
-          --dart-define=DJINN_BACKEND_URL=http://127.0.0.1:8000
+      - name: Prepare debug APK release file
+        run: |
+          mkdir -p build/release
+          cp build/app/outputs/flutter-apk/app-debug.apk build/release/djinn-debug.apk
 
-      - name: Upload release APK artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: djinn-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
-
-      - name: Upload trial APK artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: djinn-trial-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: error
+      - name: Publish latest debug APK release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK_PATH: build/release/djinn-debug.apk
+          APK_NAME: djinn-debug.apk
+        run: |
+          git tag -f debug-latest "$GITHUB_SHA"
+          git push origin refs/tags/debug-latest --force
+          NOTES="Latest Djinn debug APK built from ${GITHUB_REF_NAME} commit ${GITHUB_SHA}."
+          if gh release view debug-latest >/dev/null 2>&1; then
+            gh release delete-asset debug-latest "$APK_NAME" --yes >/dev/null 2>&1 || true
+            gh release upload debug-latest "$APK_PATH" --clobber
+            gh release edit debug-latest \
+              --title "Latest Djinn debug APK" \
+              --notes "$NOTES"
+          else
+            gh release create debug-latest "$APK_PATH" \
+              --prerelease \
+              --title "Latest Djinn debug APK" \
+              --notes "$NOTES"
+          fi
+          echo "Direct APK link: https://github.com/${GITHUB_REPOSITORY}/releases/download/debug-latest/${APK_NAME}"

@@ -1,4 +1,5 @@
 import '../../../objectbox.g.dart';
+import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
 
 abstract class FlowchartValidationRepository {
@@ -34,26 +35,36 @@ class ObjectBoxFlowchartValidationRepository
 
   @override
   Future<List<FlowchartEntity>> listFlowchartsNeedingReview() async {
-    return _flowchartBox
+    final flowcharts = _flowchartBox
         .getAll()
         .where((item) => _needsReview(item.validationState))
         .toList(growable: false);
+    DebugConsole.log('[Flowchart] review list count=${flowcharts.length}');
+    return flowcharts;
   }
 
   @override
   Future<List<FlowchartNodeEntity>> listNodes(String flowchartPublicId) async {
-    return _nodeBox
+    final nodes = _nodeBox
         .getAll()
         .where((item) => item.flowchartPublicId == flowchartPublicId)
         .toList(growable: false);
+    DebugConsole.log(
+      '[Flowchart] nodes flowchart=$flowchartPublicId count=${nodes.length}',
+    );
+    return nodes;
   }
 
   @override
   Future<List<FlowchartEdgeEntity>> listEdges(String flowchartPublicId) async {
-    return _edgeBox
+    final edges = _edgeBox
         .getAll()
         .where((item) => item.flowchartPublicId == flowchartPublicId)
         .toList(growable: false);
+    DebugConsole.log(
+      '[Flowchart] edges flowchart=$flowchartPublicId count=${edges.length}',
+    );
+    return edges;
   }
 
   @override
@@ -69,6 +80,9 @@ class ObjectBoxFlowchartValidationRepository
     node.validationState = state.wireName;
     node.rejectionReason = rejectionReason;
     _nodeBox.put(node);
+    DebugConsole.log(
+      '[Flowchart] node validation node=$nodePublicId state=${state.wireName}',
+    );
   }
 
   @override
@@ -84,6 +98,9 @@ class ObjectBoxFlowchartValidationRepository
     edge.validationState = state.wireName;
     edge.rejectionReason = rejectionReason;
     _edgeBox.put(edge);
+    DebugConsole.log(
+      '[Flowchart] edge validation edge=$edgePublicId state=${state.wireName}',
+    );
   }
 
   @override

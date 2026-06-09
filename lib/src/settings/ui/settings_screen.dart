@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../debug/debug_console.dart';
 import '../data/api_key_store.dart';
 import '../models/app_settings.dart';
 
@@ -75,6 +76,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final apiKey = _apiKeyController.text.trim();
       if (apiKey.isNotEmpty) {
         await widget.apiKeyStore.saveKey(apiKey);
+        DebugConsole.log('[OpenAI] api key saved length=${apiKey.length}');
       }
       final settings = _settings.copyWith(
         answerModel: _answerModelController.text.trim().isEmpty
@@ -103,6 +105,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return;
       }
       setState(() => _statusText = 'A mentés nem sikerült');
+      DebugConsole.log('[OpenAI] settings save failed');
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -112,6 +115,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _deleteKey() async {
     await widget.apiKeyStore.deleteKey();
+    DebugConsole.log('[OpenAI] api key deleted');
     if (!mounted) {
       return;
     }
@@ -122,7 +126,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _testKey() async {
+    DebugConsole.log('[OpenAI] api key test started');
     final ok = await widget.testApiKey();
+    DebugConsole.log(
+      ok ? '[OpenAI] api key test succeeded' : '[OpenAI] api key test failed',
+    );
     if (!mounted) {
       return;
     }
