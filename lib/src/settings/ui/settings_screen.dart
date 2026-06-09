@@ -72,12 +72,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _saving = true;
       _statusText = null;
     });
-    try {
-      final apiKey = _apiKeyController.text.trim();
-      if (apiKey.isNotEmpty) {
+    var apiKeySaved = false;
+    final apiKey = _apiKeyController.text.trim();
+    if (apiKey.isNotEmpty) {
+      try {
         await widget.apiKeyStore.saveKey(apiKey);
+        apiKeySaved = true;
         DebugConsole.log('[OpenAI] api key saved length=${apiKey.length}');
+      } catch (error) {
+        DebugConsole.log('[OpenAI] api key save failed error=$error');
+        if (mounted) {
+          setState(() {
+            _statusText = 'OpenAI kulcs mentése nem sikerült';
+            _saving = false;
+          });
+        }
+        return;
       }
+    }
+    try {
       final settings = _settings.copyWith(
         answerModel: _answerModelController.text.trim().isEmpty
             ? _settings.answerModel
@@ -100,12 +113,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _settings = settings;
         _statusText = 'Beállítások mentve';
       });
-    } catch (_) {
+    } catch (error) {
+      DebugConsole.log('[OpenAI] settings save failed error=$error');
       if (!mounted) {
         return;
       }
-      setState(() => _statusText = 'A mentés nem sikerült');
-      DebugConsole.log('[OpenAI] settings save failed');
+      setState(
+        () => _statusText = apiKeySaved
+            ? 'OpenAI kulcs mentve, a modellbeállítások mentése nem sikerült'
+            : 'A modellbeállítások mentése nem sikerült',
+      );
     } finally {
       if (mounted) {
         setState(() => _saving = false);

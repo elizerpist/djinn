@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'debug_console.dart';
 
 class DebugFloatingButton extends StatelessWidget {
-  const DebugFloatingButton({super.key});
+  const DebugFloatingButton({super.key, this.navigatorKey});
+
+  final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +21,7 @@ class DebugFloatingButton extends StatelessWidget {
           tooltip: 'Debug log',
           icon: const Icon(Icons.terminal, size: 18, color: Color(0xFF38BDF8)),
           onPressed: () => showDialog<void>(
-            context: context,
+            context: navigatorKey?.currentContext ?? context,
             builder: (_) => const DebugConsoleDialog(),
           ),
         ),

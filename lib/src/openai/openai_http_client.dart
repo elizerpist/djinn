@@ -216,7 +216,14 @@ class OpenAiHttpClient implements OpenAiClient {
       body: jsonEncode(body),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw OpenAiException('OpenAI request failed: ${response.statusCode}');
+      final detail = _openAiErrorMessage(response.body);
+      final suffix = detail == null ? '' : ': $detail';
+      if (response.statusCode == 429) {
+        throw OpenAiException('OpenAI quota/rate limit reached (429)$suffix');
+      }
+      throw OpenAiException(
+        'OpenAI request failed: ${response.statusCode}$suffix',
+      );
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, Object?>) {
@@ -231,6 +238,26 @@ class OpenAiHttpClient implements OpenAiClient {
       throw const OpenAiException('OpenAI API key is missing');
     }
     return {'Authorization': 'Bearer $key', 'Content-Type': 'application/json'};
+  }
+
+  String? _openAiErrorMessage(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is! Map) {
+        return null;
+      }
+      final error = decoded['error'];
+      if (error is! Map) {
+        return null;
+      }
+      final message = error['message'];
+      if (message is! String || message.trim().isEmpty) {
+        return null;
+      }
+      return message.trim();
+    } catch (_) {
+      return null;
+    }
   }
 
   Map<String, Object?> _decodeOutputJson(Map<String, Object?> response) {

@@ -66,6 +66,7 @@ class DjinnApp extends StatefulWidget {
 
 class _DjinnAppState extends State<DjinnApp> {
   late final Future<_AppDependencies> _dependencies = _loadDependencies();
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   ObjectBoxStore? _objectBoxStore;
 
   Future<_AppDependencies> _loadDependencies() async {
@@ -166,6 +167,7 @@ class _DjinnAppState extends State<DjinnApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navigatorKey,
       title: 'Djinn',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -175,6 +177,16 @@ class _DjinnAppState extends State<DjinnApp> {
         scaffoldBackgroundColor: const Color(0xFFF6F7F9),
         useMaterial3: true,
       ),
+      builder: (context, child) {
+        return Overlay(
+          initialEntries: [
+            OverlayEntry(builder: (_) => child ?? const SizedBox.shrink()),
+            OverlayEntry(
+              builder: (_) => DebugFloatingButton(navigatorKey: _navigatorKey),
+            ),
+          ],
+        );
+      },
       home: FutureBuilder<_AppDependencies>(
         future: _dependencies,
         builder: (context, snapshot) {
@@ -187,25 +199,19 @@ class _DjinnAppState extends State<DjinnApp> {
           if (dependencies == null) {
             return const Scaffold(body: Center(child: Text('Inditasi hiba')));
           }
-          return Stack(
-            children: [
-              MainScreen(
-                repository: dependencies.chatRepository,
-                chatService: dependencies.chatService,
-                knowledgeRepository: dependencies.knowledgeRepository,
-                pdfImportService: dependencies.pdfImportService,
-                refreshKnowledgeReadiness:
-                    dependencies.refreshKnowledgeReadiness,
-                apiKeyStore: dependencies.apiKeyStore,
-                loadSettings: dependencies.loadSettings,
-                saveSettings: dependencies.saveSettings,
-                testApiKey: dependencies.testApiKey,
-                processingService: dependencies.processingService,
-                flowchartValidationRepository:
-                    dependencies.flowchartValidationRepository,
-              ),
-              const DebugFloatingButton(),
-            ],
+          return MainScreen(
+            repository: dependencies.chatRepository,
+            chatService: dependencies.chatService,
+            knowledgeRepository: dependencies.knowledgeRepository,
+            pdfImportService: dependencies.pdfImportService,
+            refreshKnowledgeReadiness: dependencies.refreshKnowledgeReadiness,
+            apiKeyStore: dependencies.apiKeyStore,
+            loadSettings: dependencies.loadSettings,
+            saveSettings: dependencies.saveSettings,
+            testApiKey: dependencies.testApiKey,
+            processingService: dependencies.processingService,
+            flowchartValidationRepository:
+                dependencies.flowchartValidationRepository,
           );
         },
       ),

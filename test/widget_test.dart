@@ -169,6 +169,26 @@ void main() {
 
     expect(find.byKey(const ValueKey('debug-floating-button')), findsOneWidget);
   });
+
+  testWidgets('Djinn keeps the onscreen debug button on pushed routes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_testApp());
+    await _pumpUntilFound(tester, find.text('Djinn'));
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Beállítások'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OpenAI kapcsolat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('debug-floating-button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Debug Console'), findsOneWidget);
+  });
 }
 
 DjinnApp _testApp({
