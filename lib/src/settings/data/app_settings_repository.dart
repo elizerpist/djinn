@@ -74,12 +74,8 @@ class AppSettingsRepository {
       ),
       deleteOpenAiFilesAfterProcessing: entity.deleteOpenAiFilesAfterProcessing,
       groundednessCheckEnabled: entity.groundednessCheckEnabled,
-      retrievalLimit: entity.retrievalLimit == 0
-          ? defaults.retrievalLimit
-          : entity.retrievalLimit,
-      minimumSimilarity: entity.minimumSimilarity == 0
-          ? defaults.minimumSimilarity
-          : entity.minimumSimilarity,
+      retrievalLimit: entity.retrievalLimit,
+      minimumSimilarity: entity.minimumSimilarity,
       voiceMode: _fallback(entity.voiceMode, defaults.voiceMode),
       voiceLocale: _fallback(entity.voiceLocale, defaults.voiceLocale),
     );

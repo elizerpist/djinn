@@ -164,4 +164,31 @@ void main() {
     expect(loaded.voiceMode, 'hands_free');
     expect(loaded.voiceLocale, 'en-US');
   });
+
+  test('settings repository preserves zero numeric settings', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'djinn-settings-test-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final ObjectBoxStore objectBox;
+    try {
+      objectBox = await ObjectBoxStore.open(directory: directory);
+    } on ArgumentError catch (error) {
+      markTestSkipped('Host ObjectBox library unavailable: $error');
+      return;
+    }
+    addTearDown(objectBox.close);
+
+    final repository = AppSettingsRepository(store: objectBox.store);
+    final settings = AppSettings.defaults().copyWith(
+      retrievalLimit: 0,
+      minimumSimilarity: 0.0,
+    );
+
+    await repository.save(settings);
+    final loaded = await repository.load();
+
+    expect(loaded.retrievalLimit, 0);
+    expect(loaded.minimumSimilarity, 0.0);
+  });
 }
