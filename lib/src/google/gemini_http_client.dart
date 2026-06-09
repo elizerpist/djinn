@@ -303,7 +303,7 @@ class GeminiHttpClient implements AiClient {
   }
 
   AiFailure _mapGeminiStatus(int statusCode, String body) {
-    final detail = _geminiErrorMessage(body) ?? body;
+    final detail = _redactApiKey(_geminiErrorMessage(body) ?? body);
     final normalized = detail.toLowerCase();
     if (statusCode == 429 ||
         normalized.contains('quota') ||
@@ -349,6 +349,13 @@ class GeminiHttpClient implements AiClient {
     } catch (_) {
       return null;
     }
+  }
+
+  String _redactApiKey(String value) {
+    return value.replaceAllMapped(
+      RegExp(r'([?&]key=)[^&\s"<>]+'),
+      (match) => '${match.group(1)}<redacted>',
+    );
   }
 
   Map<String, Object?> _decodeStructuredText(Map<String, Object?> response) {

@@ -97,6 +97,32 @@ void main() {
     );
   });
 
+  test('redacts Gemini API keys from provider failure messages', () async {
+    final keyStore = MemoryApiKeyStore();
+    await keyStore.saveKeyForProvider(AiProvider.gemini, 'gemini-key');
+    final client = GeminiHttpClient(
+      apiKeyStore: keyStore,
+      httpClient: MockClient(
+        (_) async => http.Response(
+          'upstream echoed /v1beta/models/gemini-embedding-001:embedContent?key=gemini-key',
+          502,
+        ),
+      ),
+      baseUri: Uri.parse('https://gemini.test'),
+    );
+
+    await expectLater(
+      client.createEmbedding(input: 'abc', model: 'gemini-embedding-001'),
+      throwsA(
+        isA<AiProviderException>().having(
+          (error) => error.failure.message,
+          'message',
+          isNot(contains('gemini-key')),
+        ),
+      ),
+    );
+  });
+
   test(
     'maps invalid Gemini structured response to validation failure',
     () async {
