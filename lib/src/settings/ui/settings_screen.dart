@@ -28,7 +28,8 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _apiKeyController = TextEditingController();
-  final Map<AiProvider, int> _apiKeySaveVersions = {};
+  final Map<AiProvider, String> _pendingApiKeys = {};
+  final Set<AiProvider> _apiKeySaveRunning = {};
 
   AppSettings _settings = AppSettings.defaults();
   bool _loading = true;
@@ -97,19 +98,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (trimmed.isEmpty) {
       return;
     }
-    final version = (_apiKeySaveVersions[provider] ?? 0) + 1;
-    _apiKeySaveVersions[provider] = version;
+    _pendingApiKeys[provider] = trimmed;
+    if (_apiKeySaveRunning.contains(provider)) {
+      return;
+    }
+    _apiKeySaveRunning.add(provider);
+    await _drainProviderKeySaves(provider);
+  }
+
+  Future<void> _drainProviderKeySaves(AiProvider provider) async {
     try {
-      await widget.apiKeyStore.saveKeyForProvider(provider, trimmed);
-      if (_apiKeySaveVersions[provider] != version) {
-        final latest = _apiKeyController.text.trim();
-        if (latest.isNotEmpty) {
-          await widget.apiKeyStore.saveKeyForProvider(provider, latest);
+      String? saved;
+      while (true) {
+        final next = _pendingApiKeys[provider];
+        if (next == null || next == saved) {
+          break;
         }
+        await widget.apiKeyStore.saveKeyForProvider(provider, next);
+        saved = next;
+      }
+      final latest = saved;
+      if (latest == null) {
         return;
       }
       DebugConsole.log(
-        '${_providerLogPrefix(provider)} api key saved length=${trimmed.length}',
+        '${_providerLogPrefix(provider)} api key saved length=${latest.length}',
       );
       if (!mounted) {
         return;
@@ -125,6 +138,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(
         () => _statusText = '${provider.label} kulcs mentése nem sikerült',
       );
+    } finally {
+      _apiKeySaveRunning.remove(provider);
+      final pending = _pendingApiKeys[provider];
+      if (pending != null) {
+        final stored = await widget.apiKeyStore.readKeyForProvider(provider);
+        if (stored != pending) {
+          await _saveProviderKey(provider, pending);
+        }
+      }
     }
   }
 

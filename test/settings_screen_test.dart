@@ -185,7 +185,8 @@ void main() {
   ) async {
     final keyStore = _DelayedMemoryApiKeyStore({
       'sk-partial': const Duration(milliseconds: 30),
-      'sk-final': Duration.zero,
+      'sk-final': const Duration(milliseconds: 30),
+      'sk-newer': Duration.zero,
     });
     var settings = AppSettings.defaults();
 
@@ -210,9 +211,14 @@ void main() {
       find.byKey(const Key('openai-api-key-field')),
       'sk-final',
     );
-    await tester.pump(const Duration(milliseconds: 40));
+    await tester.pump(const Duration(milliseconds: 35));
+    await tester.enterText(
+      find.byKey(const Key('openai-api-key-field')),
+      'sk-newer',
+    );
+    await tester.pump(const Duration(milliseconds: 80));
 
-    expect(await keyStore.readKeyForProvider(AiProvider.openAi), 'sk-final');
+    expect(await keyStore.readKeyForProvider(AiProvider.openAi), 'sk-newer');
   });
 }
 
