@@ -3,6 +3,8 @@ import 'package:uuid/uuid.dart';
 import '../../../objectbox.g.dart';
 import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
+import '../models/chunk_package.dart';
+import 'chunk_package_service.dart';
 import 'document_processing_service.dart';
 
 abstract class KnowledgeRepository {
@@ -45,18 +47,29 @@ abstract class KnowledgeRepository {
     ChunkEmbeddingEntity embedding,
   );
 
+  Future<ChunkPackage> exportChunkPackage(String documentPublicId);
+
+  Future<void> importChunkPackage(
+    String documentPublicId,
+    ChunkPackage package,
+  );
+
   Future<bool> hasReadyDocuments();
 }
 
 class ObjectBoxKnowledgeRepository
     implements KnowledgeRepository, ProcessingRepository {
   ObjectBoxKnowledgeRepository({required Store store, Uuid? uuid})
-    : _documentBox = store.box<KnowledgeDocumentEntity>(),
+    : _store = store,
+      _documentBox = store.box<KnowledgeDocumentEntity>(),
       _folderBox = store.box<KnowledgeFolderEntity>(),
       _chunkBox = store.box<DocumentChunkEntity>(),
       _embeddingBox = store.box<ChunkEmbeddingEntity>(),
       _uuid = uuid ?? const Uuid();
 
+  static const _vectorEmbeddingDimension = 3072;
+
+  final Store _store;
   final Box<KnowledgeDocumentEntity> _documentBox;
   final Box<KnowledgeFolderEntity> _folderBox;
   final Box<DocumentChunkEntity> _chunkBox;
@@ -273,6 +286,99 @@ class ObjectBoxKnowledgeRepository
   }
 
   @override
+  Future<ChunkPackage> exportChunkPackage(String documentPublicId) async {
+    final document = _findDocument(documentPublicId);
+    if (document == null) {
+      throw StateError('knowledge document not found: $documentPublicId');
+    }
+    final chunks = _chunksForDocument(documentPublicId);
+    final embeddings = {
+      for (final embedding in _embeddingBox.getAll())
+        if (embedding.sourceType == EvidenceSourceType.textChunk.wireName)
+          embedding.sourceId: embedding,
+    };
+    final items = <ChunkPackageItem>[];
+    String? embeddingModel;
+    for (final chunk in chunks) {
+      final embedding = embeddings[chunk.publicId];
+      embeddingModel ??= embedding?.model;
+      items.add(
+        ChunkPackageItem(
+          id: _packageChunkId(documentPublicId, chunk.publicId),
+          text: chunk.text,
+          pageNumber: chunk.pageNumber,
+          sectionTitle: chunk.sectionTitle,
+          embedding: embedding?.vector ?? const [],
+        ),
+      );
+    }
+    final embeddingDimension = _firstEmbeddingDimension(items);
+    return ChunkPackage(
+      schemaVersion: 1,
+      documentHash: document.sha256 ?? '',
+      filename: document.filename,
+      provider: document.activeProvider ?? '',
+      extractionModel: document.activeModel ?? '',
+      embeddingModel: embeddingModel ?? '',
+      embeddingDimension: embeddingDimension,
+      chunks: items,
+    );
+  }
+
+  @override
+  Future<void> importChunkPackage(
+    String documentPublicId,
+    ChunkPackage package,
+  ) async {
+    final document = _findDocument(documentPublicId);
+    if (document == null) {
+      throw StateError('knowledge document not found: $documentPublicId');
+    }
+    const service = ChunkPackageService();
+    service.validateForImport(
+      package,
+      documentHash: document.sha256 ?? '',
+      expectedDimension: _vectorEmbeddingDimension,
+    );
+    _store.runInTransaction(TxMode.write, () {
+      _removeTextChunksForDocument(documentPublicId);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      for (final item in package.chunks) {
+        final sourceId = '$documentPublicId:${item.id}';
+        _chunkBox.put(
+          DocumentChunkEntity(
+            publicId: sourceId,
+            documentPublicId: documentPublicId,
+            text: item.text,
+            pageNumber: item.pageNumber,
+            sectionTitle: item.sectionTitle,
+          ),
+        );
+        _embeddingBox.put(
+          ChunkEmbeddingEntity(
+            sourceId: sourceId,
+            sourceType: EvidenceSourceType.textChunk.wireName,
+            vector: item.embedding,
+            model: package.embeddingModel,
+            createdAtMillis: now,
+          ),
+        );
+      }
+      document.processingState = ProcessingState.ready.wireName;
+      document.errorMessage = null;
+      document.activeProvider = package.provider.isEmpty
+          ? null
+          : package.provider;
+      document.activeModel = package.extractionModel.isEmpty
+          ? null
+          : package.extractionModel;
+      document.lastErrorCode = null;
+      document.retryable = false;
+      _documentBox.put(document);
+    });
+  }
+
+  @override
   Future<bool> hasReadyDocuments() async {
     final query = _documentBox
         .query(
@@ -297,6 +403,55 @@ class ObjectBoxKnowledgeRepository
     } finally {
       query.close();
     }
+  }
+
+  List<DocumentChunkEntity> _chunksForDocument(String documentPublicId) {
+    final query = _chunkBox
+        .query(DocumentChunkEntity_.documentPublicId.equals(documentPublicId))
+        .build();
+    try {
+      return query.find();
+    } finally {
+      query.close();
+    }
+  }
+
+  void _removeTextChunksForDocument(String documentPublicId) {
+    final chunks = _chunksForDocument(documentPublicId);
+    if (chunks.isEmpty) {
+      return;
+    }
+    final sourceIds = chunks.map((chunk) => chunk.publicId).toSet();
+    final embeddingIds = _embeddingBox
+        .getAll()
+        .where(
+          (embedding) =>
+              embedding.sourceType == EvidenceSourceType.textChunk.wireName &&
+              sourceIds.contains(embedding.sourceId),
+        )
+        .map((embedding) => embedding.id)
+        .toList(growable: false);
+    if (embeddingIds.isNotEmpty) {
+      _embeddingBox.removeMany(embeddingIds);
+    }
+    _chunkBox.removeMany(chunks.map((chunk) => chunk.id).toList());
+  }
+
+  String _packageChunkId(String documentPublicId, String publicId) {
+    final prefix = '$documentPublicId:';
+    if (publicId.startsWith(prefix)) {
+      return publicId.substring(prefix.length);
+    }
+    return publicId;
+  }
+
+  int _firstEmbeddingDimension(List<ChunkPackageItem> items) {
+    for (final item in items) {
+      if (item.embedding.isNotEmpty) {
+        return item.embedding.length;
+      }
+    }
+    return 0;
   }
 
   KnowledgeFolderEntity? _findFolder(String publicId) {
