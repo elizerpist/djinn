@@ -5,6 +5,7 @@ import '../data/document_processing_service.dart';
 import '../data/knowledge_document_repository.dart';
 import '../data/pdf_import_service.dart';
 import '../models/knowledge_document.dart';
+import '../models/knowledge_folder.dart';
 import 'knowledge_document_row.dart';
 import 'knowledge_header.dart';
 import 'pdf_viewer_screen.dart';
@@ -43,6 +44,7 @@ class KnowledgeBaseScreen extends StatefulWidget {
 
 class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   List<KnowledgeDocument> _documents = const [];
+  List<KnowledgeFolder> _folders = const [];
   Set<String> _selectedDocumentIds = {};
   bool _importing = false;
   String? _processingDocumentId;
@@ -55,11 +57,13 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
 
   Future<void> _loadDocuments() async {
     final documents = await widget.repository.listDocuments();
+    final folders = await widget.repository.listFolders();
     if (!mounted) {
       return;
     }
     setState(() {
       _documents = documents;
+      _folders = folders;
       final existingIds = documents.map((document) => document.id).toSet();
       _selectedDocumentIds = _selectedDocumentIds.intersection(existingIds);
     });
@@ -191,28 +195,97 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     }
   }
 
+  Future<void> _createFolder() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => const _CreateFolderDialog(),
+    );
+    final trimmed = name?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return;
+    }
+    await widget.repository.createFolder(trimmed);
+    await _loadDocuments();
+  }
+
+  Future<void> _moveSelectedDocuments() async {
+    final selectedIds = _selectedDocumentIds.toList(growable: false);
+    if (selectedIds.isEmpty) {
+      return;
+    }
+    await _showMoveDialog(selectedIds);
+  }
+
+  Future<void> _moveSingleDocument(KnowledgeDocument document) async {
+    await _showMoveDialog([document.id]);
+  }
+
+  Future<void> _showMoveDialog(List<String> documentIds) async {
+    final folders = await widget.repository.listFolders();
+    if (!mounted) {
+      return;
+    }
+    final folderId = await showModalBottomSheet<String?>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(title: Text('Mozgatás mappába'), dense: true),
+              ListTile(
+                key: const Key('move-folder-root'),
+                leading: const Icon(Icons.home_outlined),
+                title: const Text('Tudástár gyökér'),
+                onTap: () => Navigator.of(context).pop(''),
+              ),
+              for (final folder in folders)
+                ListTile(
+                  key: Key('move-folder-${folder.id}'),
+                  leading: const Icon(Icons.folder),
+                  title: Text(folder.name),
+                  onTap: () => Navigator.of(context).pop(folder.id),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted || folderId == null) {
+      return;
+    }
+    await widget.repository.moveDocumentsToFolder(
+      documentIds,
+      folderId.isEmpty ? null : folderId,
+    );
+    _exitSelection();
+    await _loadDocuments();
+  }
+
   Future<void> _showGeneralMenu() async {
     final selected = await showMenu<String>(
       context: context,
       position: const RelativeRect.fromLTRB(1000, kToolbarHeight, 12, 0),
-      items: const [
-        PopupMenuItem(value: 'select_all', child: Text('Összes kijelölése')),
-        PopupMenuItem<String>(
-          enabled: false,
-          value: 'sort',
-          child: Text('Rendezés'),
+      items: [
+        const PopupMenuItem(
+          value: 'select_all',
+          child: Text('Összes kijelölése'),
         ),
         PopupMenuItem<String>(
-          enabled: false,
+          enabled: _documents.length > 1,
+          value: 'sort',
+          child: const Text('Rendezés'),
+        ),
+        const PopupMenuItem<String>(
           value: 'new_folder',
           child: Text('Új mappa'),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           enabled: false,
           value: 'import_chunks',
           child: Text('Chunk csomag import'),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           enabled: false,
           value: 'export_knowledge',
           child: Text('Tudástár export'),
@@ -228,46 +301,53 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
             .map((document) => document.id)
             .toSet(),
       );
+    } else if (selected == 'new_folder') {
+      await _createFolder();
     }
   }
 
   Future<void> _showSelectionMenu() async {
-    await showMenu<String>(
+    final selected = await showMenu<String>(
       context: context,
       position: const RelativeRect.fromLTRB(1000, kToolbarHeight, 12, 0),
-      items: const [
-        PopupMenuItem<String>(
+      items: [
+        const PopupMenuItem<String>(
           enabled: false,
           value: 'rag_on',
           child: Text('RAG bekapcsolása'),
         ),
-        PopupMenuItem<String>(
-          enabled: false,
+        const PopupMenuItem<String>(
           value: 'move',
           child: Text('Mozgatás mappába'),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           enabled: false,
           value: 'export_chunks',
           child: Text('Chunk csomag export'),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           enabled: false,
           value: 'refresh_embeddings',
           child: Text('Embedding frissítés'),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           enabled: false,
           value: 'flowchart_review',
           child: Text('Flowchart validálásra'),
         ),
-        PopupMenuItem(
+        const PopupMenuItem(
           enabled: false,
           value: 'offline_index',
           child: Text('Offline index frissítés'),
         ),
       ],
     );
+    if (!mounted) {
+      return;
+    }
+    if (selected == 'move') {
+      await _moveSelectedDocuments();
+    }
   }
 
   Future<void> _showDocumentMenu(KnowledgeDocument document) async {
@@ -282,7 +362,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
           child: const Text('Szinkronizálás'),
         ),
         const PopupMenuItem<String>(
-          enabled: false,
           value: 'move',
           child: Text('Mozgatás mappába'),
         ),
@@ -298,6 +377,8 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     }
     if (selected == 'sync' && _canProcessManually(document.status)) {
       await _processDocument(document.id);
+    } else if (selected == 'move') {
+      await _moveSingleDocument(document);
     }
   }
 
@@ -333,7 +414,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
             ),
           ),
           Expanded(
-            child: _documents.isEmpty
+            child: _documents.isEmpty && _folders.isEmpty
                 ? const Center(
                     child: Text(
                       'Nincs importált PDF',
@@ -342,10 +423,15 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                    itemCount: _documents.length,
+                    itemCount: _folders.length + _documents.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
-                      final document = _documents[index];
+                      if (index < _folders.length) {
+                        final folder = _folders[index];
+                        return _KnowledgeFolderRow(folder: folder);
+                      }
+                      final documentIndex = index - _folders.length;
+                      final document = _documents[documentIndex];
                       final selected = _selectedDocumentIds.contains(
                         document.id,
                       );
@@ -390,5 +476,84 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   bool _isUnsynced(KnowledgeDocumentStatus status) {
     return status == KnowledgeDocumentStatus.imported ||
         status == KnowledgeDocumentStatus.pendingIngest;
+  }
+}
+
+class _CreateFolderDialog extends StatefulWidget {
+  const _CreateFolderDialog();
+
+  @override
+  State<_CreateFolderDialog> createState() => _CreateFolderDialogState();
+}
+
+class _CreateFolderDialogState extends State<_CreateFolderDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Új mappa'),
+      content: TextField(
+        key: const Key('folder-name-field'),
+        controller: _controller,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        decoration: const InputDecoration(
+          labelText: 'Mappa neve',
+          border: OutlineInputBorder(),
+        ),
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Mégse'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('Létrehozás'),
+        ),
+      ],
+    );
+  }
+}
+
+class _KnowledgeFolderRow extends StatelessWidget {
+  const _KnowledgeFolderRow({required this.folder});
+
+  final KnowledgeFolder folder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(Icons.folder, color: Color(0xFF155EEF)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                folder.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF111827),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

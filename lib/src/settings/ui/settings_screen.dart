@@ -30,6 +30,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _apiKeyController = TextEditingController();
   final Map<AiProvider, String> _pendingApiKeys = {};
   final Set<AiProvider> _apiKeySaveRunning = {};
+  AppSettings? _pendingSettings;
+  bool _settingsSaveRunning = false;
 
   AppSettings _settings = AppSettings.defaults();
   bool _loading = true;
@@ -80,16 +82,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) {
       setState(() => _settings = settings);
     }
+    _pendingSettings = settings;
+    if (_settingsSaveRunning) {
+      return;
+    }
+    _settingsSaveRunning = true;
+    await _drainSettingsSaves();
+  }
+
+  Future<void> _drainSettingsSaves() async {
     try {
-      await widget.saveSettings(settings);
+      while (true) {
+        final next = _pendingSettings;
+        if (next == null) {
+          break;
+        }
+        _pendingSettings = null;
+        await widget.saveSettings(next);
+        DebugConsole.log(
+          '${_providerLogPrefix(next.activeProvider)} settings saved '
+          'provider=${next.activeProvider.wireName} voiceMode=${next.voiceMode}',
+        );
+      }
     } catch (error) {
       DebugConsole.log(
-        '${_providerLogPrefix(settings.activeProvider)} settings save failed error=$error',
+        '${_providerLogPrefix(_settings.activeProvider)} settings save failed error=$error',
       );
       if (!mounted) {
         return;
       }
       setState(() => _statusText = 'A beállítások mentése nem sikerült');
+    } finally {
+      _settingsSaveRunning = false;
+      if (_pendingSettings != null) {
+        _settingsSaveRunning = true;
+        await _drainSettingsSaves();
+      }
     }
   }
 
@@ -344,12 +372,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _Section(
                     title: 'Beszéd',
                     children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.mic),
-                        title: const Text('Hangvezérlés'),
-                        subtitle: Text(_voiceModeLabel(_settings.voiceMode)),
+                      Row(
+                        children: [
+                          const Icon(Icons.mic),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              'Hangvezérlés',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 8),
+                      SegmentedButton<String>(
+                        key: const Key('voice-mode-selector'),
+                        segments: const [
+                          ButtonSegment(
+                            value: 'push_to_talk',
+                            label: Text('Push-to-talk'),
+                          ),
+                          ButtonSegment(
+                            value: 'conversation',
+                            label: Text('Párbeszéd'),
+                          ),
+                        ],
+                        selected: {_normalizedVoiceMode(_settings.voiceMode)},
+                        onSelectionChanged: (selection) {
+                          _autoSave(
+                            _settings.copyWith(voiceMode: selection.single),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 8),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.record_voice_over),
@@ -410,12 +465,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return provider == AiProvider.openAi ? '[OpenAI]' : '[Google]';
   }
 
-  String _voiceModeLabel(String value) {
-    return switch (value) {
-      'conversation' => 'Párbeszéd',
-      'push_to_talk' => 'Push-to-talk',
-      _ => value,
-    };
+  String _normalizedVoiceMode(String value) {
+    return value == 'conversation' ? 'conversation' : 'push_to_talk';
   }
 }
 

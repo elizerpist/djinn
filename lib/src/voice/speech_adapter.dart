@@ -93,8 +93,8 @@ class PluginSpeechRecognitionEngine implements SpeechRecognitionEngine {
         partialResults: true,
         cancelOnError: true,
         listenMode: speech_to_text.ListenMode.dictation,
-        pauseFor: const Duration(seconds: 4),
-        listenFor: const Duration(minutes: 1),
+        pauseFor: const Duration(seconds: 8),
+        listenFor: const Duration(minutes: 2),
       ),
     );
   }

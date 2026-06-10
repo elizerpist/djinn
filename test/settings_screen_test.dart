@@ -43,6 +43,40 @@ void main() {
     expect(find.text('Haladó modellbeállítások'), findsNothing);
   });
 
+  testWidgets('voice mode selector autosaves conversation mode', (
+    tester,
+  ) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Push-to-talk'), findsOneWidget);
+    expect(find.text('Párbeszéd'), findsOneWidget);
+
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -260),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Párbeszéd'));
+    await tester.pumpAndSettle();
+
+    expect(settings.voiceMode, 'conversation');
+  });
+
   testWidgets('provider pill changes API key field and autosaves', (
     tester,
   ) async {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../knowledge/models/knowledge_document.dart';
+import '../../settings/models/app_settings.dart';
 import '../../voice/speech_adapter.dart';
 import '../../voice/tts_adapter.dart';
 import '../../voice/voice_controller.dart';
@@ -21,6 +22,7 @@ class ChatScreen extends StatefulWidget {
     required this.refreshKnowledgeReadiness,
     required this.conversation,
     this.voiceController,
+    this.loadSettings,
   });
 
   final LocalChatRepository repository;
@@ -28,6 +30,7 @@ class ChatScreen extends StatefulWidget {
   final Future<KnowledgeBaseState> Function() refreshKnowledgeReadiness;
   final ChatConversation conversation;
   final VoiceController? voiceController;
+  final Future<AppSettings> Function()? loadSettings;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -40,9 +43,10 @@ class _ChatScreenState extends State<ChatScreen> {
   );
   bool _sending = false;
   bool _voiceReplyEnabled = false;
+  String _voiceMode = 'push_to_talk';
+  String _voiceLocale = 'hu-HU';
   late final VoiceController _voiceController;
   late final bool _ownsVoiceController;
-  static const _voiceLocale = 'hu-HU';
 
   @override
   void initState() {
@@ -58,6 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
         );
     _loadMessages();
     _loadKnowledgeState();
+    _loadVoiceSettings();
   }
 
   @override
@@ -88,6 +93,22 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _knowledgeState = state);
   }
 
+  Future<void> _loadVoiceSettings() async {
+    final loader = widget.loadSettings;
+    if (loader == null) {
+      return;
+    }
+    final settings = await loader();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _voiceMode = settings.voiceMode;
+      _voiceLocale = settings.voiceLocale;
+      _voiceReplyEnabled = settings.voiceMode == 'conversation';
+    });
+  }
+
   Future<void> _send(String text, {bool speakResponse = false}) async {
     if (!mounted) {
       return;
@@ -107,10 +128,19 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     if (mounted && assistantMessage != null) {
-      unawaited(
-        _voiceController.speak(assistantMessage.text, locale: _voiceLocale),
-      );
+      unawaited(_speakAssistant(assistantMessage.text));
     }
+  }
+
+  Future<void> _speakAssistant(String text) async {
+    await _voiceController.speak(text, locale: _voiceLocale);
+    if (!mounted ||
+        _voiceMode != 'conversation' ||
+        !_voiceReplyEnabled ||
+        _voiceController.state != VoiceState.idle) {
+      return;
+    }
+    unawaited(_voiceController.listenOnce(locale: _voiceLocale));
   }
 
   ChatMessage? _lastAssistantMessage(List<ChatMessage> messages) {

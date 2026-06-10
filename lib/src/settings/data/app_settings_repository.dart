@@ -16,15 +16,30 @@ class AppSettingsRepository {
     if (items.isEmpty) {
       return AppSettings.defaults();
     }
-    return _fromEntity(items.first);
+    return _fromEntity(_canonicalEntity(items));
   }
 
   Future<AppSettings> save(AppSettings settings) async {
     final items = _box.getAll();
-    final entity = items.isEmpty ? _toEntity(settings) : _toEntity(settings)
-      ..id = items.first.id;
-    _box.put(entity);
+    final entity = _toEntity(settings);
+    if (items.isNotEmpty) {
+      entity.id = _canonicalEntity(items).id;
+    }
+    final savedId = _box.put(entity);
+    final duplicateIds = items
+        .map((item) => item.id)
+        .where((id) => id != savedId)
+        .toList(growable: false);
+    if (duplicateIds.isNotEmpty) {
+      _box.removeMany(duplicateIds);
+    }
     return settings;
+  }
+
+  AppSettingsEntity _canonicalEntity(List<AppSettingsEntity> items) {
+    return items.reduce(
+      (current, next) => next.id > current.id ? next : current,
+    );
   }
 
   AppSettings _fromEntity(AppSettingsEntity entity) {

@@ -8,6 +8,7 @@ import 'package:djinn/src/chat/data/local_answer_service.dart';
 import 'package:djinn/src/chat/data/local_chat_repository.dart';
 import 'package:djinn/src/chat/ui/chat_screen.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
+import 'package:djinn/src/settings/models/app_settings.dart';
 import 'package:djinn/src/voice/speech_adapter.dart';
 import 'package:djinn/src/voice/tts_adapter.dart';
 import 'package:djinn/src/voice/voice_controller.dart';
@@ -105,6 +106,51 @@ void main() {
       expect(tts.started, isTrue);
     },
   );
+
+  testWidgets('conversation voice settings enable reply and saved locale', (
+    tester,
+  ) async {
+    final repository = LocalChatRepository(
+      clock: () => DateTime.utc(2026, 1, 1, 12),
+    );
+    final conversation = await repository.createConversation();
+    final speech = _RecordingSpeechAdapter();
+    final voiceController = VoiceController(
+      speech: speech,
+      tts: FakeTtsAdapter(),
+      onFinalTranscript: (_) async {},
+    );
+    addTearDown(voiceController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatScreen(
+          repository: repository,
+          chatService: ChatService(
+            repository: repository,
+            answerService: const _FakeAnswerService(),
+          ),
+          refreshKnowledgeReadiness: () async =>
+              KnowledgeBaseState.fromDocuments(const []),
+          conversation: conversation,
+          voiceController: voiceController,
+          loadSettings: () async => AppSettings.defaults().copyWith(
+            voiceMode: 'conversation',
+            voiceLocale: 'en-US',
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.volume_up), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('voice-listen')));
+    await tester.pumpAndSettle();
+
+    expect(speech.locales, ['en-US']);
+  });
 }
 
 class _FakeAnswerService implements AnswerService {
@@ -141,4 +187,17 @@ class _BlockingTtsAdapter extends FakeTtsAdapter {
       _completion.complete();
     }
   }
+}
+
+class _RecordingSpeechAdapter implements SpeechAdapter {
+  final List<String> locales = [];
+
+  @override
+  Stream<SpeechEvent> listen({required String locale}) {
+    locales.add(locale);
+    return Stream<SpeechEvent>.fromIterable(const []);
+  }
+
+  @override
+  Future<void> stop() async {}
 }

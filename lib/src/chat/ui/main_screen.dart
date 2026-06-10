@@ -117,6 +117,7 @@ class _MainScreenState extends State<MainScreen> {
           chatService: widget.chatService,
           refreshKnowledgeReadiness: widget.refreshKnowledgeReadiness,
           conversation: conversation,
+          loadSettings: widget.loadSettings,
         ),
       ),
     );
@@ -131,6 +132,7 @@ class _MainScreenState extends State<MainScreen> {
           chatService: widget.chatService,
           refreshKnowledgeReadiness: widget.refreshKnowledgeReadiness,
           conversation: conversation,
+          loadSettings: widget.loadSettings,
         ),
       ),
     );

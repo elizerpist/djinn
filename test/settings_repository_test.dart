@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/src/ai/ai_provider.dart';
+import 'package:djinn/src/local_store/entities.dart';
 import 'package:djinn/src/local_store/objectbox_store.dart';
 import 'package:djinn/src/settings/data/api_key_store.dart';
 import 'package:djinn/src/settings/data/app_settings_repository.dart';
@@ -172,6 +173,44 @@ void main() {
     expect(loaded.voiceLocale, 'en-US');
   });
 
+  test('settings repository consolidates duplicate settings rows', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'djinn-settings-test-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final ObjectBoxStore objectBox;
+    try {
+      objectBox = await ObjectBoxStore.open(directory: directory);
+    } on ArgumentError catch (error) {
+      markTestSkipped('Host ObjectBox library unavailable: $error');
+      return;
+    }
+    addTearDown(objectBox.close);
+
+    final box = objectBox.store.box<AppSettingsEntity>();
+    box.put(_settingsEntity(AppSettings.defaults()));
+    box.put(
+      _settingsEntity(
+        AppSettings.defaults().copyWith(
+          activeProvider: AiProvider.openAi,
+          voiceMode: 'push_to_talk',
+        ),
+      ),
+    );
+    final repository = AppSettingsRepository(store: objectBox.store);
+    final geminiSettings = AppSettings.defaults().copyWith(
+      activeProvider: AiProvider.gemini,
+      voiceMode: 'conversation',
+    );
+
+    await repository.save(geminiSettings);
+    final loaded = await repository.load();
+
+    expect(box.getAll(), hasLength(1));
+    expect(loaded.activeProvider, AiProvider.gemini);
+    expect(loaded.voiceMode, 'conversation');
+  });
+
   test('settings repository preserves zero numeric settings', () async {
     final directory = await Directory.systemTemp.createTemp(
       'djinn-settings-test-',
@@ -198,4 +237,30 @@ void main() {
     expect(loaded.retrievalLimit, 0);
     expect(loaded.minimumSimilarity, 0.0);
   });
+}
+
+AppSettingsEntity _settingsEntity(AppSettings settings) {
+  return AppSettingsEntity(
+    runtimeMode: settings.runtimeMode,
+    activeProvider: settings.activeProvider.wireName,
+    openAiAnswerModel: settings.openAiAnswerModel,
+    openAiExtractionModel: settings.openAiExtractionModel,
+    openAiGroundednessModel: settings.openAiGroundednessModel,
+    openAiEmbeddingModel: settings.openAiEmbeddingModel,
+    geminiAnswerModel: settings.geminiAnswerModel,
+    geminiExtractionModel: settings.geminiExtractionModel,
+    geminiGroundednessModel: settings.geminiGroundednessModel,
+    geminiEmbeddingModel: settings.geminiEmbeddingModel,
+    answerModel: settings.openAiAnswerModel,
+    extractionModel: settings.openAiExtractionModel,
+    groundednessModel: settings.openAiGroundednessModel,
+    embeddingModel: settings.openAiEmbeddingModel,
+    deleteOpenAiFilesAfterProcessing: settings.deleteOpenAiFilesAfterProcessing,
+    groundednessCheckEnabled: settings.groundednessCheckEnabled,
+    offlineFallbackEnabled: settings.offlineFallbackEnabled,
+    retrievalLimit: settings.retrievalLimit,
+    minimumSimilarity: settings.minimumSimilarity,
+    voiceMode: settings.voiceMode,
+    voiceLocale: settings.voiceLocale,
+  );
 }

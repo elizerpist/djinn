@@ -244,6 +244,73 @@ void main() {
     expect(find.text('Rendezés'), findsOneWidget);
   });
 
+  testWidgets('general menu creates a new folder and shows it', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('Nincs importált PDF'));
+
+    await tester.tap(find.byKey(const Key('knowledge-general-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Új mappa'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('folder-name-field')),
+      'Eljárásrendek',
+    );
+    await tester.tap(find.text('Létrehozás'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Eljárásrendek'), findsOneWidget);
+    expect((await repository.listFolders()).single.name, 'Eljárásrendek');
+  });
+
+  testWidgets('selection menu moves selected PDFs into a folder', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final folder = await repository.createFolder('Eljárásrendek');
+    final document = await repository.addDocument(
+      filename: 'move-me.pdf',
+      localPath: '/memory/move-me.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'move-me',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('move-me.pdf'));
+
+    await tester.longPress(find.text('move-me.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mozgatás mappába'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('move-folder-${folder.id}')));
+    await tester.pumpAndSettle();
+
+    final documents = await repository.listDocuments();
+    expect(
+      documents.singleWhere((item) => item.id == document.id).folderId,
+      folder.id,
+    );
+  });
+
   testWidgets('batch sync skips already ready PDFs', (tester) async {
     final repository = KnowledgeDocumentRepository();
     final ready = await repository.addDocument(
