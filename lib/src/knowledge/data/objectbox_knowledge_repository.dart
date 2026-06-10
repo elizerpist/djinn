@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:uuid/uuid.dart';
 
 import '../../../objectbox.g.dart';
+import '../../ai/ai_client.dart';
 import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
 import '../models/chunk_package.dart';
@@ -69,15 +70,26 @@ class ObjectBoxKnowledgeRepository
       _folderBox = store.box<KnowledgeFolderEntity>(),
       _chunkBox = store.box<DocumentChunkEntity>(),
       _embeddingBox = store.box<ChunkEmbeddingEntity>(),
+      _flowchartBox = store.box<FlowchartEntity>(),
+      _flowchartNodeBox = store.box<FlowchartNodeEntity>(),
+      _flowchartEdgeBox = store.box<FlowchartEdgeEntity>(),
       _uuid = uuid ?? const Uuid();
 
   static const _vectorEmbeddingDimension = 3072;
+  static const _generatedEmbeddingSourceTypes = {
+    'text_chunk',
+    'table_chunk',
+    'score_chunk',
+  };
 
   final Store _store;
   final Box<KnowledgeDocumentEntity> _documentBox;
   final Box<KnowledgeFolderEntity> _folderBox;
   final Box<DocumentChunkEntity> _chunkBox;
   final Box<ChunkEmbeddingEntity> _embeddingBox;
+  final Box<FlowchartEntity> _flowchartBox;
+  final Box<FlowchartNodeEntity> _flowchartNodeBox;
+  final Box<FlowchartEdgeEntity> _flowchartEdgeBox;
   final Uuid _uuid;
 
   @override
@@ -198,7 +210,7 @@ class ObjectBoxKnowledgeRepository
         .toList(growable: false);
     _store.runInTransaction(TxMode.write, () {
       for (final document in documents) {
-        _removeTextChunksForDocument(document.publicId);
+        _clearGeneratedKnowledgeForDocument(document.publicId);
         _documentBox.remove(document.id);
       }
     });
@@ -277,24 +289,94 @@ class ObjectBoxKnowledgeRepository
     required OpenAiExtractedChunk chunk,
     required List<double> embedding,
     required String embeddingModel,
+  }) {
+    return saveExtractedEvidence(
+      documentPublicId: documentPublicId,
+      evidence: AiExtractedEvidence(
+        id: chunk.id,
+        text: chunk.text,
+        pageNumber: chunk.pageNumber,
+        sectionTitle: chunk.sectionTitle,
+        sourceType: AiEvidenceSourceType.textChunk,
+      ),
+      embedding: embedding,
+      embeddingModel: embeddingModel,
+    );
+  }
+
+  @override
+  Future<void> clearGeneratedKnowledge(String documentPublicId) async {
+    _store.runInTransaction(TxMode.write, () {
+      _clearGeneratedKnowledgeForDocument(documentPublicId);
+    });
+  }
+
+  @override
+  Future<void> saveExtractedEvidence({
+    required String documentPublicId,
+    required AiExtractedEvidence evidence,
+    required List<double> embedding,
+    required String embeddingModel,
   }) async {
-    final sourceId = '$documentPublicId:${chunk.id}';
+    final sourceId = '$documentPublicId:${evidence.id}';
     await saveChunk(
       DocumentChunkEntity(
         publicId: sourceId,
         documentPublicId: documentPublicId,
-        text: chunk.text,
-        pageNumber: chunk.pageNumber,
-        sectionTitle: chunk.sectionTitle,
+        text: evidence.text,
+        pageNumber: evidence.pageNumber,
+        sectionTitle: evidence.sectionTitle,
       ),
       ChunkEmbeddingEntity(
         sourceId: sourceId,
-        sourceType: EvidenceSourceType.textChunk.wireName,
+        sourceType: _evidenceSourceTypeWireName(evidence.sourceType),
         vector: embedding,
         model: embeddingModel,
         createdAtMillis: DateTime.now().millisecondsSinceEpoch,
       ),
     );
+  }
+
+  @override
+  Future<void> saveFlowchartCandidate({
+    required String documentPublicId,
+    required AiFlowchartCandidate flowchart,
+  }) async {
+    final flowchartPublicId = '$documentPublicId:${flowchart.id}';
+    _store.runInTransaction(TxMode.write, () {
+      _removeFlowchart(flowchartPublicId);
+      _flowchartBox.put(
+        FlowchartEntity(
+          publicId: flowchartPublicId,
+          documentPublicId: documentPublicId,
+          pageNumber: flowchart.pageNumber,
+          validationState: ValidationState.unreviewed.wireName,
+          extractionConfidence: flowchart.confidence,
+        ),
+      );
+      for (final node in flowchart.nodes) {
+        _flowchartNodeBox.put(
+          FlowchartNodeEntity(
+            publicId: '$flowchartPublicId:${node.id}',
+            flowchartPublicId: flowchartPublicId,
+            label: node.label,
+            validationState: ValidationState.unreviewed.wireName,
+          ),
+        );
+      }
+      for (final edge in flowchart.edges) {
+        _flowchartEdgeBox.put(
+          FlowchartEdgeEntity(
+            publicId: '$flowchartPublicId:${edge.id}',
+            flowchartPublicId: flowchartPublicId,
+            fromNodePublicId: '$flowchartPublicId:${edge.fromNodeId}',
+            toNodePublicId: '$flowchartPublicId:${edge.toNodeId}',
+            label: edge.label,
+            validationState: ValidationState.unreviewed.wireName,
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -315,7 +397,7 @@ class ObjectBoxKnowledgeRepository
     final chunks = _chunksForDocument(documentPublicId);
     final embeddings = {
       for (final embedding in _embeddingBox.getAll())
-        if (embedding.sourceType == EvidenceSourceType.textChunk.wireName)
+        if (_generatedEmbeddingSourceTypes.contains(embedding.sourceType))
           embedding.sourceId: embedding,
     };
     final items = <ChunkPackageItem>[];
@@ -362,7 +444,7 @@ class ObjectBoxKnowledgeRepository
       expectedDimension: _vectorEmbeddingDimension,
     );
     _store.runInTransaction(TxMode.write, () {
-      _removeTextChunksForDocument(documentPublicId);
+      _clearGeneratedKnowledgeForDocument(documentPublicId);
       final now = DateTime.now().millisecondsSinceEpoch;
       for (final item in package.chunks) {
         final sourceId = '$documentPublicId:${item.id}';
@@ -437,17 +519,14 @@ class ObjectBoxKnowledgeRepository
     }
   }
 
-  void _removeTextChunksForDocument(String documentPublicId) {
+  void _clearGeneratedKnowledgeForDocument(String documentPublicId) {
     final chunks = _chunksForDocument(documentPublicId);
-    if (chunks.isEmpty) {
-      return;
-    }
     final sourceIds = chunks.map((chunk) => chunk.publicId).toSet();
     final embeddingIds = _embeddingBox
         .getAll()
         .where(
           (embedding) =>
-              embedding.sourceType == EvidenceSourceType.textChunk.wireName &&
+              _generatedEmbeddingSourceTypes.contains(embedding.sourceType) &&
               sourceIds.contains(embedding.sourceId),
         )
         .map((embedding) => embedding.id)
@@ -455,7 +534,78 @@ class ObjectBoxKnowledgeRepository
     if (embeddingIds.isNotEmpty) {
       _embeddingBox.removeMany(embeddingIds);
     }
-    _chunkBox.removeMany(chunks.map((chunk) => chunk.id).toList());
+    if (chunks.isNotEmpty) {
+      _chunkBox.removeMany(chunks.map((chunk) => chunk.id).toList());
+    }
+
+    final flowcharts = _flowchartsForDocument(documentPublicId);
+    for (final flowchart in flowcharts) {
+      _removeFlowchart(flowchart.publicId);
+    }
+  }
+
+  List<FlowchartEntity> _flowchartsForDocument(String documentPublicId) {
+    final query = _flowchartBox
+        .query(FlowchartEntity_.documentPublicId.equals(documentPublicId))
+        .build();
+    try {
+      return query.find();
+    } finally {
+      query.close();
+    }
+  }
+
+  void _removeFlowchart(String flowchartPublicId) {
+    final nodes = _flowchartNodeBox
+        .getAll()
+        .where((node) => node.flowchartPublicId == flowchartPublicId)
+        .toList(growable: false);
+    final edges = _flowchartEdgeBox
+        .getAll()
+        .where((edge) => edge.flowchartPublicId == flowchartPublicId)
+        .toList(growable: false);
+    final flowcharts = _flowchartBox
+        .getAll()
+        .where((flowchart) => flowchart.publicId == flowchartPublicId)
+        .toList(growable: false);
+    final flowchartSourceIds = {
+      ...nodes.map((node) => node.publicId),
+      ...edges.map((edge) => edge.publicId),
+    };
+    final embeddingIds = _embeddingBox
+        .getAll()
+        .where(
+          (embedding) =>
+              flowchartSourceIds.contains(embedding.sourceId) &&
+              (embedding.sourceType ==
+                      EvidenceSourceType.flowchartNode.wireName ||
+                  embedding.sourceType ==
+                      EvidenceSourceType.flowchartEdge.wireName),
+        )
+        .map((embedding) => embedding.id)
+        .toList(growable: false);
+    if (embeddingIds.isNotEmpty) {
+      _embeddingBox.removeMany(embeddingIds);
+    }
+    if (nodes.isNotEmpty) {
+      _flowchartNodeBox.removeMany(nodes.map((node) => node.id).toList());
+    }
+    if (edges.isNotEmpty) {
+      _flowchartEdgeBox.removeMany(edges.map((edge) => edge.id).toList());
+    }
+    if (flowcharts.isNotEmpty) {
+      _flowchartBox.removeMany(
+        flowcharts.map((flowchart) => flowchart.id).toList(),
+      );
+    }
+  }
+
+  String _evidenceSourceTypeWireName(AiEvidenceSourceType sourceType) {
+    return switch (sourceType) {
+      AiEvidenceSourceType.textChunk => EvidenceSourceType.textChunk.wireName,
+      AiEvidenceSourceType.table => EvidenceSourceType.tableChunk.wireName,
+      AiEvidenceSourceType.score => EvidenceSourceType.scoreChunk.wireName,
+    };
   }
 
   String _packageChunkId(String documentPublicId, String publicId) {

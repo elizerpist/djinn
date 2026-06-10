@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/src/core/storage/json_file_store.dart';
+import 'package:djinn/src/ai/ai_client.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
 import 'package:djinn/src/openai/openai_client.dart';
@@ -262,4 +263,36 @@ void main() {
       );
     },
   );
+
+  test('clearGeneratedKnowledge removes chunks before re-sync', () async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'stroke.pdf',
+      localPath: '/memory/stroke.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'hash',
+    );
+    await repository.saveExtractedEvidence(
+      documentPublicId: document.id,
+      evidence: const AiExtractedEvidence(
+        id: 'rave-row-1',
+        text: 'RAVE score: arcpanasz 1 pont',
+        pageNumber: 2,
+        sectionTitle: 'RAVE',
+        sourceType: AiEvidenceSourceType.score,
+      ),
+      embedding: List<double>.filled(3072, 0.1),
+      embeddingModel: 'gemini-embedding-001',
+    );
+
+    expect(
+      (await repository.exportChunkPackage(document.id)).chunks,
+      hasLength(1),
+    );
+
+    await repository.clearGeneratedKnowledge(document.id);
+
+    expect((await repository.exportChunkPackage(document.id)).chunks, isEmpty);
+  });
 }

@@ -29,6 +29,8 @@ enum ValidationState {
 
 enum EvidenceSourceType {
   textChunk('text_chunk'),
+  tableChunk('table_chunk'),
+  scoreChunk('score_chunk'),
   flowchartNode('flowchart_node'),
   flowchartEdge('flowchart_edge');
 

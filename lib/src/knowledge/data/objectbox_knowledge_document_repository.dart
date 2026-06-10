@@ -1,3 +1,4 @@
+import '../../ai/ai_client.dart';
 import '../../local_store/entities.dart' as local;
 import '../../openai/openai_client.dart';
 import '../models/chunk_package.dart';
@@ -154,6 +155,37 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
       chunk: chunk,
       embedding: embedding,
       embeddingModel: embeddingModel,
+    );
+  }
+
+  @override
+  Future<void> clearGeneratedKnowledge(String documentPublicId) {
+    return _repository.clearGeneratedKnowledge(documentPublicId);
+  }
+
+  @override
+  Future<void> saveExtractedEvidence({
+    required String documentPublicId,
+    required AiExtractedEvidence evidence,
+    required List<double> embedding,
+    required String embeddingModel,
+  }) {
+    return _repository.saveExtractedEvidence(
+      documentPublicId: documentPublicId,
+      evidence: evidence,
+      embedding: embedding,
+      embeddingModel: embeddingModel,
+    );
+  }
+
+  @override
+  Future<void> saveFlowchartCandidate({
+    required String documentPublicId,
+    required AiFlowchartCandidate flowchart,
+  }) {
+    return _repository.saveFlowchartCandidate(
+      documentPublicId: documentPublicId,
+      flowchart: flowchart,
     );
   }
 

@@ -1028,7 +1028,10 @@ class _RecordingProcessingService extends DocumentProcessingService {
   final processedIds = <String>[];
 
   @override
-  Future<ProcessingResult> processDocument(String documentPublicId) async {
+  Future<ProcessingResult> processDocument(
+    String documentPublicId, {
+    bool forceReprocess = false,
+  }) async {
     processedIds.add(documentPublicId);
     await _repository.updateStatus(
       documentPublicId,

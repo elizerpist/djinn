@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:uuid/uuid.dart';
 
+import '../../ai/ai_client.dart';
 import '../../core/storage/json_file_store.dart';
 import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
@@ -27,6 +28,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
   final List<KnowledgeFolder> _folders = [];
   final Map<String, List<ChunkPackageItem>> _chunksByDocument = {};
   final Map<String, String> _embeddingModelByDocument = {};
+  final Map<String, List<AiFlowchartCandidate>> _flowchartsByDocument = {};
   int _nextDocumentId = 1;
 
   static JsonFileStore? _defaultFolderStore(JsonFileStore? store) {
@@ -144,6 +146,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     for (final document in documentsToDelete) {
       _chunksByDocument.remove(document.id);
       _embeddingModelByDocument.remove(document.id);
+      _flowchartsByDocument.remove(document.id);
       await _deleteLocalFileIfPresent(document.localPath);
     }
     await _persist();
@@ -282,19 +285,57 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     required OpenAiExtractedChunk chunk,
     required List<double> embedding,
     required String embeddingModel,
-  }) async {
-    final items = _chunksByDocument.putIfAbsent(documentPublicId, () => []);
-    items.removeWhere((item) => item.id == chunk.id);
-    items.add(
-      ChunkPackageItem(
+  }) {
+    return saveExtractedEvidence(
+      documentPublicId: documentPublicId,
+      evidence: AiExtractedEvidence(
         id: chunk.id,
         text: chunk.text,
         pageNumber: chunk.pageNumber,
         sectionTitle: chunk.sectionTitle,
+        sourceType: AiEvidenceSourceType.textChunk,
+      ),
+      embedding: embedding,
+      embeddingModel: embeddingModel,
+    );
+  }
+
+  @override
+  Future<void> clearGeneratedKnowledge(String documentPublicId) async {
+    _chunksByDocument.remove(documentPublicId);
+    _embeddingModelByDocument.remove(documentPublicId);
+    _flowchartsByDocument.remove(documentPublicId);
+  }
+
+  @override
+  Future<void> saveExtractedEvidence({
+    required String documentPublicId,
+    required AiExtractedEvidence evidence,
+    required List<double> embedding,
+    required String embeddingModel,
+  }) async {
+    final items = _chunksByDocument.putIfAbsent(documentPublicId, () => []);
+    items.removeWhere((item) => item.id == evidence.id);
+    items.add(
+      ChunkPackageItem(
+        id: evidence.id,
+        text: evidence.text,
+        pageNumber: evidence.pageNumber,
+        sectionTitle: evidence.sectionTitle,
         embedding: embedding,
       ),
     );
     _embeddingModelByDocument[documentPublicId] = embeddingModel;
+  }
+
+  @override
+  Future<void> saveFlowchartCandidate({
+    required String documentPublicId,
+    required AiFlowchartCandidate flowchart,
+  }) async {
+    final items = _flowchartsByDocument.putIfAbsent(documentPublicId, () => []);
+    items.removeWhere((item) => item.id == flowchart.id);
+    items.add(flowchart);
   }
 
   Future<ChunkPackage> exportChunkPackage(String documentPublicId) async {

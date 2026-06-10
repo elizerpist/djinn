@@ -40,6 +40,33 @@ abstract class ProcessingRepository {
     required OpenAiExtractedChunk chunk,
     required List<double> embedding,
     required String embeddingModel,
+  }) {
+    return saveExtractedEvidence(
+      documentPublicId: documentPublicId,
+      evidence: AiExtractedEvidence(
+        id: chunk.id,
+        text: chunk.text,
+        pageNumber: chunk.pageNumber,
+        sectionTitle: chunk.sectionTitle,
+        sourceType: AiEvidenceSourceType.textChunk,
+      ),
+      embedding: embedding,
+      embeddingModel: embeddingModel,
+    );
+  }
+
+  Future<void> clearGeneratedKnowledge(String documentPublicId);
+
+  Future<void> saveExtractedEvidence({
+    required String documentPublicId,
+    required AiExtractedEvidence evidence,
+    required List<double> embedding,
+    required String embeddingModel,
+  });
+
+  Future<void> saveFlowchartCandidate({
+    required String documentPublicId,
+    required AiFlowchartCandidate flowchart,
   });
 }
 
@@ -63,7 +90,10 @@ class DocumentProcessingService {
   final HasApiKeyForProvider? _hasApiKeyForProvider;
   final ProcessingRepository repository;
 
-  Future<ProcessingResult> processDocument(String documentPublicId) async {
+  Future<ProcessingResult> processDocument(
+    String documentPublicId, {
+    bool forceReprocess = false,
+  }) async {
     final settings = await loadSettings();
     final provider = settings.activeProvider;
     if (!await _hasKey(provider)) {
@@ -97,6 +127,9 @@ class DocumentProcessingService {
         retryable: false,
         clearLastErrorCode: true,
       );
+      if (forceReprocess) {
+        await repository.clearGeneratedKnowledge(documentPublicId);
+      }
 
       final extraction = await client.extractDocument(
         pdfPath: pdfPath,

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:djinn/src/ai/ai_client.dart';
 import 'package:djinn/src/ai/ai_error.dart';
 import 'package:djinn/src/ai/ai_provider.dart';
 import 'package:djinn/src/debug/debug_console.dart';
@@ -70,6 +71,20 @@ void main() {
         '[Flowchart] extraction candidates=0 reason=text_chunk_schema_only document=doc-1',
       ),
     );
+  });
+
+  test('re-sync clears generated knowledge before extraction', () async {
+    final repository = MemoryProcessingRepository();
+    final service = DocumentProcessingService(
+      openAiClient: _ExtractingOpenAiClient(),
+      loadSettings: () async => AppSettings.defaults(),
+      hasApiKey: () async => true,
+      repository: repository,
+    );
+
+    await service.processDocument('doc-1', forceReprocess: true);
+
+    expect(repository.clearedDocuments, ['doc-1']);
   });
 
   test('marks document failed when OpenAI extraction fails', () async {
@@ -204,6 +219,8 @@ class MemoryProcessingRepository implements ProcessingRepository {
   final activeModels = <String>[];
   final lastErrorCodes = <String>[];
   final retryableFlags = <bool>[];
+  final clearedDocuments = <String>[];
+  final savedFlowcharts = <AiFlowchartCandidate>[];
 
   @override
   Future<String> localPathForDocument(String documentPublicId) async {
@@ -246,16 +263,65 @@ class MemoryProcessingRepository implements ProcessingRepository {
     required List<double> embedding,
     required String embeddingModel,
   }) async {
-    savedChunks.add(chunk);
+    await saveExtractedEvidence(
+      documentPublicId: documentPublicId,
+      evidence: AiExtractedEvidence(
+        id: chunk.id,
+        text: chunk.text,
+        pageNumber: chunk.pageNumber,
+        sectionTitle: chunk.sectionTitle,
+        sourceType: AiEvidenceSourceType.textChunk,
+      ),
+      embedding: embedding,
+      embeddingModel: embeddingModel,
+    );
+  }
+
+  @override
+  Future<void> saveExtractedEvidence({
+    required String documentPublicId,
+    required AiExtractedEvidence evidence,
+    required List<double> embedding,
+    required String embeddingModel,
+  }) async {
+    savedChunks.add(
+      OpenAiExtractedChunk(
+        id: evidence.id,
+        text: evidence.text,
+        pageNumber: evidence.pageNumber,
+        sectionTitle: evidence.sectionTitle,
+      ),
+    );
     savedEmbeddings.add(
       ChunkEmbeddingEntity(
-        sourceId: chunk.id,
-        sourceType: EvidenceSourceType.textChunk.wireName,
+        sourceId: evidence.id,
+        sourceType: _sourceTypeWireName(evidence.sourceType),
         vector: embedding,
         model: embeddingModel,
         createdAtMillis: 1760000000000,
       ),
     );
+  }
+
+  @override
+  Future<void> clearGeneratedKnowledge(String documentPublicId) async {
+    clearedDocuments.add(documentPublicId);
+  }
+
+  @override
+  Future<void> saveFlowchartCandidate({
+    required String documentPublicId,
+    required AiFlowchartCandidate flowchart,
+  }) async {
+    savedFlowcharts.add(flowchart);
+  }
+
+  String _sourceTypeWireName(AiEvidenceSourceType sourceType) {
+    return switch (sourceType) {
+      AiEvidenceSourceType.textChunk => EvidenceSourceType.textChunk.wireName,
+      AiEvidenceSourceType.table => EvidenceSourceType.tableChunk.wireName,
+      AiEvidenceSourceType.score => EvidenceSourceType.scoreChunk.wireName,
+    };
   }
 }
 
