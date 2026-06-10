@@ -37,6 +37,42 @@ void main() {
     expect(sent, ['mellkasi fajdalom']);
   });
 
+  testWidgets('voice listen button sends best partial transcript on done', (
+    tester,
+  ) async {
+    final sent = <String>[];
+    final controller = VoiceController(
+      speech: FakeSpeechAdapter(
+        events: const [
+          SpeechEvent.status('listening'),
+          SpeechEvent.result('mellkasi', false),
+          SpeechEvent.result('mellkasi fajdalom mit adjak', false),
+          SpeechEvent.status('done'),
+          SpeechEvent.result('mit', false),
+        ],
+      ),
+      tts: FakeTtsAdapter(),
+      onFinalTranscript: (text) async => sent.add(text),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MessageComposer(
+            onSend: (text) async => sent.add(text),
+            sending: false,
+            voiceController: controller,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('voice-listen')));
+    await tester.pumpAndSettle();
+
+    expect(sent, ['mellkasi fajdalom mit adjak']);
+  });
+
   testWidgets(
     'mic tap selects conversation and long press selects push to talk',
     (tester) async {

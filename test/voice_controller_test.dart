@@ -57,6 +57,37 @@ void main() {
     },
   );
 
+  test(
+    'last partial transcript is sent when engine finishes without final flag',
+    () async {
+      final sent = <String>[];
+      final controller = VoiceController(
+        speech: FakeSpeechAdapter(
+          events: const [
+            SpeechEvent.status('listening'),
+            SpeechEvent.result('', false),
+            SpeechEvent.result('mit kell', false),
+            SpeechEvent.result('mit kell csinalni stroke eseten', false),
+            SpeechEvent.status('notListening'),
+            SpeechEvent.status('done'),
+            SpeechEvent.result('stroke', false),
+          ],
+        ),
+        tts: FakeTtsAdapter(),
+        onFinalTranscript: (text) async => sent.add(text),
+      );
+
+      await controller.listenOnce(locale: 'hu-HU');
+
+      expect(sent, ['mit kell csinalni stroke eseten']);
+      expect(controller.state, VoiceState.idle);
+      expect(
+        DebugConsole.allText,
+        contains('commit partial transcript reason=stream_closed chars=31'),
+      );
+    },
+  );
+
   test('speak does not start duplicate TTS sessions', () async {
     final tts = _BlockingTtsAdapter();
     final controller = VoiceController(

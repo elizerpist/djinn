@@ -42,6 +42,7 @@ class VoiceController extends ChangeNotifier {
     _setState(VoiceState.listening);
     DebugConsole.log('[Voice/STT] listen start locale=$locale');
     var sentFinal = false;
+    String? bestPartialTranscript;
     try {
       await for (final event in speech.listen(locale: locale)) {
         switch (event) {
@@ -52,16 +53,17 @@ class VoiceController extends ChangeNotifier {
               '[Voice/STT] result chars=${text.length} final=$finalResult',
             );
             final transcript = text.trim();
+            if (transcript.isNotEmpty &&
+                (bestPartialTranscript == null ||
+                    transcript.length > bestPartialTranscript.length)) {
+              bestPartialTranscript = transcript;
+              DebugConsole.log(
+                '[Voice/STT] partial transcript updated chars=${transcript.length}',
+              );
+            }
             if (finalResult && transcript.isNotEmpty && !sentFinal) {
               sentFinal = true;
-              _setState(VoiceState.sending);
-              try {
-                await onFinalTranscript(transcript);
-                _setState(VoiceState.idle);
-              } catch (error) {
-                DebugConsole.log('[Voice/STT] send failed error=$error');
-                _setState(VoiceState.error);
-              }
+              await _commitTranscript(transcript);
             }
           case SpeechErrorEvent(:final code):
             DebugConsole.log('[Voice/STT] error code=$code');
@@ -74,14 +76,35 @@ class VoiceController extends ChangeNotifier {
             }
         }
       }
-      if (!sentFinal && _state == VoiceState.listening) {
-        _setState(VoiceState.noSpeech);
+      if (!sentFinal) {
+        final fallbackTranscript = bestPartialTranscript;
+        if (fallbackTranscript != null && fallbackTranscript.isNotEmpty) {
+          sentFinal = true;
+          DebugConsole.log(
+            '[Voice/STT] commit partial transcript reason=stream_closed '
+            'chars=${fallbackTranscript.length}',
+          );
+          await _commitTranscript(fallbackTranscript);
+        } else if (_state == VoiceState.listening) {
+          _setState(VoiceState.noSpeech);
+        }
       }
     } catch (error) {
       DebugConsole.log('[Voice/STT] error code=$error');
       if (!sentFinal) {
         _setState(VoiceState.error);
       }
+    }
+  }
+
+  Future<void> _commitTranscript(String transcript) async {
+    _setState(VoiceState.sending);
+    try {
+      await onFinalTranscript(transcript);
+      _setState(VoiceState.idle);
+    } catch (error) {
+      DebugConsole.log('[Voice/STT] send failed error=$error');
+      _setState(VoiceState.error);
     }
   }
 
