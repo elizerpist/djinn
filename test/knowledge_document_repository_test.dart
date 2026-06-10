@@ -93,4 +93,119 @@ void main() {
     expect(documents.single.backendDocumentId, 'backend-1');
     expect(documents.single.status, KnowledgeDocumentStatus.processed);
   });
+
+  test('creates folders and moves documents between folders', () async {
+    final repository = KnowledgeDocumentRepository();
+    final folder = await repository.createFolder('Eljárásrendek');
+    final document = await repository.addDocument(
+      filename: 'stroke.pdf',
+      localPath: '/memory/stroke.pdf',
+      sizeBytes: 10,
+      importedAt: DateTime.utc(2026, 6, 9),
+      sha256: 'hash-stroke',
+    );
+
+    await repository.moveDocumentsToFolder([document.id], folder.id);
+
+    final documents = await repository.listDocuments(folderId: folder.id);
+    expect(documents.single.folderId, folder.id);
+    expect(documents.single.sha256, 'hash-stroke');
+  });
+
+  test('moving a document keeps existing sync error details', () async {
+    final repository = KnowledgeDocumentRepository();
+    final folder = await repository.createFolder('Guideline-ok');
+    final document = await repository.addDocument(
+      filename: 'failed.pdf',
+      localPath: '/memory/failed.pdf',
+      sizeBytes: 10,
+      importedAt: DateTime.utc(2026, 6, 9),
+      sha256: 'hash-failed',
+    );
+    await repository.updateStatus(
+      document.id,
+      KnowledgeDocumentStatus.failed,
+      errorMessage: 'Gemini hibás JSON-t adott.',
+    );
+
+    await repository.moveDocumentsToFolder([document.id], folder.id);
+
+    final moved = (await repository.listDocuments(folderId: folder.id)).single;
+    expect(moved.errorMessage, 'Gemini hibás JSON-t adott.');
+  });
+
+  test('persists folders and document folder links across reloads', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'djinn-folders-persist-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final store = JsonFileStore(File('${directory.path}/documents.json'));
+
+    final firstRepository = KnowledgeDocumentRepository(store: store);
+    await firstRepository.load();
+    final folder = await firstRepository.createFolder('Eljárásrendek');
+    await firstRepository.addDocument(
+      filename: 'procedure.pdf',
+      localPath: '${directory.path}/procedure.pdf',
+      sizeBytes: 10,
+      importedAt: DateTime.utc(2026, 6, 9),
+      folderId: folder.id,
+    );
+
+    final secondRepository = KnowledgeDocumentRepository(store: store);
+    await secondRepository.load();
+
+    expect((await secondRepository.listFolders()).single.name, 'Eljárásrendek');
+    expect(
+      (await secondRepository.listDocuments(
+        folderId: folder.id,
+      )).single.filename,
+      'procedure.pdf',
+    );
+  });
+
+  test(
+    'renames and deletes folders while clearing document folder ids',
+    () async {
+      final repository = KnowledgeDocumentRepository();
+      final folder = await repository.createFolder(' Eljárásrendek ');
+      final document = await repository.addDocument(
+        filename: 'procedure.pdf',
+        localPath: '/memory/procedure.pdf',
+        sizeBytes: 10,
+        importedAt: DateTime.utc(2026, 6, 9),
+        folderId: folder.id,
+      );
+
+      final renamed = await repository.renameFolder(
+        folder.id,
+        'Igazgatói utasítások',
+      );
+      await repository.deleteFolder(folder.id);
+
+      expect(folder.name, 'Eljárásrendek');
+      expect(renamed.name, 'Igazgatói utasítások');
+      expect(await repository.listFolders(), isEmpty);
+      expect((await repository.listDocuments()).single.id, document.id);
+      expect((await repository.listDocuments()).single.folderId, isNull);
+      expect(await repository.listDocuments(folderId: folder.id), isEmpty);
+    },
+  );
+
+  test(
+    'imported documents start unsynced and retryable only after explicit sync',
+    () async {
+      final repository = KnowledgeDocumentRepository();
+      final document = await repository.addDocument(
+        filename: 'guideline.pdf',
+        localPath: '/memory/guideline.pdf',
+        sizeBytes: 10,
+        importedAt: DateTime.utc(2026, 6, 9),
+        sha256: 'hash-guideline',
+      );
+
+      expect(document.status, KnowledgeDocumentStatus.imported);
+      expect(document.syncStatusLabel, 'Nincs sync');
+    },
+  );
 }

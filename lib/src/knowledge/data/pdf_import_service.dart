@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 class PdfImportResult {
@@ -7,11 +8,13 @@ class PdfImportResult {
     required this.filename,
     required this.localPath,
     required this.sizeBytes,
+    required this.sha256,
   });
 
   final String filename;
   final String localPath;
   final int sizeBytes;
+  final String sha256;
 }
 
 class PdfImportService {
@@ -37,6 +40,7 @@ class PdfImportService {
       filename: p.basename(target.path),
       localPath: target.path,
       sizeBytes: bytes.length,
+      sha256: sha256.convert(bytes).toString(),
     );
   }
 

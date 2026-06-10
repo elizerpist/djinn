@@ -28,6 +28,11 @@ abstract class ProcessingRepository {
     String documentPublicId,
     ProcessingState state, {
     String? errorMessage,
+    String? activeProvider,
+    String? activeModel,
+    String? lastErrorCode,
+    bool? retryable,
+    bool clearLastErrorCode = false,
   });
 
   Future<void> saveExtractedChunk({
@@ -68,6 +73,10 @@ class DocumentProcessingService {
       await repository.markState(
         documentPublicId,
         ProcessingState.blockedMissingApiKey,
+        activeProvider: provider.wireName,
+        activeModel: settings.extractionModel,
+        lastErrorCode: AiFailureCode.missingApiKey.name,
+        retryable: false,
       );
       return ProcessingResult(
         state: ProcessingState.blockedMissingApiKey.wireName,
@@ -80,7 +89,14 @@ class DocumentProcessingService {
         '[AI Training] start document=$documentPublicId provider=${provider.wireName}',
       );
       final pdfPath = await repository.localPathForDocument(documentPublicId);
-      await repository.markState(documentPublicId, ProcessingState.processing);
+      await repository.markState(
+        documentPublicId,
+        ProcessingState.processing,
+        activeProvider: provider.wireName,
+        activeModel: settings.extractionModel,
+        retryable: false,
+        clearLastErrorCode: true,
+      );
 
       final extraction = await client.extractDocument(
         pdfPath: pdfPath,
@@ -108,8 +124,22 @@ class DocumentProcessingService {
         );
       }
 
-      await repository.markState(documentPublicId, ProcessingState.embedded);
-      await repository.markState(documentPublicId, ProcessingState.ready);
+      await repository.markState(
+        documentPublicId,
+        ProcessingState.embedded,
+        activeProvider: provider.wireName,
+        activeModel: settings.extractionModel,
+        retryable: false,
+        clearLastErrorCode: true,
+      );
+      await repository.markState(
+        documentPublicId,
+        ProcessingState.ready,
+        activeProvider: provider.wireName,
+        activeModel: settings.extractionModel,
+        retryable: false,
+        clearLastErrorCode: true,
+      );
       DebugConsole.log(
         '[AI Training] complete document=$documentPublicId provider=${provider.wireName}',
       );
@@ -125,6 +155,10 @@ class DocumentProcessingService {
         documentPublicId,
         ProcessingState.failed,
         errorMessage: failure.userMessage,
+        activeProvider: failure.provider.wireName,
+        activeModel: settings.extractionModel,
+        lastErrorCode: failure.code.name,
+        retryable: failure.retryable,
       );
       return ProcessingResult(
         state: ProcessingState.failed.wireName,
@@ -141,6 +175,10 @@ class DocumentProcessingService {
         documentPublicId,
         ProcessingState.failed,
         errorMessage: error.message,
+        activeProvider: provider.wireName,
+        activeModel: settings.extractionModel,
+        lastErrorCode: AiFailureCode.unknown.name,
+        retryable: false,
       );
       return ProcessingResult(
         state: ProcessingState.failed.wireName,

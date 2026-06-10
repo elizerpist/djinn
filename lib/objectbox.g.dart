@@ -620,7 +620,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(10, 3835227895295506301),
     name: 'KnowledgeDocumentEntity',
-    lastPropertyId: const obx_int.IdUid(9, 3427317077375592081),
+    lastPropertyId: const obx_int.IdUid(15, 6212584103515155759),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -677,6 +677,43 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(9, 3427317077375592081),
         name: 'openAiFileId',
         type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(10, 6359626331079540923),
+        name: 'folderPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(27, 6122972541883332744),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 5564256148570499136),
+        name: 'sha256',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 5487371387622451396),
+        name: 'activeProvider',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(13, 6634760735977105420),
+        name: 'activeModel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(14, 1272267017712634895),
+        name: 'lastErrorCode',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(15, 6212584103515155759),
+        name: 'retryable',
+        type: 1,
         flags: 0,
       ),
     ],
@@ -738,6 +775,54 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(12, 3704183058245934020),
+    name: 'KnowledgeFolderEntity',
+    lastPropertyId: const obx_int.IdUid(6, 548875112364580002),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 318433947448590179),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 5990801484004260418),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(28, 7947364310959944675),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 8574750081451639028),
+        name: 'name',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(29, 1936837688981446356),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 3899959506781466959),
+        name: 'createdAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 2612195175518158406),
+        name: 'updatedAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 548875112364580002),
+        name: 'sortOrder',
+        type: 6,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -783,8 +868,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(11, 7309319277825706740),
-    lastIndexId: const obx_int.IdUid(26, 6263710456666240614),
+    lastEntityId: const obx_int.IdUid(12, 3704183058245934020),
+    lastIndexId: const obx_int.IdUid(29, 1936837688981446356),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -1585,7 +1670,22 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final openAiFileIdOffset = object.openAiFileId == null
             ? null
             : fbb.writeString(object.openAiFileId!);
-        fbb.startTable(10);
+        final folderPublicIdOffset = object.folderPublicId == null
+            ? null
+            : fbb.writeString(object.folderPublicId!);
+        final sha256Offset = object.sha256 == null
+            ? null
+            : fbb.writeString(object.sha256!);
+        final activeProviderOffset = object.activeProvider == null
+            ? null
+            : fbb.writeString(object.activeProvider!);
+        final activeModelOffset = object.activeModel == null
+            ? null
+            : fbb.writeString(object.activeModel!);
+        final lastErrorCodeOffset = object.lastErrorCode == null
+            ? null
+            : fbb.writeString(object.lastErrorCode!);
+        fbb.startTable(16);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, publicIdOffset);
         fbb.addOffset(2, filenameOffset);
@@ -1595,6 +1695,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(6, processingStateOffset);
         fbb.addOffset(7, errorMessageOffset);
         fbb.addOffset(8, openAiFileIdOffset);
+        fbb.addOffset(9, folderPublicIdOffset);
+        fbb.addOffset(10, sha256Offset);
+        fbb.addOffset(11, activeProviderOffset);
+        fbb.addOffset(12, activeModelOffset);
+        fbb.addOffset(13, lastErrorCodeOffset);
+        fbb.addBool(14, object.retryable);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1637,6 +1743,27 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final openAiFileIdParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 20);
+        final folderPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 22);
+        final sha256Param = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 24);
+        final activeProviderParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 26);
+        final activeModelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 28);
+        final lastErrorCodeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 30);
+        final retryableParam = const fb.BoolReader().vTableGet(
+          buffer,
+          rootOffset,
+          32,
+          false,
+        );
         final object = KnowledgeDocumentEntity(
           id: idParam,
           publicId: publicIdParam,
@@ -1647,6 +1774,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
           processingState: processingStateParam,
           errorMessage: errorMessageParam,
           openAiFileId: openAiFileIdParam,
+          folderPublicId: folderPublicIdParam,
+          sha256: sha256Param,
+          activeProvider: activeProviderParam,
+          activeModel: activeModelParam,
+          lastErrorCode: lastErrorCodeParam,
+          retryable: retryableParam,
         );
 
         return object;
@@ -1719,6 +1852,72 @@ obx_int.ModelDefinition getObjectBoxModel() {
           createdAtMillis: createdAtMillisParam,
           updatedAtMillis: updatedAtMillisParam,
           errorMessage: errorMessageParam,
+        );
+
+        return object;
+      },
+    ),
+    KnowledgeFolderEntity: obx_int.EntityDefinition<KnowledgeFolderEntity>(
+      model: _entities[11],
+      toOneRelations: (KnowledgeFolderEntity object) => [],
+      toManyRelations: (KnowledgeFolderEntity object) => {},
+      getId: (KnowledgeFolderEntity object) => object.id,
+      setId: (KnowledgeFolderEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (KnowledgeFolderEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final nameOffset = fbb.writeString(object.name);
+        fbb.startTable(7);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, nameOffset);
+        fbb.addInt64(3, object.createdAtMillis);
+        fbb.addInt64(4, object.updatedAtMillis);
+        fbb.addInt64(5, object.sortOrder);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final nameParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final createdAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          10,
+          0,
+        );
+        final updatedAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          12,
+          0,
+        );
+        final sortOrderParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          14,
+          0,
+        );
+        final object = KnowledgeFolderEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          name: nameParam,
+          createdAtMillis: createdAtMillisParam,
+          updatedAtMillis: updatedAtMillisParam,
+          sortOrder: sortOrderParam,
         );
 
         return object;
@@ -2200,6 +2399,38 @@ class KnowledgeDocumentEntity_ {
   static final openAiFileId = obx.QueryStringProperty<KnowledgeDocumentEntity>(
     _entities[9].properties[8],
   );
+
+  /// See [KnowledgeDocumentEntity.folderPublicId].
+  static final folderPublicId =
+      obx.QueryStringProperty<KnowledgeDocumentEntity>(
+        _entities[9].properties[9],
+      );
+
+  /// See [KnowledgeDocumentEntity.sha256].
+  static final sha256 = obx.QueryStringProperty<KnowledgeDocumentEntity>(
+    _entities[9].properties[10],
+  );
+
+  /// See [KnowledgeDocumentEntity.activeProvider].
+  static final activeProvider =
+      obx.QueryStringProperty<KnowledgeDocumentEntity>(
+        _entities[9].properties[11],
+      );
+
+  /// See [KnowledgeDocumentEntity.activeModel].
+  static final activeModel = obx.QueryStringProperty<KnowledgeDocumentEntity>(
+    _entities[9].properties[12],
+  );
+
+  /// See [KnowledgeDocumentEntity.lastErrorCode].
+  static final lastErrorCode = obx.QueryStringProperty<KnowledgeDocumentEntity>(
+    _entities[9].properties[13],
+  );
+
+  /// See [KnowledgeDocumentEntity.retryable].
+  static final retryable = obx.QueryBooleanProperty<KnowledgeDocumentEntity>(
+    _entities[9].properties[14],
+  );
 }
 
 /// [ProcessingJobEntity] entity fields to define ObjectBox queries.
@@ -2237,5 +2468,40 @@ class ProcessingJobEntity_ {
   /// See [ProcessingJobEntity.errorMessage].
   static final errorMessage = obx.QueryStringProperty<ProcessingJobEntity>(
     _entities[10].properties[6],
+  );
+}
+
+/// [KnowledgeFolderEntity] entity fields to define ObjectBox queries.
+class KnowledgeFolderEntity_ {
+  /// See [KnowledgeFolderEntity.id].
+  static final id = obx.QueryIntegerProperty<KnowledgeFolderEntity>(
+    _entities[11].properties[0],
+  );
+
+  /// See [KnowledgeFolderEntity.publicId].
+  static final publicId = obx.QueryStringProperty<KnowledgeFolderEntity>(
+    _entities[11].properties[1],
+  );
+
+  /// See [KnowledgeFolderEntity.name].
+  static final name = obx.QueryStringProperty<KnowledgeFolderEntity>(
+    _entities[11].properties[2],
+  );
+
+  /// See [KnowledgeFolderEntity.createdAtMillis].
+  static final createdAtMillis =
+      obx.QueryIntegerProperty<KnowledgeFolderEntity>(
+        _entities[11].properties[3],
+      );
+
+  /// See [KnowledgeFolderEntity.updatedAtMillis].
+  static final updatedAtMillis =
+      obx.QueryIntegerProperty<KnowledgeFolderEntity>(
+        _entities[11].properties[4],
+      );
+
+  /// See [KnowledgeFolderEntity.sortOrder].
+  static final sortOrder = obx.QueryIntegerProperty<KnowledgeFolderEntity>(
+    _entities[11].properties[5],
   );
 }

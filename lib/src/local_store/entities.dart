@@ -92,6 +92,31 @@ class ChatMessageEntity {
 }
 
 @Entity()
+class KnowledgeFolderEntity {
+  KnowledgeFolderEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.name,
+    required this.createdAtMillis,
+    required this.updatedAtMillis,
+    this.sortOrder = 0,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String name;
+
+  int createdAtMillis;
+  int updatedAtMillis;
+  int sortOrder;
+}
+
+@Entity()
 class KnowledgeDocumentEntity {
   KnowledgeDocumentEntity({
     this.id = 0,
@@ -103,6 +128,12 @@ class KnowledgeDocumentEntity {
     required this.processingState,
     this.errorMessage,
     this.openAiFileId,
+    this.folderPublicId,
+    this.sha256,
+    this.activeProvider,
+    this.activeModel,
+    this.lastErrorCode,
+    this.retryable = false,
   });
 
   @Id()
@@ -121,6 +152,15 @@ class KnowledgeDocumentEntity {
 
   String? errorMessage;
   String? openAiFileId;
+
+  @Index()
+  String? folderPublicId;
+
+  String? sha256;
+  String? activeProvider;
+  String? activeModel;
+  String? lastErrorCode;
+  bool retryable;
 }
 
 @Entity()

@@ -533,7 +533,7 @@
     },
     {
       "id": "10:3835227895295506301",
-      "lastPropertyId": "9:3427317077375592081",
+      "lastPropertyId": "15:6212584103515155759",
       "name": "KnowledgeDocumentEntity",
       "properties": [
         {
@@ -585,6 +585,38 @@
           "id": "9:3427317077375592081",
           "name": "openAiFileId",
           "type": 9
+        },
+        {
+          "id": "10:6359626331079540923",
+          "name": "folderPublicId",
+          "indexId": "27:6122972541883332744",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "11:5564256148570499136",
+          "name": "sha256",
+          "type": 9
+        },
+        {
+          "id": "12:5487371387622451396",
+          "name": "activeProvider",
+          "type": 9
+        },
+        {
+          "id": "13:6634760735977105420",
+          "name": "activeModel",
+          "type": 9
+        },
+        {
+          "id": "14:1272267017712634895",
+          "name": "lastErrorCode",
+          "type": 9
+        },
+        {
+          "id": "15:6212584103515155759",
+          "name": "retryable",
+          "type": 1
         }
       ],
       "relations": []
@@ -638,10 +670,53 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "12:3704183058245934020",
+      "lastPropertyId": "6:548875112364580002",
+      "name": "KnowledgeFolderEntity",
+      "properties": [
+        {
+          "id": "1:318433947448590179",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5990801484004260418",
+          "name": "publicId",
+          "indexId": "28:7947364310959944675",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:8574750081451639028",
+          "name": "name",
+          "indexId": "29:1936837688981446356",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:3899959506781466959",
+          "name": "createdAtMillis",
+          "type": 6
+        },
+        {
+          "id": "5:2612195175518158406",
+          "name": "updatedAtMillis",
+          "type": 6
+        },
+        {
+          "id": "6:548875112364580002",
+          "name": "sortOrder",
+          "type": 6
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "11:7309319277825706740",
-  "lastIndexId": "26:6263710456666240614",
+  "lastEntityId": "12:3704183058245934020",
+  "lastIndexId": "29:1936837688981446356",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

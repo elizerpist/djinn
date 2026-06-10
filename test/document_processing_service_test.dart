@@ -162,6 +162,10 @@ void main() {
     expect(repository.errorMessages, [
       'Halozati kapcsolat megszakadt. Ujraprobalhato.',
     ]);
+    expect(repository.activeProviders.last, 'gemini');
+    expect(repository.activeModels.last, 'gemini-2.5-flash-lite');
+    expect(repository.lastErrorCodes.last, 'networkAbort');
+    expect(repository.retryableFlags.last, isTrue);
     expect(DebugConsole.allText, contains('provider=gemini'));
     expect(DebugConsole.allText, contains('code=networkAbort'));
     expect(DebugConsole.allText, contains('retryable=true'));
@@ -173,6 +177,10 @@ class MemoryProcessingRepository implements ProcessingRepository {
   final savedChunks = <OpenAiExtractedChunk>[];
   final savedEmbeddings = <ChunkEmbeddingEntity>[];
   final errorMessages = <String?>[];
+  final activeProviders = <String>[];
+  final activeModels = <String>[];
+  final lastErrorCodes = <String>[];
+  final retryableFlags = <bool>[];
 
   @override
   Future<String> localPathForDocument(String documentPublicId) async {
@@ -184,10 +192,27 @@ class MemoryProcessingRepository implements ProcessingRepository {
     String documentPublicId,
     ProcessingState state, {
     String? errorMessage,
+    String? activeProvider,
+    String? activeModel,
+    String? lastErrorCode,
+    bool? retryable,
+    bool clearLastErrorCode = false,
   }) async {
     states.add(state);
     if (errorMessage != null) {
       errorMessages.add(errorMessage);
+    }
+    if (activeProvider != null) {
+      activeProviders.add(activeProvider);
+    }
+    if (activeModel != null) {
+      activeModels.add(activeModel);
+    }
+    if (lastErrorCode != null) {
+      lastErrorCodes.add(lastErrorCode);
+    }
+    if (retryable != null) {
+      retryableFlags.add(retryable);
     }
   }
 

@@ -64,15 +64,13 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         if (imported == null) {
           continue;
         }
-        final document = await widget.repository.addDocument(
+        await widget.repository.addDocument(
           filename: imported.filename,
           localPath: imported.localPath,
           sizeBytes: imported.sizeBytes,
           importedAt: (widget.clock ?? DateTime.now)(),
+          sha256: imported.sha256,
         );
-        if (widget.processingService != null) {
-          await _processDocument(document.id);
-        }
       }
       await _loadDocuments();
     } finally {
@@ -182,11 +180,14 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
                         trailing: _DocumentAction(
                           document: document,
                           processing: _processingDocumentId == document.id,
-                          onRetry:
-                              document.status.canRetry &&
+                          onAction:
+                              _canProcessManually(document.status) &&
                                   widget.processingService != null
                               ? () => _processDocument(document.id)
                               : null,
+                          actionTooltip: _isUnsynced(document.status)
+                              ? 'Szinkronizálás'
+                              : 'Újrapróbálás',
                         ),
                       );
                     },
@@ -203,18 +204,29 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       ),
     );
   }
+
+  bool _canProcessManually(KnowledgeDocumentStatus status) {
+    return _isUnsynced(status) || status.canRetry;
+  }
+
+  bool _isUnsynced(KnowledgeDocumentStatus status) {
+    return status == KnowledgeDocumentStatus.imported ||
+        status == KnowledgeDocumentStatus.pendingIngest;
+  }
 }
 
 class _DocumentAction extends StatelessWidget {
   const _DocumentAction({
     required this.document,
     required this.processing,
-    required this.onRetry,
+    required this.onAction,
+    required this.actionTooltip,
   });
 
   final KnowledgeDocument document;
   final bool processing;
-  final VoidCallback? onRetry;
+  final VoidCallback? onAction;
+  final String actionTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -226,7 +238,7 @@ class _DocumentAction extends StatelessWidget {
       );
     }
     final label = _statusLabel(document.status);
-    if (onRetry == null) {
+    if (onAction == null) {
       return Text(label, style: const TextStyle(fontSize: 12));
     }
     return Row(
@@ -235,9 +247,9 @@ class _DocumentAction extends StatelessWidget {
         Text(label, style: const TextStyle(fontSize: 12)),
         const SizedBox(width: 4),
         IconButton(
-          tooltip: 'Újrapróbálás',
+          tooltip: actionTooltip,
           visualDensity: VisualDensity.compact,
-          onPressed: onRetry,
+          onPressed: onAction,
           icon: const Icon(Icons.refresh),
         ),
       ],
@@ -247,7 +259,7 @@ class _DocumentAction extends StatelessWidget {
   String _statusLabel(KnowledgeDocumentStatus status) {
     return switch (status) {
       KnowledgeDocumentStatus.imported ||
-      KnowledgeDocumentStatus.pendingIngest => 'Feldolgozásra vár',
+      KnowledgeDocumentStatus.pendingIngest => 'Nincs sync',
       KnowledgeDocumentStatus.blockedMissingApiKey =>
         'OpenAI API kulcs szükséges',
       KnowledgeDocumentStatus.blockedOffline => 'Offline állapot',

@@ -1,35 +1,131 @@
+import 'dart:io';
+
+import 'package:uuid/uuid.dart';
+
 import '../../core/storage/json_file_store.dart';
 import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
 import '../models/knowledge_document.dart';
+import '../models/knowledge_folder.dart';
 import 'document_processing_service.dart';
 
 class KnowledgeDocumentRepository implements ProcessingRepository {
-  KnowledgeDocumentRepository({JsonFileStore? store}) : _store = store;
+  KnowledgeDocumentRepository({
+    JsonFileStore? store,
+    JsonFileStore? folderStore,
+    Uuid? uuid,
+  }) : _store = store,
+       _folderStore = folderStore ?? _defaultFolderStore(store),
+       _uuid = uuid ?? const Uuid();
 
   final JsonFileStore? _store;
-  final List<KnowledgeDocument> _documents = [];
+  final JsonFileStore? _folderStore;
+  final Uuid _uuid;
+  List<KnowledgeDocument> _documents = [];
+  final List<KnowledgeFolder> _folders = [];
   int _nextDocumentId = 1;
+
+  static JsonFileStore? _defaultFolderStore(JsonFileStore? store) {
+    if (store == null) {
+      return null;
+    }
+    return JsonFileStore(File('${store.file.parent.path}/folders.json'));
+  }
 
   Future<void> load() async {
     final store = _store;
-    if (store == null) {
-      return;
+    if (store != null) {
+      final items = await store.readList();
+      _documents
+        ..clear()
+        ..addAll(items.map(KnowledgeDocument.fromJson));
+      _nextDocumentId =
+          _nextNumericSuffix(
+            _documents.map((document) => document.id),
+            'document-',
+          ) +
+          1;
     }
-    final items = await store.readList();
-    _documents
-      ..clear()
-      ..addAll(items.map(KnowledgeDocument.fromJson));
-    _nextDocumentId =
-        _nextNumericSuffix(
-          _documents.map((document) => document.id),
-          'document-',
-        ) +
-        1;
+    final folderStore = _folderStore;
+    if (folderStore != null) {
+      final items = await folderStore.readList();
+      _folders
+        ..clear()
+        ..addAll(items.map(KnowledgeFolder.fromJson));
+    }
   }
 
-  Future<List<KnowledgeDocument>> listDocuments() async {
-    return List.unmodifiable(_documents);
+  Future<List<KnowledgeDocument>> listDocuments({String? folderId}) async {
+    final documents = folderId == null
+        ? _documents
+        : _documents.where((document) => document.folderId == folderId);
+    return List.unmodifiable(documents);
+  }
+
+  Future<List<KnowledgeFolder>> listFolders() async {
+    return List.unmodifiable(_folders);
+  }
+
+  Future<KnowledgeFolder> createFolder(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('folder name must not be blank');
+    }
+    final now = DateTime.now();
+    final folder = KnowledgeFolder(
+      id: _uuid.v4(),
+      name: trimmed,
+      createdAt: now,
+      updatedAt: now,
+    );
+    _folders.add(folder);
+    await _persistFolders();
+    return folder;
+  }
+
+  Future<KnowledgeFolder> renameFolder(String folderId, String name) async {
+    final index = _folders.indexWhere((folder) => folder.id == folderId);
+    if (index == -1) {
+      throw StateError('knowledge folder not found: $folderId');
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('folder name must not be blank');
+    }
+    final updated = _folders[index].copyWith(
+      name: trimmed,
+      updatedAt: DateTime.now(),
+    );
+    _folders[index] = updated;
+    await _persistFolders();
+    return updated;
+  }
+
+  Future<void> deleteFolder(String folderId) async {
+    _folders.removeWhere((folder) => folder.id == folderId);
+    await _persistFolders();
+    await moveDocumentsToFolder(
+      _documents
+          .where((document) => document.folderId == folderId)
+          .map((document) => document.id)
+          .toList(growable: false),
+      null,
+    );
+  }
+
+  Future<void> moveDocumentsToFolder(
+    List<String> documentIds,
+    String? folderId,
+  ) async {
+    final idSet = documentIds.toSet();
+    _documents = [
+      for (final document in _documents)
+        if (idSet.contains(document.id))
+          document.copyWith(folderId: folderId, clearFolderId: folderId == null)
+        else
+          document,
+    ];
+    await _persist();
   }
 
   Future<KnowledgeBaseState> state() async {
@@ -41,6 +137,8 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     required String localPath,
     required int sizeBytes,
     required DateTime importedAt,
+    String? sha256,
+    String? folderId,
   }) async {
     final document = KnowledgeDocument(
       id: 'document-${_nextDocumentId++}',
@@ -48,7 +146,9 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       localPath: localPath,
       sizeBytes: sizeBytes,
       importedAt: importedAt,
-      status: KnowledgeDocumentStatus.pendingIngest,
+      status: KnowledgeDocumentStatus.imported,
+      folderId: folderId,
+      sha256: sha256,
     );
     _documents.insert(0, document);
     await _persist();
@@ -60,6 +160,11 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     KnowledgeDocumentStatus status, {
     String? backendDocumentId,
     String? errorMessage,
+    String? activeProvider,
+    String? activeModel,
+    String? lastErrorCode,
+    bool? retryable,
+    bool clearLastErrorCode = false,
   }) async {
     final index = _documents.indexWhere(
       (document) => document.id == documentId,
@@ -71,6 +176,12 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       status: status,
       backendDocumentId: backendDocumentId,
       errorMessage: errorMessage,
+      clearErrorMessage: errorMessage == null,
+      activeProvider: activeProvider,
+      activeModel: activeModel,
+      lastErrorCode: lastErrorCode,
+      retryable: retryable,
+      clearLastErrorCode: clearLastErrorCode,
     );
     _documents[index] = updated;
     await _persist();
@@ -99,6 +210,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       backendDocumentId:
           backendDocument.backendDocumentId ?? backendDocument.id,
       errorMessage: backendDocument.errorMessage,
+      clearErrorMessage: backendDocument.errorMessage == null,
     );
     _documents[index] = updated;
     await _persist();
@@ -125,11 +237,21 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     String documentPublicId,
     ProcessingState state, {
     String? errorMessage,
+    String? activeProvider,
+    String? activeModel,
+    String? lastErrorCode,
+    bool? retryable,
+    bool clearLastErrorCode = false,
   }) async {
     await updateStatus(
       documentPublicId,
       _statusFromProcessingState(state),
       errorMessage: errorMessage,
+      activeProvider: activeProvider,
+      activeModel: activeModel,
+      lastErrorCode: lastErrorCode,
+      retryable: retryable,
+      clearLastErrorCode: clearLastErrorCode,
     );
   }
 
@@ -175,6 +297,14 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     await store.writeList(
       _documents.map((document) => document.toJson()).toList(),
     );
+  }
+
+  Future<void> _persistFolders() async {
+    final store = _folderStore;
+    if (store == null) {
+      return;
+    }
+    await store.writeList(_folders.map((folder) => folder.toJson()).toList());
   }
 
   int _nextNumericSuffix(Iterable<String> ids, String prefix) {

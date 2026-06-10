@@ -39,6 +39,12 @@ void main() {
         home: KnowledgeBaseScreen(
           repository: repository,
           importService: importService,
+          processingService: DocumentProcessingService(
+            openAiClient: FakeOpenAiClient(),
+            loadSettings: () async => AppSettings.defaults(),
+            hasApiKey: () async => false,
+            repository: repository,
+          ),
           pickPdfs: () async => [
             PickedPdfFile(filename: 'omsz.pdf', bytes: [37, 80, 68, 70]),
           ],
@@ -52,15 +58,17 @@ void main() {
     await _pumpUntilFound(tester, find.text('omsz.pdf'));
 
     expect(find.text('omsz.pdf'), findsOneWidget);
-    expect(find.text('Feldolgozásra vár'), findsOneWidget);
+    expect(find.text('Nincs sync'), findsOneWidget);
+    expect(find.text('OpenAI API kulcs szükséges'), findsNothing);
 
     final documents = await repository.listDocuments();
     expect(documents, hasLength(1));
     expect(documents.single.filename, 'omsz.pdf');
     expect(documents.single.localPath, '/memory/omsz.pdf');
+    expect(documents.single.status, KnowledgeDocumentStatus.imported);
   });
 
-  testWidgets('shows missing OpenAI key after local processing starts', (
+  testWidgets('manual sync shows missing OpenAI key after import', (
     tester,
   ) async {
     final repository = KnowledgeDocumentRepository();
@@ -86,6 +94,15 @@ void main() {
     await _pumpUntilFound(tester, find.text('Nincs importált PDF'));
 
     await tester.tap(find.byTooltip('PDF hozzáadása'));
+    await _pumpUntilFound(tester, find.text('Nincs sync'));
+
+    expect(find.text('OpenAI API kulcs szükséges'), findsNothing);
+    expect(
+      (await repository.listDocuments()).single.status,
+      KnowledgeDocumentStatus.imported,
+    );
+
+    await tester.tap(find.byTooltip('Szinkronizálás'));
     await _pumpUntilFound(tester, find.text('OpenAI API kulcs szükséges'));
 
     expect(
@@ -159,6 +176,7 @@ class _FakePdfImportService extends PdfImportService {
       filename: filename,
       localPath: '/memory/$filename',
       sizeBytes: bytes.length,
+      sha256: 'fake-sha256-${bytes.length}',
     );
   }
 }

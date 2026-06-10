@@ -40,6 +40,12 @@ class KnowledgeDocument {
     required this.status,
     this.backendDocumentId,
     this.errorMessage,
+    this.folderId,
+    this.sha256,
+    this.activeProvider,
+    this.activeModel,
+    this.lastErrorCode,
+    this.retryable = false,
   });
 
   final String id;
@@ -50,6 +56,24 @@ class KnowledgeDocument {
   final KnowledgeDocumentStatus status;
   final String? backendDocumentId;
   final String? errorMessage;
+  final String? folderId;
+  final String? sha256;
+  final String? activeProvider;
+  final String? activeModel;
+  final String? lastErrorCode;
+  final bool retryable;
+
+  String get syncStatusLabel {
+    return switch (status) {
+      KnowledgeDocumentStatus.imported => 'Nincs sync',
+      KnowledgeDocumentStatus.processing => 'Chunkolás',
+      KnowledgeDocumentStatus.embedded ||
+      KnowledgeDocumentStatus.ready ||
+      KnowledgeDocumentStatus.processed => 'Kész',
+      KnowledgeDocumentStatus.failed => 'Hiba',
+      _ => 'Feldolgozásra vár',
+    };
+  }
 
   KnowledgeDocument copyWith({
     String? id,
@@ -60,6 +84,15 @@ class KnowledgeDocument {
     KnowledgeDocumentStatus? status,
     String? backendDocumentId,
     String? errorMessage,
+    String? folderId,
+    String? sha256,
+    String? activeProvider,
+    String? activeModel,
+    String? lastErrorCode,
+    bool? retryable,
+    bool clearFolderId = false,
+    bool clearErrorMessage = false,
+    bool clearLastErrorCode = false,
   }) {
     return KnowledgeDocument(
       id: id ?? this.id,
@@ -69,7 +102,17 @@ class KnowledgeDocument {
       importedAt: importedAt ?? this.importedAt,
       status: status ?? this.status,
       backendDocumentId: backendDocumentId ?? this.backendDocumentId,
-      errorMessage: errorMessage,
+      errorMessage: clearErrorMessage
+          ? null
+          : errorMessage ?? this.errorMessage,
+      folderId: clearFolderId ? null : folderId ?? this.folderId,
+      sha256: sha256 ?? this.sha256,
+      activeProvider: activeProvider ?? this.activeProvider,
+      activeModel: activeModel ?? this.activeModel,
+      lastErrorCode: clearLastErrorCode
+          ? null
+          : lastErrorCode ?? this.lastErrorCode,
+      retryable: retryable ?? this.retryable,
     );
   }
 
@@ -83,6 +126,12 @@ class KnowledgeDocument {
       'status': status.wireName,
       'backendDocumentId': backendDocumentId,
       'errorMessage': errorMessage,
+      'folderId': folderId,
+      'sha256': sha256,
+      'activeProvider': activeProvider,
+      'activeModel': activeModel,
+      'lastErrorCode': lastErrorCode,
+      'retryable': retryable,
     };
   }
 
@@ -98,6 +147,12 @@ class KnowledgeDocument {
       status: KnowledgeDocumentStatus.fromWireName(json['status'] as String?),
       backendDocumentId: json['backendDocumentId'] as String?,
       errorMessage: json['errorMessage'] as String?,
+      folderId: json['folderId'] as String?,
+      sha256: json['sha256'] as String?,
+      activeProvider: json['activeProvider'] as String?,
+      activeModel: json['activeModel'] as String?,
+      lastErrorCode: json['lastErrorCode'] as String?,
+      retryable: json['retryable'] as bool? ?? false,
     );
   }
 }

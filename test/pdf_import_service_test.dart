@@ -19,6 +19,10 @@ void main() {
 
     expect(result.filename, 'source.pdf');
     expect(result.sizeBytes, 4);
+    expect(
+      result.sha256,
+      '315d429b7714cedb6ad04ac31240145257692630457f3c88253c5beceac76027',
+    );
     expect(result.localPath, startsWith(importDirectory.path));
     expect(await File(result.localPath).readAsBytes(), [37, 80, 68, 70]);
   });
@@ -37,6 +41,10 @@ void main() {
 
     expect(result.filename, 'OMSZ_protocol.pdf');
     expect(result.sizeBytes, 3);
+    expect(
+      result.sha256,
+      '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',
+    );
     expect(await File(result.localPath).exists(), isTrue);
     expect(await File(result.localPath).readAsBytes(), [1, 2, 3]);
   });
