@@ -397,6 +397,7 @@ class AppSettingsEntity {
     required this.embeddingModel,
     required this.deleteOpenAiFilesAfterProcessing,
     required this.groundednessCheckEnabled,
+    required this.offlineFallbackEnabled,
     required this.retrievalLimit,
     required this.minimumSimilarity,
     required this.voiceMode,
@@ -422,6 +423,7 @@ class AppSettingsEntity {
   String embeddingModel;
   bool deleteOpenAiFilesAfterProcessing;
   bool groundednessCheckEnabled;
+  bool offlineFallbackEnabled;
   int retrievalLimit;
   double minimumSimilarity;
   String voiceMode;

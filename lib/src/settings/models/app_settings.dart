@@ -14,6 +14,7 @@ class AppSettings {
     required this.geminiEmbeddingModel,
     required this.deleteOpenAiFilesAfterProcessing,
     required this.groundednessCheckEnabled,
+    required this.offlineFallbackEnabled,
     required this.retrievalLimit,
     required this.minimumSimilarity,
     required this.voiceMode,
@@ -34,6 +35,7 @@ class AppSettings {
       geminiEmbeddingModel: 'gemini-embedding-001',
       deleteOpenAiFilesAfterProcessing: true,
       groundednessCheckEnabled: false,
+      offlineFallbackEnabled: false,
       retrievalLimit: 8,
       minimumSimilarity: 0.72,
       voiceMode: 'push_to_talk',
@@ -53,6 +55,7 @@ class AppSettings {
   final String geminiEmbeddingModel;
   final bool deleteOpenAiFilesAfterProcessing;
   final bool groundednessCheckEnabled;
+  final bool offlineFallbackEnabled;
   final int retrievalLimit;
   final double minimumSimilarity;
   final String voiceMode;
@@ -95,6 +98,7 @@ class AppSettings {
     String? embeddingModel,
     bool? deleteOpenAiFilesAfterProcessing,
     bool? groundednessCheckEnabled,
+    bool? offlineFallbackEnabled,
     int? retrievalLimit,
     double? minimumSimilarity,
     String? voiceMode,
@@ -144,6 +148,8 @@ class AppSettings {
           this.deleteOpenAiFilesAfterProcessing,
       groundednessCheckEnabled:
           groundednessCheckEnabled ?? this.groundednessCheckEnabled,
+      offlineFallbackEnabled:
+          offlineFallbackEnabled ?? this.offlineFallbackEnabled,
       retrievalLimit: retrievalLimit ?? this.retrievalLimit,
       minimumSimilarity: minimumSimilarity ?? this.minimumSimilarity,
       voiceMode: voiceMode ?? this.voiceMode,

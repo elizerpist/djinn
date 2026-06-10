@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:273186095957995459",
-      "lastPropertyId": "21:6426574414698199161",
+      "lastPropertyId": "22:7523619240086187895",
       "name": "AppSettingsEntity",
       "properties": [
         {
@@ -113,6 +113,11 @@
           "id": "21:6426574414698199161",
           "name": "voiceLocale",
           "type": 9
+        },
+        {
+          "id": "22:7523619240086187895",
+          "name": "offlineFallbackEnabled",
+          "type": 1
         }
       ],
       "relations": []

@@ -1,6 +1,7 @@
 import '../../../objectbox.g.dart';
 import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
+import '../../offline/offline_search_service.dart';
 import '../models/source_evidence.dart';
 
 abstract class LocalRetriever {
@@ -8,6 +9,11 @@ abstract class LocalRetriever {
     required List<double> queryVector,
     required int limit,
     required double minimumSimilarity,
+  });
+
+  Future<List<SourceEvidence>> retrieveOffline({
+    required String query,
+    required int limit,
   });
 }
 
@@ -46,6 +52,20 @@ class MemoryLocalRetriever implements LocalRetriever {
       '[VectorGraph] memory retrieval matches=${evidence.length}',
     );
     return evidence;
+  }
+
+  @override
+  Future<List<SourceEvidence>> retrieveOffline({
+    required String query,
+    required int limit,
+  }) async {
+    return _offlineSearchEvidence(
+      query: query,
+      limit: limit,
+      evidence: _items
+          .where((item) => item.validationState != ValidationState.rejected)
+          .toList(growable: false),
+    );
   }
 }
 
@@ -103,6 +123,64 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     } finally {
       query.close();
     }
+  }
+
+  @override
+  Future<List<SourceEvidence>> retrieveOffline({
+    required String query,
+    required int limit,
+  }) async {
+    final evidence = <SourceEvidence>[];
+    for (final chunk in _chunkBox.getAll()) {
+      evidence.add(
+        SourceEvidence(
+          id: chunk.publicId,
+          sourceType: EvidenceSourceType.textChunk,
+          text: chunk.text,
+          label: 'Szöveges PDF-részlet',
+          validationState: ValidationState.validated,
+          documentId: chunk.documentPublicId,
+          pageNumber: chunk.pageNumber,
+        ),
+      );
+    }
+    for (final node in _nodeBox.getAll()) {
+      final state = _validationStateFromWire(node.validationState);
+      if (state == ValidationState.rejected ||
+          _flowchartRejected(node.flowchartPublicId)) {
+        continue;
+      }
+      evidence.add(
+        SourceEvidence(
+          id: node.publicId,
+          sourceType: EvidenceSourceType.flowchartNode,
+          text: node.label,
+          label: _flowchartLabel(state),
+          validationState: state,
+        ),
+      );
+    }
+    for (final edge in _edgeBox.getAll()) {
+      final state = _validationStateFromWire(edge.validationState);
+      if (state == ValidationState.rejected ||
+          _flowchartRejected(edge.flowchartPublicId)) {
+        continue;
+      }
+      evidence.add(
+        SourceEvidence(
+          id: edge.publicId,
+          sourceType: EvidenceSourceType.flowchartEdge,
+          text: edge.label,
+          label: _flowchartLabel(state),
+          validationState: state,
+        ),
+      );
+    }
+    return _offlineSearchEvidence(
+      query: query,
+      limit: limit,
+      evidence: evidence,
+    );
   }
 
   SourceEvidence? _mapEmbedding(ChunkEmbeddingEntity embedding, double score) {
@@ -241,4 +319,29 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
       ValidationState.rejected => 'Nem validált flowchart',
     };
   }
+}
+
+List<SourceEvidence> _offlineSearchEvidence({
+  required String query,
+  required int limit,
+  required List<SourceEvidence> evidence,
+}) {
+  DebugConsole.log('[Offline] search start chars=${query.length} limit=$limit');
+  final byId = {for (final item in evidence) item.id: item};
+  final results = const OfflineSearchService().search(
+    query: query,
+    limit: limit,
+    chunks: evidence
+        .map(
+          (item) =>
+              OfflineChunk(id: item.id, label: item.label, text: item.text),
+        )
+        .toList(growable: false),
+  );
+  final matched = results
+      .map((result) => byId[result.id])
+      .whereType<SourceEvidence>()
+      .toList(growable: false);
+  DebugConsole.log('[Offline] search matches=${matched.length}');
+  return matched;
 }

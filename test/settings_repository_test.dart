@@ -42,6 +42,11 @@ void main() {
     );
     expect(settings.deleteOpenAiFilesAfterProcessing, isTrue);
     expect(settings.groundednessCheckEnabled, isFalse);
+    expect(settings.offlineFallbackEnabled, isFalse);
+    expect(
+      settings.copyWith(offlineFallbackEnabled: true).offlineFallbackEnabled,
+      isTrue,
+    );
   });
 
   test('legacy model aliases update Gemini slots when Gemini is active', () {
@@ -144,6 +149,7 @@ void main() {
       geminiExtractionModel: 'gemini-2.5-flash',
       geminiGroundednessModel: 'gemini-2.5-flash-lite',
       geminiEmbeddingModel: 'gemini-embedding-001',
+      offlineFallbackEnabled: true,
       voiceMode: 'hands_free',
       voiceLocale: 'en-US',
     );
@@ -161,6 +167,7 @@ void main() {
     expect(loaded.openAiExtractionModel, 'gpt-4.1');
     expect(loaded.openAiEmbeddingModel, 'text-embedding-3-small');
     expect(loaded.geminiEmbeddingModel, 'gemini-embedding-001');
+    expect(loaded.offlineFallbackEnabled, isTrue);
     expect(loaded.voiceMode, 'hands_free');
     expect(loaded.voiceLocale, 'en-US');
   });

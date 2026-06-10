@@ -1,5 +1,6 @@
 import '../../ai/ai_client.dart';
 import '../../ai/ai_client_resolver.dart';
+import '../../ai/ai_error.dart';
 import '../../ai/ai_provider.dart';
 import '../../debug/debug_console.dart';
 import '../../openai/openai_client.dart';
@@ -67,6 +68,12 @@ class LocalAnswerService implements AnswerService {
     final settings = await loadSettings();
     final provider = settings.activeProvider;
     if (!await _hasKey(provider)) {
+      if (settings.offlineFallbackEnabled && await hasReadyDocuments()) {
+        DebugConsole.log(
+          '[Chat/RAG] fallback reason=missing_api_key provider=${provider.wireName}',
+        );
+        return _offlineAnswer(question, settings);
+      }
       DebugConsole.log(
         '[Chat/RAG] refused reason=missing_api_key provider=${provider.wireName}',
       );
@@ -88,18 +95,37 @@ class LocalAnswerService implements AnswerService {
     }
 
     final client = _clientFor(provider);
-    DebugConsole.log(
-      '[Chat/RAG] query embedding model=${settings.embeddingModel}',
-    );
-    final queryVector = await client.createEmbedding(
-      input: question,
-      model: settings.embeddingModel,
-    );
-    final retrieved = await retriever.retrieve(
-      queryVector: queryVector,
-      limit: settings.retrievalLimit,
-      minimumSimilarity: settings.minimumSimilarity,
-    );
+    final List<SourceEvidence> retrieved;
+    try {
+      DebugConsole.log(
+        '[Chat/RAG] query embedding model=${settings.embeddingModel}',
+      );
+      final queryVector = await client.createEmbedding(
+        input: question,
+        model: settings.embeddingModel,
+      );
+      retrieved = await retriever.retrieve(
+        queryVector: queryVector,
+        limit: settings.retrievalLimit,
+        minimumSimilarity: settings.minimumSimilarity,
+      );
+    } on AiProviderException catch (error) {
+      if (settings.offlineFallbackEnabled) {
+        DebugConsole.log(
+          '[Chat/RAG] fallback reason=${error.failure.code.name} provider=${provider.wireName}',
+        );
+        return _offlineAnswer(question, settings);
+      }
+      rethrow;
+    } on OpenAiException catch (error) {
+      if (settings.offlineFallbackEnabled) {
+        DebugConsole.log(
+          '[Chat/RAG] fallback reason=openai_error error=${error.message}',
+        );
+        return _offlineAnswer(question, settings);
+      }
+      rethrow;
+    }
     DebugConsole.log('[Chat/RAG] retrieved count=${retrieved.length}');
     if (retrieved.isEmpty) {
       DebugConsole.log('[Chat/RAG] refused reason=insufficient_evidence');
@@ -198,6 +224,41 @@ class LocalAnswerService implements AnswerService {
       sourceId: evidence.id,
       sourceLabel: evidence.label,
       validationState: evidence.validationState.wireName,
+    );
+  }
+
+  Future<LocalAnswerResult> _offlineAnswer(
+    String question,
+    AppSettings settings,
+  ) async {
+    final results = await retriever.retrieveOffline(
+      query: question,
+      limit: settings.retrievalLimit,
+    );
+    if (results.isEmpty) {
+      DebugConsole.log('[Chat/RAG] offline fallback matches=0');
+      return const LocalAnswerResult(
+        text:
+            'Offline keresési találatok. Ez nem AI által generált válasz.\n\nNincs offline találat.',
+        status: 'offline_search',
+        refusalReason: 'insufficient_offline_results',
+        citations: [],
+      );
+    }
+    DebugConsole.log('[Chat/RAG] offline fallback matches=${results.length}');
+    final excerpts = results
+        .map((item) {
+          final page = item.pageNumber == null
+              ? ''
+              : ' ${item.pageNumber}. oldal';
+          return '- ${item.label}$page: ${item.text}';
+        })
+        .join('\n');
+    return LocalAnswerResult(
+      text:
+          'Offline keresési találatok. Ez nem AI által generált válasz.\n\n$excerpts',
+      status: 'offline_search',
+      citations: results.map(_toChatCitation).toList(growable: false),
     );
   }
 

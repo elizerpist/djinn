@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 273186095957995459),
     name: 'AppSettingsEntity',
-    lastPropertyId: const obx_int.IdUid(21, 6426574414698199161),
+    lastPropertyId: const obx_int.IdUid(22, 7523619240086187895),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -149,6 +149,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(21, 6426574414698199161),
         name: 'voiceLocale',
         type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(22, 7523619240086187895),
+        name: 'offlineFallbackEnabled',
+        type: 1,
         flags: 0,
       ),
     ],
@@ -925,7 +931,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         );
         final voiceModeOffset = fbb.writeString(object.voiceMode);
         final voiceLocaleOffset = fbb.writeString(object.voiceLocale);
-        fbb.startTable(22);
+        fbb.startTable(23);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, runtimeModeOffset);
         fbb.addOffset(2, answerModelOffset);
@@ -947,6 +953,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(18, geminiEmbeddingModelOffset);
         fbb.addOffset(19, voiceModeOffset);
         fbb.addOffset(20, voiceLocaleOffset);
+        fbb.addBool(21, object.offlineFallbackEnabled);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1009,6 +1016,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
           18,
           false,
         );
+        final offlineFallbackEnabledParam = const fb.BoolReader().vTableGet(
+          buffer,
+          rootOffset,
+          46,
+          false,
+        );
         final retrievalLimitParam = const fb.Int64Reader().vTableGet(
           buffer,
           rootOffset,
@@ -1046,6 +1059,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           deleteOpenAiFilesAfterProcessing:
               deleteOpenAiFilesAfterProcessingParam,
           groundednessCheckEnabled: groundednessCheckEnabledParam,
+          offlineFallbackEnabled: offlineFallbackEnabledParam,
           retrievalLimit: retrievalLimitParam,
           minimumSimilarity: minimumSimilarityParam,
           voiceMode: voiceModeParam,
@@ -2026,6 +2040,10 @@ class AppSettingsEntity_ {
   static final voiceLocale = obx.QueryStringProperty<AppSettingsEntity>(
     _entities[0].properties[20],
   );
+
+  /// See [AppSettingsEntity.offlineFallbackEnabled].
+  static final offlineFallbackEnabled =
+      obx.QueryBooleanProperty<AppSettingsEntity>(_entities[0].properties[21]);
 }
 
 /// [ChatMessageEntity] entity fields to define ObjectBox queries.

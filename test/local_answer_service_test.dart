@@ -120,4 +120,36 @@ void main() {
       contains('[Chat/RAG] refused reason=missing_api_key provider=gemini'),
     );
   });
+
+  test(
+    'offline fallback returns source excerpts without generated answer text',
+    () async {
+      final service = LocalAnswerService(
+        openAiClient: FakeOpenAiClient(),
+        retriever: MemoryLocalRetriever(const [
+          SourceEvidence(
+            id: 'chunk-1',
+            sourceType: EvidenceSourceType.textChunk,
+            text: 'Thrombectomia indikaciok.',
+            label: '1. oldal',
+            validationState: ValidationState.validated,
+            score: 0.9,
+          ),
+        ]),
+        citationVerifier: CitationVerifier(),
+        loadSettings: () async =>
+            AppSettings.defaults().copyWith(offlineFallbackEnabled: true),
+        hasApiKey: () async => false,
+        hasReadyDocuments: () async => true,
+      );
+
+      final result = await service.answer('thrombectomia');
+
+      expect(result.status, 'offline_search');
+      expect(result.text, contains('Offline keresési találatok'));
+      expect(result.text, contains('Ez nem AI által generált válasz.'));
+      expect(result.text, contains('Thrombectomia indikaciok.'));
+      expect(result.citations.single.sourceId, 'chunk-1');
+    },
+  );
 }
