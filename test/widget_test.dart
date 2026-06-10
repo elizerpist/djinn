@@ -142,10 +142,10 @@ void main() {
     await _pumpUntilFound(tester, find.text('Djinn'));
 
     await tester.tap(find.byTooltip('Tudastar'));
-    await _pumpUntilFound(tester, find.text('Tudastar'));
+    await _pumpUntilFound(tester, find.text('Tudástár'));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Tudastar'), findsOneWidget);
+    expect(find.text('Tudástár'), findsOneWidget);
     expect(find.text('Nincs importált PDF'), findsOneWidget);
     expect(find.byTooltip('PDF hozzáadása'), findsOneWidget);
   });
@@ -159,7 +159,7 @@ void main() {
     await tester.tap(find.text('Beállítások'));
     await tester.pumpAndSettle();
 
-    expect(find.text('OpenAI kapcsolat'), findsOneWidget);
+    expect(find.text('AI'), findsOneWidget);
     expect(find.byKey(const Key('openai-api-key-field')), findsOneWidget);
   });
 
@@ -181,7 +181,7 @@ void main() {
     await tester.tap(find.text('Beállítások'));
     await tester.pumpAndSettle();
 
-    expect(find.text('OpenAI kapcsolat'), findsOneWidget);
+    expect(find.text('AI'), findsOneWidget);
     expect(find.byKey(const ValueKey('debug-floating-button')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
