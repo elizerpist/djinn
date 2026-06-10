@@ -67,10 +67,9 @@ void main() {
     );
     expect(
       DebugConsole.allText,
-      contains(
-        '[Flowchart] extraction candidates=0 reason=text_chunk_schema_only document=doc-1',
-      ),
+      contains('[Flowchart] extraction candidates=0 document=doc-1'),
     );
+    expect(DebugConsole.allText, isNot(contains('text_chunk_schema_only')));
   });
 
   test('re-sync clears generated knowledge before extraction', () async {
@@ -85,6 +84,58 @@ void main() {
     await service.processDocument('doc-1', forceReprocess: true);
 
     expect(repository.clearedDocuments, ['doc-1']);
+  });
+
+  test('emits extraction and embedding progress', () async {
+    final repository = MemoryProcessingRepository();
+    final events = <ProcessingProgress>[];
+    final service = DocumentProcessingService(
+      openAiClient: _ExtractingTwoChunkClient(),
+      loadSettings: () async => AppSettings.defaults(),
+      hasApiKey: () async => true,
+      repository: repository,
+      onProgress: events.add,
+    );
+
+    await service.processDocument('doc-1');
+
+    expect(
+      events.map((event) => event.phase),
+      containsAll([
+        ProcessingPhase.extracting,
+        ProcessingPhase.embedding,
+        ProcessingPhase.complete,
+      ]),
+    );
+    final lastEmbedding = events.lastWhere(
+      (event) => event.phase == ProcessingPhase.embedding,
+    );
+    expect(lastEmbedding.current, 2);
+    expect(lastEmbedding.total, 2);
+    expect(lastEmbedding.label, 'Embedding 2/2');
+  });
+
+  test('persists extracted scores and flowchart candidates', () async {
+    final repository = MemoryProcessingRepository();
+    final service = DocumentProcessingService(
+      openAiClient: _FlowchartExtractingClient(),
+      loadSettings: () async => AppSettings.defaults(),
+      hasApiKey: () async => true,
+      repository: repository,
+    );
+
+    await service.processDocument('doc-1');
+
+    expect(repository.savedFlowcharts.single.id, 'flow-1');
+    expect(
+      repository.savedEmbeddings.map((embedding) => embedding.sourceType),
+      contains(EvidenceSourceType.scoreChunk.wireName),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[Flowchart] extraction candidates=1 document=doc-1'),
+    );
+    expect(DebugConsole.allText, isNot(contains('text_chunk_schema_only')));
   });
 
   test('marks document failed when OpenAI extraction fails', () async {
@@ -335,6 +386,56 @@ class _ExtractingOpenAiClient extends FakeOpenAiClient {
     return const OpenAiExtractionResult(
       chunks: [
         OpenAiExtractedChunk(id: 'c1', text: 'ABCDE protokoll', pageNumber: 1),
+      ],
+    );
+  }
+}
+
+class _ExtractingTwoChunkClient extends FakeOpenAiClient {
+  @override
+  Future<OpenAiExtractionResult> extractDocument({
+    required String pdfPath,
+    required String model,
+    required String chunkingMode,
+  }) async {
+    return const OpenAiExtractionResult(
+      chunks: [
+        OpenAiExtractedChunk(id: 'c1', text: 'ABCDE protokoll', pageNumber: 1),
+        OpenAiExtractedChunk(id: 'c2', text: 'RACE score', pageNumber: 2),
+      ],
+    );
+  }
+}
+
+class _FlowchartExtractingClient extends FakeOpenAiClient {
+  @override
+  Future<OpenAiExtractionResult> extractDocument({
+    required String pdfPath,
+    required String model,
+    required String chunkingMode,
+  }) async {
+    return const OpenAiExtractionResult(
+      chunks: [
+        OpenAiExtractedChunk(id: 'c1', text: 'Stroke ellatas', pageNumber: 1),
+      ],
+      evidence: [
+        AiExtractedEvidence(
+          id: 'rave-arc',
+          text: 'RAVE: Arcparesis - 1 pont',
+          pageNumber: 2,
+          sectionTitle: 'RAVE',
+          sourceType: AiEvidenceSourceType.score,
+        ),
+      ],
+      flowcharts: [
+        AiFlowchartCandidate(
+          id: 'flow-1',
+          pageNumber: 3,
+          title: 'Stroke dontesi fa',
+          confidence: 0.82,
+          nodes: [AiFlowchartNode(id: 'n1', label: 'FAST pozitiv')],
+          edges: [],
+        ),
       ],
     );
   }

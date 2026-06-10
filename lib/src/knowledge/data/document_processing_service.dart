@@ -21,6 +21,24 @@ class ProcessingResult {
   final bool retryable;
 }
 
+enum ProcessingPhase { queued, extracting, embedding, complete, failed }
+
+class ProcessingProgress {
+  const ProcessingProgress({
+    required this.documentId,
+    required this.phase,
+    this.current,
+    this.total,
+    this.label,
+  });
+
+  final String documentId;
+  final ProcessingPhase phase;
+  final int? current;
+  final int? total;
+  final String? label;
+}
+
 abstract class ProcessingRepository {
   Future<String> localPathForDocument(String documentPublicId);
 
@@ -78,6 +96,7 @@ class DocumentProcessingService {
     Future<bool> Function()? hasApiKey,
     HasApiKeyForProvider? hasApiKeyForProvider,
     required this.repository,
+    this.onProgress,
   }) : _openAiClient = openAiClient,
        _clientForProvider = clientForProvider,
        _hasApiKey = hasApiKey,
@@ -89,6 +108,7 @@ class DocumentProcessingService {
   final Future<bool> Function()? _hasApiKey;
   final HasApiKeyForProvider? _hasApiKeyForProvider;
   final ProcessingRepository repository;
+  final void Function(ProcessingProgress progress)? onProgress;
 
   Future<ProcessingResult> processDocument(
     String documentPublicId, {
@@ -131,6 +151,11 @@ class DocumentProcessingService {
         await repository.clearGeneratedKnowledge(documentPublicId);
       }
 
+      _emitProgress(
+        documentPublicId,
+        ProcessingPhase.extracting,
+        label: 'Kinyeres...',
+      );
       final extraction = await client.extractDocument(
         pdfPath: pdfPath,
         model: settings.extractionModel,
@@ -141,24 +166,40 @@ class DocumentProcessingService {
         'model=${settings.extractionModel} provider=${provider.wireName}',
       );
       DebugConsole.log(
-        '[Flowchart] extraction candidates=0 '
-        'reason=text_chunk_schema_only document=$documentPublicId',
+        '[Flowchart] extraction candidates=${extraction.flowcharts.length} '
+        'document=$documentPublicId',
       );
-      for (final chunk in extraction.chunks) {
+      for (final flowchart in extraction.flowcharts) {
+        await repository.saveFlowchartCandidate(
+          documentPublicId: documentPublicId,
+          flowchart: flowchart,
+        );
+      }
+      final evidence = extraction.allEvidence;
+      for (var index = 0; index < evidence.length; index += 1) {
+        final item = evidence[index];
         final embedding = await client.createEmbedding(
-          input: chunk.text,
+          input: item.text,
           model: settings.embeddingModel,
         );
+        final current = index + 1;
         DebugConsole.log(
-          '[AI Training] embedding chunk=${chunk.id} '
+          '[AI Training] embedding chunk=${item.id} '
           'model=${settings.embeddingModel} dim=${embedding.length} '
           'provider=${provider.wireName}',
         );
-        await repository.saveExtractedChunk(
+        await repository.saveExtractedEvidence(
           documentPublicId: documentPublicId,
-          chunk: chunk,
+          evidence: item,
           embedding: embedding,
           embeddingModel: settings.embeddingModel,
+        );
+        _emitProgress(
+          documentPublicId,
+          ProcessingPhase.embedding,
+          current: current,
+          total: evidence.length,
+          label: 'Embedding $current/${evidence.length}',
         );
       }
 
@@ -181,6 +222,7 @@ class DocumentProcessingService {
       DebugConsole.log(
         '[AI Training] complete document=$documentPublicId provider=${provider.wireName}',
       );
+      _emitProgress(documentPublicId, ProcessingPhase.complete, label: 'Kesz');
       return ProcessingResult(state: ProcessingState.ready.wireName);
     } on AiProviderException catch (error) {
       final failure = error.failure;
@@ -197,6 +239,11 @@ class DocumentProcessingService {
         activeModel: settings.extractionModel,
         lastErrorCode: failure.code.name,
         retryable: failure.retryable,
+      );
+      _emitProgress(
+        documentPublicId,
+        ProcessingPhase.failed,
+        label: failure.userMessage,
       );
       return ProcessingResult(
         state: ProcessingState.failed.wireName,
@@ -217,6 +264,11 @@ class DocumentProcessingService {
         activeModel: settings.extractionModel,
         lastErrorCode: AiFailureCode.unknown.name,
         retryable: false,
+      );
+      _emitProgress(
+        documentPublicId,
+        ProcessingPhase.failed,
+        label: error.message,
       );
       return ProcessingResult(
         state: ProcessingState.failed.wireName,
@@ -247,5 +299,23 @@ class DocumentProcessingService {
       return legacy;
     }
     throw StateError('No AI client configured');
+  }
+
+  void _emitProgress(
+    String documentId,
+    ProcessingPhase phase, {
+    int? current,
+    int? total,
+    String? label,
+  }) {
+    onProgress?.call(
+      ProcessingProgress(
+        documentId: documentId,
+        phase: phase,
+        current: current,
+        total: total,
+        label: label,
+      ),
+    );
   }
 }
