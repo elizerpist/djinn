@@ -66,12 +66,17 @@ class KnowledgeDocument {
   String get syncStatusLabel {
     return switch (status) {
       KnowledgeDocumentStatus.imported => 'Nincs sync',
-      KnowledgeDocumentStatus.processing => 'Chunkolás',
+      KnowledgeDocumentStatus.pendingIngest => 'Nincs sync',
+      KnowledgeDocumentStatus.blockedMissingApiKey =>
+        'OpenAI API kulcs szükséges',
+      KnowledgeDocumentStatus.blockedOffline => 'Offline állapot',
+      KnowledgeDocumentStatus.uploading ||
+      KnowledgeDocumentStatus.processing => 'Feldolgozás folyamatban',
       KnowledgeDocumentStatus.embedded ||
       KnowledgeDocumentStatus.ready ||
       KnowledgeDocumentStatus.processed => 'Kész',
+      KnowledgeDocumentStatus.needsReview => 'Validáció szükséges',
       KnowledgeDocumentStatus.failed => 'Hiba',
-      _ => 'Feldolgozásra vár',
     };
   }
 

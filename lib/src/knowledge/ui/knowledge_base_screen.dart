@@ -5,6 +5,9 @@ import '../data/document_processing_service.dart';
 import '../data/knowledge_document_repository.dart';
 import '../data/pdf_import_service.dart';
 import '../models/knowledge_document.dart';
+import 'knowledge_document_row.dart';
+import 'knowledge_header.dart';
+import 'pdf_viewer_screen.dart';
 
 typedef PickPdfs = Future<List<PickedPdfFile>> Function();
 
@@ -24,6 +27,7 @@ class KnowledgeBaseScreen extends StatefulWidget {
     this.processingService,
     this.pickPdfs,
     this.clock,
+    this.onOpenDocumentForTest,
   });
 
   final KnowledgeDocumentRepository repository;
@@ -31,6 +35,7 @@ class KnowledgeBaseScreen extends StatefulWidget {
   final DocumentProcessingService? processingService;
   final PickPdfs? pickPdfs;
   final DateTime Function()? clock;
+  final void Function(KnowledgeDocument document)? onOpenDocumentForTest;
 
   @override
   State<KnowledgeBaseScreen> createState() => _KnowledgeBaseScreenState();
@@ -38,6 +43,7 @@ class KnowledgeBaseScreen extends StatefulWidget {
 
 class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   List<KnowledgeDocument> _documents = const [];
+  Set<String> _selectedDocumentIds = {};
   bool _importing = false;
   String? _processingDocumentId;
 
@@ -52,7 +58,11 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     if (!mounted) {
       return;
     }
-    setState(() => _documents = documents);
+    setState(() {
+      _documents = documents;
+      final existingIds = documents.map((document) => document.id).toSet();
+      _selectedDocumentIds = _selectedDocumentIds.intersection(existingIds);
+    });
   }
 
   Future<void> _importPdfs() async {
@@ -132,13 +142,180 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     }
   }
 
+  void _openDocument(KnowledgeDocument document) {
+    final callback = widget.onOpenDocumentForTest;
+    if (callback != null) {
+      callback(document);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            PdfViewerScreen(title: document.filename, path: document.localPath),
+      ),
+    );
+  }
+
+  void _selectDocument(String documentId, bool selected) {
+    setState(() {
+      final next = Set<String>.of(_selectedDocumentIds);
+      if (selected) {
+        next.add(documentId);
+      } else {
+        next.remove(documentId);
+      }
+      _selectedDocumentIds = next;
+    });
+  }
+
+  void _enterSelection(String documentId) {
+    _selectDocument(documentId, true);
+  }
+
+  void _exitSelection() {
+    setState(() => _selectedDocumentIds = {});
+  }
+
+  Future<void> _syncSelectedDocuments() async {
+    final selectedIds = Set<String>.of(_selectedDocumentIds);
+    final documentsToProcess = _documents.where(
+      (document) =>
+          selectedIds.contains(document.id) &&
+          _canProcessManually(document.status),
+    );
+    for (final document in documentsToProcess) {
+      await _processDocument(document.id);
+    }
+    if (mounted) {
+      _exitSelection();
+    }
+  }
+
+  Future<void> _showGeneralMenu() async {
+    final selected = await showMenu<String>(
+      context: context,
+      position: const RelativeRect.fromLTRB(1000, kToolbarHeight, 12, 0),
+      items: const [
+        PopupMenuItem(value: 'select_all', child: Text('Összes kijelölése')),
+        PopupMenuItem<String>(
+          enabled: false,
+          value: 'sort',
+          child: Text('Rendezés'),
+        ),
+        PopupMenuItem<String>(
+          enabled: false,
+          value: 'new_folder',
+          child: Text('Új mappa'),
+        ),
+        PopupMenuItem(
+          enabled: false,
+          value: 'import_chunks',
+          child: Text('Chunk csomag import'),
+        ),
+        PopupMenuItem(
+          enabled: false,
+          value: 'export_knowledge',
+          child: Text('Tudástár export'),
+        ),
+      ],
+    );
+    if (!mounted) {
+      return;
+    }
+    if (selected == 'select_all') {
+      setState(
+        () => _selectedDocumentIds = _documents
+            .map((document) => document.id)
+            .toSet(),
+      );
+    }
+  }
+
+  Future<void> _showSelectionMenu() async {
+    await showMenu<String>(
+      context: context,
+      position: const RelativeRect.fromLTRB(1000, kToolbarHeight, 12, 0),
+      items: const [
+        PopupMenuItem<String>(
+          enabled: false,
+          value: 'rag_on',
+          child: Text('RAG bekapcsolása'),
+        ),
+        PopupMenuItem<String>(
+          enabled: false,
+          value: 'move',
+          child: Text('Mozgatás mappába'),
+        ),
+        PopupMenuItem(
+          enabled: false,
+          value: 'export_chunks',
+          child: Text('Chunk csomag export'),
+        ),
+        PopupMenuItem(
+          enabled: false,
+          value: 'refresh_embeddings',
+          child: Text('Embedding frissítés'),
+        ),
+        PopupMenuItem(
+          enabled: false,
+          value: 'flowchart_review',
+          child: Text('Flowchart validálásra'),
+        ),
+        PopupMenuItem(
+          enabled: false,
+          value: 'offline_index',
+          child: Text('Offline index frissítés'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showDocumentMenu(KnowledgeDocument document) async {
+    final canProcess = _canProcessManually(document.status);
+    final selected = await showMenu<String>(
+      context: context,
+      position: const RelativeRect.fromLTRB(1000, kToolbarHeight, 12, 0),
+      items: [
+        PopupMenuItem<String>(
+          enabled: canProcess,
+          value: 'sync',
+          child: const Text('Szinkronizálás'),
+        ),
+        const PopupMenuItem<String>(
+          enabled: false,
+          value: 'move',
+          child: Text('Mozgatás mappába'),
+        ),
+        const PopupMenuItem<String>(
+          enabled: false,
+          value: 'delete',
+          child: Text('Törlés'),
+        ),
+      ],
+    );
+    if (!mounted) {
+      return;
+    }
+    if (selected == 'sync' && _canProcessManually(document.status)) {
+      await _processDocument(document.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final selectionCount = _selectedDocumentIds.length;
+    final selectionMode = selectionCount > 0;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tudastar'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+      appBar: KnowledgeHeader(
+        selectionCount: selectionCount,
+        selectionSummary: '${_documents.length} PDF a tudástárban',
+        onExitSelection: _exitSelection,
+        onSendSelected: widget.processingService == null
+            ? () {}
+            : _syncSelectedDocuments,
+        onDeleteSelected: null,
+        onGeneralMenu: _showGeneralMenu,
+        onSelectionMenu: _showSelectionMenu,
       ),
       body: Column(
         children: [
@@ -169,26 +346,27 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final document = _documents[index];
-                      return ListTile(
-                        tileColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        leading: const Icon(Icons.picture_as_pdf),
-                        title: Text(document.filename),
-                        subtitle: Text('${document.sizeBytes} byte'),
-                        trailing: _DocumentAction(
-                          document: document,
-                          processing: _processingDocumentId == document.id,
-                          onAction:
-                              _canProcessManually(document.status) &&
-                                  widget.processingService != null
-                              ? () => _processDocument(document.id)
-                              : null,
-                          actionTooltip: _isUnsynced(document.status)
-                              ? 'Szinkronizálás'
-                              : 'Újrapróbálás',
-                        ),
+                      final selected = _selectedDocumentIds.contains(
+                        document.id,
+                      );
+                      return KnowledgeDocumentRow(
+                        document: document,
+                        selectionMode: selectionMode,
+                        selected: selected,
+                        processing: _processingDocumentId == document.id,
+                        onTap: () => _openDocument(document),
+                        onLongPress: () => _enterSelection(document.id),
+                        onSelectionChanged: (value) =>
+                            _selectDocument(document.id, value),
+                        onProcess:
+                            _canProcessManually(document.status) &&
+                                widget.processingService != null
+                            ? () => _processDocument(document.id)
+                            : null,
+                        processTooltip: _isUnsynced(document.status)
+                            ? 'Szinkronizálás'
+                            : 'Újrapróbálás',
+                        onMenu: () => _showDocumentMenu(document),
                       );
                     },
                   ),
@@ -212,64 +390,5 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   bool _isUnsynced(KnowledgeDocumentStatus status) {
     return status == KnowledgeDocumentStatus.imported ||
         status == KnowledgeDocumentStatus.pendingIngest;
-  }
-}
-
-class _DocumentAction extends StatelessWidget {
-  const _DocumentAction({
-    required this.document,
-    required this.processing,
-    required this.onAction,
-    required this.actionTooltip,
-  });
-
-  final KnowledgeDocument document;
-  final bool processing;
-  final VoidCallback? onAction;
-  final String actionTooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    if (processing) {
-      return const SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator(strokeWidth: 2),
-      );
-    }
-    final label = _statusLabel(document.status);
-    if (onAction == null) {
-      return Text(label, style: const TextStyle(fontSize: 12));
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12)),
-        const SizedBox(width: 4),
-        IconButton(
-          tooltip: actionTooltip,
-          visualDensity: VisualDensity.compact,
-          onPressed: onAction,
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    );
-  }
-
-  String _statusLabel(KnowledgeDocumentStatus status) {
-    return switch (status) {
-      KnowledgeDocumentStatus.imported ||
-      KnowledgeDocumentStatus.pendingIngest => 'Nincs sync',
-      KnowledgeDocumentStatus.blockedMissingApiKey =>
-        'OpenAI API kulcs szükséges',
-      KnowledgeDocumentStatus.blockedOffline => 'Offline állapot',
-      KnowledgeDocumentStatus.uploading ||
-      KnowledgeDocumentStatus.processing => 'Feldolgozás folyamatban',
-      KnowledgeDocumentStatus.embedded => 'Embedding kész',
-      KnowledgeDocumentStatus.ready ||
-      KnowledgeDocumentStatus.processed => 'Kész',
-      KnowledgeDocumentStatus.needsReview => 'Validáció szükséges',
-      KnowledgeDocumentStatus.failed => 'Hiba',
-    };
   }
 }

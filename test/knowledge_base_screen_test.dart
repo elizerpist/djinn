@@ -148,6 +148,209 @@ void main() {
       KnowledgeDocumentStatus.ready,
     );
   });
+
+  testWidgets('single tap opens in-app PDF viewer callback', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'stroke.pdf',
+      localPath: '/memory/stroke.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 9),
+      sha256: 'hash',
+    );
+    String? openedId;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          onOpenDocumentForTest: (doc) => openedId = doc.id,
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('stroke.pdf'));
+
+    await tester.tap(find.text('stroke.pdf'));
+    await tester.pumpAndSettle();
+
+    expect(openedId, document.id);
+  });
+
+  testWidgets(
+    'long tap enters selection mode and checkboxes appear on all rows',
+    (tester) async {
+      final repository = KnowledgeDocumentRepository();
+      await repository.addDocument(
+        filename: 'a.pdf',
+        localPath: '/memory/a.pdf',
+        sizeBytes: 4,
+        importedAt: DateTime.utc(2026, 6, 9),
+        sha256: 'a',
+      );
+      await repository.addDocument(
+        filename: 'b.pdf',
+        localPath: '/memory/b.pdf',
+        sizeBytes: 4,
+        importedAt: DateTime.utc(2026, 6, 9),
+        sha256: 'b',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: KnowledgeBaseScreen(
+            repository: repository,
+            importService: _FakePdfImportService(),
+          ),
+        ),
+      );
+      await _pumpUntilFound(tester, find.text('a.pdf'));
+
+      await tester.longPress(find.text('a.pdf'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 kijelölve'), findsOneWidget);
+      expect(find.byType(Checkbox), findsNWidgets(2));
+    },
+  );
+
+  testWidgets('three-dot menu is an overlay and does not remove PDF rows', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    await repository.addDocument(
+      filename: 'a.pdf',
+      localPath: '/memory/a.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 9),
+      sha256: 'a',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('a.pdf'));
+
+    await tester.tap(find.byKey(const Key('knowledge-general-menu')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('a.pdf'), findsOneWidget);
+    expect(find.text('Összes kijelölése'), findsOneWidget);
+    expect(find.text('Rendezés'), findsOneWidget);
+  });
+
+  testWidgets('batch sync skips already ready PDFs', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    final ready = await repository.addDocument(
+      filename: 'ready.pdf',
+      localPath: '/memory/ready.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 9),
+      sha256: 'ready',
+    );
+    await repository.updateStatus(ready.id, KnowledgeDocumentStatus.ready);
+    final imported = await repository.addDocument(
+      filename: 'imported.pdf',
+      localPath: '/memory/imported.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 9),
+      sha256: 'imported',
+    );
+    final processingService = _RecordingProcessingService(
+      repository: repository,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          processingService: processingService,
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('imported.pdf'));
+
+    await tester.tap(find.byKey(const Key('knowledge-general-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Összes kijelölése'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('knowledge-send-selected')));
+    await tester.pumpAndSettle();
+
+    expect(processingService.processedIds, [imported.id]);
+  });
+
+  testWidgets('document menu sync processes only eligible PDF', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'menu-sync.pdf',
+      localPath: '/memory/menu-sync.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 9),
+      sha256: 'menu-sync',
+    );
+    final processingService = _RecordingProcessingService(
+      repository: repository,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          processingService: processingService,
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('menu-sync.pdf'));
+
+    await tester.tap(find.byKey(Key('document-menu-${document.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Szinkronizálás'));
+    await tester.pumpAndSettle();
+
+    expect(processingService.processedIds, [document.id]);
+  });
+
+  testWidgets('document menu disables sync for ready PDF', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'ready-menu.pdf',
+      localPath: '/memory/ready-menu.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 9),
+      sha256: 'ready-menu',
+    );
+    await repository.updateStatus(document.id, KnowledgeDocumentStatus.ready);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          processingService: _RecordingProcessingService(
+            repository: repository,
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('ready-menu.pdf'));
+
+    await tester.tap(find.byKey(Key('document-menu-${document.id}')));
+    await tester.pumpAndSettle();
+
+    final menuItem = tester.widget<PopupMenuItem<String>>(
+      find.widgetWithText(PopupMenuItem<String>, 'Szinkronizálás'),
+    );
+    expect(menuItem.enabled, isFalse);
+  });
 }
 
 class _ExtractingOpenAiClient extends FakeOpenAiClient {
@@ -178,6 +381,30 @@ class _FakePdfImportService extends PdfImportService {
       sizeBytes: bytes.length,
       sha256: 'fake-sha256-${bytes.length}',
     );
+  }
+}
+
+class _RecordingProcessingService extends DocumentProcessingService {
+  _RecordingProcessingService({required KnowledgeDocumentRepository repository})
+    : _repository = repository,
+      super(
+        openAiClient: FakeOpenAiClient(),
+        loadSettings: (() async => AppSettings.defaults()),
+        hasApiKey: (() async => true),
+        repository: repository,
+      );
+
+  final KnowledgeDocumentRepository _repository;
+  final processedIds = <String>[];
+
+  @override
+  Future<ProcessingResult> processDocument(String documentPublicId) async {
+    processedIds.add(documentPublicId);
+    await _repository.updateStatus(
+      documentPublicId,
+      KnowledgeDocumentStatus.ready,
+    );
+    return ProcessingResult(state: KnowledgeDocumentStatus.ready.wireName);
   }
 }
 
