@@ -364,11 +364,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onChanged: (value) =>
                             _autoSave(_settings.copyWith(chunkingMode: value)),
                       ),
-                      _TtsLocaleDropdown(
-                        value: _settings.voiceLocale,
-                        onChanged: (value) =>
-                            _autoSave(_settings.copyWith(voiceLocale: value)),
-                      ),
                       if (_statusText != null) ...[
                         const SizedBox(height: 12),
                         Text(
@@ -376,6 +371,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           style: const TextStyle(color: Color(0xFF166534)),
                         ),
                       ],
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _Section(
+                    title: 'Nyelv és felolvasás',
+                    children: [
+                      _TtsLocaleDropdown(
+                        value: _settings.voiceLocale,
+                        onChanged: (value) =>
+                            _autoSave(_settings.copyWith(voiceLocale: value)),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),

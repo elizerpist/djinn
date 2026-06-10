@@ -37,6 +37,7 @@ void main() {
     expect(find.text('Groundedness modell'), findsOneWidget);
     expect(find.text('Embedding modell'), findsOneWidget);
     expect(find.text('Chunkolási mód'), findsOneWidget);
+    expect(find.text('Nyelv és felolvasás'), findsOneWidget);
     expect(find.text('Felolvasás hangja'), findsOneWidget);
     expect(find.text('Beszéd'), findsNothing);
     expect(find.text('Működési mód'), findsOneWidget);
