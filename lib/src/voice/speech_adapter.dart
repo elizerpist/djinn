@@ -55,7 +55,7 @@ abstract class SpeechRecognitionEngine {
   Future<String?> systemLocale();
 
   Future<void> listen({
-    required String locale,
+    required String? locale,
     required SpeechResultCallback onResult,
   });
 
@@ -66,6 +66,11 @@ class PluginSpeechRecognitionEngine implements SpeechRecognitionEngine {
   PluginSpeechRecognitionEngine({speech_to_text.SpeechToText? speech})
     : _speech = speech ?? speech_to_text.SpeechToText();
 
+  static final initializationOptions = [
+    speech_to_text.SpeechToText.androidNoBluetooth,
+    speech_to_text.SpeechToText.iosNoBluetooth,
+  ];
+
   final speech_to_text.SpeechToText _speech;
 
   @override
@@ -73,14 +78,13 @@ class PluginSpeechRecognitionEngine implements SpeechRecognitionEngine {
     required SpeechStatusCallback onStatus,
     required SpeechErrorCallback onError,
   }) {
+    DebugConsole.log(
+      '[Voice/STT] plugin initialize options=${initializationOptions.join(',')}',
+    );
     return _speech.initialize(
       onStatus: onStatus,
       onError: (error) => onError(error.errorMsg),
-      options: [
-        speech_to_text.SpeechToText.androidNoBluetooth,
-        speech_to_text.SpeechToText.androidIntentLookup,
-        speech_to_text.SpeechToText.iosNoBluetooth,
-      ],
+      options: initializationOptions,
     );
   }
 
@@ -98,9 +102,13 @@ class PluginSpeechRecognitionEngine implements SpeechRecognitionEngine {
 
   @override
   Future<void> listen({
-    required String locale,
+    required String? locale,
     required SpeechResultCallback onResult,
   }) {
+    DebugConsole.log(
+      '[Voice/STT] plugin listen locale=${locale ?? 'system_default'} '
+      'partial=true cancelOnError=true mode=confirmation pauseFor=8s listenFor=2m',
+    );
     return _speech.listen(
       onResult: (result) =>
           onResult(result.recognizedWords, result.finalResult),
@@ -108,7 +116,7 @@ class PluginSpeechRecognitionEngine implements SpeechRecognitionEngine {
         localeId: locale,
         partialResults: true,
         cancelOnError: true,
-        listenMode: speech_to_text.ListenMode.dictation,
+        listenMode: speech_to_text.ListenMode.confirmation,
         pauseFor: const Duration(seconds: 8),
         listenFor: const Duration(minutes: 2),
       ),
@@ -127,20 +135,36 @@ class SpeechToTextAdapter implements SpeechAdapter {
   StreamController<SpeechEvent>? _activeController;
   SpeechResultCallback? _activeResultCallback;
   String? _activeResolvedLocale;
+  var _activeSessionId = 0;
+  Stopwatch? _activeStopwatch;
   Future<bool>? _initialization;
   var _initialized = false;
   var _unsupportedRetryAttempted = false;
+  var _startupRetryAttempted = false;
+  var _startupRetryInProgress = false;
+  var _hasSpeechResult = false;
+
+  static const startupRetryDelay = Duration(milliseconds: 350);
 
   @override
   Stream<SpeechEvent> listen({required String locale}) {
     final controller = StreamController<SpeechEvent>();
+    final sessionId = _activeSessionId + 1;
+    _activeSessionId = sessionId;
+    _activeStopwatch = Stopwatch()..start();
     _activeController = controller;
+    _hasSpeechResult = false;
+
+    DebugConsole.log(
+      '[Voice/STT] session=$sessionId adapter listen requested locale=$locale',
+    );
 
     Future<void>(() async {
       try {
         final available = await _ensureInitialized();
         DebugConsole.log(
-          '[Voice/STT] permission status=${available ? 'granted' : 'denied'}',
+          '[Voice/STT] session=$sessionId permission status=${available ? 'granted' : 'denied'} '
+          'elapsed=${_elapsedMs()}ms',
         );
         if (!available) {
           _addTo(controller, const SpeechEvent.error('error_permission'));
@@ -150,10 +174,20 @@ class SpeechToTextAdapter implements SpeechAdapter {
         final resolvedLocale = await _resolveLocale(locale);
         _activeResolvedLocale = resolvedLocale;
         _unsupportedRetryAttempted = false;
-        _activeResultCallback = (text, finalResult) =>
-            _addTo(controller, SpeechEvent.result(text, finalResult));
+        _startupRetryAttempted = false;
+        _startupRetryInProgress = false;
+        _activeResultCallback = (text, finalResult) {
+          if (text.trim().isNotEmpty) {
+            _hasSpeechResult = true;
+          }
+          _addTo(controller, SpeechEvent.result(text, finalResult));
+        };
         await _listenWithResolvedLocale(controller, resolvedLocale);
       } catch (error) {
+        DebugConsole.log(
+          '[Voice/STT] session=$sessionId adapter listen failed error=$error '
+          'elapsed=${_elapsedMs()}ms',
+        );
         _addTo(controller, SpeechEvent.error(error.toString()));
         _close(controller);
       }
@@ -173,13 +207,21 @@ class SpeechToTextAdapter implements SpeechAdapter {
 
   Future<void> _listenWithResolvedLocale(
     StreamController<SpeechEvent> controller,
-    String locale,
+    String? locale,
   ) async {
     final onResult = _activeResultCallback;
     if (_activeController != controller || onResult == null) {
       return;
     }
+    DebugConsole.log(
+      '[Voice/STT] session=$_activeSessionId engine listen locale=${locale ?? 'system_default'} '
+      'elapsed=${_elapsedMs()}ms',
+    );
     await _engine.listen(locale: locale, onResult: onResult);
+    DebugConsole.log(
+      '[Voice/STT] session=$_activeSessionId engine listen returned '
+      'elapsed=${_elapsedMs()}ms',
+    );
   }
 
   Future<String> _resolveLocale(String requestedLocale) async {
@@ -208,9 +250,9 @@ class SpeechToTextAdapter implements SpeechAdapter {
       fallbackReason = 'unsupported_locale';
     }
     DebugConsole.log(
-      '[Voice/STT] locale requested=$requestedLocale normalized=$normalized '
+      '[Voice/STT] session=$_activeSessionId locale requested=$requestedLocale normalized=$normalized '
       'system=${systemLocale ?? 'none'} available=${locales.length} '
-      'selected=$selected',
+      'selected=$selected sample=${_localeSample(locales)}',
     );
     if (fallbackReason != null) {
       DebugConsole.log(
@@ -245,19 +287,31 @@ class SpeechToTextAdapter implements SpeechAdapter {
 
   Future<bool> _ensureInitialized() async {
     if (_initialized) {
+      DebugConsole.log(
+        '[Voice/STT] session=$_activeSessionId initialize reused=true '
+        'elapsed=${_elapsedMs()}ms',
+      );
       return true;
     }
+    DebugConsole.log(
+      '[Voice/STT] session=$_activeSessionId initialize start '
+      'elapsed=${_elapsedMs()}ms',
+    );
     final initialization =
         _initialization ??
-        _engine.initialize(onStatus: _handleStatus, onError: _handleError).then(
-          (available) {
-            _initialized = available;
-            if (!available) {
-              _initialization = null;
-            }
-            return available;
-          },
-        );
+        _engine.initialize(onStatus: _handleStatus, onError: _handleError).then((
+          available,
+        ) {
+          _initialized = available;
+          if (!available) {
+            _initialization = null;
+          }
+          DebugConsole.log(
+            '[Voice/STT] session=$_activeSessionId initialize result=$available '
+            'elapsed=${_elapsedMs()}ms',
+          );
+          return available;
+        });
     _initialization = initialization;
     return initialization;
   }
@@ -267,12 +321,22 @@ class SpeechToTextAdapter implements SpeechAdapter {
     if (controller == null) {
       return;
     }
+    DebugConsole.log(
+      '[Voice/STT] session=$_activeSessionId adapter status=$status '
+      'elapsed=${_elapsedMs()}ms',
+    );
     _addTo(controller, SpeechEvent.status(status));
     if (status == 'done') {
-      Future<void>.delayed(
-        const Duration(milliseconds: 200),
-        () => _close(controller),
-      );
+      Future<void>.delayed(const Duration(milliseconds: 200), () {
+        if (_startupRetryInProgress && _activeController == controller) {
+          DebugConsole.log(
+            '[Voice/STT] session=$_activeSessionId done close delayed for retry '
+            'elapsed=${_elapsedMs()}ms',
+          );
+          return;
+        }
+        _close(controller);
+      });
     }
   }
 
@@ -281,24 +345,73 @@ class SpeechToTextAdapter implements SpeechAdapter {
     if (controller == null) {
       return;
     }
-    DebugConsole.log('[Voice/STT] adapter error code=$code');
+    DebugConsole.log(
+      '[Voice/STT] session=$_activeSessionId adapter error code=$code '
+      'locale=${_activeResolvedLocale ?? 'system_default'} '
+      'hasResult=$_hasSpeechResult elapsed=${_elapsedMs()}ms',
+    );
+    if (_isRetryableStartupError(code)) {
+      _startupRetryAttempted = true;
+      _startupRetryInProgress = true;
+      Future<void>(() async {
+        try {
+          await _engine.stop();
+          await Future<void>.delayed(startupRetryDelay);
+          if (_activeController != controller) {
+            return;
+          }
+          DebugConsole.log(
+            '[Voice/STT] session=$_activeSessionId retry start reason=$code '
+            'locale=${_activeResolvedLocale ?? 'system_default'} delayMs=${startupRetryDelay.inMilliseconds}',
+          );
+          await _listenWithResolvedLocale(controller, _activeResolvedLocale);
+        } catch (error) {
+          DebugConsole.log(
+            '[Voice/STT] session=$_activeSessionId retry failed error=$error',
+          );
+          _addTo(controller, SpeechEvent.error(error.toString()));
+          _close(controller);
+        } finally {
+          _startupRetryInProgress = false;
+        }
+      });
+      return;
+    }
     if (code == 'error_language_not_supported' && !_unsupportedRetryAttempted) {
       _unsupportedRetryAttempted = true;
+      _startupRetryInProgress = true;
       Future<void>(() async {
-        final from = _activeResolvedLocale;
-        final fallback = await _normalizedSystemLocale();
-        if (fallback != null &&
-            fallback != from &&
-            _activeController == controller) {
-          DebugConsole.log(
-            '[Voice/STT] locale fallback from=$from to=$fallback reason=error_language_not_supported',
-          );
-          _activeResolvedLocale = fallback;
-          await _listenWithResolvedLocale(controller, fallback);
-          return;
+        try {
+          final from = _activeResolvedLocale;
+          final fallback = await _normalizedSystemLocale();
+          if (fallback != null &&
+              fallback != from &&
+              _activeController == controller) {
+            DebugConsole.log(
+              '[Voice/STT] locale fallback from=$from to=$fallback reason=error_language_not_supported',
+            );
+            _activeResolvedLocale = fallback;
+            await _listenWithResolvedLocale(controller, fallback);
+            return;
+          }
+          if (_activeController == controller && from != null) {
+            DebugConsole.log(
+              '[Voice/STT] locale fallback from=$from to=system_default '
+              'reason=error_language_not_supported',
+            );
+            _activeResolvedLocale = null;
+            await _listenWithResolvedLocale(controller, null);
+            return;
+          }
+          _addTo(controller, SpeechEvent.error(code));
+          _close(controller);
+        } catch (error) {
+          DebugConsole.log('[Voice/STT] locale fallback failed error=$error');
+          _addTo(controller, SpeechEvent.error(error.toString()));
+          _close(controller);
+        } finally {
+          _startupRetryInProgress = false;
         }
-        _addTo(controller, SpeechEvent.error(code));
-        _close(controller);
       });
       return;
     }
@@ -317,11 +430,23 @@ class SpeechToTextAdapter implements SpeechAdapter {
       _activeController = null;
       _activeResultCallback = null;
       _activeResolvedLocale = null;
+      _activeStopwatch = null;
+      _startupRetryInProgress = false;
     }
     if (!controller.isClosed) {
       controller.close();
     }
   }
+
+  bool _isRetryableStartupError(String code) {
+    return !_startupRetryAttempted &&
+        !_hasSpeechResult &&
+        (code == 'error_server_disconnected' ||
+            code == 'error_audio_error' ||
+            code == 'error_client');
+  }
+
+  int _elapsedMs() => _activeStopwatch?.elapsedMilliseconds ?? -1;
 }
 
 String _normalizeLocale(String locale) {
@@ -335,6 +460,13 @@ String _normalizeLocale(String locale) {
 String _languagePart(String locale) {
   final separator = locale.contains('_') ? '_' : '-';
   return locale.split(separator).first.toLowerCase();
+}
+
+String _localeSample(Set<String> locales) {
+  if (locales.isEmpty) {
+    return '[]';
+  }
+  return '[${locales.take(8).join(',')}]';
 }
 
 class FakeSpeechAdapter implements SpeechAdapter {

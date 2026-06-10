@@ -223,7 +223,7 @@ void main() {
 
       expect(find.text('1 kijelölve'), findsOneWidget);
       expect(find.byType(Checkbox), findsNWidgets(2));
-      expect(find.byKey(const Key('knowledge-send-selected')), findsNothing);
+      expect(find.byKey(const Key('knowledge-share-selected')), findsOneWidget);
     },
   );
 
@@ -473,10 +473,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.longPress(find.text('a.pdf'));
       await tester.pumpAndSettle();
+      expect(find.byKey(const Key('knowledge-share-selected')), findsOneWidget);
       await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
       await tester.pumpAndSettle();
 
       expect(find.text('Rendezés'), findsNothing);
+      expect(find.text('Megosztás'), findsNothing);
       expect(find.text('Chunk csomag export'), findsOneWidget);
     },
   );
@@ -546,7 +548,7 @@ void main() {
     expect(exportedDocumentId, document.sha256, reason: DebugConsole.allText);
   });
 
-  testWidgets('selection menu shares a djinnpack for selected PDFs', (
+  testWidgets('selection header shares a djinnpack for selected PDFs', (
     tester,
   ) async {
     final tempDir = Directory.systemTemp.createTempSync('djinn-pack-share-');
@@ -590,12 +592,9 @@ void main() {
 
     await tester.longPress(find.text('share.pdf'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
-    await tester.pumpAndSettle();
-    expect(find.text('Megosztás'), findsOneWidget);
-    expect(find.byIcon(Icons.share), findsOneWidget);
+    expect(find.byKey(const Key('knowledge-share-selected')), findsOneWidget);
 
-    await tester.tap(find.text('Megosztás'));
+    await tester.tap(find.byKey(const Key('knowledge-share-selected')));
     await _pumpUntil(tester, () => sharedPack != null);
 
     expect(sharedPack, isNotNull, reason: DebugConsole.allText);
@@ -929,7 +928,9 @@ void main() {
     await tester.tap(find.text('Összes kijelölése'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('knowledge-send-selected')));
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Újraszinkronizálás'));
     await tester.pumpAndSettle();
 
     final forceByDocument = <String, bool>{

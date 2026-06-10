@@ -6,7 +6,7 @@ class KnowledgeHeader extends StatelessWidget implements PreferredSizeWidget {
     required this.selectionCount,
     required this.selectionSummary,
     required this.onExitSelection,
-    this.onSendSelected,
+    this.onShareSelected,
     this.onDeleteSelected,
     required this.onGeneralMenu,
     required this.onSelectionMenu,
@@ -15,7 +15,7 @@ class KnowledgeHeader extends StatelessWidget implements PreferredSizeWidget {
   final int selectionCount;
   final String selectionSummary;
   final VoidCallback onExitSelection;
-  final VoidCallback? onSendSelected;
+  final VoidCallback? onShareSelected;
   final VoidCallback? onDeleteSelected;
   final VoidCallback onGeneralMenu;
   final VoidCallback onSelectionMenu;
@@ -50,12 +50,12 @@ class KnowledgeHeader extends StatelessWidget implements PreferredSizeWidget {
           ],
         ),
         actions: [
-          if (onSendSelected != null)
+          if (onShareSelected != null)
             IconButton(
-              key: const Key('knowledge-send-selected'),
-              tooltip: 'Küldés feldolgozásra',
-              onPressed: onSendSelected,
-              icon: const Icon(Icons.upload),
+              key: const Key('knowledge-share-selected'),
+              tooltip: 'Megosztás',
+              onPressed: onShareSelected,
+              icon: const Icon(Icons.share),
             ),
           IconButton(
             key: const Key('knowledge-delete-selected'),

@@ -1,8 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:speech_to_text/speech_to_text.dart' as speech_to_text;
 
 import 'package:djinn/src/voice/speech_adapter.dart';
 
 void main() {
+  test(
+    'plugin engine uses Android default recognizer instead of intent lookup',
+    () {
+      expect(
+        PluginSpeechRecognitionEngine.initializationOptions,
+        contains(speech_to_text.SpeechToText.androidNoBluetooth),
+      );
+      expect(
+        PluginSpeechRecognitionEngine.initializationOptions,
+        isNot(contains(speech_to_text.SpeechToText.androidIntentLookup)),
+      );
+    },
+  );
+
   test(
     'reuses initialization while routing callbacks to current listen stream',
     () async {
@@ -92,6 +107,55 @@ void main() {
     expect(engine.listenLocales, ['hu_HU', 'en_US']);
     expect(events.whereType<SpeechResultEvent>().single.text, 'hello');
   });
+
+  test(
+    'falls back to system default when unsupported language has no alternate locale',
+    () async {
+      final engine = _FakeSpeechRecognitionEngine(
+        localeIds: const ['hu_HU'],
+        systemLocaleId: 'hu_HU',
+      );
+      final adapter = SpeechToTextAdapter(engine: engine);
+      final events = <SpeechEvent>[];
+
+      final subscription = adapter.listen(locale: 'hu-HU').listen(events.add);
+      await Future<void>.delayed(Duration.zero);
+      engine.emitError('error_language_not_supported');
+      await Future<void>.delayed(Duration.zero);
+      engine.emitResult('szia', true);
+      await Future<void>.delayed(Duration.zero);
+      await subscription.cancel();
+
+      expect(engine.listenLocales, ['hu_HU', null]);
+      expect(events.whereType<SpeechResultEvent>().single.text, 'szia');
+    },
+  );
+
+  test('retries transient startup disconnect once before failing', () async {
+    final engine = _FakeSpeechRecognitionEngine(
+      localeIds: const ['hu_HU'],
+      systemLocaleId: 'hu_HU',
+    );
+    final adapter = SpeechToTextAdapter(engine: engine);
+    final events = <SpeechEvent>[];
+
+    final subscription = adapter.listen(locale: 'hu-HU').listen(events.add);
+    await Future<void>.delayed(Duration.zero);
+    engine.emitStatus('notListening');
+    engine.emitStatus('done');
+    engine.emitError('error_server_disconnected');
+    await Future<void>.delayed(
+      SpeechToTextAdapter.startupRetryDelay + const Duration(milliseconds: 50),
+    );
+    engine.emitResult('ujraindult', true);
+    await Future<void>.delayed(Duration.zero);
+    await subscription.cancel();
+
+    expect(engine.stopCount, 2);
+    expect(engine.listenLocales, ['hu_HU', 'hu_HU']);
+    expect(events.whereType<SpeechErrorEvent>(), isEmpty);
+    expect(events.whereType<SpeechResultEvent>().single.text, 'ujraindult');
+  });
 }
 
 class _FakeSpeechRecognitionEngine implements SpeechRecognitionEngine {
@@ -106,7 +170,8 @@ class _FakeSpeechRecognitionEngine implements SpeechRecognitionEngine {
   SpeechErrorCallback? _onError;
   SpeechResultCallback? _onResult;
   var initializeCount = 0;
-  final listenLocales = <String>[];
+  var stopCount = 0;
+  final listenLocales = <String?>[];
 
   @override
   Future<bool> initialize({
@@ -121,7 +186,7 @@ class _FakeSpeechRecognitionEngine implements SpeechRecognitionEngine {
 
   @override
   Future<void> listen({
-    required String locale,
+    required String? locale,
     required SpeechResultCallback onResult,
   }) async {
     listenLocales.add(locale);
@@ -129,7 +194,9 @@ class _FakeSpeechRecognitionEngine implements SpeechRecognitionEngine {
   }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    stopCount += 1;
+  }
 
   @override
   Future<List<String>> locales() async => localeIds;

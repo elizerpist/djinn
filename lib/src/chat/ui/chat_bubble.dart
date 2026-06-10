@@ -60,26 +60,7 @@ class ChatBubble extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
               ],
-              if (!isUser)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _MessageText(text: message.text, color: textColor),
-                    ),
-                    const SizedBox(width: 6),
-                    _BubbleTtsControls(
-                      message: message,
-                      state: ttsState,
-                      onPlay: onPlay,
-                      onPause: onPause,
-                      onResume: onResume,
-                      onStop: onStop,
-                    ),
-                  ],
-                )
-              else
-                _MessageText(text: message.text, color: textColor),
+              _MessageText(text: message.text, color: textColor),
               if (!isUser && message.citations.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 for (final citation in message.citations)
@@ -97,6 +78,20 @@ class ChatBubble extends StatelessWidget {
                   style: TextStyle(
                     color: isUser ? Colors.white70 : const Color(0xFF6B7280),
                     fontSize: 11,
+                  ),
+                ),
+              ],
+              if (!isUser) ...[
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _BubbleTtsControls(
+                    message: message,
+                    state: ttsState,
+                    onPlay: onPlay,
+                    onPause: onPause,
+                    onResume: onResume,
+                    onStop: onStop,
                   ),
                 ),
               ],

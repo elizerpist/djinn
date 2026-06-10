@@ -481,17 +481,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
           child: Text('Mozgatás mappába'),
         ),
         const PopupMenuItem<String>(
-          value: 'share_pack',
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.share, size: 20),
-              SizedBox(width: 12),
-              Text('Megosztás'),
-            ],
-          ),
-        ),
-        const PopupMenuItem<String>(
           value: 'export_chunks',
           child: Text('Chunk csomag export'),
         ),
@@ -504,8 +493,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       await _syncSelectedDocuments();
     } else if (selected == 'move') {
       await _moveSelectedDocuments();
-    } else if (selected == 'share_pack') {
-      await _shareKnowledgePack(_selectedDocuments);
     } else if (selected == 'export_chunks') {
       await _exportKnowledgePack(_selectedDocuments);
     }
@@ -810,9 +797,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         selectionCount: selectionCount,
         selectionSummary: '${visibleDocuments.length} PDF ebben a nézetben',
         onExitSelection: _exitSelection,
-        onSendSelected: widget.processingService == null
-            ? null
-            : _syncSelectedDocuments,
+        onShareSelected: () => _shareKnowledgePack(_selectedDocuments),
         onDeleteSelected: _deleteSelectedDocuments,
         onGeneralMenu: _showGeneralMenu,
         onSelectionMenu: _showSelectionMenu,

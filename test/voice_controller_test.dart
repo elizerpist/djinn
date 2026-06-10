@@ -189,15 +189,20 @@ void main() {
     },
   );
 
-  test('server disconnected does not retry endlessly', () async {
-    final engine = _FailingSpeechEngine(errorCode: 'error_server_disconnected');
-    final adapter = SpeechToTextAdapter(engine: engine);
+  test(
+    'server disconnected retries once and does not retry endlessly',
+    () async {
+      final engine = _FailingSpeechEngine(
+        errorCode: 'error_server_disconnected',
+      );
+      final adapter = SpeechToTextAdapter(engine: engine);
 
-    await adapter.listen(locale: 'hu-HU').drain<void>();
+      await adapter.listen(locale: 'hu-HU').drain<void>();
 
-    expect(engine.listenCount, 1);
-    expect(DebugConsole.allText, contains('error_server_disconnected'));
-  });
+      expect(engine.listenCount, 2);
+      expect(DebugConsole.allText, contains('error_server_disconnected'));
+    },
+  );
 }
 
 class _BlockingTtsAdapter extends FakeTtsAdapter {
@@ -249,7 +254,7 @@ class _LocaleRecordingEngine implements SpeechRecognitionEngine {
 
   @override
   Future<void> listen({
-    required String locale,
+    required String? locale,
     required SpeechResultCallback onResult,
   }) async {
     _onStatus?.call('done');
@@ -279,7 +284,7 @@ class _FailingSpeechEngine extends _LocaleRecordingEngine {
 
   @override
   Future<void> listen({
-    required String locale,
+    required String? locale,
     required SpeechResultCallback onResult,
   }) async {
     listenCount += 1;

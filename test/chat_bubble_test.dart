@@ -58,6 +58,33 @@ void main() {
     },
   );
 
+  testWidgets('assistant TTS controls sit below the bubble text', (
+    tester,
+  ) async {
+    final message = ChatMessage(
+      id: 'assistant-1',
+      conversationId: 'c1',
+      sender: ChatSender.assistant,
+      text: 'Felolvasható válasz.',
+      createdAt: DateTime.utc(2026),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(message: message, onPlay: (_) {}),
+        ),
+      ),
+    );
+
+    final textBottom = tester.getRect(find.text('Felolvasható válasz.')).bottom;
+    final playTop = tester
+        .getRect(find.byKey(const ValueKey('assistant-play-assistant-1')))
+        .top;
+
+    expect(playTop, greaterThan(textBottom));
+  });
+
   testWidgets('renders validation warning and citation label', (tester) async {
     final message = ChatMessage(
       id: 'm1',
