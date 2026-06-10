@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:djinn/src/knowledge/data/document_processing_service.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/data/pdf_import_service.dart';
+import 'package:djinn/src/knowledge/models/chunk_package.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
 import 'package:djinn/src/knowledge/ui/knowledge_base_screen.dart';
 import 'package:djinn/src/openai/openai_client.dart';
@@ -333,6 +334,226 @@ void main() {
     expect(find.text('guideline.pdf'), findsOneWidget);
   });
 
+  testWidgets('imports PDFs into the active folder', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    final folder = await repository.createFolder('Eljárásrendek');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          pickPdfs: () async => [
+            PickedPdfFile(filename: 'folder.pdf', bytes: [37, 80, 68, 70]),
+          ],
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.byKey(Key('folder-pill-${folder.id}')));
+
+    await tester.tap(find.byKey(Key('folder-pill-${folder.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('PDF hozzáadása'));
+    await _pumpUntilFound(tester, find.text('folder.pdf'));
+
+    expect((await repository.listDocuments()).single.folderId, folder.id);
+  });
+
+  testWidgets('PDF rows do not show per-row overflow menus', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'a.pdf',
+      localPath: '/memory/a.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'a',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('a.pdf'));
+
+    expect(find.byKey(const Key('knowledge-general-menu')), findsOneWidget);
+    expect(find.byKey(Key('document-menu-${document.id}')), findsNothing);
+  });
+
+  testWidgets(
+    'header menu changes from general to PDF actions after selection',
+    (tester) async {
+      final repository = KnowledgeDocumentRepository();
+      await repository.addDocument(
+        filename: 'a.pdf',
+        localPath: '/memory/a.pdf',
+        sizeBytes: 4,
+        importedAt: DateTime.utc(2026, 6, 10),
+        sha256: 'a',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: KnowledgeBaseScreen(
+            repository: repository,
+            importService: _FakePdfImportService(),
+          ),
+        ),
+      );
+      await _pumpUntilFound(tester, find.text('a.pdf'));
+
+      await tester.tap(find.byKey(const Key('knowledge-general-menu')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rendezés'), findsOneWidget);
+      expect(find.text('Chunk csomag export'), findsNothing);
+
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('a.pdf'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rendezés'), findsNothing);
+      expect(find.text('Chunk csomag export'), findsOneWidget);
+    },
+  );
+
+  testWidgets('selection menu exports and imports chunk packages', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'chunks.pdf',
+      localPath: '/memory/chunks.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'hash-chunks',
+    );
+    await repository.updateStatus(
+      document.id,
+      KnowledgeDocumentStatus.ready,
+      activeProvider: 'openai',
+      activeModel: 'gpt-5.5',
+    );
+    await repository.saveExtractedChunk(
+      documentPublicId: document.id,
+      chunk: const OpenAiExtractedChunk(
+        id: 'p1-main',
+        text: 'Régi chunk',
+        pageNumber: 1,
+      ),
+      embedding: List<double>.filled(3072, 0.1),
+      embeddingModel: 'text-embedding-3-large',
+    );
+    final importedPackage = ChunkPackage(
+      schemaVersion: 1,
+      documentHash: 'hash-chunks',
+      filename: 'chunks.pdf',
+      provider: 'gemini',
+      extractionModel: 'gemini-2.5-flash-lite',
+      embeddingModel: 'gemini-embedding-001',
+      embeddingDimension: 3072,
+      chunks: [
+        ChunkPackageItem(
+          id: 'p2-main',
+          text: 'Importált chunk',
+          pageNumber: 2,
+          sectionTitle: null,
+          embedding: List<double>.filled(3072, 0.2),
+        ),
+      ],
+    );
+    String? exportedDocumentId;
+    String? importedDocumentId;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          exportChunkPackageForTest: (document, package) async {
+            exportedDocumentId = document.id;
+            expect(package.chunks.single.text, 'Régi chunk');
+            return '/memory/chunks.djinn-chunks.json';
+          },
+          importChunkPackageForTest: (document) async {
+            importedDocumentId = document.id;
+            return importedPackage;
+          },
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('chunks.pdf'));
+
+    await tester.longPress(find.text('chunks.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chunk csomag export'));
+    await tester.pumpAndSettle();
+
+    expect(exportedDocumentId, document.id);
+
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chunk csomag import'));
+    await tester.pumpAndSettle();
+
+    expect(importedDocumentId, document.id);
+    expect(
+      (await repository.exportChunkPackage(document.id)).chunks.single.text,
+      'Importált chunk',
+    );
+  });
+
+  testWidgets('sort opens a bottom sheet and reorders PDFs', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    await repository.addDocument(
+      filename: 'b.pdf',
+      localPath: '/memory/b.pdf',
+      sizeBytes: 20,
+      importedAt: DateTime.utc(2026, 6, 9),
+      sha256: 'b',
+    );
+    await repository.addDocument(
+      filename: 'a.pdf',
+      localPath: '/memory/a.pdf',
+      sizeBytes: 10,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'a',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('a.pdf'));
+
+    await tester.tap(find.byKey(const Key('knowledge-general-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rendezés'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Legújabb legelöl'), findsOneWidget);
+    expect(find.text('Név (A→Z)'), findsOneWidget);
+
+    await tester.tap(find.text('Név (A→Z)'));
+    await tester.pumpAndSettle();
+
+    final aTop = tester.getTopLeft(find.text('a.pdf')).dy;
+    final bTop = tester.getTopLeft(find.text('b.pdf')).dy;
+    expect(aTop, lessThan(bTop));
+  });
+
   testWidgets('selection menu moves selected PDFs into a folder', (
     tester,
   ) async {
@@ -415,9 +636,11 @@ void main() {
     expect(processingService.processedIds, [imported.id]);
   });
 
-  testWidgets('document menu sync processes only eligible PDF', (tester) async {
+  testWidgets('selection menu sync processes only eligible PDFs', (
+    tester,
+  ) async {
     final repository = KnowledgeDocumentRepository();
-    final document = await repository.addDocument(
+    await repository.addDocument(
       filename: 'menu-sync.pdf',
       localPath: '/memory/menu-sync.pdf',
       sizeBytes: 4,
@@ -439,15 +662,17 @@ void main() {
     );
     await _pumpUntilFound(tester, find.text('menu-sync.pdf'));
 
-    await tester.tap(find.byKey(Key('document-menu-${document.id}')));
+    await tester.longPress(find.text('menu-sync.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Szinkronizálás'));
     await tester.pumpAndSettle();
 
-    expect(processingService.processedIds, [document.id]);
+    expect(processingService.processedIds, hasLength(1));
   });
 
-  testWidgets('document menu disables sync for ready PDF', (tester) async {
+  testWidgets('selection menu sync skips ready PDF', (tester) async {
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
       filename: 'ready-menu.pdf',
@@ -457,27 +682,29 @@ void main() {
       sha256: 'ready-menu',
     );
     await repository.updateStatus(document.id, KnowledgeDocumentStatus.ready);
+    final processingService = _RecordingProcessingService(
+      repository: repository,
+    );
 
     await tester.pumpWidget(
       MaterialApp(
         home: KnowledgeBaseScreen(
           repository: repository,
           importService: _FakePdfImportService(),
-          processingService: _RecordingProcessingService(
-            repository: repository,
-          ),
+          processingService: processingService,
         ),
       ),
     );
     await _pumpUntilFound(tester, find.text('ready-menu.pdf'));
 
-    await tester.tap(find.byKey(Key('document-menu-${document.id}')));
+    await tester.longPress(find.text('ready-menu.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Szinkronizálás'));
     await tester.pumpAndSettle();
 
-    final menuItem = tester.widget<PopupMenuItem<String>>(
-      find.widgetWithText(PopupMenuItem<String>, 'Szinkronizálás'),
-    );
-    expect(menuItem.enabled, isFalse);
+    expect(processingService.processedIds, isEmpty);
   });
 }
 

@@ -77,6 +77,42 @@ void main() {
     expect(settings.voiceMode, 'conversation');
   });
 
+  testWidgets('answer mode selector autosaves forced offline mode', (
+    tester,
+  ) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -420),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('AI válasz'), findsOneWidget);
+    expect(find.text('Offline keresés'), findsOneWidget);
+    expect(find.text('Automatikus fallback'), findsOneWidget);
+
+    await tester.tap(find.text('Offline keresés'));
+    await tester.pumpAndSettle();
+
+    expect(settings.answerMode, AnswerModes.offline);
+    expect(settings.offlineFallbackEnabled, isFalse);
+  });
+
   testWidgets('provider pill changes API key field and autosaves', (
     tester,
   ) async {

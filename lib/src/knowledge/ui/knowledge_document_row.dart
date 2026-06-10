@@ -14,7 +14,6 @@ class KnowledgeDocumentRow extends StatelessWidget {
     required this.onSelectionChanged,
     required this.onProcess,
     required this.processTooltip,
-    required this.onMenu,
   });
 
   final KnowledgeDocument document;
@@ -26,7 +25,6 @@ class KnowledgeDocumentRow extends StatelessWidget {
   final ValueChanged<bool> onSelectionChanged;
   final VoidCallback? onProcess;
   final String processTooltip;
-  final VoidCallback onMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -84,13 +82,6 @@ class KnowledgeDocumentRow extends StatelessWidget {
                 processing: processing,
                 tooltip: processTooltip,
                 onPressed: onProcess,
-              ),
-              IconButton(
-                key: Key('document-menu-${document.id}'),
-                tooltip: 'PDF műveletek',
-                visualDensity: VisualDensity.compact,
-                onPressed: onMenu,
-                icon: const Icon(Icons.more_vert),
               ),
             ],
           ),

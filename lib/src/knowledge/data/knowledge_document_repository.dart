@@ -5,8 +5,10 @@ import 'package:uuid/uuid.dart';
 import '../../core/storage/json_file_store.dart';
 import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
+import '../models/chunk_package.dart';
 import '../models/knowledge_document.dart';
 import '../models/knowledge_folder.dart';
+import 'chunk_package_service.dart';
 import 'document_processing_service.dart';
 
 class KnowledgeDocumentRepository implements ProcessingRepository {
@@ -23,6 +25,8 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
   final Uuid _uuid;
   List<KnowledgeDocument> _documents = [];
   final List<KnowledgeFolder> _folders = [];
+  final Map<String, List<ChunkPackageItem>> _chunksByDocument = {};
+  final Map<String, String> _embeddingModelByDocument = {};
   int _nextDocumentId = 1;
 
   static JsonFileStore? _defaultFolderStore(JsonFileStore? store) {
@@ -262,7 +266,60 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     required List<double> embedding,
     required String embeddingModel,
   }) async {
-    // JSON repository is a test/transition adapter. ObjectBox stores chunks in production.
+    final items = _chunksByDocument.putIfAbsent(documentPublicId, () => []);
+    items.removeWhere((item) => item.id == chunk.id);
+    items.add(
+      ChunkPackageItem(
+        id: chunk.id,
+        text: chunk.text,
+        pageNumber: chunk.pageNumber,
+        sectionTitle: chunk.sectionTitle,
+        embedding: embedding,
+      ),
+    );
+    _embeddingModelByDocument[documentPublicId] = embeddingModel;
+  }
+
+  Future<ChunkPackage> exportChunkPackage(String documentPublicId) async {
+    final document = _findDocument(documentPublicId);
+    final chunks = _chunksByDocument[documentPublicId] ?? const [];
+    final embeddingDimension = chunks.isEmpty
+        ? 0
+        : chunks.first.embedding.length;
+    return ChunkPackage(
+      schemaVersion: 1,
+      documentHash: document.sha256 ?? '',
+      filename: document.filename,
+      provider: document.activeProvider ?? '',
+      extractionModel: document.activeModel ?? '',
+      embeddingModel: _embeddingModelByDocument[documentPublicId] ?? '',
+      embeddingDimension: embeddingDimension,
+      chunks: List<ChunkPackageItem>.unmodifiable(chunks),
+    );
+  }
+
+  Future<void> importChunkPackage(
+    String documentPublicId,
+    ChunkPackage package,
+  ) async {
+    final document = _findDocument(documentPublicId);
+    const service = ChunkPackageService();
+    service.validateForImport(
+      package,
+      documentHash: document.sha256 ?? '',
+      expectedDimension: package.embeddingDimension,
+    );
+    _chunksByDocument[documentPublicId] = package.chunks;
+    _embeddingModelByDocument[documentPublicId] = package.embeddingModel;
+    await updateStatus(
+      document.id,
+      KnowledgeDocumentStatus.ready,
+      activeProvider: package.provider.isEmpty ? null : package.provider,
+      activeModel: package.extractionModel.isEmpty
+          ? null
+          : package.extractionModel,
+      clearLastErrorCode: true,
+    );
   }
 
   KnowledgeDocument _findDocument(String documentId) {

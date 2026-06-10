@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:djinn/src/core/storage/json_file_store.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
+import 'package:djinn/src/openai/openai_client.dart';
 
 void main() {
   test('adds updates and persists knowledge documents', () async {
@@ -206,6 +207,59 @@ void main() {
 
       expect(document.status, KnowledgeDocumentStatus.imported);
       expect(document.syncStatusLabel, 'Nincs sync');
+    },
+  );
+
+  test(
+    'exports and imports chunk packages through the UI repository contract',
+    () async {
+      final repository = KnowledgeDocumentRepository();
+      final document = await repository.addDocument(
+        filename: 'stroke.pdf',
+        localPath: '/memory/stroke.pdf',
+        sizeBytes: 10,
+        importedAt: DateTime.utc(2026, 6, 10),
+        sha256: 'hash-stroke',
+      );
+      await repository.updateStatus(
+        document.id,
+        KnowledgeDocumentStatus.ready,
+        activeProvider: 'openai',
+        activeModel: 'gpt-5.5',
+      );
+      await repository.saveExtractedChunk(
+        documentPublicId: document.id,
+        chunk: const OpenAiExtractedChunk(
+          id: 'p1-main',
+          text: 'ABCDE protokoll',
+          pageNumber: 1,
+          sectionTitle: 'Ellátás',
+        ),
+        embedding: List<double>.filled(3072, 0.1),
+        embeddingModel: 'text-embedding-3-large',
+      );
+
+      final exported = await repository.exportChunkPackage(document.id);
+
+      expect(exported.documentHash, 'hash-stroke');
+      expect(exported.provider, 'openai');
+      expect(exported.extractionModel, 'gpt-5.5');
+      expect(exported.embeddingModel, 'text-embedding-3-large');
+      expect(exported.embeddingDimension, 3072);
+      expect(exported.chunks.single.id, 'p1-main');
+
+      await repository.updateStatus(
+        document.id,
+        KnowledgeDocumentStatus.failed,
+      );
+      await repository.importChunkPackage(document.id, exported);
+
+      final updated = (await repository.listDocuments()).single;
+      expect(updated.status, KnowledgeDocumentStatus.ready);
+      expect(
+        (await repository.exportChunkPackage(document.id)).chunks.single.text,
+        'ABCDE protokoll',
+      );
     },
   );
 }

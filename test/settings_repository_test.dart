@@ -44,9 +44,18 @@ void main() {
     expect(settings.deleteOpenAiFilesAfterProcessing, isTrue);
     expect(settings.groundednessCheckEnabled, isFalse);
     expect(settings.offlineFallbackEnabled, isFalse);
+    expect(settings.answerMode, AnswerModes.ai);
     expect(
       settings.copyWith(offlineFallbackEnabled: true).offlineFallbackEnabled,
       isTrue,
+    );
+    expect(
+      settings.copyWith(offlineFallbackEnabled: true).answerMode,
+      AnswerModes.autoFallback,
+    );
+    expect(
+      settings.copyWith(answerMode: AnswerModes.offline).answerMode,
+      AnswerModes.offline,
     );
   });
 

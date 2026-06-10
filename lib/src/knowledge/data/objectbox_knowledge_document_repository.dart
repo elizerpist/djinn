@@ -1,5 +1,6 @@
 import '../../local_store/entities.dart' as local;
 import '../../openai/openai_client.dart';
+import '../models/chunk_package.dart';
 import '../models/knowledge_document.dart';
 import '../models/knowledge_folder.dart';
 import 'document_processing_service.dart';
@@ -149,6 +150,19 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
       embedding: embedding,
       embeddingModel: embeddingModel,
     );
+  }
+
+  @override
+  Future<ChunkPackage> exportChunkPackage(String documentPublicId) {
+    return _repository.exportChunkPackage(documentPublicId);
+  }
+
+  @override
+  Future<void> importChunkPackage(
+    String documentPublicId,
+    ChunkPackage package,
+  ) {
+    return _repository.importChunkPackage(documentPublicId, package);
   }
 
   KnowledgeDocument _fromEntity(local.KnowledgeDocumentEntity entity) {

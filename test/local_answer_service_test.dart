@@ -152,4 +152,42 @@ void main() {
       expect(result.citations.single.sourceId, 'chunk-1');
     },
   );
+
+  test('forced offline mode bypasses API key and AI client calls', () async {
+    final service = LocalAnswerService(
+      openAiClient: _ThrowingAiClient(),
+      retriever: MemoryLocalRetriever(const [
+        SourceEvidence(
+          id: 'chunk-1',
+          sourceType: EvidenceSourceType.textChunk,
+          text: 'Thrombectomia indikaciok.',
+          label: '1. oldal',
+          validationState: ValidationState.validated,
+          score: 0.9,
+        ),
+      ]),
+      citationVerifier: CitationVerifier(),
+      loadSettings: () async =>
+          AppSettings.defaults().copyWith(answerMode: AnswerModes.offline),
+      hasApiKey: () async => throw StateError('api key should not be checked'),
+      hasReadyDocuments: () async => true,
+    );
+
+    final result = await service.answer('thrombectomia');
+
+    expect(result.status, 'offline_search');
+    expect(result.text, contains('Ez nem AI által generált válasz.'));
+    expect(result.citations.single.sourceId, 'chunk-1');
+    expect(DebugConsole.allText, contains('[Offline] mode=forced'));
+  });
+}
+
+class _ThrowingAiClient extends FakeOpenAiClient {
+  @override
+  Future<List<double>> createEmbedding({
+    required String input,
+    required String model,
+  }) {
+    throw StateError('AI client should not be called');
+  }
 }

@@ -416,7 +416,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 12),
                   _Section(
                     title: 'Működési mód',
-                    children: const [
+                    children: [
+                      RadioGroup<String>(
+                        groupValue: _settings.answerMode,
+                        onChanged: (value) {
+                          if (value != null) {
+                            _autoSave(_settings.copyWith(answerMode: value));
+                          }
+                        },
+                        child: Column(
+                          key: const Key('answer-mode-selector'),
+                          children: const [
+                            RadioListTile<String>(
+                              contentPadding: EdgeInsets.zero,
+                              value: AnswerModes.ai,
+                              title: Text('AI válasz'),
+                            ),
+                            RadioListTile<String>(
+                              contentPadding: EdgeInsets.zero,
+                              value: AnswerModes.offline,
+                              title: Text('Offline keresés'),
+                              subtitle: Text('Nem hív AI API-t'),
+                            ),
+                            RadioListTile<String>(
+                              contentPadding: EdgeInsets.zero,
+                              value: AnswerModes.autoFallback,
+                              title: Text('Automatikus fallback'),
+                              subtitle: Text(
+                                'AI hiba esetén offline találatok',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.search),
+                        title: Text('Offline forráskeresés'),
+                        subtitle: Text(
+                          'Lokális ObjectBox chunkokból, AI hívás nélkül',
+                        ),
+                      ),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(Icons.phone_android),

@@ -1,5 +1,11 @@
 import '../../ai/ai_provider.dart';
 
+class AnswerModes {
+  static const ai = 'ai';
+  static const offline = 'offline_search';
+  static const autoFallback = 'auto_fallback';
+}
+
 class AppSettings {
   const AppSettings({
     required this.runtimeMode,
@@ -61,6 +67,14 @@ class AppSettings {
   final String voiceMode;
   final String voiceLocale;
 
+  String get answerMode {
+    return switch (runtimeMode) {
+      AnswerModes.offline => AnswerModes.offline,
+      AnswerModes.autoFallback => AnswerModes.autoFallback,
+      _ => offlineFallbackEnabled ? AnswerModes.autoFallback : AnswerModes.ai,
+    };
+  }
+
   String get answerModel => modelFor(activeProvider, AiModelSlot.answer);
   String get extractionModel =>
       modelFor(activeProvider, AiModelSlot.extraction);
@@ -96,6 +110,7 @@ class AppSettings {
     String? extractionModel,
     String? groundednessModel,
     String? embeddingModel,
+    String? answerMode,
     bool? deleteOpenAiFilesAfterProcessing,
     bool? groundednessCheckEnabled,
     bool? offlineFallbackEnabled,
@@ -107,9 +122,17 @@ class AppSettings {
     final effectiveProvider = activeProvider ?? this.activeProvider;
     final aliasesTargetOpenAi = effectiveProvider == AiProvider.openAi;
     final aliasesTargetGemini = effectiveProvider == AiProvider.gemini;
+    final effectiveRuntimeMode = runtimeMode ?? answerMode ?? this.runtimeMode;
+    final effectiveOfflineFallback =
+        offlineFallbackEnabled ??
+        switch (answerMode) {
+          AnswerModes.autoFallback => true,
+          AnswerModes.ai || AnswerModes.offline => false,
+          _ => this.offlineFallbackEnabled,
+        };
 
     return AppSettings(
-      runtimeMode: runtimeMode ?? this.runtimeMode,
+      runtimeMode: effectiveRuntimeMode,
       activeProvider: effectiveProvider,
       openAiAnswerModel:
           openAiAnswerModel ??
@@ -148,8 +171,7 @@ class AppSettings {
           this.deleteOpenAiFilesAfterProcessing,
       groundednessCheckEnabled:
           groundednessCheckEnabled ?? this.groundednessCheckEnabled,
-      offlineFallbackEnabled:
-          offlineFallbackEnabled ?? this.offlineFallbackEnabled,
+      offlineFallbackEnabled: effectiveOfflineFallback,
       retrievalLimit: retrievalLimit ?? this.retrievalLimit,
       minimumSimilarity: minimumSimilarity ?? this.minimumSimilarity,
       voiceMode: voiceMode ?? this.voiceMode,

@@ -67,6 +67,19 @@ class LocalAnswerService implements AnswerService {
     DebugConsole.log('[Chat/RAG] answer start chars=${question.length}');
     final settings = await loadSettings();
     final provider = settings.activeProvider;
+    if (settings.answerMode == AnswerModes.offline) {
+      DebugConsole.log('[Offline] mode=forced');
+      if (!await hasReadyDocuments()) {
+        DebugConsole.log('[Chat/RAG] refused reason=empty_knowledge_base');
+        return const LocalAnswerResult(
+          text: 'Nincs feldolgozott helyi tudásbázis.',
+          status: 'empty_knowledge_base',
+          refusalReason: 'empty_knowledge_base',
+          citations: [],
+        );
+      }
+      return _offlineAnswer(question, settings);
+    }
     if (!await _hasKey(provider)) {
       if (settings.offlineFallbackEnabled && await hasReadyDocuments()) {
         DebugConsole.log(
