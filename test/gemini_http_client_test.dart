@@ -63,6 +63,9 @@ void main() {
                             'section_title': null,
                           },
                         ],
+                        'tables': [],
+                        'scores': [],
+                        'flowcharts': [],
                       }),
                     },
                   ],
@@ -83,6 +86,98 @@ void main() {
     );
 
     expect(result.chunks.single.id, 'p1-main');
+  });
+
+  test('parses Gemini tables scores and flowchart candidates', () async {
+    final keyStore = MemoryApiKeyStore();
+    await keyStore.saveKeyForProvider(AiProvider.gemini, 'gemini-key');
+    final tempDir = await Directory.systemTemp.createTemp('djinn_gemini_test_');
+    addTearDown(() => tempDir.delete(recursive: true));
+    final pdf = File('${tempDir.path}/rave.pdf');
+    await pdf.writeAsBytes([1, 2, 3]);
+
+    final client = GeminiHttpClient(
+      apiKeyStore: keyStore,
+      httpClient: MockClient((request) async {
+        expect(request.body, contains('"tables"'));
+        expect(request.body, contains('"scores"'));
+        expect(request.body, contains('"flowcharts"'));
+        return http.Response(
+          jsonEncode({
+            'candidates': [
+              {
+                'content': {
+                  'parts': [
+                    {
+                      'text': jsonEncode({
+                        'chunks': [],
+                        'tables': [
+                          {
+                            'id': 'table-1',
+                            'page_number': 2,
+                            'title': 'RAVE score',
+                            'rows': [
+                              {
+                                'label': 'Arcparesis',
+                                'value': '1',
+                                'text': 'Arcparesis - 1 pont',
+                              },
+                            ],
+                          },
+                        ],
+                        'scores': [
+                          {
+                            'id': 'rave-arc',
+                            'page_number': 2,
+                            'score_name': 'RAVE',
+                            'criterion': 'Arcparesis',
+                            'value': '1',
+                            'text': 'RAVE Arcparesis 1 pont',
+                          },
+                        ],
+                        'flowcharts': [
+                          {
+                            'id': 'flow-1',
+                            'page_number': 3,
+                            'title': 'Stroke dontesi fa',
+                            'confidence': 0.82,
+                            'nodes': [
+                              {'id': 'n1', 'label': 'FAST pozitiv'},
+                            ],
+                            'edges': [],
+                          },
+                        ],
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+      baseUri: Uri.parse('https://gemini.test'),
+    );
+
+    final result = await client.extractDocument(
+      pdfPath: pdf.path,
+      model: 'gemini-2.5-flash-lite',
+      chunkingMode: 'normal',
+    );
+
+    expect(
+      result.evidence.map((item) => item.sourceType),
+      containsAll([AiEvidenceSourceType.table, AiEvidenceSourceType.score]),
+    );
+    expect(
+      result.evidence
+          .singleWhere((item) => item.sourceType == AiEvidenceSourceType.score)
+          .text,
+      contains('RAVE Arcparesis 1 pont'),
+    );
+    expect(result.flowcharts.single.id, 'flow-1');
+    expect(result.flowcharts.single.nodes.single.label, 'FAST pozitiv');
   });
 
   test(
@@ -109,6 +204,10 @@ void main() {
               properties['refusal_reason'] as Map<String, Object?>;
           expect(refusalReason['type'], 'string');
           expect(refusalReason['nullable'], isTrue);
+          expect(request.body, contains('Answer language policy'));
+          expect(request.body, contains('ambiguous'));
+          expect(request.body, contains('Hungarian'));
+          expect(request.body, contains('English'));
 
           return http.Response(
             jsonEncode({

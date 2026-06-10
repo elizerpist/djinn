@@ -62,6 +62,10 @@ void main() {
     expect(result.hasValidationWarning, isTrue);
     expect(result.citations.single.sourceId, 'node-1');
     expect(DebugConsole.allText, contains('[Chat/RAG] retrieved count=1'));
+    expect(
+      DebugConsole.allText,
+      contains('[Chat/RAG] answer language=auto default=hu'),
+    );
     expect(DebugConsole.allText, contains('[Chat/RAG] grounded citations=1'));
   });
 

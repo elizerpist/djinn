@@ -119,6 +119,7 @@ class GeminiHttpClient implements AiClient {
             'role': 'user',
             'parts': [
               {'text': _documentExtractionInstruction},
+              {'text': _visualExtractionInstruction},
               {'text': _chunkingInstruction(chunkingMode)},
               {
                 'inlineData': {
@@ -156,7 +157,8 @@ class GeminiHttpClient implements AiClient {
               {
                 'text': jsonEncode({
                   'instruction':
-                      'Answer only from supplied evidence. Return JSON only.',
+                      'Answer only from supplied evidence. Return JSON only. '
+                      '$_answerLanguagePolicy',
                   'question': question,
                   'evidence': evidence
                       .map(
@@ -427,52 +429,264 @@ class GeminiHttpClient implements AiClient {
         ),
       );
     }
-    return AiExtractionResult(
-      chunks: chunks
-          .map((item) {
-            if (item is! Map) {
-              throw AiProviderException(
-                AiFailure.invalidStructuredResponse(
-                  AiProvider.gemini,
-                  'chunk must be an object',
-                ),
-              );
-            }
-            final id = item['id'];
-            final text = item['text'];
-            final pageNumber = item['page_number'];
-            final sectionTitle = item['section_title'];
-            if (id is! String || text is! String || pageNumber is! num) {
-              throw AiProviderException(
-                AiFailure.invalidStructuredResponse(
-                  AiProvider.gemini,
-                  'chunk id/text/page_number invalid',
-                ),
-              );
-            }
-            if (sectionTitle != null && sectionTitle is! String) {
-              throw AiProviderException(
-                AiFailure.invalidStructuredResponse(
-                  AiProvider.gemini,
-                  'chunk section_title invalid',
-                ),
-              );
-            }
-            return AiExtractedChunk(
-              id: id,
-              text: text,
-              pageNumber: pageNumber.toInt(),
-              sectionTitle: sectionTitle as String?,
+    final parsedChunks = chunks
+        .map((item) {
+          if (item is! Map) {
+            throw AiProviderException(
+              AiFailure.invalidStructuredResponse(
+                AiProvider.gemini,
+                'chunk must be an object',
+              ),
             );
-          })
-          .toList(growable: false),
+          }
+          final id = item['id'];
+          final text = item['text'];
+          final pageNumber = item['page_number'];
+          final sectionTitle = item['section_title'];
+          if (id is! String || text is! String || pageNumber is! num) {
+            throw AiProviderException(
+              AiFailure.invalidStructuredResponse(
+                AiProvider.gemini,
+                'chunk id/text/page_number invalid',
+              ),
+            );
+          }
+          if (sectionTitle != null && sectionTitle is! String) {
+            throw AiProviderException(
+              AiFailure.invalidStructuredResponse(
+                AiProvider.gemini,
+                'chunk section_title invalid',
+              ),
+            );
+          }
+          return AiExtractedChunk(
+            id: id,
+            text: text,
+            pageNumber: pageNumber.toInt(),
+            sectionTitle: sectionTitle as String?,
+          );
+        })
+        .toList(growable: false);
+    return AiExtractionResult(
+      chunks: parsedChunks,
+      evidence: [..._parseTables(json), ..._parseScores(json)],
+      flowcharts: _parseFlowcharts(json),
     );
+  }
+
+  List<AiExtractedEvidence> _parseTables(Map<String, Object?> json) {
+    final tables = _optionalList(json, 'tables');
+    final evidence = <AiExtractedEvidence>[];
+    for (final table in tables) {
+      if (table is! Map) {
+        throw _invalidStructured('table must be an object');
+      }
+      final id = _requiredString(table, 'id', 'table');
+      final pageNumber = _requiredNum(table, 'page_number', 'table').toInt();
+      final title = _optionalString(table, 'title', 'table');
+      final rows = table['rows'];
+      if (rows is! List) {
+        throw _invalidStructured('table rows must be a list');
+      }
+      for (var index = 0; index < rows.length; index += 1) {
+        final row = rows[index];
+        if (row is! Map) {
+          throw _invalidStructured('table row must be an object');
+        }
+        final label = _optionalString(row, 'label', 'table row') ?? '';
+        final value = _optionalString(row, 'value', 'table row') ?? '';
+        final text = _requiredString(row, 'text', 'table row');
+        evidence.add(
+          AiExtractedEvidence(
+            id: '$id-row-${index + 1}',
+            text: _joinParts([title, label, value, text]),
+            pageNumber: pageNumber,
+            sectionTitle: title,
+            sourceType: AiEvidenceSourceType.table,
+          ),
+        );
+      }
+    }
+    return evidence;
+  }
+
+  List<AiExtractedEvidence> _parseScores(Map<String, Object?> json) {
+    final scores = _optionalList(json, 'scores');
+    return scores
+        .map((score) {
+          if (score is! Map) {
+            throw _invalidStructured('score must be an object');
+          }
+          final id = _requiredString(score, 'id', 'score');
+          final pageNumber = _requiredNum(
+            score,
+            'page_number',
+            'score',
+          ).toInt();
+          final scoreName = _requiredString(score, 'score_name', 'score');
+          final criterion = _requiredString(score, 'criterion', 'score');
+          final value = _optionalString(score, 'value', 'score') ?? '';
+          final text = _requiredString(score, 'text', 'score');
+          return AiExtractedEvidence(
+            id: id,
+            text: _joinParts([scoreName, criterion, value, text]),
+            pageNumber: pageNumber,
+            sectionTitle: scoreName,
+            sourceType: AiEvidenceSourceType.score,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  List<AiFlowchartCandidate> _parseFlowcharts(Map<String, Object?> json) {
+    final flowcharts = _optionalList(json, 'flowcharts');
+    return flowcharts
+        .map((flowchart) {
+          if (flowchart is! Map) {
+            throw _invalidStructured('flowchart must be an object');
+          }
+          final id = _requiredString(flowchart, 'id', 'flowchart');
+          final pageNumber = _requiredNum(
+            flowchart,
+            'page_number',
+            'flowchart',
+          ).toInt();
+          final title = _optionalString(flowchart, 'title', 'flowchart');
+          final confidence = _optionalNum(flowchart, 'confidence', 'flowchart');
+          final nodes = _requiredList(flowchart, 'nodes', 'flowchart')
+              .map((node) {
+                if (node is! Map) {
+                  throw _invalidStructured('flowchart node must be an object');
+                }
+                return AiFlowchartNode(
+                  id: _requiredString(node, 'id', 'flowchart node'),
+                  label: _requiredString(node, 'label', 'flowchart node'),
+                );
+              })
+              .toList(growable: false);
+          final edges = _requiredList(flowchart, 'edges', 'flowchart')
+              .map((edge) {
+                if (edge is! Map) {
+                  throw _invalidStructured('flowchart edge must be an object');
+                }
+                return AiFlowchartEdge(
+                  id: _requiredString(edge, 'id', 'flowchart edge'),
+                  fromNodeId: _requiredString(
+                    edge,
+                    'from_node_id',
+                    'flowchart edge',
+                  ),
+                  toNodeId: _requiredString(
+                    edge,
+                    'to_node_id',
+                    'flowchart edge',
+                  ),
+                  label: _requiredString(edge, 'label', 'flowchart edge'),
+                );
+              })
+              .toList(growable: false);
+          return AiFlowchartCandidate(
+            id: id,
+            pageNumber: pageNumber,
+            title: title,
+            confidence: confidence?.toDouble(),
+            nodes: nodes,
+            edges: edges,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  List<Object?> _optionalList(Map<String, Object?> json, String key) {
+    final value = json[key];
+    if (value == null) {
+      return const [];
+    }
+    if (value is List) {
+      return value;
+    }
+    throw _invalidStructured('$key must be a list');
+  }
+
+  List<Object?> _requiredList(
+    Map<dynamic, dynamic> json,
+    String key,
+    String context,
+  ) {
+    final value = json[key];
+    if (value is List) {
+      return value;
+    }
+    throw _invalidStructured('$context $key must be a list');
+  }
+
+  String _requiredString(
+    Map<dynamic, dynamic> json,
+    String key,
+    String context,
+  ) {
+    final value = json[key];
+    if (value is String) {
+      return value;
+    }
+    throw _invalidStructured('$context $key must be a string');
+  }
+
+  String? _optionalString(
+    Map<dynamic, dynamic> json,
+    String key,
+    String context,
+  ) {
+    final value = json[key];
+    if (value == null || value is String) {
+      return value as String?;
+    }
+    throw _invalidStructured('$context $key must be a string');
+  }
+
+  num _requiredNum(Map<dynamic, dynamic> json, String key, String context) {
+    final value = json[key];
+    if (value is num) {
+      return value;
+    }
+    throw _invalidStructured('$context $key must be numeric');
+  }
+
+  num? _optionalNum(Map<dynamic, dynamic> json, String key, String context) {
+    final value = json[key];
+    if (value == null || value is num) {
+      return value as num?;
+    }
+    throw _invalidStructured('$context $key must be numeric');
+  }
+
+  AiProviderException _invalidStructured(String message) {
+    return AiProviderException(
+      AiFailure.invalidStructuredResponse(AiProvider.gemini, message),
+    );
+  }
+
+  String _joinParts(List<String?> parts) {
+    return parts
+        .map((part) => part?.trim() ?? '')
+        .where((part) => part.isNotEmpty)
+        .join(' | ');
   }
 }
 
 const _documentExtractionInstruction = '''
 Extract this OMSZ PDF into source-grounded chunks. Return JSON only. Include page-aware text chunks and preserve source wording. Flowchart extraction will be validated later, so do not invent missing nodes or arrows.
 ''';
+
+const _visualExtractionInstruction = '''
+If a page contains a table, score, or flowchart as an image, extract it from the PDF image content. Preserve clinically relevant table rows. For RAVE or other scores, return each criterion as a score item. For flowcharts, return candidate nodes and directed edges; do not invent uncertain nodes.
+''';
+
+const _answerLanguagePolicy =
+    'Answer language policy: detect the latest user question language. '
+    'If it is Hungarian, answer in Hungarian. If it is ambiguous or mixed, '
+    'answer in Hungarian. If it is clearly English, answer in English. '
+    'Do not choose the answer language from the source document language alone.';
 
 String _chunkingInstruction(String mode) {
   return switch (ChunkingModes.normalize(mode)) {
@@ -501,8 +715,98 @@ const Map<String, Object?> _documentExtractionSchema = {
         'required': ['id', 'text', 'page_number', 'section_title'],
       },
     },
+    'tables': {
+      'type': 'array',
+      'items': {
+        'type': 'object',
+        'properties': {
+          'id': {'type': 'string'},
+          'page_number': {'type': 'integer'},
+          'title': {'type': 'string', 'nullable': true},
+          'rows': {
+            'type': 'array',
+            'items': {
+              'type': 'object',
+              'properties': {
+                'label': {'type': 'string', 'nullable': true},
+                'value': {'type': 'string', 'nullable': true},
+                'text': {'type': 'string'},
+              },
+              'required': ['label', 'value', 'text'],
+            },
+          },
+        },
+        'required': ['id', 'page_number', 'title', 'rows'],
+      },
+    },
+    'scores': {
+      'type': 'array',
+      'items': {
+        'type': 'object',
+        'properties': {
+          'id': {'type': 'string'},
+          'page_number': {'type': 'integer'},
+          'score_name': {'type': 'string'},
+          'criterion': {'type': 'string'},
+          'value': {'type': 'string', 'nullable': true},
+          'text': {'type': 'string'},
+        },
+        'required': [
+          'id',
+          'page_number',
+          'score_name',
+          'criterion',
+          'value',
+          'text',
+        ],
+      },
+    },
+    'flowcharts': {
+      'type': 'array',
+      'items': {
+        'type': 'object',
+        'properties': {
+          'id': {'type': 'string'},
+          'page_number': {'type': 'integer'},
+          'title': {'type': 'string', 'nullable': true},
+          'confidence': {'type': 'number', 'nullable': true},
+          'nodes': {
+            'type': 'array',
+            'items': {
+              'type': 'object',
+              'properties': {
+                'id': {'type': 'string'},
+                'label': {'type': 'string'},
+              },
+              'required': ['id', 'label'],
+            },
+          },
+          'edges': {
+            'type': 'array',
+            'items': {
+              'type': 'object',
+              'properties': {
+                'id': {'type': 'string'},
+                'from_node_id': {'type': 'string'},
+                'to_node_id': {'type': 'string'},
+                'label': {'type': 'string'},
+              },
+              'required': ['id', 'from_node_id', 'to_node_id', 'label'],
+            },
+          },
+        },
+        'required': [
+          'id',
+          'page_number',
+          'title',
+          'confidence',
+          'nodes',
+          'edges',
+        ],
+      },
+    },
   },
-  'required': ['chunks'],
+  'required': ['chunks', 'tables', 'scores', 'flowcharts'],
 };
 
 const Map<String, Object?> _answerSchema = {

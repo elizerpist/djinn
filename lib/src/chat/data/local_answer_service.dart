@@ -150,6 +150,7 @@ class LocalAnswerService implements AnswerService {
       );
     }
 
+    DebugConsole.log('[Chat/RAG] answer language=auto default=hu');
     final draft = await client.generateAnswer(
       model: settings.answerModel,
       question: question,
