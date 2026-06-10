@@ -168,6 +168,36 @@ void main() {
 
     expect(speech.stopCount, 1);
   });
+
+  test(
+    'speech adapter logs requested normalized system and selected locale',
+    () async {
+      final adapter = SpeechToTextAdapter(
+        engine: _LocaleRecordingEngine(
+          locales: const ['hu_HU', 'en_US'],
+          systemLocale: 'en_US',
+        ),
+      );
+
+      await adapter.listen(locale: 'hu-HU').drain<void>();
+
+      expect(DebugConsole.allText, contains('requested=hu-HU'));
+      expect(DebugConsole.allText, contains('normalized=hu_HU'));
+      expect(DebugConsole.allText, contains('system=en_US'));
+      expect(DebugConsole.allText, contains('available=2'));
+      expect(DebugConsole.allText, contains('selected=hu_HU'));
+    },
+  );
+
+  test('server disconnected does not retry endlessly', () async {
+    final engine = _FailingSpeechEngine(errorCode: 'error_server_disconnected');
+    final adapter = SpeechToTextAdapter(engine: engine);
+
+    await adapter.listen(locale: 'hu-HU').drain<void>();
+
+    expect(engine.listenCount, 1);
+    expect(DebugConsole.allText, contains('error_server_disconnected'));
+  });
 }
 
 class _BlockingTtsAdapter extends FakeTtsAdapter {
@@ -188,5 +218,71 @@ class _BlockingTtsAdapter extends FakeTtsAdapter {
     if (!_completion.isCompleted) {
       _completion.complete();
     }
+  }
+}
+
+class _LocaleRecordingEngine implements SpeechRecognitionEngine {
+  _LocaleRecordingEngine({
+    required List<String> locales,
+    required String? systemLocale,
+  }) : _locales = locales,
+       _systemLocale = systemLocale;
+
+  final List<String> _locales;
+  final String? _systemLocale;
+  SpeechStatusCallback? _onStatus;
+
+  @override
+  Future<bool> initialize({
+    required SpeechStatusCallback onStatus,
+    required SpeechErrorCallback onError,
+  }) async {
+    _onStatus = onStatus;
+    return true;
+  }
+
+  @override
+  Future<List<String>> locales() async => _locales;
+
+  @override
+  Future<String?> systemLocale() async => _systemLocale;
+
+  @override
+  Future<void> listen({
+    required String locale,
+    required SpeechResultCallback onResult,
+  }) async {
+    _onStatus?.call('done');
+  }
+
+  @override
+  Future<void> stop() async {}
+}
+
+class _FailingSpeechEngine extends _LocaleRecordingEngine {
+  _FailingSpeechEngine({required this.errorCode})
+    : super(locales: const ['hu_HU', 'en_US'], systemLocale: 'en_US');
+
+  final String errorCode;
+  SpeechErrorCallback? _onError;
+  var listenCount = 0;
+
+  @override
+  Future<bool> initialize({
+    required SpeechStatusCallback onStatus,
+    required SpeechErrorCallback onError,
+  }) async {
+    await super.initialize(onStatus: onStatus, onError: onError);
+    _onError = onError;
+    return true;
+  }
+
+  @override
+  Future<void> listen({
+    required String locale,
+    required SpeechResultCallback onResult,
+  }) async {
+    listenCount += 1;
+    _onError?.call(errorCode);
   }
 }

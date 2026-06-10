@@ -130,4 +130,40 @@ void main() {
 
     expect(opened, citation);
   });
+
+  testWidgets('speaking assistant bubble shows pause and stop', (tester) async {
+    final message = ChatMessage(
+      id: 'assistant-1',
+      conversationId: 'c1',
+      sender: ChatSender.assistant,
+      text: 'Válasz.',
+      createdAt: DateTime.utc(2026),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(
+            message: message,
+            ttsState: BubbleTtsState.speaking,
+            onPause: (_) {},
+            onStop: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('assistant-pause-assistant-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('assistant-stop-assistant-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('assistant-play-assistant-1')),
+      findsNothing,
+    );
+  });
 }

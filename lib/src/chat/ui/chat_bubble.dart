@@ -3,16 +3,26 @@ import 'package:flutter/material.dart';
 import '../models/chat_citation.dart';
 import '../models/chat_message.dart';
 
+enum BubbleTtsState { idle, speaking, paused }
+
 class ChatBubble extends StatelessWidget {
   const ChatBubble({
     super.key,
     required this.message,
+    this.ttsState = BubbleTtsState.idle,
     this.onPlay,
+    this.onPause,
+    this.onResume,
+    this.onStop,
     this.onCitationTap,
   });
 
   final ChatMessage message;
+  final BubbleTtsState ttsState;
   final ValueChanged<ChatMessage>? onPlay;
+  final ValueChanged<ChatMessage>? onPause;
+  final ValueChanged<ChatMessage>? onResume;
+  final ValueChanged<ChatMessage>? onStop;
   final ValueChanged<ChatCitation>? onCitationTap;
 
   @override
@@ -50,7 +60,7 @@ class ChatBubble extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
               ],
-              if (!isUser && onPlay != null)
+              if (!isUser)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -58,16 +68,13 @@ class ChatBubble extends StatelessWidget {
                       child: _MessageText(text: message.text, color: textColor),
                     ),
                     const SizedBox(width: 6),
-                    IconButton(
-                      key: ValueKey('assistant-play-${message.id}'),
-                      tooltip: 'Válasz felolvasása',
-                      visualDensity: VisualDensity.compact,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 36,
-                        height: 36,
-                      ),
-                      onPressed: () => onPlay!(message),
-                      icon: const Icon(Icons.volume_up_outlined, size: 18),
+                    _BubbleTtsControls(
+                      message: message,
+                      state: ttsState,
+                      onPlay: onPlay,
+                      onPause: onPause,
+                      onResume: onResume,
+                      onStop: onStop,
                     ),
                   ],
                 )
@@ -126,6 +133,85 @@ class ChatBubble extends StatelessWidget {
       final status? => status,
       null => null,
     };
+  }
+}
+
+class _BubbleTtsControls extends StatelessWidget {
+  const _BubbleTtsControls({
+    required this.message,
+    required this.state,
+    this.onPlay,
+    this.onPause,
+    this.onResume,
+    this.onStop,
+  });
+
+  final ChatMessage message;
+  final BubbleTtsState state;
+  final ValueChanged<ChatMessage>? onPlay;
+  final ValueChanged<ChatMessage>? onPause;
+  final ValueChanged<ChatMessage>? onResume;
+  final ValueChanged<ChatMessage>? onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: switch (state) {
+        BubbleTtsState.idle => [
+          _smallButton(
+            key: ValueKey('assistant-play-${message.id}'),
+            tooltip: 'Válasz felolvasása',
+            icon: Icons.volume_up_outlined,
+            onPressed: onPlay == null ? null : () => onPlay!(message),
+          ),
+        ],
+        BubbleTtsState.speaking => [
+          _smallButton(
+            key: ValueKey('assistant-pause-${message.id}'),
+            tooltip: 'Felolvasás szüneteltetése',
+            icon: Icons.pause_circle_outline,
+            onPressed: onPause == null ? null : () => onPause!(message),
+          ),
+          _smallButton(
+            key: ValueKey('assistant-stop-${message.id}'),
+            tooltip: 'Felolvasás leállítása',
+            icon: Icons.stop_circle_outlined,
+            onPressed: onStop == null ? null : () => onStop!(message),
+          ),
+        ],
+        BubbleTtsState.paused => [
+          _smallButton(
+            key: ValueKey('assistant-resume-${message.id}'),
+            tooltip: 'Felolvasás folytatása',
+            icon: Icons.play_circle_outline,
+            onPressed: onResume == null ? null : () => onResume!(message),
+          ),
+          _smallButton(
+            key: ValueKey('assistant-stop-${message.id}'),
+            tooltip: 'Felolvasás leállítása',
+            icon: Icons.stop_circle_outlined,
+            onPressed: onStop == null ? null : () => onStop!(message),
+          ),
+        ],
+      },
+    );
+  }
+
+  Widget _smallButton({
+    required Key key,
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback? onPressed,
+  }) {
+    return IconButton(
+      key: key,
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+    );
   }
 }
 

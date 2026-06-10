@@ -43,20 +43,6 @@ class VoiceControls extends StatelessWidget {
                   : () => _startListening(VoiceInputMode.pushToTalk),
               icon: Icon(listening ? Icons.graphic_eq : Icons.mic),
             ),
-            if (state == VoiceState.speaking)
-              IconButton(
-                key: const ValueKey('voice-pause'),
-                tooltip: 'Felolvasas szuneteltetese',
-                onPressed: controller.pauseTts,
-                icon: const Icon(Icons.pause_circle_outline),
-              ),
-            if (state == VoiceState.speaking || state == VoiceState.paused)
-              IconButton(
-                key: const ValueKey('voice-stop'),
-                tooltip: 'Felolvasas leallitasa',
-                onPressed: controller.stopTts,
-                icon: const Icon(Icons.stop_circle_outlined),
-              ),
           ],
         );
       },

@@ -151,6 +151,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(speech.locales, ['en-US']);
+    expect(find.byKey(const ValueKey('voice-pause')), findsNothing);
+    expect(find.byKey(const ValueKey('voice-stop')), findsNothing);
   });
 
   testWidgets('mic long press uses push to talk without automatic TTS', (

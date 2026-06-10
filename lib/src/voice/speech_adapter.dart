@@ -185,29 +185,39 @@ class SpeechToTextAdapter implements SpeechAdapter {
   Future<String> _resolveLocale(String requestedLocale) async {
     final normalized = _normalizeLocale(requestedLocale);
     final locales = await _normalizedLocales();
-    if (locales.isEmpty) {
-      return normalized;
-    }
-    if (locales.contains(normalized)) {
-      return normalized;
-    }
-    final language = _languagePart(normalized);
-    for (final locale in locales) {
-      if (_languagePart(locale) == language) {
-        DebugConsole.log(
-          '[Voice/STT] locale fallback from=$requestedLocale to=$locale reason=language_variant',
-        );
-        return locale;
-      }
-    }
     final systemLocale = await _normalizedSystemLocale();
-    if (systemLocale != null) {
-      DebugConsole.log(
-        '[Voice/STT] locale fallback from=$requestedLocale to=$systemLocale reason=unsupported_locale',
-      );
-      return systemLocale;
+    String selected = normalized;
+    String? fallbackReason;
+    if (locales.contains(normalized)) {
+      selected = normalized;
+    } else if (locales.isNotEmpty) {
+      final language = _languagePart(normalized);
+      for (final locale in locales) {
+        if (_languagePart(locale) == language) {
+          selected = locale;
+          fallbackReason = 'language_variant';
+          break;
+        }
+      }
+      if (selected == normalized && systemLocale != null) {
+        selected = systemLocale;
+        fallbackReason = 'unsupported_locale';
+      }
+    } else if (systemLocale != null) {
+      selected = systemLocale;
+      fallbackReason = 'unsupported_locale';
     }
-    return normalized;
+    DebugConsole.log(
+      '[Voice/STT] locale requested=$requestedLocale normalized=$normalized '
+      'system=${systemLocale ?? 'none'} available=${locales.length} '
+      'selected=$selected',
+    );
+    if (fallbackReason != null) {
+      DebugConsole.log(
+        '[Voice/STT] locale fallback from=$requestedLocale to=$selected reason=$fallbackReason',
+      );
+    }
+    return selected;
   }
 
   Future<Set<String>> _normalizedLocales() async {
@@ -271,6 +281,7 @@ class SpeechToTextAdapter implements SpeechAdapter {
     if (controller == null) {
       return;
     }
+    DebugConsole.log('[Voice/STT] adapter error code=$code');
     if (code == 'error_language_not_supported' && !_unsupportedRetryAttempted) {
       _unsupportedRetryAttempted = true;
       Future<void>(() async {

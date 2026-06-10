@@ -45,6 +45,8 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _sending = false;
   bool _voiceReplyEnabled = false;
   String _voiceLocale = 'hu-HU';
+  String? _speakingMessageId;
+  String? _pausedMessageId;
   late final VoiceController _voiceController;
   late final bool _ownsVoiceController;
 
@@ -126,18 +128,64 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     if (mounted && assistantMessage != null) {
-      unawaited(_speakAssistant(assistantMessage.text));
+      unawaited(_playAssistantMessage(assistantMessage));
     }
   }
 
-  Future<void> _speakAssistant(String text) async {
-    await _voiceController.speak(text, locale: _voiceLocale);
+  Future<void> _playAssistantMessage(ChatMessage message) async {
+    setState(() {
+      _speakingMessageId = message.id;
+      _pausedMessageId = null;
+    });
+    await _voiceController.speak(message.text, locale: _voiceLocale);
+    if (mounted && _speakingMessageId == message.id) {
+      setState(() {
+        _speakingMessageId = null;
+        _pausedMessageId = null;
+      });
+    }
     if (!mounted ||
         !_voiceReplyEnabled ||
         _voiceController.state != VoiceState.idle) {
       return;
     }
     unawaited(_voiceController.listenOnce(locale: _voiceLocale));
+  }
+
+  Future<void> _pauseAssistantMessage(ChatMessage message) async {
+    await _voiceController.pauseTts();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _speakingMessageId = null;
+      _pausedMessageId = message.id;
+    });
+  }
+
+  Future<void> _resumeAssistantMessage(ChatMessage message) async {
+    await _playAssistantMessage(message);
+  }
+
+  Future<void> _stopAssistantMessage(ChatMessage message) async {
+    await _voiceController.stopTts();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _speakingMessageId = null;
+      _pausedMessageId = null;
+    });
+  }
+
+  BubbleTtsState _bubbleTtsState(ChatMessage message) {
+    if (_speakingMessageId == message.id) {
+      return BubbleTtsState.speaking;
+    }
+    if (_pausedMessageId == message.id) {
+      return BubbleTtsState.paused;
+    }
+    return BubbleTtsState.idle;
   }
 
   ChatMessage? _lastAssistantMessage(List<ChatMessage> messages) {
@@ -220,10 +268,17 @@ class _ChatScreenState extends State<ChatScreen> {
                       final message = _messages[index];
                       return ChatBubble(
                         message: message,
+                        ttsState: _bubbleTtsState(message),
                         onPlay: message.sender == ChatSender.assistant
                             ? (message) =>
-                                  unawaited(_speakAssistant(message.text))
+                                  unawaited(_playAssistantMessage(message))
                             : null,
+                        onPause: (message) =>
+                            unawaited(_pauseAssistantMessage(message)),
+                        onResume: (message) =>
+                            unawaited(_resumeAssistantMessage(message)),
+                        onStop: (message) =>
+                            unawaited(_stopAssistantMessage(message)),
                         onCitationTap: _showCitationExcerpt,
                       );
                     },
