@@ -179,4 +179,54 @@ void main() {
     expect(DebugConsole.allText, contains('[OpenAI] api key saved length=7'));
     expect(DebugConsole.allText, isNot(contains('settings save failed')));
   });
+
+  testWidgets('API key autosave keeps the latest value when writes race', (
+    tester,
+  ) async {
+    final keyStore = _DelayedMemoryApiKeyStore({
+      'sk-partial': const Duration(milliseconds: 30),
+      'sk-final': Duration.zero,
+    });
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('openai-api-key-field')),
+      'sk-partial',
+    );
+    await tester.enterText(
+      find.byKey(const Key('openai-api-key-field')),
+      'sk-final',
+    );
+    await tester.pump(const Duration(milliseconds: 40));
+
+    expect(await keyStore.readKeyForProvider(AiProvider.openAi), 'sk-final');
+  });
+}
+
+class _DelayedMemoryApiKeyStore extends MemoryApiKeyStore {
+  _DelayedMemoryApiKeyStore(this.delays);
+
+  final Map<String, Duration> delays;
+
+  @override
+  Future<void> saveKeyForProvider(AiProvider provider, String value) async {
+    final delay = delays[value.trim()] ?? Duration.zero;
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+    await super.saveKeyForProvider(provider, value);
+  }
 }

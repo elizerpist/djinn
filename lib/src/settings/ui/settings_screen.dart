@@ -28,6 +28,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _apiKeyController = TextEditingController();
+  final Map<AiProvider, int> _apiKeySaveVersions = {};
 
   AppSettings _settings = AppSettings.defaults();
   bool _loading = true;
@@ -96,8 +97,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (trimmed.isEmpty) {
       return;
     }
+    final version = (_apiKeySaveVersions[provider] ?? 0) + 1;
+    _apiKeySaveVersions[provider] = version;
     try {
       await widget.apiKeyStore.saveKeyForProvider(provider, trimmed);
+      if (_apiKeySaveVersions[provider] != version) {
+        final latest = _apiKeyController.text.trim();
+        if (latest.isNotEmpty) {
+          await widget.apiKeyStore.saveKeyForProvider(provider, latest);
+        }
+        return;
+      }
       DebugConsole.log(
         '${_providerLogPrefix(provider)} api key saved length=${trimmed.length}',
       );
@@ -138,21 +148,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _statusText = null;
     });
     DebugConsole.log('${_providerLogPrefix(provider)} api key test started');
-    final ok = await _testProviderKey(provider);
-    DebugConsole.log(
-      ok
-          ? '${_providerLogPrefix(provider)} api key test succeeded'
-          : '${_providerLogPrefix(provider)} api key test failed',
-    );
-    if (!mounted) {
-      return;
+    var ok = false;
+    try {
+      ok = await _testProviderKey(provider);
+      DebugConsole.log(
+        ok
+            ? '${_providerLogPrefix(provider)} api key test succeeded'
+            : '${_providerLogPrefix(provider)} api key test failed',
+      );
+    } catch (error) {
+      DebugConsole.log(
+        '${_providerLogPrefix(provider)} api key test failed error=$error',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _testingKey = false;
+          _statusText = ok
+              ? '${provider.label} kulcs működik'
+              : '${provider.label} kulcs hibás';
+        });
+      }
     }
-    setState(() {
-      _testingKey = false;
-      _statusText = ok
-          ? '${provider.label} kulcs működik'
-          : '${provider.label} kulcs hibás';
-    });
   }
 
   Future<bool> _testProviderKey(AiProvider provider) {
