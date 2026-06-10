@@ -46,6 +46,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   List<KnowledgeDocument> _documents = const [];
   List<KnowledgeFolder> _folders = const [];
   Set<String> _selectedDocumentIds = {};
+  String? _activeFolderId;
   bool _importing = false;
   String? _processingDocumentId;
 
@@ -64,8 +65,32 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     setState(() {
       _documents = documents;
       _folders = folders;
+      if (_activeFolderId != null &&
+          !folders.any((folder) => folder.id == _activeFolderId)) {
+        _activeFolderId = null;
+      }
       final existingIds = documents.map((document) => document.id).toSet();
       _selectedDocumentIds = _selectedDocumentIds.intersection(existingIds);
+    });
+  }
+
+  List<KnowledgeDocument> get _visibleDocuments {
+    final folderId = _activeFolderId;
+    if (folderId == null) {
+      return _documents;
+    }
+    return _documents
+        .where((document) => document.folderId == folderId)
+        .toList(growable: false);
+  }
+
+  void _setActiveFolder(String? folderId) {
+    setState(() {
+      _activeFolderId = folderId;
+      final visibleIds = _visibleDocuments
+          .map((document) => document.id)
+          .toSet();
+      _selectedDocumentIds = _selectedDocumentIds.intersection(visibleIds);
     });
   }
 
@@ -297,7 +322,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     }
     if (selected == 'select_all') {
       setState(
-        () => _selectedDocumentIds = _documents
+        () => _selectedDocumentIds = _visibleDocuments
             .map((document) => document.id)
             .toSet(),
       );
@@ -386,10 +411,12 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   Widget build(BuildContext context) {
     final selectionCount = _selectedDocumentIds.length;
     final selectionMode = selectionCount > 0;
+    final visibleDocuments = _visibleDocuments;
+    final hasAnyKnowledge = _documents.isNotEmpty || _folders.isNotEmpty;
     return Scaffold(
       appBar: KnowledgeHeader(
         selectionCount: selectionCount,
-        selectionSummary: '${_documents.length} PDF a tudástárban',
+        selectionSummary: '${visibleDocuments.length} PDF ebben a nézetben',
         onExitSelection: _exitSelection,
         onSendSelected: widget.processingService == null
             ? () {}
@@ -413,25 +440,34 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
               ),
             ),
           ),
+          _FolderPillBar(
+            folders: _folders,
+            activeFolderId: _activeFolderId,
+            onSelected: _setActiveFolder,
+          ),
           Expanded(
-            child: _documents.isEmpty && _folders.isEmpty
+            child: !hasAnyKnowledge
                 ? const Center(
                     child: Text(
                       'Nincs importált PDF',
                       style: TextStyle(color: Color(0xFF6B7280)),
                     ),
                   )
+                : visibleDocuments.isEmpty
+                ? Center(
+                    child: Text(
+                      _activeFolderId == null
+                          ? 'Nincs importált PDF'
+                          : 'Nincs PDF ebben a mappában',
+                      style: const TextStyle(color: Color(0xFF6B7280)),
+                    ),
+                  )
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                    itemCount: _folders.length + _documents.length,
+                    itemCount: visibleDocuments.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
-                      if (index < _folders.length) {
-                        final folder = _folders[index];
-                        return _KnowledgeFolderRow(folder: folder);
-                      }
-                      final documentIndex = index - _folders.length;
-                      final document = _documents[documentIndex];
+                      final document = visibleDocuments[index];
                       final selected = _selectedDocumentIds.contains(
                         document.id,
                       );
@@ -524,33 +560,51 @@ class _CreateFolderDialogState extends State<_CreateFolderDialog> {
   }
 }
 
-class _KnowledgeFolderRow extends StatelessWidget {
-  const _KnowledgeFolderRow({required this.folder});
+class _FolderPillBar extends StatelessWidget {
+  const _FolderPillBar({
+    required this.folders,
+    required this.activeFolderId,
+    required this.onSelected,
+  });
 
-  final KnowledgeFolder folder;
+  final List<KnowledgeFolder> folders;
+  final String? activeFolderId;
+  final ValueChanged<String?> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    return SizedBox(
+      height: 54,
+      child: SingleChildScrollView(
+        key: const Key('folder-pill-scroll'),
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
         child: Row(
           children: [
-            const Icon(Icons.folder, color: Color(0xFF155EEF)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                folder.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF111827),
-                ),
-              ),
+            ChoiceChip(
+              key: const Key('folder-pill-all'),
+              label: const Text('Összes'),
+              selected: activeFolderId == null,
+              showCheckmark: false,
+              visualDensity: VisualDensity.compact,
+              onSelected: (_) => onSelected(null),
             ),
+            for (final folder in folders) ...[
+              const SizedBox(width: 8),
+              ChoiceChip(
+                key: Key('folder-pill-${folder.id}'),
+                avatar: const Icon(Icons.folder_outlined, size: 18),
+                label: Text(
+                  folder.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                selected: activeFolderId == folder.id,
+                showCheckmark: false,
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => onSelected(folder.id),
+              ),
+            ],
           ],
         ),
       ),

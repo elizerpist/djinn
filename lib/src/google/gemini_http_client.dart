@@ -482,9 +482,7 @@ const Map<String, Object?> _documentExtractionSchema = {
           'id': {'type': 'string'},
           'text': {'type': 'string'},
           'page_number': {'type': 'integer'},
-          'section_title': {
-            'type': ['string', 'null'],
-          },
+          'section_title': {'type': 'string', 'nullable': true},
         },
         'required': ['id', 'text', 'page_number', 'section_title'],
       },
@@ -502,9 +500,7 @@ const Map<String, Object?> _answerSchema = {
       'items': {'type': 'string'},
     },
     'abstain': {'type': 'boolean'},
-    'refusal_reason': {
-      'type': ['string', 'null'],
-    },
+    'refusal_reason': {'type': 'string', 'nullable': true},
   },
   'required': ['answer', 'cited_source_ids', 'abstain', 'refusal_reason'],
 };

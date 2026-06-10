@@ -272,6 +272,67 @@ void main() {
     expect((await repository.listFolders()).single.name, 'Eljárásrendek');
   });
 
+  testWidgets('folder pills filter PDFs by the active folder', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    final procedures = await repository.createFolder('Eljárásrendek');
+    final guidelines = await repository.createFolder('Külső guidelineok');
+    await repository.addDocument(
+      filename: 'root.pdf',
+      localPath: '/memory/root.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'root',
+    );
+    await repository.addDocument(
+      filename: 'procedure.pdf',
+      localPath: '/memory/procedure.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'procedure',
+      folderId: procedures.id,
+    );
+    await repository.addDocument(
+      filename: 'guideline.pdf',
+      localPath: '/memory/guideline.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'guideline',
+      folderId: guidelines.id,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('procedure.pdf'));
+
+    expect(find.byKey(const Key('folder-pill-scroll')), findsOneWidget);
+    expect(find.byKey(const Key('folder-pill-all')), findsOneWidget);
+    expect(find.byKey(Key('folder-pill-${procedures.id}')), findsOneWidget);
+    expect(find.byKey(Key('folder-pill-${guidelines.id}')), findsOneWidget);
+    expect(find.text('root.pdf'), findsOneWidget);
+    expect(find.text('procedure.pdf'), findsOneWidget);
+    expect(find.text('guideline.pdf'), findsOneWidget);
+
+    await tester.tap(find.byKey(Key('folder-pill-${procedures.id}')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('procedure.pdf'), findsOneWidget);
+    expect(find.text('root.pdf'), findsNothing);
+    expect(find.text('guideline.pdf'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('folder-pill-all')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('root.pdf'), findsOneWidget);
+    expect(find.text('procedure.pdf'), findsOneWidget);
+    expect(find.text('guideline.pdf'), findsOneWidget);
+  });
+
   testWidgets('selection menu moves selected PDFs into a folder', (
     tester,
   ) async {
