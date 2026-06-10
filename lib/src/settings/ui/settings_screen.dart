@@ -140,13 +140,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     } finally {
       _apiKeySaveRunning.remove(provider);
-      final pending = _pendingApiKeys[provider];
-      if (pending != null) {
-        final stored = await widget.apiKeyStore.readKeyForProvider(provider);
-        if (stored != pending) {
-          await _saveProviderKey(provider, pending);
-        }
-      }
     }
   }
 
