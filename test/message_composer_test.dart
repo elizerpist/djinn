@@ -72,7 +72,7 @@ void main() {
     },
   );
 
-  testWidgets('speaking state exposes pause and stop controls', (tester) async {
+  testWidgets('speaking state keeps composer mic-only', (tester) async {
     final tts = _BlockingTtsAdapter();
     final controller = VoiceController(
       speech: FakeSpeechAdapter(events: const []),
@@ -97,14 +97,10 @@ void main() {
     final speaking = controller.speak('valasz', locale: 'hu-HU');
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('voice-pause')), findsOneWidget);
-    expect(find.byKey(const ValueKey('voice-stop')), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('voice-pause')));
-    await tester.pump();
-
-    expect(tts.pauseCount, 1);
-    expect(controller.state, VoiceState.paused);
+    expect(find.byKey(const ValueKey('voice-listen')), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice-pause')), findsNothing);
+    expect(find.byKey(const ValueKey('voice-stop')), findsNothing);
+    expect(controller.state, VoiceState.speaking);
 
     tts.complete();
     await speaking;
