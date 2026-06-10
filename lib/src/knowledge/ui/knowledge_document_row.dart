@@ -9,6 +9,8 @@ class KnowledgeDocumentRow extends StatelessWidget {
     required this.selectionMode,
     required this.selected,
     required this.processing,
+    this.progressLabel,
+    this.progressValue,
     required this.onTap,
     required this.onLongPress,
     required this.onSelectionChanged,
@@ -18,6 +20,8 @@ class KnowledgeDocumentRow extends StatelessWidget {
   final bool selectionMode;
   final bool selected;
   final bool processing;
+  final String? progressLabel;
+  final double? progressValue;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final ValueChanged<bool> onSelectionChanged;
@@ -34,45 +38,71 @@ class KnowledgeDocumentRow extends StatelessWidget {
         onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              if (selectionMode) ...[
-                Checkbox(
-                  value: selected,
-                  onChanged: (value) => onSelectionChanged(value ?? false),
-                  visualDensity: VisualDensity.compact,
-                ),
-                const SizedBox(width: 4),
-              ],
-              const Icon(Icons.picture_as_pdf, color: Color(0xFFB91C1C)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      document.filename,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF111827),
-                      ),
+              Row(
+                children: [
+                  if (selectionMode) ...[
+                    Checkbox(
+                      value: selected,
+                      onChanged: (value) => onSelectionChanged(value ?? false),
+                      visualDensity: VisualDensity.compact,
                     ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
+                    const SizedBox(width: 4),
+                  ],
+                  const Icon(Icons.picture_as_pdf, color: Color(0xFFB91C1C)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _Badge(text: document.syncStatusLabel),
-                        _Badge(text: _sizeLabel(document.sizeBytes)),
-                        if (document.status.isReady) const _Badge(text: 'RAG'),
+                        Text(
+                          document.filename,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF111827),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: [
+                            _Badge(text: document.syncStatusLabel),
+                            _Badge(text: _sizeLabel(document.sizeBytes)),
+                            if (document.status.isReady)
+                              const _Badge(text: 'RAG'),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+              if (progressLabel != null) ...[
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  key: Key('document-progress-${document.id}'),
+                  value: progressValue,
+                  minHeight: 3,
+                ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    progressLabel!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF6B7280),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

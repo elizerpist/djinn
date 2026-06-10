@@ -11,6 +11,7 @@ import 'package:djinn/src/knowledge/models/chunk_package.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
 import 'package:djinn/src/knowledge/models/knowledge_pack.dart';
 import 'package:djinn/src/knowledge/ui/knowledge_base_screen.dart';
+import 'package:djinn/src/knowledge/ui/knowledge_document_row.dart';
 import 'package:djinn/src/openai/openai_client.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
 
@@ -151,7 +152,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Szinkronizálás'));
+    await tester.tap(find.text('Újrapróbálás'));
     await _pumpUntilFound(tester, find.text('Kész'));
 
     expect(
@@ -545,6 +546,66 @@ void main() {
     expect(exportedDocumentId, document.sha256, reason: DebugConsole.allText);
   });
 
+  testWidgets('selection menu shares a djinnpack for selected PDFs', (
+    tester,
+  ) async {
+    final tempDir = Directory.systemTemp.createTempSync('djinn-pack-share-');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+    final pdf = File('${tempDir.path}/share.pdf')
+      ..writeAsBytesSync([37, 80, 68, 70]);
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'share.pdf',
+      localPath: pdf.path,
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'hash-share',
+    );
+    await repository.saveExtractedChunk(
+      documentPublicId: document.id,
+      chunk: const OpenAiExtractedChunk(
+        id: 'p1-main',
+        text: 'Megosztott chunk',
+        pageNumber: 1,
+      ),
+      embedding: [0.1, 0.2],
+      embeddingModel: 'gemini-embedding-001',
+    );
+    KnowledgePack? sharedPack;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          readDocumentBytesForTest: (_) async => [37, 80, 68, 70],
+          shareKnowledgePackForTest: (pack) async {
+            sharedPack = pack;
+            return '/memory/share.djinnpack';
+          },
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('share.pdf'));
+
+    await tester.longPress(find.text('share.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
+    expect(find.text('Megosztás'), findsOneWidget);
+    expect(find.byIcon(Icons.share), findsOneWidget);
+
+    await tester.tap(find.text('Megosztás'));
+    await _pumpUntil(tester, () => sharedPack != null);
+
+    expect(sharedPack, isNotNull, reason: DebugConsole.allText);
+    expect(sharedPack!.documents.single.filename, 'share.pdf');
+    expect(
+      sharedPack!.documents.single.chunkPackage.chunks.single.text,
+      'Megosztott chunk',
+    );
+  });
+
   testWidgets('global menu exports visible PDFs as one djinnpack', (
     tester,
   ) async {
@@ -831,7 +892,7 @@ void main() {
     );
   });
 
-  testWidgets('batch sync skips already ready PDFs', (tester) async {
+  testWidgets('batch sync includes ready PDFs as re-sync', (tester) async {
     final repository = KnowledgeDocumentRepository();
     final ready = await repository.addDocument(
       filename: 'ready.pdf',
@@ -871,7 +932,17 @@ void main() {
     await tester.tap(find.byKey(const Key('knowledge-send-selected')));
     await tester.pumpAndSettle();
 
-    expect(processingService.processedIds, [imported.id]);
+    final forceByDocument = <String, bool>{
+      for (
+        var index = 0;
+        index < processingService.processedIds.length;
+        index += 1
+      )
+        processingService.processedIds[index]:
+            processingService.forceReprocessFlags[index],
+    };
+    expect(forceByDocument[ready.id], isTrue);
+    expect(forceByDocument[imported.id], isFalse);
   });
 
   testWidgets('selection menu sync processes only eligible PDFs', (
@@ -910,7 +981,7 @@ void main() {
     expect(processingService.processedIds, hasLength(1));
   });
 
-  testWidgets('selection menu sync skips ready PDF', (tester) async {
+  testWidgets('selection menu re-syncs ready PDF', (tester) async {
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
       filename: 'ready-menu.pdf',
@@ -939,10 +1010,44 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Szinkronizálás'));
+    expect(find.text('Újraszinkronizálás'), findsOneWidget);
+    await tester.tap(find.text('Újraszinkronizálás'));
     await tester.pumpAndSettle();
 
-    expect(processingService.processedIds, isEmpty);
+    expect(processingService.processedIds, [document.id]);
+    expect(processingService.forceReprocessFlags, [true]);
+  });
+
+  testWidgets('processing row shows compact progress strip', (tester) async {
+    final document = KnowledgeDocument(
+      id: 'doc-1',
+      filename: 'syncing.pdf',
+      localPath: '/memory/syncing.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      status: KnowledgeDocumentStatus.processing,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: KnowledgeDocumentRow(
+            document: document,
+            selectionMode: false,
+            selected: false,
+            processing: true,
+            progressLabel: 'Embedding 4/15',
+            progressValue: 4 / 15,
+            onTap: () {},
+            onLongPress: () {},
+            onSelectionChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Embedding 4/15'), findsOneWidget);
+    expect(find.byKey(const Key('document-progress-doc-1')), findsOneWidget);
   });
 }
 
@@ -1026,13 +1131,16 @@ class _RecordingProcessingService extends DocumentProcessingService {
 
   final KnowledgeDocumentRepository _repository;
   final processedIds = <String>[];
+  final forceReprocessFlags = <bool>[];
 
   @override
   Future<ProcessingResult> processDocument(
     String documentPublicId, {
     bool forceReprocess = false,
+    void Function(ProcessingProgress progress)? onProgress,
   }) async {
     processedIds.add(documentPublicId);
+    forceReprocessFlags.add(forceReprocess);
     await _repository.updateStatus(
       documentPublicId,
       KnowledgeDocumentStatus.ready,

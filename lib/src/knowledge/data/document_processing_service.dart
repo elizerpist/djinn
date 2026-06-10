@@ -113,7 +113,24 @@ class DocumentProcessingService {
   Future<ProcessingResult> processDocument(
     String documentPublicId, {
     bool forceReprocess = false,
+    void Function(ProcessingProgress progress)? onProgress,
   }) async {
+    void emitProgress(
+      ProcessingPhase phase, {
+      int? current,
+      int? total,
+      String? label,
+    }) {
+      _emitProgress(
+        documentPublicId,
+        phase,
+        current: current,
+        total: total,
+        label: label,
+        extraProgress: onProgress,
+      );
+    }
+
     final settings = await loadSettings();
     final provider = settings.activeProvider;
     if (!await _hasKey(provider)) {
@@ -151,11 +168,7 @@ class DocumentProcessingService {
         await repository.clearGeneratedKnowledge(documentPublicId);
       }
 
-      _emitProgress(
-        documentPublicId,
-        ProcessingPhase.extracting,
-        label: 'Kinyeres...',
-      );
+      emitProgress(ProcessingPhase.extracting, label: 'Kinyeres...');
       final extraction = await client.extractDocument(
         pdfPath: pdfPath,
         model: settings.extractionModel,
@@ -194,8 +207,7 @@ class DocumentProcessingService {
           embedding: embedding,
           embeddingModel: settings.embeddingModel,
         );
-        _emitProgress(
-          documentPublicId,
+        emitProgress(
           ProcessingPhase.embedding,
           current: current,
           total: evidence.length,
@@ -222,7 +234,7 @@ class DocumentProcessingService {
       DebugConsole.log(
         '[AI Training] complete document=$documentPublicId provider=${provider.wireName}',
       );
-      _emitProgress(documentPublicId, ProcessingPhase.complete, label: 'Kesz');
+      emitProgress(ProcessingPhase.complete, label: 'Kesz');
       return ProcessingResult(state: ProcessingState.ready.wireName);
     } on AiProviderException catch (error) {
       final failure = error.failure;
@@ -240,11 +252,7 @@ class DocumentProcessingService {
         lastErrorCode: failure.code.name,
         retryable: failure.retryable,
       );
-      _emitProgress(
-        documentPublicId,
-        ProcessingPhase.failed,
-        label: failure.userMessage,
-      );
+      emitProgress(ProcessingPhase.failed, label: failure.userMessage);
       return ProcessingResult(
         state: ProcessingState.failed.wireName,
         errorMessage: failure.userMessage,
@@ -265,11 +273,7 @@ class DocumentProcessingService {
         lastErrorCode: AiFailureCode.unknown.name,
         retryable: false,
       );
-      _emitProgress(
-        documentPublicId,
-        ProcessingPhase.failed,
-        label: error.message,
-      );
+      emitProgress(ProcessingPhase.failed, label: error.message);
       return ProcessingResult(
         state: ProcessingState.failed.wireName,
         errorMessage: error.message,
@@ -307,15 +311,16 @@ class DocumentProcessingService {
     int? current,
     int? total,
     String? label,
+    void Function(ProcessingProgress progress)? extraProgress,
   }) {
-    onProgress?.call(
-      ProcessingProgress(
-        documentId: documentId,
-        phase: phase,
-        current: current,
-        total: total,
-        label: label,
-      ),
+    final progress = ProcessingProgress(
+      documentId: documentId,
+      phase: phase,
+      current: current,
+      total: total,
+      label: label,
     );
+    onProgress?.call(progress);
+    extraProgress?.call(progress);
   }
 }

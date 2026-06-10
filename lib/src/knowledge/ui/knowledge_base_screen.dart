@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../debug/debug_console.dart';
 import '../data/document_processing_service.dart';
 import '../data/knowledge_document_repository.dart';
+import '../data/knowledge_pack_share_service.dart';
 import '../data/knowledge_pack_service.dart';
 import '../data/pdf_import_service.dart';
 import '../models/knowledge_document.dart';
@@ -18,6 +19,8 @@ import 'pdf_viewer_screen.dart';
 
 typedef PickPdfs = Future<List<PickedPdfFile>> Function();
 typedef ExportKnowledgePackForTest =
+    Future<String?> Function(KnowledgePack pack);
+typedef ShareKnowledgePackForTest =
     Future<String?> Function(KnowledgePack pack);
 typedef ImportKnowledgePackForTest = Future<KnowledgePack?> Function();
 typedef ReadDocumentBytesForTest =
@@ -58,6 +61,7 @@ class KnowledgeBaseScreen extends StatefulWidget {
     this.clock,
     this.onOpenDocumentForTest,
     this.exportKnowledgePackForTest,
+    this.shareKnowledgePackForTest,
     this.importKnowledgePackForTest,
     this.readDocumentBytesForTest,
     this.chooseDuplicatePackImportForTest,
@@ -71,6 +75,7 @@ class KnowledgeBaseScreen extends StatefulWidget {
   final DateTime Function()? clock;
   final void Function(KnowledgeDocument document)? onOpenDocumentForTest;
   final ExportKnowledgePackForTest? exportKnowledgePackForTest;
+  final ShareKnowledgePackForTest? shareKnowledgePackForTest;
   final ImportKnowledgePackForTest? importKnowledgePackForTest;
   final ReadDocumentBytesForTest? readDocumentBytesForTest;
   final ChooseDuplicatePackImportForTest? chooseDuplicatePackImportForTest;
@@ -87,6 +92,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   _KnowledgeSortMode _sortMode = _KnowledgeSortMode.newestFirst;
   bool _importing = false;
   String? _processingDocumentId;
+  Map<String, ProcessingProgress> _processingProgressByDocumentId = const {};
 
   @override
   void initState() {
@@ -217,20 +223,54 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         .toList(growable: false);
   }
 
-  Future<void> _processDocument(String documentId) async {
+  Future<void> _processDocument(KnowledgeDocument document) async {
     final processingService = widget.processingService;
     if (processingService == null) {
       return;
     }
-    setState(() => _processingDocumentId = documentId);
+    final documentId = document.id;
+    setState(() {
+      _processingDocumentId = documentId;
+      _processingProgressByDocumentId = {
+        ..._processingProgressByDocumentId,
+        documentId: ProcessingProgress(
+          documentId: documentId,
+          phase: ProcessingPhase.extracting,
+          label: 'Kinyerés...',
+        ),
+      };
+    });
     try {
-      await processingService.processDocument(documentId);
+      await processingService.processDocument(
+        documentId,
+        forceReprocess: document.status.isReady,
+        onProgress: _handleProcessingProgress,
+      );
       await _loadDocuments();
     } finally {
       if (mounted) {
-        setState(() => _processingDocumentId = null);
+        setState(() {
+          _processingDocumentId = null;
+          final next = Map<String, ProcessingProgress>.of(
+            _processingProgressByDocumentId,
+          );
+          next.remove(documentId);
+          _processingProgressByDocumentId = next;
+        });
       }
     }
+  }
+
+  void _handleProcessingProgress(ProcessingProgress progress) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _processingProgressByDocumentId = {
+        ..._processingProgressByDocumentId,
+        progress.documentId: progress,
+      };
+    });
   }
 
   void _openDocument(KnowledgeDocument document) {
@@ -275,7 +315,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
           _canProcessManually(document.status),
     );
     for (final document in documentsToProcess) {
-      await _processDocument(document.id);
+      await _processDocument(document);
     }
     if (mounted) {
       _exitSelection();
@@ -426,18 +466,30 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   }
 
   Future<void> _showSelectionMenu() async {
+    final selectedDocuments = _selectedDocuments;
     final selected = await showMenu<String>(
       context: context,
       position: const RelativeRect.fromLTRB(1000, kToolbarHeight, 12, 0),
       items: [
         if (widget.processingService != null)
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'sync',
-            child: Text('Szinkronizálás'),
+            child: Text(_syncActionLabel(selectedDocuments)),
           ),
         const PopupMenuItem<String>(
           value: 'move',
           child: Text('Mozgatás mappába'),
+        ),
+        const PopupMenuItem<String>(
+          value: 'share_pack',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.share, size: 20),
+              SizedBox(width: 12),
+              Text('Megosztás'),
+            ],
+          ),
         ),
         const PopupMenuItem<String>(
           value: 'export_chunks',
@@ -452,9 +504,21 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       await _syncSelectedDocuments();
     } else if (selected == 'move') {
       await _moveSelectedDocuments();
+    } else if (selected == 'share_pack') {
+      await _shareKnowledgePack(_selectedDocuments);
     } else if (selected == 'export_chunks') {
       await _exportKnowledgePack(_selectedDocuments);
     }
+  }
+
+  String _syncActionLabel(List<KnowledgeDocument> selectedDocuments) {
+    if (selectedDocuments.any((document) => document.status.isReady)) {
+      return 'Újraszinkronizálás';
+    }
+    if (selectedDocuments.any((document) => document.status.canRetry)) {
+      return 'Újrapróbálás';
+    }
+    return 'Szinkronizálás';
   }
 
   Future<void> _exportKnowledgePack(List<KnowledgeDocument> documents) async {
@@ -475,6 +539,29 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       }
     } catch (error) {
       DebugConsole.log('[Knowledge] pack export failed error=$error');
+    }
+  }
+
+  Future<void> _shareKnowledgePack(List<KnowledgeDocument> documents) async {
+    if (documents.isEmpty) {
+      DebugConsole.log('[Knowledge] pack share skipped empty_selection');
+      return;
+    }
+    try {
+      final pack = await _buildKnowledgePack(documents);
+      final callback = widget.shareKnowledgePackForTest;
+      final path = callback != null
+          ? await callback(pack)
+          : (await KnowledgePackShareService(
+              packService: widget.packService,
+            ).share(pack, filename: _knowledgePackFilename(documents))).path;
+      if (path != null) {
+        DebugConsole.log(
+          '[Knowledge] pack share documents=${pack.documents.length} path=$path',
+        );
+      }
+    } catch (error) {
+      DebugConsole.log('[Knowledge] pack share failed error=$error');
     }
   }
 
@@ -507,9 +594,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     List<KnowledgeDocument> documents,
   ) async {
     final bytes = Uint8List.fromList(widget.packService.encode(pack));
-    final filename = documents.length == 1
-        ? '${_safeBaseName(documents.single.filename)}.djinnpack'
-        : 'djinn-tudastar-${DateTime.now().millisecondsSinceEpoch}.djinnpack';
+    final filename = _knowledgePackFilename(documents);
     return FilePicker.saveFile(
       dialogTitle: 'Tudástár export',
       fileName: filename,
@@ -517,6 +602,12 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       allowedExtensions: const ['djinnpack'],
       bytes: bytes,
     );
+  }
+
+  String _knowledgePackFilename(List<KnowledgeDocument> documents) {
+    return documents.length == 1
+        ? '${_safeBaseName(documents.single.filename)}.djinnpack'
+        : 'djinn-tudastar-${DateTime.now().millisecondsSinceEpoch}.djinnpack';
   }
 
   Future<void> _importKnowledgePack() async {
@@ -764,6 +855,11 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
                         selectionMode: selectionMode,
                         selected: selected,
                         processing: _processingDocumentId == document.id,
+                        progressLabel:
+                            _processingProgressByDocumentId[document.id]?.label,
+                        progressValue: _progressValue(
+                          _processingProgressByDocumentId[document.id],
+                        ),
                         onTap: () => _openDocument(document),
                         onLongPress: () => _enterSelection(document.id),
                         onSelectionChanged: (value) =>
@@ -785,12 +881,22 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   }
 
   bool _canProcessManually(KnowledgeDocumentStatus status) {
-    return _isUnsynced(status) || status.canRetry;
+    return _isUnsynced(status) || status.canRetry || status.isReady;
   }
 
   bool _isUnsynced(KnowledgeDocumentStatus status) {
     return status == KnowledgeDocumentStatus.imported ||
         status == KnowledgeDocumentStatus.pendingIngest;
+  }
+
+  double? _progressValue(ProcessingProgress? progress) {
+    if (progress == null ||
+        progress.total == null ||
+        progress.current == null ||
+        progress.total == 0) {
+      return null;
+    }
+    return progress.current! / progress.total!;
   }
 }
 
