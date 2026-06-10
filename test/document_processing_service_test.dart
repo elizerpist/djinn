@@ -64,6 +64,12 @@ void main() {
       DebugConsole.allText,
       contains('[AI Training] complete document=doc-1'),
     );
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[Flowchart] extraction candidates=0 reason=text_chunk_schema_only document=doc-1',
+      ),
+    );
   });
 
   test('marks document failed when OpenAI extraction fails', () async {

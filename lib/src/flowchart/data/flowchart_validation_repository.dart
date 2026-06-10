@@ -2,7 +2,27 @@ import '../../../objectbox.g.dart';
 import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
 
+enum FlowchartZeroReason {
+  noProcessedDocuments('no_processed_documents'),
+  noDetectedFlowcharts('no_detected_flowcharts'),
+  alreadyValidated('already_validated'),
+  extractionFailed('extraction_failed');
+
+  const FlowchartZeroReason(this.wireName);
+
+  final String wireName;
+}
+
+class FlowchartReviewList {
+  const FlowchartReviewList({required this.items, this.zeroReason});
+
+  final List<FlowchartEntity> items;
+  final FlowchartZeroReason? zeroReason;
+}
+
 abstract class FlowchartValidationRepository {
+  Future<FlowchartReviewList> listFlowchartReviewState();
+
   Future<List<FlowchartEntity>> listFlowchartsNeedingReview();
   Future<List<FlowchartNodeEntity>> listNodes(String flowchartPublicId);
   Future<List<FlowchartEdgeEntity>> listEdges(String flowchartPublicId);
@@ -26,21 +46,32 @@ class ObjectBoxFlowchartValidationRepository
     implements FlowchartValidationRepository {
   ObjectBoxFlowchartValidationRepository({required Store store})
     : _flowchartBox = store.box<FlowchartEntity>(),
+      _documentBox = store.box<KnowledgeDocumentEntity>(),
       _nodeBox = store.box<FlowchartNodeEntity>(),
       _edgeBox = store.box<FlowchartEdgeEntity>();
 
   final Box<FlowchartEntity> _flowchartBox;
+  final Box<KnowledgeDocumentEntity> _documentBox;
   final Box<FlowchartNodeEntity> _nodeBox;
   final Box<FlowchartEdgeEntity> _edgeBox;
 
   @override
-  Future<List<FlowchartEntity>> listFlowchartsNeedingReview() async {
-    final flowcharts = _flowchartBox
-        .getAll()
+  Future<FlowchartReviewList> listFlowchartReviewState() async {
+    final allFlowcharts = _flowchartBox.getAll();
+    final flowcharts = allFlowcharts
         .where((item) => _needsReview(item.validationState))
         .toList(growable: false);
-    DebugConsole.log('[Flowchart] review list count=${flowcharts.length}');
-    return flowcharts;
+    final zeroReason = flowcharts.isEmpty ? _zeroReason(allFlowcharts) : null;
+    DebugConsole.log(
+      '[Flowchart] review list count=${flowcharts.length} '
+      'reason=${zeroReason?.wireName ?? 'has_candidates'}',
+    );
+    return FlowchartReviewList(items: flowcharts, zeroReason: zeroReason);
+  }
+
+  @override
+  Future<List<FlowchartEntity>> listFlowchartsNeedingReview() async {
+    return (await listFlowchartReviewState()).items;
   }
 
   @override
@@ -131,5 +162,27 @@ class ObjectBoxFlowchartValidationRepository
   bool _needsReview(String validationState) {
     return validationState == ValidationState.unreviewed.wireName ||
         validationState == ValidationState.partiallyValidated.wireName;
+  }
+
+  FlowchartZeroReason _zeroReason(List<FlowchartEntity> allFlowcharts) {
+    if (allFlowcharts.isNotEmpty) {
+      return FlowchartZeroReason.alreadyValidated;
+    }
+    final documents = _documentBox.getAll();
+    if (documents.any(
+      (document) => document.processingState == ProcessingState.failed.wireName,
+    )) {
+      return FlowchartZeroReason.extractionFailed;
+    }
+    if (documents.any(_isProcessedDocument)) {
+      return FlowchartZeroReason.noDetectedFlowcharts;
+    }
+    return FlowchartZeroReason.noProcessedDocuments;
+  }
+
+  bool _isProcessedDocument(KnowledgeDocumentEntity document) {
+    return document.processingState == ProcessingState.ready.wireName ||
+        document.processingState == ProcessingState.embedded.wireName ||
+        document.processingState == ProcessingState.needsReview.wireName;
   }
 }

@@ -106,6 +106,10 @@ class DocumentProcessingService {
         '[AI Training] extraction chunks=${extraction.chunks.length} '
         'model=${settings.extractionModel} provider=${provider.wireName}',
       );
+      DebugConsole.log(
+        '[Flowchart] extraction candidates=0 '
+        'reason=text_chunk_schema_only document=$documentPublicId',
+      );
       for (final chunk in extraction.chunks) {
         final embedding = await client.createEmbedding(
           input: chunk.text,

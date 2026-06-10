@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/flowchart/data/flowchart_validation_repository.dart';
 import 'package:djinn/src/flowchart/models/flowchart_view_model.dart';
+import 'package:djinn/src/flowchart/ui/flowchart_validation_screen.dart';
 import 'package:djinn/src/flowchart/ui/simple_flowchart_editor.dart';
 import 'package:djinn/src/local_store/entities.dart';
 
@@ -82,12 +83,39 @@ void main() {
       ),
     );
   });
+
+  testWidgets('empty flowchart validation screen explains zero reason', (
+    tester,
+  ) async {
+    final repository = MemoryFlowchartValidationRepository(
+      zeroReason: FlowchartZeroReason.noDetectedFlowcharts,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: FlowchartValidationScreen(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Nincs feldolgozott vagy felismert flowchart'),
+      findsOneWidget,
+    );
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[Flowchart] validation screen loaded count=0 reason=no_detected_flowcharts',
+      ),
+    );
+  });
 }
 
 class MemoryFlowchartValidationRepository
     implements FlowchartValidationRepository {
+  MemoryFlowchartValidationRepository({this.zeroReason});
+
   final _nodes = <String, ValidationState>{};
   final _nodeRejectionReasons = <String, String?>{};
+  final FlowchartZeroReason? zeroReason;
 
   void addNode(String nodePublicId, ValidationState state) {
     _nodes[nodePublicId] = state;
@@ -96,6 +124,11 @@ class MemoryFlowchartValidationRepository
   @override
   Future<List<FlowchartEntity>> listFlowchartsNeedingReview() async {
     return const [];
+  }
+
+  @override
+  Future<FlowchartReviewList> listFlowchartReviewState() async {
+    return FlowchartReviewList(items: const [], zeroReason: zeroReason);
   }
 
   @override

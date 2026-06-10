@@ -18,6 +18,7 @@ class FlowchartValidationScreen extends StatefulWidget {
 
 class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
   List<FlowchartEntity> _flowcharts = const [];
+  FlowchartZeroReason? _zeroReason;
   bool _loading = true;
 
   @override
@@ -27,15 +28,17 @@ class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
   }
 
   Future<void> _load() async {
-    final flowcharts = await widget.repository.listFlowchartsNeedingReview();
+    final review = await widget.repository.listFlowchartReviewState();
     DebugConsole.log(
-      '[Flowchart] validation screen loaded count=${flowcharts.length}',
+      '[Flowchart] validation screen loaded count=${review.items.length} '
+      'reason=${review.zeroReason?.wireName ?? 'has_candidates'}',
     );
     if (!mounted) {
       return;
     }
     setState(() {
-      _flowcharts = flowcharts;
+      _flowcharts = review.items;
+      _zeroReason = review.zeroReason;
       _loading = false;
     });
   }
@@ -98,7 +101,7 @@ class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _flowcharts.isEmpty
-          ? const Center(child: Text('Nincs validálandó flowchart'))
+          ? Center(child: Text(_zeroText(_zeroReason)))
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: _flowcharts.length,
@@ -128,5 +131,18 @@ class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
       }
     }
     return ValidationState.unreviewed;
+  }
+
+  String _zeroText(FlowchartZeroReason? reason) {
+    return switch (reason) {
+      FlowchartZeroReason.noProcessedDocuments =>
+        'Nincs feldolgozott dokumentum',
+      FlowchartZeroReason.noDetectedFlowcharts =>
+        'Nincs feldolgozott vagy felismert flowchart',
+      FlowchartZeroReason.alreadyValidated => 'Minden flowchart validálva van',
+      FlowchartZeroReason.extractionFailed =>
+        'A flowchart feldolgozás hibára futott',
+      null => 'Nincs validálandó flowchart',
+    };
   }
 }
