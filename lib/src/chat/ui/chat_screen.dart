@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../knowledge/models/knowledge_document.dart';
+import '../../voice/speech_adapter.dart';
+import '../../voice/tts_adapter.dart';
+import '../../voice/voice_controller.dart';
 import '../data/chat_service.dart';
 import '../data/local_chat_repository.dart';
 import '../models/chat_conversation.dart';
@@ -15,12 +20,14 @@ class ChatScreen extends StatefulWidget {
     required this.chatService,
     required this.refreshKnowledgeReadiness,
     required this.conversation,
+    this.voiceController,
   });
 
   final LocalChatRepository repository;
   final ChatService chatService;
   final Future<KnowledgeBaseState> Function() refreshKnowledgeReadiness;
   final ChatConversation conversation;
+  final VoiceController? voiceController;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -32,22 +39,45 @@ class _ChatScreenState extends State<ChatScreen> {
     const [],
   );
   bool _sending = false;
+  bool _voiceReplyEnabled = false;
+  late final VoiceController _voiceController;
+  late final bool _ownsVoiceController;
+  static const _voiceLocale = 'hu-HU';
 
   @override
   void initState() {
     super.initState();
+    _ownsVoiceController = widget.voiceController == null;
+    _voiceController =
+        widget.voiceController ??
+        VoiceController(
+          speech: SpeechToTextAdapter(),
+          tts: FlutterTtsAdapter(),
+          onFinalTranscript: (text) =>
+              _send(text, speakResponse: _voiceReplyEnabled),
+        );
     _loadMessages();
     _loadKnowledgeState();
   }
 
-  Future<void> _loadMessages() async {
+  @override
+  void dispose() {
+    if (_ownsVoiceController) {
+      _voiceController.stopTts();
+      _voiceController.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<List<ChatMessage>> _loadMessages() async {
     final messages = await widget.repository.getMessages(
       widget.conversation.id,
     );
     if (!mounted) {
-      return;
+      return messages;
     }
     setState(() => _messages = messages);
+    return messages;
   }
 
   Future<void> _loadKnowledgeState() async {
@@ -58,17 +88,38 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _knowledgeState = state);
   }
 
-  Future<void> _send(String text) async {
+  Future<void> _send(String text, {bool speakResponse = false}) async {
+    if (!mounted) {
+      return;
+    }
+    ChatMessage? assistantMessage;
     setState(() => _sending = true);
     try {
       await _loadKnowledgeState();
       await widget.chatService.sendMessage(widget.conversation.id, text);
-      await _loadMessages();
+      final messages = await _loadMessages();
+      if (speakResponse) {
+        assistantMessage = _lastAssistantMessage(messages);
+      }
     } finally {
       if (mounted) {
         setState(() => _sending = false);
       }
     }
+    if (mounted && assistantMessage != null) {
+      unawaited(
+        _voiceController.speak(assistantMessage.text, locale: _voiceLocale),
+      );
+    }
+  }
+
+  ChatMessage? _lastAssistantMessage(List<ChatMessage> messages) {
+    for (final message in messages.reversed) {
+      if (message.sender == ChatSender.assistant) {
+        return message;
+      }
+    }
+    return null;
   }
 
   @override
@@ -92,7 +143,15 @@ class _ChatScreenState extends State<ChatScreen> {
                         ChatBubble(message: _messages[index]),
                   ),
           ),
-          MessageComposer(onSend: _send, sending: _sending),
+          MessageComposer(
+            onSend: (text) => _send(text, speakResponse: _voiceReplyEnabled),
+            sending: _sending,
+            voiceController: _voiceController,
+            voiceLocale: _voiceLocale,
+            voiceReplyEnabled: _voiceReplyEnabled,
+            onVoiceReplyEnabledChanged: (value) =>
+                setState(() => _voiceReplyEnabled = value),
+          ),
         ],
       ),
     );

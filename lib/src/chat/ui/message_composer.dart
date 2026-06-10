@@ -1,14 +1,25 @@
 import 'package:flutter/material.dart';
 
+import '../../voice/voice_controller.dart';
+import '../../voice/voice_controls.dart';
+
 class MessageComposer extends StatefulWidget {
   const MessageComposer({
     super.key,
     required this.onSend,
     required this.sending,
+    this.voiceController,
+    this.voiceLocale = 'hu-HU',
+    this.voiceReplyEnabled = false,
+    this.onVoiceReplyEnabledChanged,
   });
 
   final Future<void> Function(String text) onSend;
   final bool sending;
+  final VoiceController? voiceController;
+  final String voiceLocale;
+  final bool voiceReplyEnabled;
+  final ValueChanged<bool>? onVoiceReplyEnabledChanged;
 
   @override
   State<MessageComposer> createState() => _MessageComposerState();
@@ -65,6 +76,15 @@ class _MessageComposerState extends State<MessageComposer> {
               ),
             ),
             const SizedBox(width: 8),
+            if (widget.voiceController != null)
+              VoiceControls(
+                controller: widget.voiceController!,
+                locale: widget.voiceLocale,
+                sending: widget.sending,
+                voiceReplyEnabled: widget.voiceReplyEnabled,
+                onVoiceReplyEnabledChanged:
+                    widget.onVoiceReplyEnabledChanged ?? (_) {},
+              ),
             IconButton.filled(
               key: const ValueKey('send-message'),
               tooltip: 'Kuldes',
