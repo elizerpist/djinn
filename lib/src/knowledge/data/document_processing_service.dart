@@ -101,6 +101,7 @@ class DocumentProcessingService {
       final extraction = await client.extractDocument(
         pdfPath: pdfPath,
         model: settings.extractionModel,
+        chunkingMode: settings.chunkingMode,
       );
       DebugConsole.log(
         '[AI Training] extraction chunks=${extraction.chunks.length} '

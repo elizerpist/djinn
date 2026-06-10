@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 
+import '../models/chat_citation.dart';
 import '../models/chat_message.dart';
 
 class ChatBubble extends StatelessWidget {
-  const ChatBubble({super.key, required this.message});
+  const ChatBubble({
+    super.key,
+    required this.message,
+    this.onPlay,
+    this.onCitationTap,
+  });
 
   final ChatMessage message;
+  final ValueChanged<ChatMessage>? onPlay;
+  final ValueChanged<ChatCitation>? onCitationTap;
 
   @override
   Widget build(BuildContext context) {
@@ -42,17 +50,37 @@ class ChatBubble extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
               ],
-              Text(
-                message.text,
-                style: TextStyle(color: textColor, fontSize: 15, height: 1.35),
-              ),
+              if (!isUser && onPlay != null)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _MessageText(text: message.text, color: textColor),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      key: ValueKey('assistant-play-${message.id}'),
+                      tooltip: 'Válasz felolvasása',
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 36,
+                        height: 36,
+                      ),
+                      onPressed: () => onPlay!(message),
+                      icon: const Icon(Icons.volume_up_outlined, size: 18),
+                    ),
+                  ],
+                )
+              else
+                _MessageText(text: message.text, color: textColor),
               if (!isUser && message.citations.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 for (final citation in message.citations)
                   _CitationRow(
-                    sourceLabel: citation.sourceLabel,
-                    title: citation.title,
-                    page: citation.page,
+                    citation: citation,
+                    onTap: onCitationTap == null
+                        ? null
+                        : () => onCitationTap!(citation),
                   ),
               ],
               if (statusLabel != null) ...[
@@ -101,6 +129,21 @@ class ChatBubble extends StatelessWidget {
   }
 }
 
+class _MessageText extends StatelessWidget {
+  const _MessageText({required this.text, required this.color});
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: TextStyle(color: color, fontSize: 15, height: 1.35),
+    );
+  }
+}
+
 class _ValidationWarning extends StatelessWidget {
   const _ValidationWarning({required this.text});
 
@@ -130,48 +173,56 @@ class _ValidationWarning extends StatelessWidget {
 }
 
 class _CitationRow extends StatelessWidget {
-  const _CitationRow({
-    required this.sourceLabel,
-    required this.title,
-    required this.page,
-  });
+  const _CitationRow({required this.citation, this.onTap});
 
-  final String? sourceLabel;
-  final String title;
-  final int? page;
+  final ChatCitation citation;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final titleText = '$title${page == null ? '' : ' p.$page'}';
+    final page = citation.page;
+    final titleText = '${citation.title}${page == null ? '' : ' p.$page'}';
+    final sourceKey = citation.sourceId ?? citation.documentId;
     return Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          if (sourceLabel case final label?)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: const Color(0xFFBFDBFE)),
-              ),
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF1D4ED8),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+      child: InkWell(
+        key: ValueKey('citation-$sourceKey'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (citation.sourceLabel case final label?)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      color: Color(0xFF1D4ED8),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
+              Text(
+                titleText,
+                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11),
               ),
-            ),
-          Text(
-            titleText,
-            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

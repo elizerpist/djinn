@@ -8,6 +8,7 @@ import '../ai/ai_client.dart';
 import '../ai/ai_error.dart';
 import '../ai/ai_provider.dart';
 import '../settings/data/api_key_store.dart';
+import '../settings/models/app_settings.dart';
 
 class GeminiHttpClient implements AiClient {
   GeminiHttpClient({
@@ -103,6 +104,7 @@ class GeminiHttpClient implements AiClient {
   Future<AiExtractionResult> extractDocument({
     required String pdfPath,
     required String model,
+    required String chunkingMode,
   }) async {
     final file = File(pdfPath);
     final bytes = await file.exists() ? await file.readAsBytes() : <int>[];
@@ -117,6 +119,7 @@ class GeminiHttpClient implements AiClient {
             'role': 'user',
             'parts': [
               {'text': _documentExtractionInstruction},
+              {'text': _chunkingInstruction(chunkingMode)},
               {
                 'inlineData': {
                   'mimeType': 'application/pdf',
@@ -470,6 +473,17 @@ class GeminiHttpClient implements AiClient {
 const _documentExtractionInstruction = '''
 Extract this OMSZ PDF into source-grounded chunks. Return JSON only. Include page-aware text chunks and preserve source wording. Flowchart extraction will be validated later, so do not invent missing nodes or arrows.
 ''';
+
+String _chunkingInstruction(String mode) {
+  return switch (ChunkingModes.normalize(mode)) {
+    ChunkingModes.compact =>
+      'Chunking mode: compact. Prefer fewer, larger chunks. Keep related headings, lists, and tables together when they describe one clinical decision.',
+    ChunkingModes.detailed =>
+      'Chunking mode: detailed. Prefer smaller, precise chunks for distinct clinical decisions, but keep each list item with the context needed to interpret it.',
+    _ =>
+      'Chunking mode: normal. Use balanced chunks: one coherent clinical topic per chunk, preserving enough context for retrieval.',
+  };
+}
 
 const Map<String, Object?> _documentExtractionSchema = {
   'type': 'object',

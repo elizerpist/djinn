@@ -37,41 +37,40 @@ void main() {
     expect(sent, ['mellkasi fajdalom']);
   });
 
-  testWidgets('voice reply toggle updates composer mode', (tester) async {
-    var enabled = false;
+  testWidgets(
+    'mic tap selects conversation and long press selects push to talk',
+    (tester) async {
+      final modes = <VoiceInputMode>[];
+      final controller = VoiceController(
+        speech: FakeSpeechAdapter(events: const []),
+        tts: FakeTtsAdapter(),
+        onFinalTranscript: (_) async {},
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StatefulBuilder(
-          builder: (context, setState) {
-            return Scaffold(
-              body: MessageComposer(
-                onSend: (_) async {},
-                sending: false,
-                voiceController: VoiceController(
-                  speech: FakeSpeechAdapter(events: const []),
-                  tts: FakeTtsAdapter(),
-                  onFinalTranscript: (_) async {},
-                ),
-                voiceReplyEnabled: enabled,
-                onVoiceReplyEnabledChanged: (value) {
-                  setState(() => enabled = value);
-                },
-              ),
-            );
-          },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MessageComposer(
+              onSend: (_) async {},
+              sending: false,
+              voiceController: controller,
+              onVoiceInputModeSelected: modes.add,
+            ),
+          ),
         ),
-      ),
-    );
+      );
 
-    expect(find.byIcon(Icons.volume_off), findsOneWidget);
+      expect(find.byKey(const ValueKey('voice-reply-toggle')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('voice-reply-toggle')));
-    await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('voice-listen')));
+      await tester.pumpAndSettle();
 
-    expect(enabled, isTrue);
-    expect(find.byIcon(Icons.volume_up), findsOneWidget);
-  });
+      await tester.longPress(find.byKey(const ValueKey('voice-listen')));
+      await tester.pumpAndSettle();
+
+      expect(modes, [VoiceInputMode.conversation, VoiceInputMode.pushToTalk]);
+    },
+  );
 
   testWidgets('speaking state exposes pause and stop controls', (tester) async {
     final tts = _BlockingTtsAdapter();

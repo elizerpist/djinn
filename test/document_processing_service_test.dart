@@ -124,6 +124,23 @@ void main() {
     expect(DebugConsole.allText, isNot(contains('blocked missing_api_key')));
   });
 
+  test('passes chunking mode to document extraction', () async {
+    final repository = MemoryProcessingRepository();
+    final client = _RecordingExtractionClient();
+    final service = DocumentProcessingService(
+      openAiClient: client,
+      loadSettings: () async =>
+          AppSettings.defaults().copyWith(chunkingMode: ChunkingModes.compact),
+      hasApiKey: () async => true,
+      repository: repository,
+    );
+
+    final result = await service.processDocument('doc-1');
+
+    expect(result.state, 'ready');
+    expect(client.chunkingModes, [ChunkingModes.compact]);
+  });
+
   test('provider missing key log includes provider name', () async {
     final repository = MemoryProcessingRepository();
     final service = DocumentProcessingService(
@@ -247,6 +264,7 @@ class _ExtractingOpenAiClient extends FakeOpenAiClient {
   Future<OpenAiExtractionResult> extractDocument({
     required String pdfPath,
     required String model,
+    required String chunkingMode,
   }) async {
     return const OpenAiExtractionResult(
       chunks: [
@@ -261,6 +279,7 @@ class _FailingExtractionOpenAiClient extends FakeOpenAiClient {
   Future<OpenAiExtractionResult> extractDocument({
     required String pdfPath,
     required String model,
+    required String chunkingMode,
   }) async {
     throw const OpenAiException('extract failed');
   }
@@ -271,9 +290,28 @@ class _FailingProviderAiClient extends FakeOpenAiClient {
   Future<OpenAiExtractionResult> extractDocument({
     required String pdfPath,
     required String model,
+    required String chunkingMode,
   }) async {
     throw AiProviderException(
       AiFailure.networkAbort(AiProvider.gemini, 'socket closed'),
+    );
+  }
+}
+
+class _RecordingExtractionClient extends FakeOpenAiClient {
+  final chunkingModes = <String>[];
+
+  @override
+  Future<OpenAiExtractionResult> extractDocument({
+    required String pdfPath,
+    required String model,
+    required String chunkingMode,
+  }) async {
+    chunkingModes.add(chunkingMode);
+    return const OpenAiExtractionResult(
+      chunks: [
+        OpenAiExtractedChunk(id: 'c1', text: 'ABCDE protokoll', pageNumber: 1),
+      ],
     );
   }
 }

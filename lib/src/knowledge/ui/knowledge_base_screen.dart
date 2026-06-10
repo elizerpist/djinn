@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -8,19 +7,28 @@ import 'package:flutter/material.dart';
 import '../../debug/debug_console.dart';
 import '../data/document_processing_service.dart';
 import '../data/knowledge_document_repository.dart';
+import '../data/knowledge_pack_service.dart';
 import '../data/pdf_import_service.dart';
-import '../models/chunk_package.dart';
 import '../models/knowledge_document.dart';
 import '../models/knowledge_folder.dart';
+import '../models/knowledge_pack.dart';
 import 'knowledge_document_row.dart';
 import 'knowledge_header.dart';
 import 'pdf_viewer_screen.dart';
 
 typedef PickPdfs = Future<List<PickedPdfFile>> Function();
-typedef ExportChunkPackageForTest =
-    Future<String?> Function(KnowledgeDocument document, ChunkPackage package);
-typedef ImportChunkPackageForTest =
-    Future<ChunkPackage?> Function(KnowledgeDocument document);
+typedef ExportKnowledgePackForTest =
+    Future<String?> Function(KnowledgePack pack);
+typedef ImportKnowledgePackForTest = Future<KnowledgePack?> Function();
+typedef ReadDocumentBytesForTest =
+    Future<List<int>> Function(KnowledgeDocument document);
+typedef ChooseDuplicatePackImportForTest =
+    Future<KnowledgePackDuplicateChoice> Function(
+      KnowledgeDocument existing,
+      KnowledgePackDocument incoming,
+    );
+
+enum KnowledgePackDuplicateChoice { updateExisting, createDuplicate, cancel }
 
 enum _KnowledgeSortMode {
   newestFirst,
@@ -45,21 +53,27 @@ class KnowledgeBaseScreen extends StatefulWidget {
     required this.repository,
     required this.importService,
     this.processingService,
+    this.packService = const KnowledgePackService(),
     this.pickPdfs,
     this.clock,
     this.onOpenDocumentForTest,
-    this.exportChunkPackageForTest,
-    this.importChunkPackageForTest,
+    this.exportKnowledgePackForTest,
+    this.importKnowledgePackForTest,
+    this.readDocumentBytesForTest,
+    this.chooseDuplicatePackImportForTest,
   });
 
   final KnowledgeDocumentRepository repository;
   final PdfImportService importService;
   final DocumentProcessingService? processingService;
+  final KnowledgePackService packService;
   final PickPdfs? pickPdfs;
   final DateTime Function()? clock;
   final void Function(KnowledgeDocument document)? onOpenDocumentForTest;
-  final ExportChunkPackageForTest? exportChunkPackageForTest;
-  final ImportChunkPackageForTest? importChunkPackageForTest;
+  final ExportKnowledgePackForTest? exportKnowledgePackForTest;
+  final ImportKnowledgePackForTest? importKnowledgePackForTest;
+  final ReadDocumentBytesForTest? readDocumentBytesForTest;
+  final ChooseDuplicatePackImportForTest? chooseDuplicatePackImportForTest;
 
   @override
   State<KnowledgeBaseScreen> createState() => _KnowledgeBaseScreenState();
@@ -289,6 +303,42 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     await _showMoveDialog(selectedIds);
   }
 
+  Future<void> _deleteSelectedDocuments() async {
+    final selectedIds = _selectedDocumentIds.toList(growable: false);
+    if (selectedIds.isEmpty) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('PDF törlése'),
+          content: Text(
+            selectedIds.length == 1
+                ? 'A kijelölt PDF és a hozzá tartozó chunkok törlődnek.'
+                : '${selectedIds.length} PDF és a hozzájuk tartozó chunkok törlődnek.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Mégse'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Törlés'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await widget.repository.deleteDocuments(selectedIds);
+    _exitSelection();
+    await _loadDocuments();
+  }
+
   Future<void> _showMoveDialog(List<String> documentIds) async {
     final folders = await widget.repository.listFolders();
     if (!mounted) {
@@ -340,22 +390,16 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
           value: 'select_all',
           child: Text('Összes kijelölése'),
         ),
-        PopupMenuItem<String>(
-          enabled: _documents.length > 1,
-          value: 'sort',
-          child: const Text('Rendezés'),
-        ),
+        PopupMenuItem<String>(value: 'sort', child: const Text('Rendezés')),
         const PopupMenuItem<String>(
           value: 'new_folder',
           child: Text('Új mappa'),
         ),
-        const PopupMenuItem(
-          enabled: false,
+        const PopupMenuItem<String>(
           value: 'import_chunks',
           child: Text('Chunk csomag import'),
         ),
-        const PopupMenuItem(
-          enabled: false,
+        const PopupMenuItem<String>(
           value: 'export_knowledge',
           child: Text('Tudástár export'),
         ),
@@ -374,6 +418,10 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       await _createFolder();
     } else if (selected == 'sort') {
       await _showSortSheet();
+    } else if (selected == 'import_chunks') {
+      await _importKnowledgePack();
+    } else if (selected == 'export_knowledge') {
+      await _exportKnowledgePack(_visibleDocuments);
     }
   }
 
@@ -382,11 +430,11 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       context: context,
       position: const RelativeRect.fromLTRB(1000, kToolbarHeight, 12, 0),
       items: [
-        PopupMenuItem<String>(
-          enabled: widget.processingService != null,
-          value: 'sync',
-          child: const Text('Szinkronizálás'),
-        ),
+        if (widget.processingService != null)
+          const PopupMenuItem<String>(
+            value: 'sync',
+            child: Text('Szinkronizálás'),
+          ),
         const PopupMenuItem<String>(
           value: 'move',
           child: Text('Mozgatás mappába'),
@@ -394,25 +442,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         const PopupMenuItem<String>(
           value: 'export_chunks',
           child: Text('Chunk csomag export'),
-        ),
-        const PopupMenuItem<String>(
-          value: 'refresh_embeddings',
-          enabled: false,
-          child: Text('Embedding frissítés'),
-        ),
-        const PopupMenuItem<String>(
-          value: 'import_chunks',
-          child: Text('Chunk csomag import'),
-        ),
-        const PopupMenuItem(
-          enabled: false,
-          value: 'flowchart_review',
-          child: Text('Flowchart validálásra'),
-        ),
-        const PopupMenuItem(
-          enabled: false,
-          value: 'offline_index',
-          child: Text('Offline index frissítés'),
         ),
       ],
     );
@@ -424,85 +453,97 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     } else if (selected == 'move') {
       await _moveSelectedDocuments();
     } else if (selected == 'export_chunks') {
-      await _exportSelectedChunkPackages();
-    } else if (selected == 'import_chunks') {
-      await _importSelectedChunkPackages();
+      await _exportKnowledgePack(_selectedDocuments);
     }
   }
 
-  Future<void> _exportSelectedChunkPackages() async {
-    final selectedDocuments = _selectedDocuments;
-    for (final document in selectedDocuments) {
-      try {
-        final package = await widget.repository.exportChunkPackage(document.id);
-        final callback = widget.exportChunkPackageForTest;
-        final path = callback != null
-            ? await callback(document, package)
-            : await _saveChunkPackageFile(document, package);
-        if (path != null) {
-          DebugConsole.log(
-            '[Knowledge] chunk export document=${document.id} path=$path chunks=${package.chunks.length}',
-          );
-        }
-      } catch (error) {
+  Future<void> _exportKnowledgePack(List<KnowledgeDocument> documents) async {
+    if (documents.isEmpty) {
+      DebugConsole.log('[Knowledge] pack export skipped empty_selection');
+      return;
+    }
+    try {
+      final pack = await _buildKnowledgePack(documents);
+      final callback = widget.exportKnowledgePackForTest;
+      final path = callback != null
+          ? await callback(pack)
+          : await _saveKnowledgePackFile(pack, documents);
+      if (path != null) {
         DebugConsole.log(
-          '[Knowledge] chunk export failed document=${document.id} error=$error',
+          '[Knowledge] pack export documents=${pack.documents.length} path=$path',
         );
       }
+    } catch (error) {
+      DebugConsole.log('[Knowledge] pack export failed error=$error');
     }
   }
 
-  Future<void> _importSelectedChunkPackages() async {
-    final selectedDocuments = _selectedDocuments;
-    for (final document in selectedDocuments) {
-      try {
-        final callback = widget.importChunkPackageForTest;
-        final package = callback != null
-            ? await callback(document)
-            : await _pickChunkPackageFile();
-        if (package == null) {
-          continue;
-        }
-        await widget.repository.importChunkPackage(document.id, package);
-        DebugConsole.log(
-          '[Knowledge] chunk import document=${document.id} chunks=${package.chunks.length}',
-        );
-      } catch (error) {
-        DebugConsole.log(
-          '[Knowledge] chunk import failed document=${document.id} error=$error',
-        );
-      }
-    }
-    _exitSelection();
-    await _loadDocuments();
-  }
-
-  Future<String?> _saveChunkPackageFile(
-    KnowledgeDocument document,
-    ChunkPackage package,
+  Future<KnowledgePack> _buildKnowledgePack(
+    List<KnowledgeDocument> documents,
   ) async {
-    final bytes = Uint8List.fromList(utf8.encode(jsonEncode(package.toJson())));
-    final path = await FilePicker.saveFile(
-      dialogTitle: 'Chunk csomag export',
-      fileName: '${_safeBaseName(document.filename)}.djinn-chunks.json',
+    final packDocuments = <KnowledgePackDocument>[];
+    for (final document in documents) {
+      final reader = widget.readDocumentBytesForTest;
+      final pdfBytes = reader != null
+          ? await reader(document)
+          : await File(document.localPath).readAsBytes();
+      final chunkPackage = await widget.repository.exportChunkPackage(
+        document.id,
+      );
+      packDocuments.add(
+        KnowledgePackDocument(
+          filename: document.filename,
+          documentHash: document.sha256 ?? chunkPackage.documentHash,
+          pdfBytes: pdfBytes,
+          chunkPackage: chunkPackage,
+        ),
+      );
+    }
+    return KnowledgePack(schemaVersion: 1, documents: packDocuments);
+  }
+
+  Future<String?> _saveKnowledgePackFile(
+    KnowledgePack pack,
+    List<KnowledgeDocument> documents,
+  ) async {
+    final bytes = Uint8List.fromList(widget.packService.encode(pack));
+    final filename = documents.length == 1
+        ? '${_safeBaseName(documents.single.filename)}.djinnpack'
+        : 'djinn-tudastar-${DateTime.now().millisecondsSinceEpoch}.djinnpack';
+    return FilePicker.saveFile(
+      dialogTitle: 'Tudástár export',
+      fileName: filename,
       type: FileType.custom,
-      allowedExtensions: const ['json'],
+      allowedExtensions: const ['djinnpack'],
       bytes: bytes,
     );
-    if (path == null) {
-      return null;
-    }
-    final file = File(path);
-    if (path.startsWith('/') && !await file.exists()) {
-      await file.writeAsBytes(bytes);
-    }
-    return path;
   }
 
-  Future<ChunkPackage?> _pickChunkPackageFile() async {
+  Future<void> _importKnowledgePack() async {
+    try {
+      final callback = widget.importKnowledgePackForTest;
+      final pack = callback != null ? await callback() : await _pickPackFile();
+      if (pack == null) {
+        return;
+      }
+      var importedCount = 0;
+      for (final document in pack.documents) {
+        final imported = await _importPackDocument(document);
+        if (imported) {
+          importedCount += 1;
+        }
+      }
+      DebugConsole.log('[Knowledge] pack import documents=$importedCount');
+      await _loadDocuments();
+    } catch (error) {
+      DebugConsole.log('[Knowledge] pack import failed error=$error');
+    }
+  }
+
+  Future<KnowledgePack?> _pickPackFile() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['json'],
+      allowedExtensions: const ['djinnpack'],
       allowMultiple: false,
       withData: true,
     );
@@ -510,15 +551,95 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     if (file == null) {
       return null;
     }
-    final bytes = file.bytes;
-    final text = bytes != null
-        ? utf8.decode(bytes)
-        : await File(file.path ?? '').readAsString();
-    final decoded = jsonDecode(text);
-    if (decoded is! Map) {
-      throw const FormatException('Chunk package root must be an object.');
+    final bytes = file.bytes ?? await File(file.path ?? '').readAsBytes();
+    return widget.packService.decode(bytes);
+  }
+
+  Future<bool> _importPackDocument(KnowledgePackDocument incoming) async {
+    final existing = await _findDocumentByHash(incoming.documentHash);
+    if (existing != null) {
+      final choice = await _chooseDuplicatePackImport(existing, incoming);
+      if (choice == KnowledgePackDuplicateChoice.cancel) {
+        return false;
+      }
+      if (choice == KnowledgePackDuplicateChoice.updateExisting) {
+        await widget.repository.importChunkPackage(
+          existing.id,
+          incoming.chunkPackage,
+        );
+        return true;
+      }
     }
-    return ChunkPackage.fromJson(Map<String, Object?>.from(decoded));
+
+    final imported = await widget.importService.copyPdfBytes(
+      filename: incoming.filename,
+      bytes: incoming.pdfBytes,
+    );
+    final document = await widget.repository.addDocument(
+      filename: imported.filename,
+      localPath: imported.localPath,
+      sizeBytes: imported.sizeBytes,
+      importedAt: (widget.clock ?? DateTime.now)(),
+      sha256: imported.sha256,
+      folderId: _activeFolderId,
+    );
+    await widget.repository.importChunkPackage(
+      document.id,
+      incoming.chunkPackage,
+    );
+    return true;
+  }
+
+  Future<KnowledgeDocument?> _findDocumentByHash(String hash) async {
+    final documents = await widget.repository.listDocuments();
+    for (final document in documents) {
+      if (document.sha256 == hash) {
+        return document;
+      }
+    }
+    return null;
+  }
+
+  Future<KnowledgePackDuplicateChoice> _chooseDuplicatePackImport(
+    KnowledgeDocument existing,
+    KnowledgePackDocument incoming,
+  ) async {
+    final callback = widget.chooseDuplicatePackImportForTest;
+    if (callback != null) {
+      return callback(existing, incoming);
+    }
+    final choice = await showDialog<KnowledgePackDuplicateChoice>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('PDF már létezik'),
+          content: Text(
+            'Ez a chunk csomag ugyanahhoz a PDF-hez tartozik: ${existing.filename}.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(
+                context,
+              ).pop(KnowledgePackDuplicateChoice.cancel),
+              child: const Text('Mégse'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(
+                context,
+              ).pop(KnowledgePackDuplicateChoice.updateExisting),
+              child: const Text('Meglévő frissítése'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(
+                context,
+              ).pop(KnowledgePackDuplicateChoice.createDuplicate),
+              child: const Text('Duplikátum létrehozása'),
+            ),
+          ],
+        );
+      },
+    );
+    return choice ?? KnowledgePackDuplicateChoice.cancel;
   }
 
   String _safeBaseName(String filename) {
@@ -599,27 +720,14 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         selectionSummary: '${visibleDocuments.length} PDF ebben a nézetben',
         onExitSelection: _exitSelection,
         onSendSelected: widget.processingService == null
-            ? () {}
+            ? null
             : _syncSelectedDocuments,
-        onDeleteSelected: null,
+        onDeleteSelected: _deleteSelectedDocuments,
         onGeneralMenu: _showGeneralMenu,
         onSelectionMenu: _showSelectionMenu,
       ),
       body: Column(
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Helyi ObjectBox tudástár',
-                style: TextStyle(
-                  color: Color(0xFF166534),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
           _FolderPillBar(
             folders: _folders,
             activeFolderId: _activeFolderId,
@@ -660,14 +768,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
                         onLongPress: () => _enterSelection(document.id),
                         onSelectionChanged: (value) =>
                             _selectDocument(document.id, value),
-                        onProcess:
-                            _canProcessManually(document.status) &&
-                                widget.processingService != null
-                            ? () => _processDocument(document.id)
-                            : null,
-                        processTooltip: _isUnsynced(document.status)
-                            ? 'Szinkronizálás'
-                            : 'Újrapróbálás',
                       );
                     },
                   ),
@@ -753,6 +853,7 @@ class _FolderPillBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
+      width: double.infinity,
       height: 54,
       child: SingleChildScrollView(
         key: const Key('folder-pill-scroll'),

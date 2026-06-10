@@ -2,21 +2,21 @@ import 'package:flutter/material.dart';
 
 import 'voice_controller.dart';
 
+enum VoiceInputMode { conversation, pushToTalk }
+
 class VoiceControls extends StatelessWidget {
   const VoiceControls({
     super.key,
     required this.controller,
     required this.locale,
     required this.sending,
-    required this.voiceReplyEnabled,
-    required this.onVoiceReplyEnabledChanged,
+    required this.onVoiceInputModeSelected,
   });
 
   final VoiceController controller;
   final String locale;
   final bool sending;
-  final bool voiceReplyEnabled;
-  final ValueChanged<bool> onVoiceReplyEnabledChanged;
+  final ValueChanged<VoiceInputMode> onVoiceInputModeSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -37,18 +37,11 @@ class VoiceControls extends StatelessWidget {
               tooltip: 'Hangbevitel',
               onPressed: busy
                   ? null
-                  : () => controller.listenOnce(locale: locale),
-              icon: Icon(listening ? Icons.graphic_eq : Icons.mic),
-            ),
-            IconButton(
-              key: const ValueKey('voice-reply-toggle'),
-              tooltip: 'Valasz felolvasasa',
-              onPressed: sending
+                  : () => _startListening(VoiceInputMode.conversation),
+              onLongPress: busy
                   ? null
-                  : () => onVoiceReplyEnabledChanged(!voiceReplyEnabled),
-              icon: Icon(
-                voiceReplyEnabled ? Icons.volume_up : Icons.volume_off,
-              ),
+                  : () => _startListening(VoiceInputMode.pushToTalk),
+              icon: Icon(listening ? Icons.graphic_eq : Icons.mic),
             ),
             if (state == VoiceState.speaking)
               IconButton(
@@ -68,5 +61,10 @@ class VoiceControls extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _startListening(VoiceInputMode mode) async {
+    onVoiceInputModeSelected(mode);
+    await controller.listenOnce(locale: locale);
   }
 }

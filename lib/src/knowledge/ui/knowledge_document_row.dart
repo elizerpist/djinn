@@ -12,8 +12,6 @@ class KnowledgeDocumentRow extends StatelessWidget {
     required this.onTap,
     required this.onLongPress,
     required this.onSelectionChanged,
-    required this.onProcess,
-    required this.processTooltip,
   });
 
   final KnowledgeDocument document;
@@ -23,8 +21,6 @@ class KnowledgeDocumentRow extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final ValueChanged<bool> onSelectionChanged;
-  final VoidCallback? onProcess;
-  final String processTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -77,12 +73,6 @@ class KnowledgeDocumentRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 6),
-              _ProcessAction(
-                processing: processing,
-                tooltip: processTooltip,
-                onPressed: onProcess,
-              ),
             ],
           ),
         ),
@@ -98,41 +88,6 @@ class KnowledgeDocumentRow extends StatelessWidget {
       return '${(bytes / 1024).toStringAsFixed(1)} kB';
     }
     return '$bytes byte';
-  }
-}
-
-class _ProcessAction extends StatelessWidget {
-  const _ProcessAction({
-    required this.processing,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final bool processing;
-  final String tooltip;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    if (processing) {
-      return const SizedBox(
-        width: 36,
-        height: 36,
-        child: Center(
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    }
-    return IconButton(
-      tooltip: tooltip,
-      visualDensity: VisualDensity.compact,
-      onPressed: onPressed,
-      icon: const Icon(Icons.sync),
-    );
   }
 }
 

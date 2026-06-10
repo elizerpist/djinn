@@ -51,6 +51,7 @@ abstract class AiClient {
   Future<AiExtractionResult> extractDocument({
     required String pdfPath,
     required String model,
+    required String chunkingMode,
   });
 
   Future<AiAnswer> generateAnswer({

@@ -132,6 +132,23 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     await _persist();
   }
 
+  Future<void> deleteDocuments(List<String> documentIds) async {
+    final idSet = documentIds.toSet();
+    final documentsToDelete = _documents
+        .where((document) => idSet.contains(document.id))
+        .toList(growable: false);
+    _documents = [
+      for (final document in _documents)
+        if (!idSet.contains(document.id)) document,
+    ];
+    for (final document in documentsToDelete) {
+      _chunksByDocument.remove(document.id);
+      _embeddingModelByDocument.remove(document.id);
+      await _deleteLocalFileIfPresent(document.localPath);
+    }
+    await _persist();
+  }
+
   Future<KnowledgeBaseState> state() async {
     return KnowledgeBaseState.fromDocuments(_documents);
   }
@@ -362,6 +379,20 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       return;
     }
     await store.writeList(_folders.map((folder) => folder.toJson()).toList());
+  }
+
+  Future<void> _deleteLocalFileIfPresent(String path) async {
+    if (path.isEmpty) {
+      return;
+    }
+    try {
+      final file = File(path);
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    } catch (_) {
+      // A missing or provider-owned file should not block database cleanup.
+    }
   }
 
   int _nextNumericSuffix(Iterable<String> ids, String prefix) {

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:uuid/uuid.dart';
 
 import '../../../objectbox.g.dart';
@@ -30,6 +32,8 @@ abstract class KnowledgeRepository {
     List<String> documentIds,
     String? folderId,
   );
+
+  Future<void> deleteDocuments(List<String> documentIds);
 
   Future<void> updateProcessingState(
     String documentPublicId,
@@ -183,6 +187,23 @@ class ObjectBoxKnowledgeRepository
       }
       document.folderPublicId = folderId;
       _documentBox.put(document);
+    }
+  }
+
+  @override
+  Future<void> deleteDocuments(List<String> documentIds) async {
+    final documents = documentIds
+        .map(_findDocument)
+        .whereType<KnowledgeDocumentEntity>()
+        .toList(growable: false);
+    _store.runInTransaction(TxMode.write, () {
+      for (final document in documents) {
+        _removeTextChunksForDocument(document.publicId);
+        _documentBox.remove(document.id);
+      }
+    });
+    for (final document in documents) {
+      await _deleteLocalFileIfPresent(document.localPath);
     }
   }
 
@@ -462,6 +483,20 @@ class ObjectBoxKnowledgeRepository
       return query.findFirst();
     } finally {
       query.close();
+    }
+  }
+
+  Future<void> _deleteLocalFileIfPresent(String path) async {
+    if (path.isEmpty) {
+      return;
+    }
+    try {
+      final file = File(path);
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    } catch (_) {
+      // A missing or SAF-owned file should not block database cleanup.
     }
   }
 }

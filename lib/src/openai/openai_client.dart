@@ -28,6 +28,7 @@ abstract class OpenAiClient implements AiClient {
   Future<OpenAiExtractionResult> extractDocument({
     required String pdfPath,
     required String model,
+    required String chunkingMode,
   });
 
   @override
@@ -77,6 +78,7 @@ class FakeOpenAiClient implements OpenAiClient {
   Future<OpenAiExtractionResult> extractDocument({
     required String pdfPath,
     required String model,
+    required String chunkingMode,
   }) async {
     return extractionResult;
   }

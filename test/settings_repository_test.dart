@@ -45,6 +45,11 @@ void main() {
     expect(settings.groundednessCheckEnabled, isFalse);
     expect(settings.offlineFallbackEnabled, isFalse);
     expect(settings.answerMode, AnswerModes.ai);
+    expect(settings.chunkingMode, ChunkingModes.normal);
+    expect(
+      settings.copyWith(chunkingMode: ChunkingModes.detailed).chunkingMode,
+      ChunkingModes.detailed,
+    );
     expect(
       settings.copyWith(offlineFallbackEnabled: true).offlineFallbackEnabled,
       isTrue,
@@ -162,6 +167,7 @@ void main() {
       offlineFallbackEnabled: true,
       voiceMode: 'hands_free',
       voiceLocale: 'en-US',
+      chunkingMode: ChunkingModes.detailed,
     );
 
     await repository.save(settings);
@@ -180,6 +186,7 @@ void main() {
     expect(loaded.offlineFallbackEnabled, isTrue);
     expect(loaded.voiceMode, 'hands_free');
     expect(loaded.voiceLocale, 'en-US');
+    expect(loaded.chunkingMode, ChunkingModes.detailed);
   });
 
   test('settings repository consolidates duplicate settings rows', () async {
@@ -271,5 +278,6 @@ AppSettingsEntity _settingsEntity(AppSettings settings) {
     minimumSimilarity: settings.minimumSimilarity,
     voiceMode: settings.voiceMode,
     voiceLocale: settings.voiceLocale,
+    chunkingMode: settings.chunkingMode,
   );
 }

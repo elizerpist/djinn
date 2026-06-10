@@ -402,6 +402,7 @@ class AppSettingsEntity {
     required this.minimumSimilarity,
     required this.voiceMode,
     required this.voiceLocale,
+    required this.chunkingMode,
   });
 
   @Id()
@@ -428,4 +429,5 @@ class AppSettingsEntity {
   double minimumSimilarity;
   String voiceMode;
   String voiceLocale;
+  String chunkingMode;
 }

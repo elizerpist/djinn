@@ -38,13 +38,75 @@ void main() {
       );
     },
   );
+
+  test(
+    'normalizes hyphenated Android locale to installed underscore locale',
+    () async {
+      final engine = _FakeSpeechRecognitionEngine(
+        localeIds: const ['hu_HU', 'en_US'],
+        systemLocaleId: 'en_US',
+      );
+      final adapter = SpeechToTextAdapter(engine: engine);
+
+      final subscription = adapter.listen(locale: 'hu-HU').listen((_) {});
+      await Future<void>.delayed(Duration.zero);
+      await subscription.cancel();
+
+      expect(engine.listenLocales, ['hu_HU']);
+    },
+  );
+
+  test(
+    'falls back to system locale when requested locale is unavailable',
+    () async {
+      final engine = _FakeSpeechRecognitionEngine(
+        localeIds: const ['en_US'],
+        systemLocaleId: 'en_US',
+      );
+      final adapter = SpeechToTextAdapter(engine: engine);
+
+      final subscription = adapter.listen(locale: 'hu-HU').listen((_) {});
+      await Future<void>.delayed(Duration.zero);
+      await subscription.cancel();
+
+      expect(engine.listenLocales, ['en_US']);
+    },
+  );
+
+  test('retries with system locale after unsupported language error', () async {
+    final engine = _FakeSpeechRecognitionEngine(
+      localeIds: const ['hu_HU', 'en_US'],
+      systemLocaleId: 'en_US',
+    );
+    final adapter = SpeechToTextAdapter(engine: engine);
+    final events = <SpeechEvent>[];
+
+    final subscription = adapter.listen(locale: 'hu-HU').listen(events.add);
+    await Future<void>.delayed(Duration.zero);
+    engine.emitError('error_language_not_supported');
+    await Future<void>.delayed(Duration.zero);
+    engine.emitResult('hello', true);
+    await Future<void>.delayed(Duration.zero);
+    await subscription.cancel();
+
+    expect(engine.listenLocales, ['hu_HU', 'en_US']);
+    expect(events.whereType<SpeechResultEvent>().single.text, 'hello');
+  });
 }
 
 class _FakeSpeechRecognitionEngine implements SpeechRecognitionEngine {
+  _FakeSpeechRecognitionEngine({
+    this.localeIds = const ['hu_HU'],
+    this.systemLocaleId = 'hu_HU',
+  });
+
+  final List<String> localeIds;
+  final String? systemLocaleId;
   SpeechStatusCallback? _onStatus;
   SpeechErrorCallback? _onError;
   SpeechResultCallback? _onResult;
   var initializeCount = 0;
+  final listenLocales = <String>[];
 
   @override
   Future<bool> initialize({
@@ -62,11 +124,18 @@ class _FakeSpeechRecognitionEngine implements SpeechRecognitionEngine {
     required String locale,
     required SpeechResultCallback onResult,
   }) async {
+    listenLocales.add(locale);
     _onResult = onResult;
   }
 
   @override
   Future<void> stop() async {}
+
+  @override
+  Future<List<String>> locales() async => localeIds;
+
+  @override
+  Future<String?> systemLocale() async => systemLocaleId;
 
   void emitError(String code) => _onError?.call(code);
 

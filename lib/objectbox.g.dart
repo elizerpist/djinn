@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 273186095957995459),
     name: 'AppSettingsEntity',
-    lastPropertyId: const obx_int.IdUid(22, 7523619240086187895),
+    lastPropertyId: const obx_int.IdUid(23, 4227626760840467567),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -155,6 +155,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(22, 7523619240086187895),
         name: 'offlineFallbackEnabled',
         type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(23, 4227626760840467567),
+        name: 'chunkingMode',
+        type: 9,
         flags: 0,
       ),
     ],
@@ -931,7 +937,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
         );
         final voiceModeOffset = fbb.writeString(object.voiceMode);
         final voiceLocaleOffset = fbb.writeString(object.voiceLocale);
-        fbb.startTable(23);
+        final chunkingModeOffset = fbb.writeString(object.chunkingMode);
+        fbb.startTable(24);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, runtimeModeOffset);
         fbb.addOffset(2, answerModelOffset);
@@ -954,6 +961,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(19, voiceModeOffset);
         fbb.addOffset(20, voiceLocaleOffset);
         fbb.addBool(21, object.offlineFallbackEnabled);
+        fbb.addOffset(22, chunkingModeOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1040,6 +1048,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final voiceLocaleParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 44, '');
+        final chunkingModeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 48, '');
         final object = AppSettingsEntity(
           id: idParam,
           runtimeMode: runtimeModeParam,
@@ -1064,6 +1075,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           minimumSimilarity: minimumSimilarityParam,
           voiceMode: voiceModeParam,
           voiceLocale: voiceLocaleParam,
+          chunkingMode: chunkingModeParam,
         );
 
         return object;
@@ -2044,6 +2056,11 @@ class AppSettingsEntity_ {
   /// See [AppSettingsEntity.offlineFallbackEnabled].
   static final offlineFallbackEnabled =
       obx.QueryBooleanProperty<AppSettingsEntity>(_entities[0].properties[21]);
+
+  /// See [AppSettingsEntity.chunkingMode].
+  static final chunkingMode = obx.QueryStringProperty<AppSettingsEntity>(
+    _entities[0].properties[22],
+  );
 }
 
 /// [ChatMessageEntity] entity fields to define ObjectBox queries.

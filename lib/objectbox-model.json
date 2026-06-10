@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:273186095957995459",
-      "lastPropertyId": "22:7523619240086187895",
+      "lastPropertyId": "23:4227626760840467567",
       "name": "AppSettingsEntity",
       "properties": [
         {
@@ -118,6 +118,11 @@
           "id": "22:7523619240086187895",
           "name": "offlineFallbackEnabled",
           "type": 1
+        },
+        {
+          "id": "23:4227626760840467567",
+          "name": "chunkingMode",
+          "type": 9
         }
       ],
       "relations": []

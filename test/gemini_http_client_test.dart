@@ -79,6 +79,7 @@ void main() {
     final result = await client.extractDocument(
       pdfPath: pdf.path,
       model: 'gemini-2.5-flash',
+      chunkingMode: 'normal',
     );
 
     expect(result.chunks.single.id, 'p1-main');
@@ -233,6 +234,7 @@ void main() {
         () => client.extractDocument(
           pdfPath: '${tempDir.path}/missing.pdf',
           model: 'gemini-2.5-flash',
+          chunkingMode: 'normal',
         ),
         throwsA(
           isA<AiProviderException>().having(

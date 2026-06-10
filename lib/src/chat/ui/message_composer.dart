@@ -1,3 +1,5 @@
+export '../../voice/voice_controls.dart' show VoiceInputMode;
+
 import 'package:flutter/material.dart';
 
 import '../../voice/voice_controller.dart';
@@ -10,16 +12,14 @@ class MessageComposer extends StatefulWidget {
     required this.sending,
     this.voiceController,
     this.voiceLocale = 'hu-HU',
-    this.voiceReplyEnabled = false,
-    this.onVoiceReplyEnabledChanged,
+    this.onVoiceInputModeSelected,
   });
 
   final Future<void> Function(String text) onSend;
   final bool sending;
   final VoiceController? voiceController;
   final String voiceLocale;
-  final bool voiceReplyEnabled;
-  final ValueChanged<bool>? onVoiceReplyEnabledChanged;
+  final ValueChanged<VoiceInputMode>? onVoiceInputModeSelected;
 
   @override
   State<MessageComposer> createState() => _MessageComposerState();
@@ -81,9 +81,8 @@ class _MessageComposerState extends State<MessageComposer> {
                 controller: widget.voiceController!,
                 locale: widget.voiceLocale,
                 sending: widget.sending,
-                voiceReplyEnabled: widget.voiceReplyEnabled,
-                onVoiceReplyEnabledChanged:
-                    widget.onVoiceReplyEnabledChanged ?? (_) {},
+                onVoiceInputModeSelected:
+                    widget.onVoiceInputModeSelected ?? (_) {},
               ),
             IconButton.filled(
               key: const ValueKey('send-message'),

@@ -6,6 +6,20 @@ class AnswerModes {
   static const autoFallback = 'auto_fallback';
 }
 
+class ChunkingModes {
+  static const compact = 'compact';
+  static const normal = 'normal';
+  static const detailed = 'detailed';
+
+  static String normalize(String value) {
+    return switch (value) {
+      compact => compact,
+      detailed => detailed,
+      _ => normal,
+    };
+  }
+}
+
 class AppSettings {
   const AppSettings({
     required this.runtimeMode,
@@ -25,6 +39,7 @@ class AppSettings {
     required this.minimumSimilarity,
     required this.voiceMode,
     required this.voiceLocale,
+    required this.chunkingMode,
   });
 
   factory AppSettings.defaults() {
@@ -46,6 +61,7 @@ class AppSettings {
       minimumSimilarity: 0.72,
       voiceMode: 'push_to_talk',
       voiceLocale: 'hu-HU',
+      chunkingMode: ChunkingModes.normal,
     );
   }
 
@@ -66,6 +82,7 @@ class AppSettings {
   final double minimumSimilarity;
   final String voiceMode;
   final String voiceLocale;
+  final String chunkingMode;
 
   String get answerMode {
     return switch (runtimeMode) {
@@ -118,6 +135,7 @@ class AppSettings {
     double? minimumSimilarity,
     String? voiceMode,
     String? voiceLocale,
+    String? chunkingMode,
   }) {
     final effectiveProvider = activeProvider ?? this.activeProvider;
     final aliasesTargetOpenAi = effectiveProvider == AiProvider.openAi;
@@ -176,6 +194,7 @@ class AppSettings {
       minimumSimilarity: minimumSimilarity ?? this.minimumSimilarity,
       voiceMode: voiceMode ?? this.voiceMode,
       voiceLocale: voiceLocale ?? this.voiceLocale,
+      chunkingMode: ChunkingModes.normalize(chunkingMode ?? this.chunkingMode),
     );
   }
 }

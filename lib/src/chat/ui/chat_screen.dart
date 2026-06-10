@@ -9,6 +9,7 @@ import '../../voice/tts_adapter.dart';
 import '../../voice/voice_controller.dart';
 import '../data/chat_service.dart';
 import '../data/local_chat_repository.dart';
+import '../models/chat_citation.dart';
 import '../models/chat_conversation.dart';
 import '../models/chat_message.dart';
 import 'chat_bubble.dart';
@@ -43,7 +44,6 @@ class _ChatScreenState extends State<ChatScreen> {
   );
   bool _sending = false;
   bool _voiceReplyEnabled = false;
-  String _voiceMode = 'push_to_talk';
   String _voiceLocale = 'hu-HU';
   late final VoiceController _voiceController;
   late final bool _ownsVoiceController;
@@ -103,9 +103,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     setState(() {
-      _voiceMode = settings.voiceMode;
       _voiceLocale = settings.voiceLocale;
-      _voiceReplyEnabled = settings.voiceMode == 'conversation';
     });
   }
 
@@ -135,7 +133,6 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _speakAssistant(String text) async {
     await _voiceController.speak(text, locale: _voiceLocale);
     if (!mounted ||
-        _voiceMode != 'conversation' ||
         !_voiceReplyEnabled ||
         _voiceController.state != VoiceState.idle) {
       return;
@@ -150,6 +147,56 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     return null;
+  }
+
+  Future<void> _showCitationExcerpt(ChatCitation citation) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(citation.title),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (citation.page case final page?) ...[
+                  Text(
+                    '$page. oldal',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (citation.section case final section?) ...[
+                  Text(
+                    section,
+                    style: const TextStyle(color: Color(0xFF4B5563)),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Text(citation.excerpt),
+                if (citation.sourceId case final sourceId?) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    sourceId,
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Bezárás'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -169,8 +216,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     itemCount: _messages.length,
-                    itemBuilder: (context, index) =>
-                        ChatBubble(message: _messages[index]),
+                    itemBuilder: (context, index) {
+                      final message = _messages[index];
+                      return ChatBubble(
+                        message: message,
+                        onPlay: message.sender == ChatSender.assistant
+                            ? (message) =>
+                                  unawaited(_speakAssistant(message.text))
+                            : null,
+                        onCitationTap: _showCitationExcerpt,
+                      );
+                    },
                   ),
           ),
           MessageComposer(
@@ -178,9 +234,9 @@ class _ChatScreenState extends State<ChatScreen> {
             sending: _sending,
             voiceController: _voiceController,
             voiceLocale: _voiceLocale,
-            voiceReplyEnabled: _voiceReplyEnabled,
-            onVoiceReplyEnabledChanged: (value) =>
-                setState(() => _voiceReplyEnabled = value),
+            onVoiceInputModeSelected: (mode) => setState(
+              () => _voiceReplyEnabled = mode == VoiceInputMode.conversation,
+            ),
           ),
         ],
       ),

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:djinn/src/chat/data/chat_service.dart';
 import 'package:djinn/src/chat/data/local_answer_service.dart';
 import 'package:djinn/src/chat/data/local_chat_repository.dart';
+import 'package:djinn/src/chat/models/chat_citation.dart';
 import 'package:djinn/src/chat/ui/chat_screen.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
@@ -46,7 +47,8 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('voice-reply-toggle')));
+    await tester.tap(find.byKey(const ValueKey('voice-listen')));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('message-input')),
       'Mi a teendo?',
@@ -91,7 +93,8 @@ void main() {
       );
 
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('voice-reply-toggle')));
+      await tester.tap(find.byKey(const ValueKey('voice-listen')));
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('message-input')),
         'Mi a teendo?',
@@ -107,7 +110,7 @@ void main() {
     },
   );
 
-  testWidgets('conversation voice settings enable reply and saved locale', (
+  testWidgets('mic tap uses saved locale and enables conversation', (
     tester,
   ) async {
     final repository = LocalChatRepository(
@@ -134,22 +137,153 @@ void main() {
               KnowledgeBaseState.fromDocuments(const []),
           conversation: conversation,
           voiceController: voiceController,
-          loadSettings: () async => AppSettings.defaults().copyWith(
-            voiceMode: 'conversation',
-            voiceLocale: 'en-US',
-          ),
+          loadSettings: () async =>
+              AppSettings.defaults().copyWith(voiceLocale: 'en-US'),
         ),
       ),
     );
 
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.volume_up), findsOneWidget);
+    expect(find.byKey(const ValueKey('voice-reply-toggle')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('voice-listen')));
     await tester.pumpAndSettle();
 
     expect(speech.locales, ['en-US']);
+  });
+
+  testWidgets('mic long press uses push to talk without automatic TTS', (
+    tester,
+  ) async {
+    final repository = LocalChatRepository(
+      clock: () => DateTime.utc(2026, 1, 1, 12),
+    );
+    final conversation = await repository.createConversation();
+    final tts = FakeTtsAdapter();
+    final voiceController = VoiceController(
+      speech: FakeSpeechAdapter(events: const []),
+      tts: tts,
+      onFinalTranscript: (_) async {},
+    );
+    addTearDown(voiceController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatScreen(
+          repository: repository,
+          chatService: ChatService(
+            repository: repository,
+            answerService: const _FakeAnswerService(),
+          ),
+          refreshKnowledgeReadiness: () async =>
+              KnowledgeBaseState.fromDocuments(const []),
+          conversation: conversation,
+          voiceController: voiceController,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.longPress(find.byKey(const ValueKey('voice-listen')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('message-input')),
+      'Mi a teendo?',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('send-message')));
+    await tester.pumpAndSettle();
+
+    expect(tts.spokenTexts, isEmpty);
+  });
+
+  testWidgets('assistant play button reads that answer aloud', (tester) async {
+    final repository = LocalChatRepository(
+      clock: () => DateTime.utc(2026, 1, 1, 12),
+    );
+    final conversation = await repository.createConversation();
+    await repository.appendAssistantMessage(
+      conversation.id,
+      text: 'Korábbi válasz.',
+      status: 'grounded',
+    );
+    final tts = FakeTtsAdapter();
+    final voiceController = VoiceController(
+      speech: FakeSpeechAdapter(events: const []),
+      tts: tts,
+      onFinalTranscript: (_) async {},
+    );
+    addTearDown(voiceController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatScreen(
+          repository: repository,
+          chatService: ChatService(
+            repository: repository,
+            answerService: const _FakeAnswerService(),
+          ),
+          refreshKnowledgeReadiness: () async =>
+              KnowledgeBaseState.fromDocuments(const []),
+          conversation: conversation,
+          voiceController: voiceController,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('assistant-play-message-1')));
+    await tester.pumpAndSettle();
+
+    expect(tts.spokenTexts, ['Korábbi válasz.']);
+  });
+
+  testWidgets('citation tap opens source excerpt dialog', (tester) async {
+    final repository = LocalChatRepository(
+      clock: () => DateTime.utc(2026, 1, 1, 12),
+    );
+    final conversation = await repository.createConversation();
+    await repository.appendAssistantMessage(
+      conversation.id,
+      text: 'Forrásolt válasz.',
+      status: 'grounded',
+      citations: const [
+        ChatCitation(
+          documentId: 'doc-1',
+          title: 'omsz.pdf',
+          page: 7,
+          section: 'ABCDE',
+          excerpt: 'Ez a hivatkozott forrásrészlet.',
+          sourceId: 'chunk-7',
+          sourceLabel: 'PDF',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatScreen(
+          repository: repository,
+          chatService: ChatService(
+            repository: repository,
+            answerService: const _FakeAnswerService(),
+          ),
+          refreshKnowledgeReadiness: () async =>
+              KnowledgeBaseState.fromDocuments(const []),
+          conversation: conversation,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('citation-chunk-7')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('omsz.pdf'), findsWidgets);
+    expect(find.text('7. oldal'), findsOneWidget);
+    expect(find.text('ABCDE'), findsOneWidget);
+    expect(find.text('Ez a hivatkozott forrásrészlet.'), findsOneWidget);
   });
 }
 

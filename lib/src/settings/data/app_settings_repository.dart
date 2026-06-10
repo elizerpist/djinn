@@ -94,6 +94,9 @@ class AppSettingsRepository {
       minimumSimilarity: entity.minimumSimilarity,
       voiceMode: _fallback(entity.voiceMode, defaults.voiceMode),
       voiceLocale: _fallback(entity.voiceLocale, defaults.voiceLocale),
+      chunkingMode: ChunkingModes.normalize(
+        _fallback(entity.chunkingMode, defaults.chunkingMode),
+      ),
     );
   }
 
@@ -121,6 +124,7 @@ class AppSettingsRepository {
       minimumSimilarity: settings.minimumSimilarity,
       voiceMode: settings.voiceMode,
       voiceLocale: settings.voiceLocale,
+      chunkingMode: settings.chunkingMode,
     );
   }
 

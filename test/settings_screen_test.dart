@@ -36,14 +36,46 @@ void main() {
     expect(find.text('PDF feldolgozó modell'), findsOneWidget);
     expect(find.text('Groundedness modell'), findsOneWidget);
     expect(find.text('Embedding modell'), findsOneWidget);
-    expect(find.text('Beszéd'), findsOneWidget);
+    expect(find.text('Chunkolási mód'), findsOneWidget);
+    expect(find.text('Felolvasás hangja'), findsOneWidget);
+    expect(find.text('Beszéd'), findsNothing);
     expect(find.text('Működési mód'), findsOneWidget);
     expect(find.text('Validálás'), findsOneWidget);
     expect(find.text('Mentés'), findsNothing);
     expect(find.text('Haladó modellbeállítások'), findsNothing);
   });
 
-  testWidgets('voice mode selector autosaves conversation mode', (
+  testWidgets('chunking mode dropdown autosaves detailed mode', (tester) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(settings.chunkingMode, ChunkingModes.normal);
+
+    await tester.ensureVisible(find.byKey(const Key('chunking-mode-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chunking-mode-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Részletes').last);
+    await tester.pumpAndSettle();
+
+    expect(settings.chunkingMode, ChunkingModes.detailed);
+  });
+
+  testWidgets('tts locale dropdown autosaves selected voice locale', (
     tester,
   ) async {
     final keyStore = MemoryApiKeyStore();
@@ -62,19 +94,16 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-
-    expect(find.text('Push-to-talk'), findsOneWidget);
-    expect(find.text('Párbeszéd'), findsOneWidget);
-
-    await tester.drag(
-      find.byType(SingleChildScrollView),
-      const Offset(0, -260),
-    );
+    await tester.ensureVisible(find.byKey(const Key('tts-locale-dropdown')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Párbeszéd'));
+    await tester.tap(find.byKey(const Key('tts-locale-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English (US)').last);
     await tester.pumpAndSettle();
 
-    expect(settings.voiceMode, 'conversation');
+    expect(settings.voiceLocale, 'en-US');
+    expect(find.text('Push-to-talk'), findsNothing);
+    expect(find.text('Párbeszéd'), findsNothing);
   });
 
   testWidgets('answer mode selector autosaves forced offline mode', (

@@ -80,6 +80,11 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
   }
 
   @override
+  Future<void> deleteDocuments(List<String> documentIds) {
+    return _repository.deleteDocuments(documentIds);
+  }
+
+  @override
   Future<KnowledgeDocument> updateStatus(
     String documentId,
     KnowledgeDocumentStatus status, {

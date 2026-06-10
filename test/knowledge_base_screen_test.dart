@@ -3,11 +3,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/knowledge/data/document_processing_service.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/data/pdf_import_service.dart';
 import 'package:djinn/src/knowledge/models/chunk_package.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
+import 'package:djinn/src/knowledge/models/knowledge_pack.dart';
 import 'package:djinn/src/knowledge/ui/knowledge_base_screen.dart';
 import 'package:djinn/src/openai/openai_client.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
@@ -23,9 +25,9 @@ void main() {
       ),
     );
 
-    await _pumpUntilFound(tester, find.text('Helyi ObjectBox tudástár'));
+    await _pumpUntilFound(tester, find.text('Nincs importált PDF'));
 
-    expect(find.text('Helyi ObjectBox tudástár'), findsOneWidget);
+    expect(find.text('Helyi ObjectBox tudástár'), findsNothing);
     expect(find.text('Nincs importált PDF'), findsOneWidget);
   });
 
@@ -103,7 +105,11 @@ void main() {
       KnowledgeDocumentStatus.imported,
     );
 
-    await tester.tap(find.byTooltip('Szinkronizálás'));
+    await tester.longPress(find.text('omsz.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Szinkronizálás'));
     await _pumpUntilFound(tester, find.text('OpenAI API kulcs szükséges'));
 
     expect(
@@ -141,7 +147,11 @@ void main() {
     );
     await _pumpUntilFound(tester, find.text('protocol.pdf'));
 
-    await tester.tap(find.byTooltip('Újrapróbálás'));
+    await tester.longPress(find.text('protocol.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Szinkronizálás'));
     await _pumpUntilFound(tester, find.text('Kész'));
 
     expect(
@@ -212,6 +222,7 @@ void main() {
 
       expect(find.text('1 kijelölve'), findsOneWidget);
       expect(find.byType(Checkbox), findsNWidgets(2));
+      expect(find.byKey(const Key('knowledge-send-selected')), findsNothing);
     },
   );
 
@@ -318,6 +329,10 @@ void main() {
     expect(find.text('root.pdf'), findsOneWidget);
     expect(find.text('procedure.pdf'), findsOneWidget);
     expect(find.text('guideline.pdf'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('folder-pill-all'))).dx,
+      lessThan(48),
+    );
 
     await tester.tap(find.byKey(Key('folder-pill-${procedures.id}')));
     await tester.pumpAndSettle();
@@ -381,6 +396,48 @@ void main() {
 
     expect(find.byKey(const Key('knowledge-general-menu')), findsOneWidget);
     expect(find.byKey(Key('document-menu-${document.id}')), findsNothing);
+    expect(find.byTooltip('Szinkronizálás'), findsNothing);
+  });
+
+  testWidgets('menus do not show disabled placeholder items', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    await repository.addDocument(
+      filename: 'a.pdf',
+      localPath: '/memory/a.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'a',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('a.pdf'));
+
+    await tester.tap(find.byKey(const Key('knowledge-general-menu')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chunk csomag import'), findsOneWidget);
+    expect(find.text('Tudástár export'), findsOneWidget);
+    expect(_disabledPopupLabels(tester), isEmpty);
+
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('a.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chunk csomag import'), findsNothing);
+    expect(find.text('Embedding frissítés'), findsNothing);
+    expect(find.text('Flowchart validálásra'), findsNothing);
+    expect(find.text('Offline index frissítés'), findsNothing);
+    expect(_disabledPopupLabels(tester), isEmpty);
   });
 
   testWidgets(
@@ -423,13 +480,17 @@ void main() {
     },
   );
 
-  testWidgets('selection menu exports and imports chunk packages', (
+  testWidgets('selection menu exports a djinnpack for selected PDFs', (
     tester,
   ) async {
+    final tempDir = Directory.systemTemp.createTempSync('djinn-pack-test-');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+    final pdf = File('${tempDir.path}/chunks.pdf')
+      ..writeAsBytesSync([37, 80, 68, 70]);
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
       filename: 'chunks.pdf',
-      localPath: '/memory/chunks.pdf',
+      localPath: pdf.path,
       sizeBytes: 4,
       importedAt: DateTime.utc(2026, 6, 10),
       sha256: 'hash-chunks',
@@ -450,40 +511,24 @@ void main() {
       embedding: List<double>.filled(3072, 0.1),
       embeddingModel: 'text-embedding-3-large',
     );
-    final importedPackage = ChunkPackage(
-      schemaVersion: 1,
-      documentHash: 'hash-chunks',
-      filename: 'chunks.pdf',
-      provider: 'gemini',
-      extractionModel: 'gemini-2.5-flash-lite',
-      embeddingModel: 'gemini-embedding-001',
-      embeddingDimension: 3072,
-      chunks: [
-        ChunkPackageItem(
-          id: 'p2-main',
-          text: 'Importált chunk',
-          pageNumber: 2,
-          sectionTitle: null,
-          embedding: List<double>.filled(3072, 0.2),
-        ),
-      ],
-    );
     String? exportedDocumentId;
-    String? importedDocumentId;
 
     await tester.pumpWidget(
       MaterialApp(
         home: KnowledgeBaseScreen(
           repository: repository,
           importService: _FakePdfImportService(),
-          exportChunkPackageForTest: (document, package) async {
-            exportedDocumentId = document.id;
-            expect(package.chunks.single.text, 'Régi chunk');
-            return '/memory/chunks.djinn-chunks.json';
-          },
-          importChunkPackageForTest: (document) async {
-            importedDocumentId = document.id;
-            return importedPackage;
+          readDocumentBytesForTest: (_) async => [37, 80, 68, 70],
+          exportKnowledgePackForTest: (pack) async {
+            exportedDocumentId =
+                pack.documents.single.chunkPackage.documentHash;
+            expect(pack.documents.single.filename, 'chunks.pdf');
+            expect(pack.documents.single.pdfBytes, [37, 80, 68, 70]);
+            expect(
+              pack.documents.single.chunkPackage.chunks.single.text,
+              'Régi chunk',
+            );
+            return '/memory/chunks.djinnpack';
           },
         ),
       ),
@@ -495,19 +540,158 @@ void main() {
     await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Chunk csomag export'));
+    await _pumpUntil(tester, () => exportedDocumentId != null);
+
+    expect(exportedDocumentId, document.sha256, reason: DebugConsole.allText);
+  });
+
+  testWidgets('global menu exports visible PDFs as one djinnpack', (
+    tester,
+  ) async {
+    final tempDir = Directory.systemTemp.createTempSync('djinn-pack-export-');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+    final pdf = File('${tempDir.path}/export.pdf')
+      ..writeAsBytesSync([37, 80, 68, 70, 45]);
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'export.pdf',
+      localPath: pdf.path,
+      sizeBytes: 5,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'hash-export',
+    );
+    await repository.saveExtractedChunk(
+      documentPublicId: document.id,
+      chunk: const OpenAiExtractedChunk(
+        id: 'p1-main',
+        text: 'Exportált chunk',
+        pageNumber: 1,
+      ),
+      embedding: [0.1, 0.2],
+      embeddingModel: 'gemini-embedding-001',
+    );
+    KnowledgePack? exportedPack;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          readDocumentBytesForTest: (_) async => [37, 80, 68, 70, 45],
+          exportKnowledgePackForTest: (pack) async {
+            exportedPack = pack;
+            return '/memory/export.djinnpack';
+          },
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('export.pdf'));
+
+    await tester.tap(find.byKey(const Key('knowledge-general-menu')));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Tudástár export'));
+    await _pumpUntil(tester, () => exportedPack != null);
 
-    expect(exportedDocumentId, document.id);
+    expect(exportedPack, isNotNull, reason: DebugConsole.allText);
+    expect(exportedPack!.documents.single.filename, 'export.pdf');
+    expect(exportedPack!.documents.single.pdfBytes, [37, 80, 68, 70, 45]);
+    expect(
+      exportedPack!.documents.single.chunkPackage.chunks.single.text,
+      'Exportált chunk',
+    );
+  });
 
-    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+  testWidgets('global menu imports djinnpack into the active folder', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final folder = await repository.createFolder('Eljárásrendek');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          importKnowledgePackForTest: () async => _knowledgePack(
+            filename: 'imported-pack.pdf',
+            documentHash: 'fake-sha256-4',
+            pdfBytes: [1, 2, 3, 4],
+            chunkText: 'Importált chunk',
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.byKey(Key('folder-pill-${folder.id}')));
+
+    await tester.tap(find.byKey(Key('folder-pill-${folder.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-general-menu')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Chunk csomag import'));
     await tester.pumpAndSettle();
 
-    expect(importedDocumentId, document.id);
+    final documents = await repository.listDocuments();
+    expect(documents, hasLength(1));
+    expect(documents.single.filename, 'imported-pack.pdf');
+    expect(documents.single.folderId, folder.id);
+    expect(documents.single.localPath, '/memory/imported-pack.pdf');
+    expect(documents.single.status, KnowledgeDocumentStatus.ready);
+    final exportedChunks = await repository.exportChunkPackage(
+      documents.single.id,
+    );
+    expect(exportedChunks.chunks.single.text, 'Importált chunk');
+  });
+
+  testWidgets('duplicate djinnpack import asks and can create duplicate', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    await repository.addDocument(
+      filename: 'existing.pdf',
+      localPath: '/memory/existing.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'fake-sha256-4',
+    );
+    var duplicatePromptShown = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          importKnowledgePackForTest: () async => _knowledgePack(
+            filename: 'duplicate.pdf',
+            documentHash: 'fake-sha256-4',
+            pdfBytes: [1, 2, 3, 4],
+            chunkText: 'Duplikált chunk',
+          ),
+          chooseDuplicatePackImportForTest: (existing, incoming) async {
+            duplicatePromptShown = true;
+            expect(existing.filename, 'existing.pdf');
+            expect(incoming.filename, 'duplicate.pdf');
+            return KnowledgePackDuplicateChoice.createDuplicate;
+          },
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('existing.pdf'));
+
+    await tester.tap(find.byKey(const Key('knowledge-general-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chunk csomag import'));
+    await tester.pumpAndSettle();
+
+    final documents = await repository.listDocuments();
+    expect(duplicatePromptShown, isTrue);
+    expect(documents, hasLength(2));
     expect(
-      (await repository.exportChunkPackage(document.id)).chunks.single.text,
-      'Importált chunk',
+      documents.map((document) => document.filename),
+      contains('existing.pdf'),
+    );
+    expect(
+      documents.map((document) => document.filename),
+      contains('duplicate.pdf'),
     );
   });
 
@@ -590,6 +774,60 @@ void main() {
     expect(
       documents.singleWhere((item) => item.id == document.id).folderId,
       folder.id,
+    );
+  });
+
+  testWidgets('selection header deletes selected PDFs', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    await repository.addDocument(
+      filename: 'keep.pdf',
+      localPath: '/memory/keep.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'keep',
+    );
+    final remove = await repository.addDocument(
+      filename: 'remove.pdf',
+      localPath: '/memory/remove.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      sha256: 'remove',
+    );
+    await repository.saveExtractedChunk(
+      documentPublicId: remove.id,
+      chunk: const OpenAiExtractedChunk(
+        id: 'p1-main',
+        text: 'Törlendő chunk',
+        pageNumber: 1,
+      ),
+      embedding: [0.1, 0.2],
+      embeddingModel: 'gemini-embedding-001',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('remove.pdf'));
+
+    await tester.longPress(find.text('remove.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-delete-selected')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Törlés'));
+    await tester.pumpAndSettle();
+
+    final documents = await repository.listDocuments();
+    expect(find.text('remove.pdf'), findsNothing);
+    expect(find.text('keep.pdf'), findsOneWidget);
+    expect(documents.map((document) => document.filename), ['keep.pdf']);
+    expect(
+      repository.exportChunkPackage(remove.id),
+      throwsA(isA<StateError>()),
     );
   });
 
@@ -708,11 +946,48 @@ void main() {
   });
 }
 
+KnowledgePack _knowledgePack({
+  required String filename,
+  required String documentHash,
+  required List<int> pdfBytes,
+  required String chunkText,
+}) {
+  return KnowledgePack(
+    schemaVersion: 1,
+    documents: [
+      KnowledgePackDocument(
+        filename: filename,
+        documentHash: documentHash,
+        pdfBytes: pdfBytes,
+        chunkPackage: ChunkPackage(
+          schemaVersion: 1,
+          documentHash: documentHash,
+          filename: filename,
+          provider: 'gemini',
+          extractionModel: 'gemini-2.5-flash-lite',
+          embeddingModel: 'gemini-embedding-001',
+          embeddingDimension: 2,
+          chunks: [
+            ChunkPackageItem(
+              id: 'p1-main',
+              text: chunkText,
+              pageNumber: 1,
+              sectionTitle: 'Teszt',
+              embedding: [0.1, 0.2],
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
 class _ExtractingOpenAiClient extends FakeOpenAiClient {
   @override
   Future<OpenAiExtractionResult> extractDocument({
     required String pdfPath,
     required String model,
+    required String chunkingMode,
   }) async {
     return const OpenAiExtractionResult(
       chunks: [
@@ -771,4 +1046,27 @@ Future<void> _pumpUntilFound(WidgetTester tester, Finder finder) async {
     }
   }
   expect(finder, findsOneWidget);
+}
+
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
+  for (var i = 0; i < 20; i += 1) {
+    await tester.pump(const Duration(milliseconds: 50));
+    if (condition()) {
+      return;
+    }
+  }
+}
+
+List<String> _disabledPopupLabels(WidgetTester tester) {
+  return tester
+      .widgetList<PopupMenuItem<String>>(find.byType(PopupMenuItem<String>))
+      .where((item) => !item.enabled)
+      .map((item) {
+        final child = item.child;
+        if (child is Text) {
+          return child.data ?? '';
+        }
+        return child?.toStringShort() ?? '';
+      })
+      .toList(growable: false);
 }

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
 import '../settings/data/api_key_store.dart';
+import '../settings/models/app_settings.dart';
 import 'openai_client.dart';
 
 class OpenAiHttpClient implements OpenAiClient {
@@ -61,6 +62,7 @@ class OpenAiHttpClient implements OpenAiClient {
   Future<OpenAiExtractionResult> extractDocument({
     required String pdfPath,
     required String model,
+    required String chunkingMode,
   }) async {
     final file = File(pdfPath);
     final bytes = await file.readAsBytes();
@@ -71,6 +73,7 @@ class OpenAiHttpClient implements OpenAiClient {
           'role': 'user',
           'content': [
             {'type': 'input_text', 'text': _documentExtractionInstruction},
+            {'type': 'input_text', 'text': _chunkingInstruction(chunkingMode)},
             {
               'type': 'input_file',
               'filename': p.basename(pdfPath),
@@ -302,6 +305,17 @@ class OpenAiHttpClient implements OpenAiClient {
 const _documentExtractionInstruction = '''
 Extract this OMSZ PDF into source-grounded chunks. Return JSON only. Include page-aware text chunks and preserve source wording. Flowchart extraction will be validated later, so do not invent missing nodes or arrows.
 ''';
+
+String _chunkingInstruction(String mode) {
+  return switch (ChunkingModes.normalize(mode)) {
+    ChunkingModes.compact =>
+      'Chunking mode: compact. Prefer fewer, larger chunks. Keep related headings, lists, and tables together when they describe one clinical decision.',
+    ChunkingModes.detailed =>
+      'Chunking mode: detailed. Prefer smaller, precise chunks for distinct clinical decisions, but keep each list item with the context needed to interpret it.',
+    _ =>
+      'Chunking mode: normal. Use balanced chunks: one coherent clinical topic per chunk, preserving enough context for retrieval.',
+  };
+}
 
 const _closedAnswerInstruction = '''
 You are Djinn. Answer only from the supplied local evidence. Do not browse, do not use web search, do not use file search, do not use code execution, and do not use outside knowledge. If evidence is incomplete, abstain. Return JSON only with cited source IDs copied exactly from the supplied evidence.

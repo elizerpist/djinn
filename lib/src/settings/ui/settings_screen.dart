@@ -359,6 +359,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onChanged: (value) =>
                             _updateModel(AiModelSlot.embedding, value),
                       ),
+                      _ChunkingModeDropdown(
+                        value: _settings.chunkingMode,
+                        onChanged: (value) =>
+                            _autoSave(_settings.copyWith(chunkingMode: value)),
+                      ),
+                      _TtsLocaleDropdown(
+                        value: _settings.voiceLocale,
+                        onChanged: (value) =>
+                            _autoSave(_settings.copyWith(voiceLocale: value)),
+                      ),
                       if (_statusText != null) ...[
                         const SizedBox(height: 12),
                         Text(
@@ -366,51 +376,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           style: const TextStyle(color: Color(0xFF166534)),
                         ),
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _Section(
-                    title: 'Beszéd',
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.mic),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              'Hangvezérlés',
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      SegmentedButton<String>(
-                        key: const Key('voice-mode-selector'),
-                        segments: const [
-                          ButtonSegment(
-                            value: 'push_to_talk',
-                            label: Text('Push-to-talk'),
-                          ),
-                          ButtonSegment(
-                            value: 'conversation',
-                            label: Text('Párbeszéd'),
-                          ),
-                        ],
-                        selected: {_normalizedVoiceMode(_settings.voiceMode)},
-                        onSelectionChanged: (selection) {
-                          _autoSave(
-                            _settings.copyWith(voiceMode: selection.single),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.record_voice_over),
-                        title: const Text('Felolvasás'),
-                        subtitle: Text(_settings.voiceLocale),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -505,10 +470,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _providerLogPrefix(AiProvider provider) {
     return provider == AiProvider.openAi ? '[OpenAI]' : '[Google]';
   }
-
-  String _normalizedVoiceMode(String value) {
-    return value == 'conversation' ? 'conversation' : 'push_to_talk';
-  }
 }
 
 class _Section extends StatelessWidget {
@@ -532,6 +493,86 @@ class _Section extends StatelessWidget {
             ...children,
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ChunkingModeDropdown extends StatelessWidget {
+  const _ChunkingModeDropdown({required this.value, required this.onChanged});
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: DropdownButtonFormField<String>(
+        key: const Key('chunking-mode-dropdown'),
+        initialValue: ChunkingModes.normalize(value),
+        decoration: const InputDecoration(
+          labelText: 'Chunkolási mód',
+          border: OutlineInputBorder(),
+        ),
+        items: const [
+          DropdownMenuItem(
+            value: ChunkingModes.compact,
+            child: Text('Kompakt'),
+          ),
+          DropdownMenuItem(value: ChunkingModes.normal, child: Text('Normál')),
+          DropdownMenuItem(
+            value: ChunkingModes.detailed,
+            child: Text('Részletes'),
+          ),
+        ],
+        onChanged: (value) {
+          if (value != null) {
+            onChanged(value);
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _TtsLocaleDropdown extends StatelessWidget {
+  const _TtsLocaleDropdown({required this.value, required this.onChanged});
+
+  static const _options = [
+    ('hu-HU', 'Magyar'),
+    ('en-US', 'English (US)'),
+    ('de-DE', 'Deutsch'),
+  ];
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeValue = _options.any((item) => item.$1 == value)
+        ? value
+        : 'hu-HU';
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: DropdownButtonFormField<String>(
+        key: const Key('tts-locale-dropdown'),
+        initialValue: safeValue,
+        decoration: const InputDecoration(
+          labelText: 'Felolvasás hangja',
+          border: OutlineInputBorder(),
+        ),
+        items: _options
+            .map(
+              (option) =>
+                  DropdownMenuItem(value: option.$1, child: Text(option.$2)),
+            )
+            .toList(growable: false),
+        onChanged: (value) {
+          if (value != null) {
+            onChanged(value);
+          }
+        },
       ),
     );
   }
