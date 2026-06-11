@@ -166,7 +166,7 @@ void main() {
 
     messenger.setMockStreamHandler(
       eventChannel,
-      MockStreamHandler.inline(onListen: (_, __) {}),
+      MockStreamHandler.inline(onListen: (_, _) {}),
     );
     messenger.setMockMethodCallHandler(methodChannel, (call) async {
       if (call.method == 'start') {
