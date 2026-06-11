@@ -289,8 +289,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(testedModels, ['gemma-4-31b-it']);
-    expect(find.textContaining('Gemini kvota'), findsOneWidget);
-    expect(find.textContaining('gemma-4-31b-it'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Gemini kvota vagy billing hiba: Quota exceeded for model: gemma-4-31b-it',
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('kulcs hibás'), findsNothing);
   });
 
