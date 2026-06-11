@@ -42,7 +42,7 @@ void main() {
     expect(find.text('Felolvasás hangja'), findsOneWidget);
     expect(find.text('Hangmód'), findsOneWidget);
     expect(find.text('Whisper párbeszéd'), findsOneWidget);
-    expect(find.text('Natív push-to-talk'), findsOneWidget);
+    expect(find.byKey(const Key('voice-mode-dropdown')), findsOneWidget);
     expect(find.text('Működési mód'), findsOneWidget);
     expect(find.text('Validálás'), findsOneWidget);
     expect(find.text('Mentés'), findsNothing);

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -96,17 +97,23 @@ class VoiceControls extends StatelessWidget {
   }
 
   Future<void> _startListening(VoiceInputMode mode) async {
-    PermissionStatus permission = PermissionStatus.granted;
-    try {
-      permission = await Permission.microphone.request();
-    } catch (_) {
-      permission = PermissionStatus.granted;
-    }
-    if (!permission.isGranted) {
+    if (!await _hasMicrophonePermission()) {
       return;
     }
     onVoiceInputModeSelected(mode);
     await controller.listenOnce(locale: locale, mode: mode);
+  }
+
+  Future<bool> _hasMicrophonePermission() async {
+    if (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS) {
+      return true;
+    }
+    try {
+      final permission = await Permission.microphone.request();
+      return permission.isGranted;
+    } catch (_) {
+      return true;
+    }
   }
 
   VoiceInputMode get _defaultInputMode {
