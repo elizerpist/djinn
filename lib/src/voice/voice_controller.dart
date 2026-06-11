@@ -90,7 +90,7 @@ class VoiceController extends ChangeNotifier {
             DebugConsole.log('[Voice/STT] error code=$code');
             if (!sentFinal) {
               _setState(
-                code == 'error_speech_timeout'
+                code == 'error_speech_timeout' || code == 'error_no_match'
                     ? VoiceState.noSpeech
                     : VoiceState.error,
               );

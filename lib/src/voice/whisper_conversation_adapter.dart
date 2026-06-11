@@ -11,9 +11,9 @@ import 'speech_adapter.dart';
 class WhisperConversationAdapter implements SpeechAdapter {
   WhisperConversationAdapter({
     WhisperController? whisperController,
-    WhisperModel model = WhisperModel.base,
+    WhisperModel model = WhisperModel.tiny,
     AudioRecorder? recorder,
-    this.chunkDuration = const Duration(seconds: 3),
+    this.chunkDuration = const Duration(seconds: 2),
   }) : _whisperController = whisperController ?? WhisperController(),
        _model = model,
        _recorder = recorder ?? AudioRecorder();
@@ -73,14 +73,14 @@ class WhisperConversationAdapter implements SpeechAdapter {
         if (_activeController != controller || _activeSessionId != sessionId) {
           return;
         }
-        await _startChunkRecording();
+        await _startChunkRecording(sessionId);
         if (_activeController != controller || _activeSessionId != sessionId) {
           return;
         }
         _addTo(controller, const SpeechEvent.status('listening'));
 
         _chunkTimer = Timer.periodic(chunkDuration, (_) {
-          unawaited(_rotateChunk());
+          unawaited(_rotateChunk(sessionId));
         });
       } catch (error) {
         DebugConsole.log('[Voice/Whisper] listen failed error=$error');
@@ -103,24 +103,34 @@ class WhisperConversationAdapter implements SpeechAdapter {
     if (_stopping) {
       return;
     }
+    final sessionId = _activeSessionId;
     _stopping = true;
-    _activeSessionId = 0;
     _chunkTimer?.cancel();
     _chunkTimer = null;
-    await _finalizeCurrentChunk(commit: true);
-    _addTo(controller, const SpeechEvent.status('notListening'));
-    _addTo(controller, const SpeechEvent.status('done'));
-    _close(controller);
+    await _finalizeCurrentChunk(sessionId: sessionId, commit: true);
+    if (_activeController == controller && _activeSessionId == sessionId) {
+      _addTo(controller, const SpeechEvent.status('notListening'));
+      _addTo(controller, const SpeechEvent.status('done'));
+      _close(controller);
+    }
   }
 
   Future<void> _prepareModel() {
-    final preparation = _modelPreparation ?? _whisperController.downloadModel(_model);
+    final preparation =
+        _modelPreparation ?? _whisperController.downloadModel(_model);
     _modelPreparation = preparation;
     return preparation;
   }
 
-  Future<void> _startChunkRecording() async {
+  Future<void> _startChunkRecording(int sessionId) async {
+    if (_activeSessionId != sessionId || _stopping) {
+      return;
+    }
     final path = await _nextChunkPath();
+    if (_activeSessionId != sessionId || _stopping) {
+      await _safeDelete(path);
+      return;
+    }
     _currentChunkPath = path;
     await _recorder.start(
       const RecordConfig(
@@ -130,19 +140,34 @@ class WhisperConversationAdapter implements SpeechAdapter {
       ),
       path: path,
     );
+    if (_activeSessionId != sessionId || _stopping) {
+      try {
+        await _recorder.stop();
+      } catch (_) {}
+      _currentChunkPath = null;
+      await _safeDelete(path);
+      return;
+    }
     _recording = true;
-    DebugConsole.log('[Voice/Whisper] chunk recording started path=$path');
+    DebugConsole.log(
+      '[Voice/Whisper] session=$sessionId chunk recording started path=$path',
+    );
   }
 
-  Future<void> _rotateChunk() async {
-    if (_stopping || _processingChunk || !_recording) {
+  Future<void> _rotateChunk(int sessionId) async {
+    if (_activeSessionId != sessionId ||
+        _stopping ||
+        _processingChunk ||
+        !_recording) {
       return;
     }
     _processingChunk = true;
     try {
-      await _finalizeCurrentChunk(commit: false);
-      if (!_stopping && _activeController != null) {
-        await _startChunkRecording();
+      await _finalizeCurrentChunk(sessionId: sessionId, commit: false);
+      if (!_stopping &&
+          _activeController != null &&
+          _activeSessionId == sessionId) {
+        await _startChunkRecording(sessionId);
       }
     } catch (error) {
       DebugConsole.log('[Voice/Whisper] chunk rotation failed error=$error');
@@ -155,8 +180,11 @@ class WhisperConversationAdapter implements SpeechAdapter {
     }
   }
 
-  Future<void> _finalizeCurrentChunk({required bool commit}) async {
-    if (!_recording) {
+  Future<void> _finalizeCurrentChunk({
+    required int sessionId,
+    required bool commit,
+  }) async {
+    if (_activeSessionId != sessionId || !_recording) {
       return;
     }
     final controller = _activeController;
@@ -169,8 +197,14 @@ class WhisperConversationAdapter implements SpeechAdapter {
       return;
     }
 
-    final text = await _transcribeChunk(audioPath);
+    final text = await _transcribeChunk(audioPath, sessionId: sessionId);
     await _safeDelete(audioPath);
+    if (_activeSessionId != sessionId || _activeController != controller) {
+      DebugConsole.log(
+        '[Voice/Whisper] drop stale chunk session=$sessionId chars=${text.length}',
+      );
+      return;
+    }
     if (text.isEmpty) {
       if (commit && _currentTranscript.isNotEmpty && controller != null) {
         _addTo(controller, SpeechEvent.result(_currentTranscript, true));
@@ -189,11 +223,15 @@ class WhisperConversationAdapter implements SpeechAdapter {
     }
   }
 
-  Future<String> _transcribeChunk(String audioPath) async {
+  Future<String> _transcribeChunk(
+    String audioPath, {
+    required int sessionId,
+  }) async {
     final locale = _currentLocale ?? 'auto';
     final lang = _whisperLanguage(locale);
     DebugConsole.log(
-      '[Voice/Whisper] transcribe chunk path=$audioPath lang=$lang model=$_model',
+      '[Voice/Whisper] session=$sessionId transcribe chunk path=$audioPath '
+      'lang=$lang model=$_model',
     );
     final result = await _whisperController.transcribe(
       model: _model,

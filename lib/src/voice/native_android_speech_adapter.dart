@@ -10,14 +10,22 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
   NativeAndroidSpeechAdapter({
     MethodChannel? methodChannel,
     EventChannel? eventChannel,
-  }) : _methodChannel = methodChannel ?? const MethodChannel(VoiceChannels.method),
-       _eventChannel = eventChannel ?? const EventChannel(VoiceChannels.events);
+    this.stopGracePeriod = const Duration(milliseconds: 1800),
+  }) : _methodChannel =
+           methodChannel ?? const MethodChannel(VoiceChannels.method),
+       _eventChannel =
+           eventChannel ?? const EventChannel(VoiceChannels.events);
 
   final MethodChannel _methodChannel;
   final EventChannel _eventChannel;
+  final Duration stopGracePeriod;
 
   StreamController<SpeechEvent>? _activeController;
   StreamSubscription<dynamic>? _eventSubscription;
+  Timer? _stopGraceTimer;
+  Completer<void>? _stopCompleter;
+  String? _bestPartialTranscript;
+  bool _stopRequested = false;
   int _sessionCounter = 0;
   int _activeSessionId = 0;
 
@@ -38,21 +46,19 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
         }
         _activeSessionId = sessionId;
         _activeController = controller;
+        _bestPartialTranscript = null;
+        _stopRequested = false;
+        _stopCompleter = null;
         _eventSubscription = _eventChannel.receiveBroadcastStream().listen(
           (dynamic event) {
-            final mapped = _mapEvent(event);
-            if (mapped != null) {
-              controller.add(mapped);
-              if (_isTerminal(mapped)) {
-                _close(controller);
-              }
-            }
+            _handleEvent(controller, event);
           },
           onError: (Object error) {
-            controller.add(SpeechEvent.error(error.toString()));
+            _addTo(controller, SpeechEvent.error(error.toString()));
             _close(controller);
           },
           onDone: () {
+            _commitBestPartialIfNeeded(controller, reason: 'stream_done');
             _close(controller);
           },
           cancelOnError: true,
@@ -91,20 +97,78 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
 
   @override
   Future<void> stop() async {
-    _activeSessionId = 0;
+    final controller = _activeController;
+    if (controller == null) {
+      return;
+    }
+    if (_stopRequested) {
+      await _stopCompleter?.future;
+      return;
+    }
+    _stopRequested = true;
+    final completion = Completer<void>();
+    _stopCompleter = completion;
+    DebugConsole.log(
+      '[Voice/PTT] stop requested graceMs=${stopGracePeriod.inMilliseconds}',
+    );
     try {
       await _methodChannel.invokeMethod<void>('stop');
     } catch (_) {}
-    await _eventSubscription?.cancel();
-    _eventSubscription = null;
-    final controller = _activeController;
-    if (controller != null) {
+    if (_activeController != controller) {
+      if (!completion.isCompleted) {
+        completion.complete();
+      }
+      return;
+    }
+    _stopGraceTimer?.cancel();
+    _stopGraceTimer = Timer(stopGracePeriod, () {
+      DebugConsole.log('[Voice/PTT] stop grace elapsed');
+      _commitBestPartialIfNeeded(controller, reason: 'stop_timeout');
       _close(controller);
+    });
+    await completion.future;
+  }
+
+  void _handleEvent(StreamController<SpeechEvent> controller, dynamic event) {
+    final mapped = _mapEvent(event);
+    if (mapped == null) {
+      return;
+    }
+    switch (mapped) {
+      case SpeechResultEvent(:final text, :final finalResult):
+        _rememberBestPartial(text);
+        _addTo(controller, mapped);
+        if (finalResult) {
+          _close(controller);
+        }
+      case SpeechErrorEvent(:final code):
+        if (_isRecoverableNoResultError(code) &&
+            _commitBestPartialIfNeeded(controller, reason: code)) {
+          _close(controller);
+          return;
+        }
+        _addTo(controller, mapped);
+        _close(controller);
+      case SpeechStatusEvent(:final status):
+        _addTo(controller, mapped);
+        if (_stopRequested && status == 'done') {
+          _commitBestPartialIfNeeded(controller, reason: 'done_status');
+          _close(controller);
+        }
     }
   }
 
   SpeechEvent? _mapEvent(dynamic event) {
     if (event is! Map) {
+      return null;
+    }
+    final eventSessionId = event['sessionId'];
+    if (eventSessionId is num &&
+        eventSessionId.toInt() != _activeSessionId) {
+      DebugConsole.log(
+        '[Voice/PTT] drop stale event session=${eventSessionId.toInt()} '
+        'active=$_activeSessionId',
+      );
       return null;
     }
     final type = event['type']?.toString();
@@ -123,18 +187,58 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
     }
   }
 
-  bool _isTerminal(SpeechEvent event) {
-    return switch (event) {
-      SpeechResultEvent(:final finalResult) => finalResult,
-      SpeechErrorEvent() => true,
-      _ => false,
-    };
+  void _rememberBestPartial(String text) {
+    final transcript = text.trim();
+    if (transcript.isEmpty) {
+      return;
+    }
+    final current = _bestPartialTranscript;
+    if (current == null || transcript.length >= current.length) {
+      _bestPartialTranscript = transcript;
+    }
+  }
+
+  bool _commitBestPartialIfNeeded(
+    StreamController<SpeechEvent> controller, {
+    required String reason,
+  }) {
+    final transcript = _bestPartialTranscript?.trim();
+    if (transcript == null || transcript.isEmpty) {
+      return false;
+    }
+    DebugConsole.log(
+      '[Voice/PTT] commit partial transcript reason=$reason '
+      'chars=${transcript.length}',
+    );
+    _addTo(controller, SpeechEvent.result(transcript, true));
+    return true;
+  }
+
+  bool _isRecoverableNoResultError(String code) {
+    return code == 'error_no_match' || code == 'error_speech_timeout';
+  }
+
+  void _addTo(StreamController<SpeechEvent> controller, SpeechEvent event) {
+    if (_activeController == controller && !controller.isClosed) {
+      controller.add(event);
+    }
   }
 
   void _close(StreamController<SpeechEvent> controller) {
     if (_activeController == controller) {
       _activeController = null;
       _activeSessionId = 0;
+      _stopRequested = false;
+      _bestPartialTranscript = null;
+      _stopGraceTimer?.cancel();
+      _stopGraceTimer = null;
+      final completion = _stopCompleter;
+      _stopCompleter = null;
+      if (completion != null && !completion.isCompleted) {
+        completion.complete();
+      }
+      unawaited(_eventSubscription?.cancel());
+      _eventSubscription = null;
     }
     if (!controller.isClosed) {
       controller.close();

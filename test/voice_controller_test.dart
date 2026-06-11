@@ -33,6 +33,29 @@ void main() {
     );
   });
 
+  test('no match becomes noSpeech and does not send chat', () async {
+    var sent = 0;
+    final controller = VoiceController(
+      speech: FakeSpeechAdapter(
+        events: const [
+          SpeechEvent.status('listening'),
+          SpeechEvent.error('error_no_match'),
+        ],
+      ),
+      tts: FakeTtsAdapter(),
+      onFinalTranscript: (_) async => sent += 1,
+    );
+
+    await controller.listenOnce(locale: 'hu-HU');
+
+    expect(controller.state, VoiceState.noSpeech);
+    expect(sent, 0);
+    expect(
+      DebugConsole.allText,
+      contains('[Voice/STT] error code=error_no_match'),
+    );
+  });
+
   test(
     'empty interim results are ignored and final transcript is sent once',
     () async {
