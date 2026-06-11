@@ -42,6 +42,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Free runner disk space
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/lib/android/sdk/ndk
+          df -h
+
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
@@ -69,12 +78,17 @@ jobs:
         run: flutter test
 
       - name: Build debug APK
-        run: flutter build apk --debug
+        run: flutter build apk --debug --target-platform android-arm64
 
       - name: Prepare debug APK release file
         run: |
           mkdir -p build/release
           cp build/app/outputs/flutter-apk/app-debug.apk build/release/djinn-debug.apk
+          rm -rf "$ANDROID_HOME/ndk/29.0.13113456"
+          rm -rf "$HOME/.gradle/caches"
+          rm -rf .gradle android/.gradle
+          find build -mindepth 1 -maxdepth 1 ! -name release -exec rm -rf {} +
+          df -h
 
       - name: Publish latest debug APK release
         env:
