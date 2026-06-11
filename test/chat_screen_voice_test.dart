@@ -291,14 +291,14 @@ void main() {
     }
 
     expect(stopButton, findsOneWidget);
-    expect(speech.locales, ['hu-HU']);
+    expect(speech.locales, ['hu-HU', 'hu-HU']);
 
     await tester.tap(stopButton);
-    for (var i = 0; i < 5 && speech.locales.length < 2; i += 1) {
+    for (var i = 0; i < 5 && speech.locales.length < 3; i += 1) {
       await tester.pump(const Duration(milliseconds: 20));
     }
 
-    expect(speech.locales, ['hu-HU', 'hu-HU']);
+    expect(speech.locales, ['hu-HU', 'hu-HU', 'hu-HU']);
   });
 
   testWidgets('mic tap during TTS stops playback and starts conversation', (
