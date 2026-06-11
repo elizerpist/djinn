@@ -616,7 +616,7 @@ class _VoiceModeDropdown extends StatelessWidget {
         items: const [
           DropdownMenuItem(
             value: VoiceMode.whisperConversation,
-            child: Text('Whisper párbeszéd'),
+            child: Text('Párbeszéd mód'),
           ),
           DropdownMenuItem(
             value: VoiceMode.nativeAndroidPtt,

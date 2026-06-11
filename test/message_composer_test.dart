@@ -108,6 +108,41 @@ void main() {
     },
   );
 
+  testWidgets('holding mic starts push to talk before release', (
+    tester,
+  ) async {
+    final modes = <VoiceInputMode>[];
+    final controller = VoiceController(
+      speech: FakeSpeechAdapter(events: const []),
+      tts: FakeTtsAdapter(),
+      onFinalTranscript: (_) async {},
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MessageComposer(
+            onSend: (_) async {},
+            sending: false,
+            voiceController: controller,
+            onVoiceInputModeSelected: modes.add,
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('voice-listen'))),
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+
+    expect(modes, [VoiceInputMode.pushToTalk]);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('speaking state keeps composer mic-only', (tester) async {
     final tts = _BlockingTtsAdapter();
     final controller = VoiceController(

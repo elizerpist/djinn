@@ -241,6 +241,65 @@ void main() {
     expect(tts.spokenTexts, ['Korábbi válasz.']);
   });
 
+  testWidgets('stopping a spoken voice reply restarts conversation listening', (
+    tester,
+  ) async {
+    final repository = LocalChatRepository(
+      clock: () => DateTime.utc(2026, 1, 1, 12),
+    );
+    final conversation = await repository.createConversation();
+    final speech = _RecordingSpeechAdapter();
+    final tts = _BlockingTtsAdapter();
+    final voiceController = VoiceController(
+      speech: speech,
+      tts: tts,
+      onFinalTranscript: (_) async {},
+    );
+    addTearDown(voiceController.dispose);
+    addTearDown(tts.complete);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatScreen(
+          repository: repository,
+          chatService: ChatService(
+            repository: repository,
+            answerService: const _FakeAnswerService(),
+          ),
+          refreshKnowledgeReadiness: () async =>
+              KnowledgeBaseState.fromDocuments(const []),
+          conversation: conversation,
+          voiceController: voiceController,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('voice-listen')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('message-input')),
+      'Mi a teendo?',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('send-message')));
+
+    final stopButton = find.byKey(const ValueKey('assistant-stop-message-2'));
+    for (var i = 0; i < 10 && stopButton.evaluate().isEmpty; i += 1) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+
+    expect(stopButton, findsOneWidget);
+    expect(speech.locales, ['hu-HU']);
+
+    await tester.tap(stopButton);
+    for (var i = 0; i < 5 && speech.locales.length < 2; i += 1) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+
+    expect(speech.locales, ['hu-HU', 'hu-HU']);
+  });
+
   testWidgets('citation tap opens source excerpt dialog', (tester) async {
     final repository = LocalChatRepository(
       clock: () => DateTime.utc(2026, 1, 1, 12),

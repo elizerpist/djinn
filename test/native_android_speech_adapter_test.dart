@@ -34,6 +34,7 @@ void main() {
             sink = events;
             events.success(const {
               'type': 'status',
+              'sessionId': 42,
               'status': 'listening',
             });
           },
@@ -45,14 +46,19 @@ void main() {
           scheduleMicrotask(() {
             sink?.success(const {
               'type': 'result',
+              'sessionId': 42,
               'text': 'stroke ellatas',
               'final': true,
             });
             sink?.success(const {
               'type': 'status',
+              'sessionId': 42,
               'status': 'done',
             });
           });
+        }
+        if (call.method == 'start') {
+          return <String, Object?>{'sessionId': 42, 'locale': 'hu-HU'};
         }
         return null;
       });
@@ -95,10 +101,12 @@ void main() {
           sink = events;
           events.success(const {
             'type': 'status',
+            'sessionId': 42,
             'status': 'listening',
           });
           events.success(const {
             'type': 'result',
+            'sessionId': 42,
             'text': 'mellkasi fajdalom',
             'final': false,
           });
@@ -110,13 +118,18 @@ void main() {
         scheduleMicrotask(() {
           sink?.success(const {
             'type': 'error',
+            'sessionId': 42,
             'code': 'error_no_match',
           });
           sink?.success(const {
             'type': 'status',
+            'sessionId': 42,
             'status': 'done',
           });
         });
+      }
+      if (call.method == 'start') {
+        return <String, Object?>{'sessionId': 42, 'locale': 'hu-HU'};
       }
       return null;
     });

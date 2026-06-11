@@ -11,6 +11,7 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
     MethodChannel? methodChannel,
     EventChannel? eventChannel,
     this.stopGracePeriod = const Duration(milliseconds: 1800),
+    this.debugLabel = 'PTT',
   }) : _methodChannel =
            methodChannel ?? const MethodChannel(VoiceChannels.method),
        _eventChannel =
@@ -19,6 +20,7 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
   final MethodChannel _methodChannel;
   final EventChannel _eventChannel;
   final Duration stopGracePeriod;
+  final String debugLabel;
 
   StreamController<SpeechEvent>? _activeController;
   StreamSubscription<dynamic>? _eventSubscription;
@@ -28,13 +30,14 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
   bool _stopRequested = false;
   int _sessionCounter = 0;
   int _activeSessionId = 0;
+  int? _activeNativeSessionId;
 
   @override
   Stream<SpeechEvent> listen({required String locale}) {
     final controller = StreamController<SpeechEvent>();
     final sessionId = ++_sessionCounter;
 
-    DebugConsole.log('[Voice/PTT] listen start locale=$locale');
+    DebugConsole.log('[Voice/$debugLabel] listen start locale=$locale');
 
     Future<void>(() async {
       try {
@@ -66,11 +69,20 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
         if (_activeController != controller || _activeSessionId != sessionId) {
           return;
         }
-        await _methodChannel.invokeMethod<void>('start', <String, dynamic>{
-          'locale': locale,
-        });
+        final result = await _methodChannel.invokeMethod<dynamic>(
+          'start',
+          <String, dynamic>{'locale': locale},
+        );
+        final nativeSessionId = _nativeSessionIdFromResult(result);
+        if (_activeController != controller || _activeSessionId != sessionId) {
+          return;
+        }
+        _activeNativeSessionId = nativeSessionId;
+        if (nativeSessionId != null) {
+          DebugConsole.log('[Voice/$debugLabel] native session=$nativeSessionId');
+        }
       } on MissingPluginException catch (error) {
-        DebugConsole.log('[Voice/PTT] missing plugin error=$error');
+        DebugConsole.log('[Voice/$debugLabel] missing plugin error=$error');
         controller.add(const SpeechEvent.error('error_plugin_missing'));
         _close(controller);
       } on PlatformException catch (error) {
@@ -79,11 +91,13 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
           'unavailable' => 'error_unavailable',
           _ => error.code.isEmpty ? 'error_unknown' : error.code,
         };
-        DebugConsole.log('[Voice/PTT] platform error code=$code error=$error');
+        DebugConsole.log(
+          '[Voice/$debugLabel] platform error code=$code error=$error',
+        );
         controller.add(SpeechEvent.error(code));
         _close(controller);
       } catch (error) {
-        DebugConsole.log('[Voice/PTT] listen failed error=$error');
+        DebugConsole.log('[Voice/$debugLabel] listen failed error=$error');
         controller.add(SpeechEvent.error(error.toString()));
         _close(controller);
       }
@@ -109,7 +123,7 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
     final completion = Completer<void>();
     _stopCompleter = completion;
     DebugConsole.log(
-      '[Voice/PTT] stop requested graceMs=${stopGracePeriod.inMilliseconds}',
+      '[Voice/$debugLabel] stop requested graceMs=${stopGracePeriod.inMilliseconds}',
     );
     try {
       await _methodChannel.invokeMethod<void>('stop');
@@ -122,7 +136,7 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
     }
     _stopGraceTimer?.cancel();
     _stopGraceTimer = Timer(stopGracePeriod, () {
-      DebugConsole.log('[Voice/PTT] stop grace elapsed');
+      DebugConsole.log('[Voice/$debugLabel] stop grace elapsed');
       _commitBestPartialIfNeeded(controller, reason: 'stop_timeout');
       _close(controller);
     });
@@ -163,11 +177,13 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
       return null;
     }
     final eventSessionId = event['sessionId'];
+    final nativeSessionId = _activeNativeSessionId;
     if (eventSessionId is num &&
-        eventSessionId.toInt() != _activeSessionId) {
+        nativeSessionId != null &&
+        eventSessionId.toInt() != nativeSessionId) {
       DebugConsole.log(
-        '[Voice/PTT] drop stale event session=${eventSessionId.toInt()} '
-        'active=$_activeSessionId',
+        '[Voice/$debugLabel] drop stale event session=${eventSessionId.toInt()} '
+        'activeNative=$nativeSessionId',
       );
       return null;
     }
@@ -207,7 +223,7 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
       return false;
     }
     DebugConsole.log(
-      '[Voice/PTT] commit partial transcript reason=$reason '
+      '[Voice/$debugLabel] commit partial transcript reason=$reason '
       'chars=${transcript.length}',
     );
     _addTo(controller, SpeechEvent.result(transcript, true));
@@ -228,6 +244,7 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
     if (_activeController == controller) {
       _activeController = null;
       _activeSessionId = 0;
+      _activeNativeSessionId = null;
       _stopRequested = false;
       _bestPartialTranscript = null;
       _stopGraceTimer?.cancel();
@@ -243,5 +260,13 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
     if (!controller.isClosed) {
       controller.close();
     }
+  }
+
+  int? _nativeSessionIdFromResult(dynamic result) {
+    if (result is! Map) {
+      return null;
+    }
+    final value = result['sessionId'];
+    return value is num ? value.toInt() : null;
   }
 }

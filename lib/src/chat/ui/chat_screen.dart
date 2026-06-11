@@ -149,12 +149,23 @@ class _ChatScreenState extends State<ChatScreen> {
         _pausedMessageId = null;
       });
     }
+    _restartVoiceConversationIfNeeded();
+  }
+
+  void _restartVoiceConversationIfNeeded() {
     if (!mounted ||
         !_voiceReplyEnabled ||
-        _voiceController.state != VoiceState.idle) {
+        _voiceController.isListening ||
+        _voiceController.state == VoiceState.sending ||
+        _voiceController.state == VoiceState.speaking) {
       return;
     }
-    unawaited(_voiceController.listenOnce(locale: _voiceLocale));
+    unawaited(
+      _voiceController.listenOnce(
+        locale: _voiceLocale,
+        mode: VoiceInputMode.conversation,
+      ),
+    );
   }
 
   Future<void> _pauseAssistantMessage(ChatMessage message) async {
@@ -164,8 +175,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     setState(() {
       _speakingMessageId = null;
-      _pausedMessageId = message.id;
+      _pausedMessageId = null;
     });
+    _restartVoiceConversationIfNeeded();
   }
 
   Future<void> _resumeAssistantMessage(ChatMessage message) async {
@@ -181,6 +193,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _speakingMessageId = null;
       _pausedMessageId = null;
     });
+    _restartVoiceConversationIfNeeded();
   }
 
   BubbleTtsState _bubbleTtsState(ChatMessage message) {

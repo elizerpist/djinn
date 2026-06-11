@@ -7,7 +7,12 @@ import 'whisper_conversation_adapter.dart';
 class VoiceBackendFactory {
   const VoiceBackendFactory();
 
-  SpeechAdapter conversation() => WhisperConversationAdapter();
+  SpeechAdapter conversation() {
+    if (Platform.isAndroid) {
+      return NativeAndroidSpeechAdapter(debugLabel: 'Conversation');
+    }
+    return WhisperConversationAdapter();
+  }
 
   SpeechAdapter pushToTalk() {
     if (Platform.isAndroid) {
