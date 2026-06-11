@@ -157,10 +157,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.drag(
-      find.byType(SingleChildScrollView),
-      const Offset(0, -420),
-    );
+    await tester.ensureVisible(find.text('Offline keresés'));
     await tester.pumpAndSettle();
 
     expect(find.text('AI válasz'), findsOneWidget);
