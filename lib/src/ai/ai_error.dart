@@ -5,6 +5,7 @@ enum AiFailureCode {
   keyTestFailed,
   quotaOrBilling,
   highDemand,
+  modelUnavailable,
   networkAbort,
   invalidJson,
   invalidStructuredResponse,
@@ -42,7 +43,7 @@ class AiFailure {
       provider: provider,
       code: AiFailureCode.keyTestFailed,
       message: message,
-      userMessage: '${provider.label} API kulcs teszt sikertelen.',
+      userMessage: '${provider.label} API kulcs teszt sikertelen: $message',
       retryable: false,
     );
   }
@@ -52,7 +53,7 @@ class AiFailure {
       provider: provider,
       code: AiFailureCode.quotaOrBilling,
       message: message,
-      userMessage: '${provider.label} kvota vagy billing hiba.',
+      userMessage: '${provider.label} kvota vagy billing hiba: $message',
       retryable: false,
     );
   }
@@ -62,8 +63,18 @@ class AiFailure {
       provider: provider,
       code: AiFailureCode.highDemand,
       message: message,
-      userMessage: '${provider.label} modell tulterhelt. Probald ujra kesobb.',
+      userMessage: '${provider.label} modell tulterhelt: $message',
       retryable: true,
+    );
+  }
+
+  factory AiFailure.modelUnavailable(AiProvider provider, String message) {
+    return AiFailure(
+      provider: provider,
+      code: AiFailureCode.modelUnavailable,
+      message: message,
+      userMessage: '${provider.label} modell nem elerheto: $message',
+      retryable: false,
     );
   }
 
@@ -115,7 +126,7 @@ class AiFailure {
       provider: provider,
       code: AiFailureCode.unknown,
       message: message,
-      userMessage: '${provider.label} ismeretlen AI hiba.',
+      userMessage: '${provider.label} ismeretlen AI hiba: $message',
       retryable: false,
     );
   }

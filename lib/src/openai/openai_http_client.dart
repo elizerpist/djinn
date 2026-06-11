@@ -23,7 +23,7 @@ class OpenAiHttpClient implements OpenAiClient {
   final Uri _baseUri;
 
   @override
-  Future<void> testApiKey({required String apiKey}) async {
+  Future<void> testApiKey({required String apiKey, String? model}) async {
     final trimmed = apiKey.trim();
     if (trimmed.isEmpty) {
       throw const OpenAiException('OpenAI API key is missing');
@@ -33,7 +33,11 @@ class OpenAiHttpClient implements OpenAiClient {
       headers: {'Authorization': 'Bearer $trimmed'},
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw OpenAiException('api key test failed: ${response.statusCode}');
+      final detail = _openAiErrorMessage(response.body);
+      final suffix = detail == null ? '' : ': $detail';
+      throw OpenAiException(
+        'api key test failed: ${response.statusCode}$suffix',
+      );
     }
   }
 
@@ -102,6 +106,7 @@ class OpenAiHttpClient implements OpenAiClient {
     required String model,
     required String question,
     required List<OpenAiEvidence> evidence,
+    String? conversationContext,
   }) async {
     final response = await _postJson('/v1/responses', {
       'model': model,
@@ -119,6 +124,9 @@ class OpenAiHttpClient implements OpenAiClient {
               'type': 'input_text',
               'text': jsonEncode({
                 'question': question,
+                if (conversationContext != null &&
+                    conversationContext.trim().isNotEmpty)
+                  'conversation_context': conversationContext,
                 'evidence': evidence
                     .map(
                       (item) => {
@@ -517,6 +525,8 @@ String _chunkingInstruction(String mode) {
 
 const _closedAnswerInstruction = '''
 You are Djinn. Answer only from the supplied local evidence. Do not browse, do not use web search, do not use file search, do not use code execution, and do not use outside knowledge. If evidence is incomplete, abstain. Return JSON only with cited source IDs copied exactly from the supplied evidence.
+
+If conversation_context is supplied, use it only to resolve follow-up references like "why" or "that treatment". Never cite or rely on conversation_context as evidence; the evidence array remains the only authoritative source.
 
 Answer language policy: detect the latest user question language. If it is Hungarian, answer in Hungarian. If it is ambiguous or mixed, answer in Hungarian. If it is clearly English, answer in English. Do not choose the answer language from the source document language alone.
 ''';

@@ -124,7 +124,7 @@ class AiExtractionResult {
 }
 
 abstract class AiClient {
-  Future<void> testApiKey({required String apiKey});
+  Future<void> testApiKey({required String apiKey, String? model});
 
   Future<List<double>> createEmbedding({
     required String input,
@@ -141,6 +141,7 @@ abstract class AiClient {
     required String model,
     required String question,
     required List<AiEvidence> evidence,
+    String? conversationContext,
   });
 
   Future<bool> verifyGroundedness({

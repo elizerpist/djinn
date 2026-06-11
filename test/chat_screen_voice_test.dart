@@ -7,6 +7,7 @@ import 'package:djinn/src/chat/data/chat_service.dart';
 import 'package:djinn/src/chat/data/local_answer_service.dart';
 import 'package:djinn/src/chat/data/local_chat_repository.dart';
 import 'package:djinn/src/chat/models/chat_citation.dart';
+import 'package:djinn/src/chat/models/chat_message.dart';
 import 'package:djinn/src/chat/ui/chat_screen.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
@@ -300,6 +301,57 @@ void main() {
     expect(speech.locales, ['hu-HU', 'hu-HU']);
   });
 
+  testWidgets('mic tap during TTS stops playback and starts conversation', (
+    tester,
+  ) async {
+    final repository = LocalChatRepository(
+      clock: () => DateTime.utc(2026, 1, 1, 12),
+    );
+    final conversation = await repository.createConversation();
+    await repository.appendAssistantMessage(
+      conversation.id,
+      text: 'Felolvasott válasz.',
+      status: 'grounded',
+    );
+    final speech = _RecordingSpeechAdapter();
+    final tts = _BlockingTtsAdapter();
+    final voiceController = VoiceController(
+      speech: speech,
+      tts: tts,
+      onFinalTranscript: (_) async {},
+    );
+    addTearDown(voiceController.dispose);
+    addTearDown(tts.complete);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatScreen(
+          repository: repository,
+          chatService: ChatService(
+            repository: repository,
+            answerService: const _FakeAnswerService(),
+          ),
+          refreshKnowledgeReadiness: () async =>
+              KnowledgeBaseState.fromDocuments(const []),
+          conversation: conversation,
+          voiceController: voiceController,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('assistant-play-message-1')));
+    await tester.pump();
+
+    expect(voiceController.state, VoiceState.speaking);
+
+    await tester.tap(find.byKey(const ValueKey('voice-listen')));
+    await tester.pumpAndSettle();
+
+    expect(tts.stopCount, 1);
+    expect(speech.locales, ['hu-HU']);
+  });
+
   testWidgets('citation tap opens source excerpt dialog', (tester) async {
     final repository = LocalChatRepository(
       clock: () => DateTime.utc(2026, 1, 1, 12),
@@ -352,7 +404,10 @@ class _FakeAnswerService implements AnswerService {
   const _FakeAnswerService();
 
   @override
-  Future<LocalAnswerResult> answer(String question) async {
+  Future<LocalAnswerResult> answer(
+    String question, {
+    List<ChatMessage> context = const [],
+  }) async {
     return const LocalAnswerResult(
       text: 'Forrasolt valasz.',
       status: 'grounded',

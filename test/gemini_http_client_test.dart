@@ -12,6 +12,111 @@ import 'package:djinn/src/google/gemini_http_client.dart';
 import 'package:djinn/src/settings/data/api_key_store.dart';
 
 void main() {
+  test('tests the selected Gemini model instead of hard-coded Flash Lite', () async {
+    final keyStore = MemoryApiKeyStore();
+    var requestedPath = '';
+
+    final client = GeminiHttpClient(
+      apiKeyStore: keyStore,
+      httpClient: MockClient((request) async {
+        requestedPath = request.url.path;
+        return http.Response(
+          jsonEncode({
+            'candidates': [
+              {
+                'content': {
+                  'parts': [
+                    {'text': 'pong'},
+                  ],
+                },
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+      baseUri: Uri.parse('https://gemini.test'),
+    );
+
+    await client.testApiKey(
+      apiKey: 'gemini-key',
+      model: 'gemma-4-26b-a4b-it',
+    );
+
+    expect(
+      requestedPath,
+      '/v1beta/models/gemma-4-26b-a4b-it:generateContent',
+    );
+  });
+
+  test('maps Gemini quota test failure without calling it an API key error', () {
+    final client = GeminiHttpClient(
+      apiKeyStore: MemoryApiKeyStore(),
+      httpClient: MockClient(
+        (_) async => http.Response(
+          '{"error":{"message":"Quota exceeded for metric: generate_content_free_tier_requests, model: gemini-2.5-flash-lite"}}',
+          429,
+        ),
+      ),
+      baseUri: Uri.parse('https://gemini.test'),
+    );
+
+    expect(
+      () => client.testApiKey(
+        apiKey: 'gemini-key',
+        model: 'gemini-2.5-flash-lite',
+      ),
+      throwsA(
+        isA<AiProviderException>()
+            .having(
+              (error) => error.failure.code,
+              'code',
+              AiFailureCode.quotaOrBilling,
+            )
+            .having(
+              (error) => error.failure.userMessage,
+              'userMessage',
+              allOf(contains('kvota'), contains('gemini-2.5-flash-lite')),
+            )
+            .having(
+              (error) => error.failure.userMessage,
+              'userMessage',
+              isNot(contains('kulcs hibas')),
+            ),
+      ),
+    );
+  });
+
+  test('allows Gemini Embedding 2 for vector creation', () async {
+    final keyStore = MemoryApiKeyStore();
+    await keyStore.saveKeyForProvider(AiProvider.gemini, 'gemini-key');
+    var requestedPath = '';
+
+    final client = GeminiHttpClient(
+      apiKeyStore: keyStore,
+      httpClient: MockClient((request) async {
+        requestedPath = request.url.path;
+        return http.Response(
+          jsonEncode({
+            'embedding': {
+              'values': [0.1, 0.2, 0.3],
+            },
+          }),
+          200,
+        );
+      }),
+      baseUri: Uri.parse('https://gemini.test'),
+    );
+
+    final vector = await client.createEmbedding(
+      input: 'stroke',
+      model: 'gemini-embedding-2',
+    );
+
+    expect(requestedPath, '/v1beta/models/gemini-embedding-2:embedContent');
+    expect(vector, [0.1, 0.2, 0.3]);
+  });
+
   test('sends Gemini extraction with JSON mime type and schema', () async {
     final keyStore = MemoryApiKeyStore();
     await keyStore.saveKeyForProvider(AiProvider.gemini, 'gemini-key');

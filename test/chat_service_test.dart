@@ -66,6 +66,44 @@ void main() {
     expect(messages.last.refusalReason, 'openai_error');
     expect(messages.last.text, contains('OpenAI'));
   });
+
+  test('passes recent conversation history to answer service', () async {
+    final repository = LocalChatRepository(
+      clock: () => DateTime.utc(2026, 1, 1, 12),
+    );
+    final conversation = await repository.createConversation();
+    await repository.appendUserMessage(
+      conversation.id,
+      'Mikor kell trombolizis?',
+    );
+    await repository.appendAssistantMessage(
+      conversation.id,
+      text: 'A dokumentum szerint 4,5 oran belul merul fel.',
+      status: 'grounded',
+    );
+    final answerService = _RecordingAnswerService(
+      response: const LocalAnswerResult(
+        text: 'Azert, mert idofuggo beavatkozas.',
+        status: 'grounded',
+        citations: [],
+      ),
+    );
+    final service = ChatService(
+      repository: repository,
+      answerService: answerService,
+    );
+
+    await service.sendMessage(conversation.id, 'Miért?');
+
+    expect(answerService.questions, ['Miért?']);
+    expect(
+      answerService.contexts.single.map((message) => message.text),
+      [
+        'Mikor kell trombolizis?',
+        'A dokumentum szerint 4,5 oran belul merul fel.',
+      ],
+    );
+  });
 }
 
 class _FakeAnswerService implements AnswerService {
@@ -74,12 +112,36 @@ class _FakeAnswerService implements AnswerService {
   final LocalAnswerResult response;
 
   @override
-  Future<LocalAnswerResult> answer(String question) async => response;
+  Future<LocalAnswerResult> answer(
+    String question, {
+    List<ChatMessage> context = const [],
+  }) async => response;
 }
 
 class _FailingAnswerService implements AnswerService {
   @override
-  Future<LocalAnswerResult> answer(String question) async {
+  Future<LocalAnswerResult> answer(
+    String question, {
+    List<ChatMessage> context = const [],
+  }) async {
     throw const OpenAiException('provider failed');
+  }
+}
+
+class _RecordingAnswerService implements AnswerService {
+  _RecordingAnswerService({required this.response});
+
+  final LocalAnswerResult response;
+  final questions = <String>[];
+  final contexts = <List<ChatMessage>>[];
+
+  @override
+  Future<LocalAnswerResult> answer(
+    String question, {
+    List<ChatMessage> context = const [],
+  }) async {
+    questions.add(question);
+    contexts.add(context);
+    return response;
   }
 }

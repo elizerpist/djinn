@@ -42,7 +42,8 @@ class MainScreen extends StatefulWidget {
   final Future<AppSettings> Function() loadSettings;
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
-  final Future<bool> Function(AiProvider provider)? testApiKeyForProvider;
+  final Future<bool> Function(AiProvider provider, String model)?
+      testApiKeyForProvider;
   final DocumentProcessingService? processingService;
   final FlowchartValidationRepository? flowchartValidationRepository;
 

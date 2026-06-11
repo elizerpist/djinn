@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../ai/ai_error.dart';
 import '../../ai/ai_provider.dart';
 import '../../debug/debug_console.dart';
+import '../../openai/openai_client.dart';
 import '../data/api_key_store.dart';
 import '../models/app_settings.dart';
 import '../models/model_catalog.dart';
@@ -21,7 +23,8 @@ class SettingsScreen extends StatefulWidget {
   final Future<AppSettings> Function() loadSettings;
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
-  final Future<bool> Function(AiProvider provider)? testApiKeyForProvider;
+  final Future<bool> Function(AiProvider provider, String model)?
+      testApiKeyForProvider;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -193,14 +196,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     DebugConsole.log('${_providerLogPrefix(provider)} api key test started');
     var ok = false;
+    var statusText = '${provider.label} API kulcs nincs beallitva.';
     try {
       ok = await _testProviderKey(provider);
+      statusText = ok
+          ? '${provider.label} kulcs működik (${_settings.modelFor(provider, AiModelSlot.answer)})'
+          : '${provider.label} API kulcs nincs beallitva.';
       DebugConsole.log(
         ok
             ? '${_providerLogPrefix(provider)} api key test succeeded'
             : '${_providerLogPrefix(provider)} api key test failed',
       );
     } catch (error) {
+      statusText = _keyTestErrorStatus(provider, error);
       DebugConsole.log(
         '${_providerLogPrefix(provider)} api key test failed error=$error',
       );
@@ -208,9 +216,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         setState(() {
           _testingKey = false;
-          _statusText = ok
-              ? '${provider.label} kulcs működik'
-              : '${provider.label} kulcs hibás';
+          _statusText = statusText;
         });
       }
     }
@@ -219,12 +225,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<bool> _testProviderKey(AiProvider provider) {
     final providerTester = widget.testApiKeyForProvider;
     if (providerTester != null) {
-      return providerTester(provider);
+      return providerTester(
+        provider,
+        _settings.modelFor(provider, AiModelSlot.answer),
+      );
     }
     if (provider == AiProvider.openAi) {
       return widget.testApiKey();
     }
     return Future.value(false);
+  }
+
+  String _keyTestErrorStatus(AiProvider provider, Object error) {
+    if (error is AiProviderException) {
+      return error.failure.userMessage;
+    }
+    if (error is OpenAiException) {
+      return '${provider.label} API kulcs teszt sikertelen: ${error.message}';
+    }
+    return '${provider.label} API kulcs teszt sikertelen: $error';
   }
 
   Future<void> _updateModel(AiModelSlot slot, String model) async {

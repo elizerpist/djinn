@@ -23,15 +23,23 @@ class GeminiHttpClient implements AiClient {
   final ApiKeyStore _apiKeyStore;
   final http.Client _httpClient;
   final Uri _baseUri;
+  static const _defaultTestModel = 'gemini-3.5-flash';
+  static const _supportedEmbeddingModels = {
+    'gemini-embedding-001',
+    'gemini-embedding-2',
+  };
 
   @override
-  Future<void> testApiKey({required String apiKey}) async {
+  Future<void> testApiKey({required String apiKey, String? model}) async {
     final trimmed = apiKey.trim();
     if (trimmed.isEmpty) {
       throw AiProviderException(AiFailure.missingApiKey(AiProvider.gemini));
     }
+    final testModel = model?.trim().isNotEmpty == true
+        ? model!.trim()
+        : _defaultTestModel;
     await _generateContent(
-      model: 'gemini-2.5-flash-lite',
+      model: testModel,
       apiKeyOverride: trimmed,
       body: const {
         'contents': [
@@ -51,7 +59,7 @@ class GeminiHttpClient implements AiClient {
     required String input,
     required String model,
   }) async {
-    if (model != 'gemini-embedding-001') {
+    if (!_supportedEmbeddingModels.contains(model)) {
       throw AiProviderException(
         AiFailure.unsupportedEmbedding(AiProvider.gemini, model),
       );
@@ -146,6 +154,7 @@ class GeminiHttpClient implements AiClient {
     required String model,
     required String question,
     required List<AiEvidence> evidence,
+    String? conversationContext,
   }) async {
     final response = await _generateContent(
       model: model,
@@ -158,8 +167,13 @@ class GeminiHttpClient implements AiClient {
                 'text': jsonEncode({
                   'instruction':
                       'Answer only from supplied evidence. Return JSON only. '
+                      'Use conversation_context only to resolve follow-up references; '
+                      'never treat it as evidence. '
                       '$_answerLanguagePolicy',
                   'question': question,
+                  if (conversationContext != null &&
+                      conversationContext.trim().isNotEmpty)
+                    'conversation_context': conversationContext,
                   'evidence': evidence
                       .map(
                         (item) => {
@@ -320,9 +334,16 @@ class GeminiHttpClient implements AiClient {
     }
     if (statusCode == 503 ||
         normalized.contains('high demand') ||
-        normalized.contains('overloaded') ||
-        normalized.contains('unavailable')) {
+        normalized.contains('overloaded')) {
       return AiFailure.highDemand(AiProvider.gemini, detail);
+    }
+    if (statusCode == 404 ||
+        (normalized.contains('model') &&
+            (normalized.contains('not found') ||
+                normalized.contains('not supported') ||
+                normalized.contains('does not exist') ||
+                normalized.contains('not available')))) {
+      return AiFailure.modelUnavailable(AiProvider.gemini, detail);
     }
     if ((statusCode == 400 || statusCode == 401 || statusCode == 403) &&
         (normalized.contains('api key') ||

@@ -8,6 +8,7 @@ import 'src/ai/ai_provider.dart';
 import 'src/chat/data/chat_service.dart';
 import 'src/chat/data/local_answer_service.dart';
 import 'src/chat/data/local_chat_repository.dart';
+import 'src/chat/models/chat_message.dart';
 import 'src/chat/data/objectbox_chat_repository.dart';
 import 'src/chat/ui/main_screen.dart';
 import 'src/debug/debug_floating_button.dart';
@@ -63,7 +64,8 @@ class DjinnApp extends StatefulWidget {
   final Future<AppSettings> Function()? loadSettings;
   final Future<void> Function(AppSettings settings)? saveSettings;
   final Future<bool> Function()? testApiKey;
-  final Future<bool> Function(AiProvider provider)? testApiKeyForProvider;
+  final Future<bool> Function(AiProvider provider, String model)?
+      testApiKeyForProvider;
 
   @override
   State<DjinnApp> createState() => _DjinnAppState();
@@ -274,7 +276,8 @@ class _AppDependencies {
   final Future<AppSettings> Function() loadSettings;
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
-  final Future<bool> Function(AiProvider provider) testApiKeyForProvider;
+  final Future<bool> Function(AiProvider provider, String model)
+      testApiKeyForProvider;
 }
 
 Future<bool> Function() _buildOpenAiKeyTester(ApiKeyStore apiKeyStore) {
@@ -293,10 +296,11 @@ Future<bool> Function() _buildOpenAiKeyTester(ApiKeyStore apiKeyStore) {
   };
 }
 
-Future<bool> Function(AiProvider provider) _buildFallbackProviderKeyTester(
+Future<bool> Function(AiProvider provider, String model)
+_buildFallbackProviderKeyTester(
   Future<bool> Function() openAiTester,
 ) {
-  return (provider) {
+  return (provider, _) {
     if (provider == AiProvider.openAi) {
       return openAiTester();
     }
@@ -304,27 +308,23 @@ Future<bool> Function(AiProvider provider) _buildFallbackProviderKeyTester(
   };
 }
 
-Future<bool> Function(AiProvider provider) _buildProviderKeyTester({
+Future<bool> Function(AiProvider provider, String model) _buildProviderKeyTester({
   required ApiKeyStore apiKeyStore,
   required OpenAiHttpClient openAiClient,
   required GeminiHttpClient geminiClient,
 }) {
-  return (provider) async {
+  return (provider, model) async {
     final key = await apiKeyStore.readKeyForProvider(provider);
     if (key == null || key.trim().isEmpty) {
       return false;
     }
-    try {
-      switch (provider) {
-        case AiProvider.openAi:
-          await openAiClient.testApiKey(apiKey: key);
-        case AiProvider.gemini:
-          await geminiClient.testApiKey(apiKey: key);
-      }
-      return true;
-    } catch (_) {
-      return false;
+    switch (provider) {
+      case AiProvider.openAi:
+        await openAiClient.testApiKey(apiKey: key, model: model);
+      case AiProvider.gemini:
+        await geminiClient.testApiKey(apiKey: key, model: model);
     }
+    return true;
   };
 }
 
@@ -346,7 +346,10 @@ class _UnavailableAnswerService implements AnswerService {
   const _UnavailableAnswerService();
 
   @override
-  Future<LocalAnswerResult> answer(String question) async {
+  Future<LocalAnswerResult> answer(
+    String question, {
+    List<ChatMessage> context = const [],
+  }) async {
     return const LocalAnswerResult(
       text:
           'A helyi B mód még nincs teljesen inicializálva. Importálj PDF-et és állítsd be az OpenAI kulcsot.',

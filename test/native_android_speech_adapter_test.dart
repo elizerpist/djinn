@@ -158,4 +158,41 @@ void main() {
     );
     expect(events.whereType<SpeechErrorEvent>(), isEmpty);
   });
+
+  test('passes Android silence timing options to native recognizer', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    Map<Object?, Object?>? startArguments;
+
+    messenger.setMockStreamHandler(
+      eventChannel,
+      MockStreamHandler.inline(onListen: (_, __) {}),
+    );
+    messenger.setMockMethodCallHandler(methodChannel, (call) async {
+      if (call.method == 'start') {
+        startArguments = (call.arguments as Map).cast<Object?, Object?>();
+        return <String, Object?>{'sessionId': 42, 'locale': 'hu-HU'};
+      }
+      return null;
+    });
+
+    final adapter = NativeAndroidSpeechAdapter(
+      methodChannel: methodChannel,
+      eventChannel: eventChannel,
+      completeSilenceTimeout: const Duration(milliseconds: 3500),
+      possibleCompleteSilenceTimeout: const Duration(milliseconds: 2200),
+      minimumSpeechLength: const Duration(milliseconds: 1200),
+    );
+    final subscription = adapter.listen(locale: 'hu-HU').listen((_) {});
+
+    await Future<void>.delayed(Duration.zero);
+
+    expect(startArguments, isNotNull);
+    expect(startArguments!['locale'], 'hu-HU');
+    expect(startArguments!['completeSilenceMillis'], 3500);
+    expect(startArguments!['possibleCompleteSilenceMillis'], 2200);
+    expect(startArguments!['minimumSpeechMillis'], 1200);
+
+    await subscription.cancel();
+  });
 }

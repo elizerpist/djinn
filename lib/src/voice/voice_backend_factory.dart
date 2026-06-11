@@ -9,7 +9,12 @@ class VoiceBackendFactory {
 
   SpeechAdapter conversation() {
     if (Platform.isAndroid) {
-      return NativeAndroidSpeechAdapter(debugLabel: 'Conversation');
+      return NativeAndroidSpeechAdapter(
+        debugLabel: 'Conversation',
+        completeSilenceTimeout: const Duration(milliseconds: 3500),
+        possibleCompleteSilenceTimeout: const Duration(milliseconds: 2200),
+        minimumSpeechLength: const Duration(milliseconds: 1200),
+      );
     }
     return WhisperConversationAdapter();
   }

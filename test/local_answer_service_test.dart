@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/src/ai/ai_provider.dart';
 import 'package:djinn/src/chat/data/local_answer_service.dart';
+import 'package:djinn/src/chat/models/chat_message.dart';
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/local_store/entities.dart';
 import 'package:djinn/src/openai/openai_client.dart';
@@ -104,6 +105,58 @@ void main() {
     );
   });
 
+  test('uses recent chat context for follow-up retrieval and generation', () async {
+    final client = _RecordingAiClient(
+      answerText: 'Azert, mert idofuggo beavatkozas.',
+    );
+    final service = LocalAnswerService(
+      openAiClient: client,
+      retriever: MemoryLocalRetriever(const [
+        SourceEvidence(
+          id: 'chunk-1',
+          sourceType: EvidenceSourceType.textChunk,
+          text: 'A trombolizis idofuggo beavatkozas.',
+          label: 'Stroke protokoll',
+          validationState: ValidationState.validated,
+          score: 0.95,
+        ),
+      ]),
+      citationVerifier: CitationVerifier(),
+      loadSettings: () async => AppSettings.defaults(),
+      hasApiKey: () async => true,
+      hasReadyDocuments: () async => true,
+    );
+
+    final result = await service.answer(
+      'Miért?',
+      context: [
+        ChatMessage(
+          id: 'message-1',
+          conversationId: 'conversation-1',
+          sender: ChatSender.user,
+          text: 'Mikor kell trombolizis?',
+          createdAt: DateTime.utc(2026, 1, 1, 12),
+        ),
+        ChatMessage(
+          id: 'message-2',
+          conversationId: 'conversation-1',
+          sender: ChatSender.assistant,
+          text: 'A dokumentum szerint 4,5 oran belul merul fel.',
+          createdAt: DateTime.utc(2026, 1, 1, 12, 1),
+          status: 'grounded',
+        ),
+      ],
+    );
+
+    expect(result.status, 'grounded');
+    expect(client.embeddingInputs.single, contains('Mikor kell trombolizis?'));
+    expect(client.embeddingInputs.single, contains('Aktualis kerdes: Miért?'));
+    expect(
+      client.conversationContexts.single,
+      contains('A dokumentum szerint 4,5 oran belul merul fel.'),
+    );
+  });
+
   test('missing provider key log includes provider name in chat', () async {
     final service = LocalAnswerService(
       clientForProvider: (AiProvider provider) => FakeOpenAiClient(),
@@ -193,5 +246,37 @@ class _ThrowingAiClient extends FakeOpenAiClient {
     required String model,
   }) {
     throw StateError('AI client should not be called');
+  }
+}
+
+class _RecordingAiClient extends FakeOpenAiClient {
+  _RecordingAiClient({required super.answerText});
+
+  final embeddingInputs = <String>[];
+  final conversationContexts = <String?>[];
+
+  @override
+  Future<List<double>> createEmbedding({
+    required String input,
+    required String model,
+  }) async {
+    embeddingInputs.add(input);
+    return super.createEmbedding(input: input, model: model);
+  }
+
+  @override
+  Future<OpenAiAnswer> generateAnswer({
+    required String model,
+    required String question,
+    required List<OpenAiEvidence> evidence,
+    String? conversationContext,
+  }) async {
+    conversationContexts.add(conversationContext);
+    return super.generateAnswer(
+      model: model,
+      question: question,
+      evidence: evidence,
+      conversationContext: conversationContext,
+    );
   }
 }

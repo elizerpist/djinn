@@ -27,7 +27,17 @@ class NativeSpeechBridge(private val context: Context) :
         when (call.method) {
             "start" -> {
                 val locale = call.argument<String>("locale")
-                start(locale, result)
+                val completeSilenceMillis = call.argument<Int>("completeSilenceMillis")
+                val possibleCompleteSilenceMillis =
+                    call.argument<Int>("possibleCompleteSilenceMillis")
+                val minimumSpeechMillis = call.argument<Int>("minimumSpeechMillis")
+                start(
+                    locale,
+                    completeSilenceMillis,
+                    possibleCompleteSilenceMillis,
+                    minimumSpeechMillis,
+                    result
+                )
             }
 
             "stop" -> {
@@ -47,7 +57,13 @@ class NativeSpeechBridge(private val context: Context) :
         eventSink = null
     }
 
-    private fun start(locale: String?, result: MethodChannel.Result) {
+    private fun start(
+        locale: String?,
+        completeSilenceMillis: Int?,
+        possibleCompleteSilenceMillis: Int?,
+        minimumSpeechMillis: Int?,
+        result: MethodChannel.Result
+    ) {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             emitError("error_unavailable")
             result.error("unavailable", "SpeechRecognizer unavailable", null)
@@ -80,6 +96,24 @@ class NativeSpeechBridge(private val context: Context) :
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale ?: "")
+            completeSilenceMillis?.takeIf { it > 0 }?.let {
+                putExtra(
+                    RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS,
+                    it
+                )
+            }
+            possibleCompleteSilenceMillis?.takeIf { it > 0 }?.let {
+                putExtra(
+                    RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS,
+                    it
+                )
+            }
+            minimumSpeechMillis?.takeIf { it > 0 }?.let {
+                putExtra(
+                    RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS,
+                    it
+                )
+            }
         }
 
         recognizer?.startListening(intent)

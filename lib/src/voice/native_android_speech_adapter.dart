@@ -12,6 +12,9 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
     EventChannel? eventChannel,
     this.stopGracePeriod = const Duration(milliseconds: 1800),
     this.debugLabel = 'PTT',
+    this.completeSilenceTimeout,
+    this.possibleCompleteSilenceTimeout,
+    this.minimumSpeechLength,
   }) : _methodChannel =
            methodChannel ?? const MethodChannel(VoiceChannels.method),
        _eventChannel =
@@ -21,6 +24,9 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
   final EventChannel _eventChannel;
   final Duration stopGracePeriod;
   final String debugLabel;
+  final Duration? completeSilenceTimeout;
+  final Duration? possibleCompleteSilenceTimeout;
+  final Duration? minimumSpeechLength;
 
   StreamController<SpeechEvent>? _activeController;
   StreamSubscription<dynamic>? _eventSubscription;
@@ -71,7 +77,15 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
         }
         final result = await _methodChannel.invokeMethod<dynamic>(
           'start',
-          <String, dynamic>{'locale': locale},
+          <String, dynamic>{
+            'locale': locale,
+            if (completeSilenceTimeout case final timeout?)
+              'completeSilenceMillis': timeout.inMilliseconds,
+            if (possibleCompleteSilenceTimeout case final timeout?)
+              'possibleCompleteSilenceMillis': timeout.inMilliseconds,
+            if (minimumSpeechLength case final timeout?)
+              'minimumSpeechMillis': timeout.inMilliseconds,
+          },
         );
         final nativeSessionId = _nativeSessionIdFromResult(result);
         if (_activeController != controller || _activeSessionId != sessionId) {

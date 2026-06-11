@@ -259,7 +259,10 @@ class _DefaultRefusalService implements AnswerService {
   const _DefaultRefusalService();
 
   @override
-  Future<LocalAnswerResult> answer(String question) async {
+  Future<LocalAnswerResult> answer(
+    String question, {
+    List<ChatMessage> context = const [],
+  }) async {
     return const LocalAnswerResult(
       text:
           'A tudasbazisban nincs elegendo hitelesitett forras ehhez a valaszhoz. Csak az alkalmazas dokumentumai alapjan tudok valaszolni.',
@@ -274,7 +277,10 @@ class _BackendAnswerService implements AnswerService {
   const _BackendAnswerService();
 
   @override
-  Future<LocalAnswerResult> answer(String question) async {
+  Future<LocalAnswerResult> answer(
+    String question, {
+    List<ChatMessage> context = const [],
+  }) async {
     return const LocalAnswerResult(
       text: 'Forrasbol valaszolok.',
       status: 'grounded',

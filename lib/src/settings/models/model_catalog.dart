@@ -9,11 +9,19 @@ class ModelCatalog {
     'text-embedding-3-small',
   ];
   static const geminiTextModels = [
+    'gemini-3.5-flash',
+    'gemini-3-flash-preview',
+    'gemini-3.1-flash-lite',
     'gemini-2.5-flash-lite',
     'gemini-2.5-flash',
     'gemini-2.5-pro',
+    'gemma-4-26b-a4b-it',
+    'gemma-4-31b-it',
   ];
-  static const geminiEmbeddingModels = ['gemini-embedding-001'];
+  static const geminiEmbeddingModels = [
+    'gemini-embedding-2',
+    'gemini-embedding-001',
+  ];
 
   static List<String> options(AiProvider provider, AiModelSlot slot) {
     return switch ((provider, slot)) {

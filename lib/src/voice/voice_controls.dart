@@ -51,11 +51,7 @@ class _VoiceControlsState extends State<VoiceControls> {
       builder: (context, _) {
         final state = widget.controller.state;
         final listening = state == VoiceState.listening;
-        final busy =
-            widget.sending ||
-            state == VoiceState.speaking ||
-            state == VoiceState.paused ||
-            state == VoiceState.sending;
+        final busy = widget.sending || state == VoiceState.sending;
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [

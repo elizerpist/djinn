@@ -9,12 +9,16 @@ import '../../rag/retrieval/local_retriever.dart';
 import '../../rag/verification/citation_verifier.dart';
 import '../../settings/models/app_settings.dart';
 import '../models/chat_citation.dart';
+import '../models/chat_message.dart';
 
 const insufficientEvidenceText =
     'A helyi tudásbázisban nincs elég forrás ehhez a válaszhoz.';
 
 abstract class AnswerService {
-  Future<LocalAnswerResult> answer(String question);
+  Future<LocalAnswerResult> answer(
+    String question, {
+    List<ChatMessage> context = const [],
+  });
 }
 
 class LocalAnswerResult {
@@ -63,8 +67,16 @@ class LocalAnswerService implements AnswerService {
   final ReadinessCheck hasReadyDocuments;
 
   @override
-  Future<LocalAnswerResult> answer(String question) async {
+  Future<LocalAnswerResult> answer(
+    String question, {
+    List<ChatMessage> context = const [],
+  }) async {
     DebugConsole.log('[Chat/RAG] answer start chars=${question.length}');
+    final conversationContext = _conversationContext(context);
+    final retrievalQuery = _retrievalQuery(
+      question: question,
+      conversationContext: conversationContext,
+    );
     final settings = await loadSettings();
     final provider = settings.activeProvider;
     if (settings.answerMode == AnswerModes.offline) {
@@ -114,7 +126,7 @@ class LocalAnswerService implements AnswerService {
         '[Chat/RAG] query embedding model=${settings.embeddingModel}',
       );
       final queryVector = await client.createEmbedding(
-        input: question,
+        input: retrievalQuery,
         model: settings.embeddingModel,
       );
       retrieved = await retriever.retrieve(
@@ -154,6 +166,9 @@ class LocalAnswerService implements AnswerService {
     final draft = await client.generateAnswer(
       model: settings.answerModel,
       question: question,
+      conversationContext: conversationContext.isEmpty
+          ? null
+          : conversationContext,
       evidence: retrieved
           .map(
             (item) =>
@@ -239,6 +254,47 @@ class LocalAnswerService implements AnswerService {
       sourceLabel: evidence.label,
       validationState: evidence.validationState.wireName,
     );
+  }
+
+  String _retrievalQuery({
+    required String question,
+    required String conversationContext,
+  }) {
+    if (conversationContext.isEmpty) {
+      return question;
+    }
+    return 'Beszelgetesi elozmeny:\n$conversationContext\n\n'
+        'Aktualis kerdes: $question';
+  }
+
+  String _conversationContext(List<ChatMessage> messages) {
+    if (messages.isEmpty) {
+      return '';
+    }
+    const maxMessages = 6;
+    const maxChars = 1800;
+    const maxMessageChars = 420;
+    final lines = <String>[];
+    for (final message in messages.reversed.take(maxMessages).toList().reversed) {
+      final text = _truncate(message.text.trim(), maxMessageChars);
+      if (text.isEmpty) {
+        continue;
+      }
+      final role = switch (message.sender) {
+        ChatSender.user => 'User',
+        ChatSender.assistant => 'Assistant',
+      };
+      lines.add('$role: $text');
+    }
+    final joined = lines.join('\n');
+    return _truncate(joined, maxChars);
+  }
+
+  String _truncate(String value, int maxChars) {
+    if (value.length <= maxChars) {
+      return value;
+    }
+    return '${value.substring(0, maxChars - 3)}...';
   }
 
   Future<LocalAnswerResult> _offlineAnswer(

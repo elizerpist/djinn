@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:djinn/src/ai/ai_error.dart';
 import 'package:djinn/src/ai/ai_provider.dart';
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/settings/data/api_key_store.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
+import 'package:djinn/src/settings/models/model_catalog.dart';
 import 'package:djinn/src/settings/ui/settings_screen.dart';
 import 'package:djinn/src/voice/voice_mode.dart';
 
@@ -23,7 +25,7 @@ void main() {
           loadSettings: () async => settings,
           saveSettings: (value) async => settings = value,
           testApiKey: () async => true,
-          testApiKeyForProvider: (_) async => true,
+          testApiKeyForProvider: (_, _) async => true,
         ),
       ),
     );
@@ -60,7 +62,7 @@ void main() {
           loadSettings: () async => settings,
           saveSettings: (value) async => settings = value,
           testApiKey: () async => true,
-          testApiKeyForProvider: (_) async => true,
+          testApiKeyForProvider: (_, _) async => true,
         ),
       ),
     );
@@ -92,7 +94,7 @@ void main() {
           loadSettings: () async => settings,
           saveSettings: (value) async => settings = value,
           testApiKey: () async => true,
-          testApiKeyForProvider: (_) async => true,
+          testApiKeyForProvider: (_, _) async => true,
         ),
       ),
     );
@@ -121,7 +123,7 @@ void main() {
           loadSettings: () async => settings,
           saveSettings: (value) async => settings = value,
           testApiKey: () async => true,
-          testApiKeyForProvider: (_) async => true,
+          testApiKeyForProvider: (_, _) async => true,
         ),
       ),
     );
@@ -151,7 +153,7 @@ void main() {
           loadSettings: () async => settings,
           saveSettings: (value) async => settings = value,
           testApiKey: () async => true,
-          testApiKeyForProvider: (_) async => true,
+          testApiKeyForProvider: (_, _) async => true,
         ),
       ),
     );
@@ -184,7 +186,7 @@ void main() {
           loadSettings: () async => settings,
           saveSettings: (value) async => settings = value,
           testApiKey: () async => true,
-          testApiKeyForProvider: (_) async => true,
+          testApiKeyForProvider: (_, _) async => true,
         ),
       ),
     );
@@ -221,7 +223,7 @@ void main() {
           loadSettings: () async => settings,
           saveSettings: (value) async => settings = value,
           testApiKey: () async => true,
-          testApiKeyForProvider: (_) async => true,
+          testApiKeyForProvider: (_, _) async => true,
         ),
       ),
     );
@@ -241,6 +243,57 @@ void main() {
     );
   });
 
+  test('Gemini model catalog includes current Gemini, Gemma and Embedding 2 models', () {
+    expect(ModelCatalog.geminiTextModels, contains('gemini-3.5-flash'));
+    expect(ModelCatalog.geminiTextModels, contains('gemini-3-flash-preview'));
+    expect(ModelCatalog.geminiTextModels, contains('gemini-3.1-flash-lite'));
+    expect(ModelCatalog.geminiTextModels, contains('gemma-4-26b-a4b-it'));
+    expect(ModelCatalog.geminiTextModels, contains('gemma-4-31b-it'));
+    expect(ModelCatalog.geminiEmbeddingModels, contains('gemini-embedding-2'));
+  });
+
+  testWidgets('Gemini key test uses selected answer model and surfaces quota', (
+    tester,
+  ) async {
+    final keyStore = MemoryApiKeyStore();
+    await keyStore.saveKeyForProvider(AiProvider.gemini, 'gemini-key');
+    var settings = AppSettings.defaults().copyWith(
+      activeProvider: AiProvider.gemini,
+      geminiAnswerModel: 'gemma-4-31b-it',
+    );
+    final testedModels = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (provider, model) async {
+            expect(provider, AiProvider.gemini);
+            testedModels.add(model);
+            throw AiProviderException(
+              AiFailure.quota(
+                AiProvider.gemini,
+                'Quota exceeded for model: $model',
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kulcs tesztelése'));
+    await tester.pumpAndSettle();
+
+    expect(testedModels, ['gemma-4-31b-it']);
+    expect(find.textContaining('Gemini kvota'), findsOneWidget);
+    expect(find.textContaining('gemma-4-31b-it'), findsOneWidget);
+    expect(find.textContaining('kulcs hibás'), findsNothing);
+  });
+
   testWidgets('tests and deletes active provider API key', (tester) async {
     final keyStore = MemoryApiKeyStore();
     var settings = AppSettings.defaults();
@@ -252,7 +305,7 @@ void main() {
           loadSettings: () async => settings,
           saveSettings: (value) async => settings = value,
           testApiKey: () async => true,
-          testApiKeyForProvider: (_) async => true,
+          testApiKeyForProvider: (_, _) async => true,
         ),
       ),
     );
@@ -291,7 +344,7 @@ void main() {
           loadSettings: () async => AppSettings.defaults(),
           saveSettings: (_) async => throw StateError('settings store failed'),
           testApiKey: () async => true,
-          testApiKeyForProvider: (_) async => true,
+          testApiKeyForProvider: (_, _) async => true,
         ),
       ),
     );
@@ -325,7 +378,7 @@ void main() {
           loadSettings: () async => settings,
           saveSettings: (value) async => settings = value,
           testApiKey: () async => true,
-          testApiKeyForProvider: (_) async => true,
+          testApiKeyForProvider: (_, _) async => true,
         ),
       ),
     );

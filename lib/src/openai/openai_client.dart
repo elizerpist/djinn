@@ -16,7 +16,7 @@ class OpenAiException implements Exception {
 
 abstract class OpenAiClient implements AiClient {
   @override
-  Future<void> testApiKey({required String apiKey});
+  Future<void> testApiKey({required String apiKey, String? model});
 
   @override
   Future<List<double>> createEmbedding({
@@ -36,6 +36,7 @@ abstract class OpenAiClient implements AiClient {
     required String model,
     required String question,
     required List<OpenAiEvidence> evidence,
+    String? conversationContext,
   });
 
   @override
@@ -60,7 +61,7 @@ class FakeOpenAiClient implements OpenAiClient {
   final bool grounded;
 
   @override
-  Future<void> testApiKey({required String apiKey}) async {
+  Future<void> testApiKey({required String apiKey, String? model}) async {
     if (apiKey.trim().isEmpty) {
       throw const OpenAiException('missing api key');
     }
@@ -88,6 +89,7 @@ class FakeOpenAiClient implements OpenAiClient {
     required String model,
     required String question,
     required List<OpenAiEvidence> evidence,
+    String? conversationContext,
   }) async {
     return OpenAiAnswer(
       answer: answerText,
