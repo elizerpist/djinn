@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../debug/debug_console.dart';
 import 'voice_controller.dart';
 import 'voice_input_mode.dart';
 import 'voice_mode.dart';
@@ -84,25 +85,40 @@ class _VoiceControlsState extends State<VoiceControls> {
   }
 
   void _handleTapDown(TapDownDetails _) {
+    DebugConsole.log(
+      '[Voice/UI] mic tap down listening=${widget.controller.isListening} '
+      'sending=${widget.sending} state=${widget.controller.state.name}',
+    );
     _pressTimer?.cancel();
     _pressStartedPushToTalk = false;
     _pendingPushToTalkStop = false;
     if (widget.controller.isListening) {
       _tapDownStoppedListening = true;
+      DebugConsole.log('[Voice/UI] mic tap down stops active listening');
       unawaited(widget.controller.stopListening());
       return;
     }
     _tapDownStoppedListening = false;
     _pressTimer = Timer(_pushToTalkDelay, () {
       if (!mounted || widget.controller.isListening || widget.sending) {
+        DebugConsole.log(
+          '[Voice/UI] ptt threshold skipped mounted=$mounted '
+          'listening=${widget.controller.isListening} sending=${widget.sending}',
+        );
         return;
       }
       _pressStartedPushToTalk = true;
+      DebugConsole.log('[Voice/UI] ptt threshold reached start pushToTalk');
       unawaited(_startListening(VoiceInputMode.pushToTalk));
     });
   }
 
   void _handleTapUp(TapUpDetails _) {
+    DebugConsole.log(
+      '[Voice/UI] mic tap up startedPtt=$_pressStartedPushToTalk '
+      'stoppedExisting=$_tapDownStoppedListening '
+      'listening=${widget.controller.isListening}',
+    );
     if (_tapDownStoppedListening) {
       _tapDownStoppedListening = false;
       _pressTimer?.cancel();
@@ -114,23 +130,32 @@ class _VoiceControlsState extends State<VoiceControls> {
     _pressTimer = null;
     if (startedPushToTalk) {
       if (widget.controller.isListening) {
+        DebugConsole.log('[Voice/UI] ptt release stop active listening');
         unawaited(widget.controller.stopListening());
       } else {
         _pendingPushToTalkStop = true;
+        DebugConsole.log('[Voice/UI] ptt release pending stop before listening');
       }
       return;
     }
+    DebugConsole.log('[Voice/UI] single tap start mode=${_defaultInputMode.name}');
     unawaited(_startListening(_defaultInputMode));
   }
 
   void _handleTapCancel() {
+    DebugConsole.log(
+      '[Voice/UI] mic tap cancel startedPtt=$_pressStartedPushToTalk '
+      'listening=${widget.controller.isListening}',
+    );
     _pressTimer?.cancel();
     _pressTimer = null;
     if (_pressStartedPushToTalk) {
       if (widget.controller.isListening) {
+        DebugConsole.log('[Voice/UI] ptt cancel stop active listening');
         unawaited(widget.controller.stopListening());
       } else {
         _pendingPushToTalkStop = true;
+        DebugConsole.log('[Voice/UI] ptt cancel pending stop before listening');
       }
     }
     _pressStartedPushToTalk = false;
@@ -138,11 +163,14 @@ class _VoiceControlsState extends State<VoiceControls> {
   }
 
   Future<void> _startListening(VoiceInputMode mode) async {
+    DebugConsole.log('[Voice/UI] start listening requested mode=${mode.name}');
     if (!await _hasMicrophonePermission()) {
+      DebugConsole.log('[Voice/UI] start listening blocked permission_denied');
       return;
     }
     if (mode == VoiceInputMode.pushToTalk && _pendingPushToTalkStop) {
       _pendingPushToTalkStop = false;
+      DebugConsole.log('[Voice/UI] ptt start cancelled by pending stop');
       return;
     }
     widget.onVoiceInputModeSelected(mode);
@@ -151,12 +179,17 @@ class _VoiceControlsState extends State<VoiceControls> {
 
   Future<bool> _hasMicrophonePermission() async {
     if (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS) {
+      DebugConsole.log(
+        '[Voice/UI] permission skipped platform=${Platform.operatingSystem}',
+      );
       return true;
     }
     try {
       final permission = await Permission.microphone.request();
+      DebugConsole.log('[Voice/UI] permission status=${permission.name}');
       return permission.isGranted;
-    } catch (_) {
+    } catch (error) {
+      DebugConsole.log('[Voice/UI] permission check failed error=$error');
       return true;
     }
   }

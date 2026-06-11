@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/voice/native_android_speech_adapter.dart';
 import 'package:djinn/src/voice/speech_adapter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(DebugConsole.clear);
 
   const methodChannel = MethodChannel('test.djinn/native_speech');
   const eventChannel = EventChannel('test.djinn/native_speech_events');
@@ -157,6 +159,85 @@ void main() {
       ),
     );
     expect(events.whereType<SpeechErrorEvent>(), isEmpty);
+  });
+
+  test('done status commits best partial without explicit stop', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final methodCalls = <String>[];
+
+    messenger.setMockStreamHandler(
+      eventChannel,
+      MockStreamHandler.inline(
+        onListen: (_, events) {
+          scheduleMicrotask(() {
+            events.success(const {
+              'type': 'status',
+              'sessionId': 42,
+              'status': 'listening',
+            });
+            events.success(const {
+              'type': 'result',
+              'sessionId': 42,
+              'text': 'mit kell',
+              'final': false,
+            });
+            events.success(const {
+              'type': 'status',
+              'sessionId': 42,
+              'status': 'notListening',
+            });
+            events.success(const {
+              'type': 'result',
+              'sessionId': 42,
+              'text': 'mit kell stroke eseten',
+              'final': false,
+            });
+            events.success(const {
+              'type': 'status',
+              'sessionId': 42,
+              'status': 'done',
+            });
+          });
+        },
+      ),
+    );
+    messenger.setMockMethodCallHandler(methodChannel, (call) async {
+      methodCalls.add(call.method);
+      if (call.method == 'start') {
+        return <String, Object?>{'sessionId': 42, 'locale': 'hu-HU'};
+      }
+      return null;
+    });
+
+    final adapter = NativeAndroidSpeechAdapter(
+      methodChannel: methodChannel,
+      eventChannel: eventChannel,
+      debugLabel: 'Conversation',
+    );
+    final events = <SpeechEvent>[];
+
+    await adapter
+        .listen(locale: 'hu-HU')
+        .listen(events.add)
+        .asFuture<void>()
+        .timeout(const Duration(seconds: 1));
+
+    expect(methodCalls, ['start']);
+    expect(
+      events,
+      contains(
+        isA<SpeechResultEvent>()
+            .having((event) => event.text, 'text', 'mit kell stroke eseten')
+            .having((event) => event.finalResult, 'finalResult', isTrue),
+      ),
+    );
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[Voice/Conversation] commit partial transcript reason=done_status',
+      ),
+    );
   });
 
   test('passes Android silence timing options to native recognizer', () async {

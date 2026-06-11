@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../debug/debug_console.dart';
 import '../../knowledge/models/knowledge_document.dart';
 import '../../settings/models/app_settings.dart';
 import '../../voice/voice_mode.dart';
@@ -45,6 +46,7 @@ class _ChatScreenState extends State<ChatScreen> {
   );
   bool _sending = false;
   bool _voiceReplyEnabled = false;
+  bool _voiceListenStarting = false;
   String _voiceLocale = 'hu-HU';
   VoiceMode _voiceMode = VoiceMode.whisperConversation;
   String? _speakingMessageId;
@@ -66,6 +68,7 @@ class _ChatScreenState extends State<ChatScreen> {
           onFinalTranscript: (text) =>
               _send(text, speakResponse: _voiceReplyEnabled),
         );
+    _voiceController.addListener(_syncVoicePlaybackState);
     _loadMessages();
     _loadKnowledgeState();
     _loadVoiceSettings();
@@ -73,6 +76,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _voiceController.removeListener(_syncVoicePlaybackState);
     if (_ownsVoiceController) {
       _voiceController.stopTts();
       _voiceController.dispose();
@@ -138,6 +142,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _playAssistantMessage(ChatMessage message) async {
+    DebugConsole.log(
+      '[Voice/TTS] bubble play message=${message.id} chars=${message.text.length}',
+    );
     setState(() {
       _speakingMessageId = message.id;
       _pausedMessageId = null;
@@ -149,17 +156,30 @@ class _ChatScreenState extends State<ChatScreen> {
         _pausedMessageId = null;
       });
     }
+    DebugConsole.log('[Voice/TTS] bubble play finished message=${message.id}');
     _restartVoiceConversationIfNeeded();
   }
 
   void _restartVoiceConversationIfNeeded() {
-    if (!mounted ||
-        !_voiceReplyEnabled ||
+    if (!mounted) {
+      return;
+    }
+    if (!_voiceReplyEnabled ||
+        _voiceListenStarting ||
         _voiceController.isListening ||
         _voiceController.state == VoiceState.sending ||
         _voiceController.state == VoiceState.speaking) {
+      DebugConsole.log(
+        '[Voice/STT] conversation restart skipped enabled=$_voiceReplyEnabled '
+        'starting=$_voiceListenStarting state=${_voiceController.state.name} '
+        'listening=${_voiceController.isListening}',
+      );
       return;
     }
+    DebugConsole.log(
+      '[Voice/STT] conversation restart locale=$_voiceLocale '
+      'state=${_voiceController.state.name}',
+    );
     unawaited(
       _voiceController.listenOnce(
         locale: _voiceLocale,
@@ -169,6 +189,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _pauseAssistantMessage(ChatMessage message) async {
+    DebugConsole.log('[Voice/TTS] bubble pause message=${message.id}');
     await _voiceController.pauseTts();
     if (!mounted) {
       return;
@@ -181,10 +202,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _resumeAssistantMessage(ChatMessage message) async {
+    DebugConsole.log('[Voice/TTS] bubble resume message=${message.id}');
     await _playAssistantMessage(message);
   }
 
   Future<void> _stopAssistantMessage(ChatMessage message) async {
+    DebugConsole.log('[Voice/TTS] bubble stop message=${message.id}');
     await _voiceController.stopTts();
     if (!mounted) {
       return;
@@ -194,6 +217,37 @@ class _ChatScreenState extends State<ChatScreen> {
       _pausedMessageId = null;
     });
     _restartVoiceConversationIfNeeded();
+  }
+
+  void _syncVoicePlaybackState() {
+    if (_voiceListenStarting) {
+      final state = _voiceController.state;
+      if (state == VoiceState.listening ||
+          state == VoiceState.sending ||
+          state == VoiceState.noSpeech ||
+          state == VoiceState.error ||
+          state == VoiceState.idle) {
+        DebugConsole.log(
+          '[Voice/UI] listen start flag cleared state=${state.name}',
+        );
+        _voiceListenStarting = false;
+      }
+    }
+    if (!mounted || (_speakingMessageId == null && _pausedMessageId == null)) {
+      return;
+    }
+    final state = _voiceController.state;
+    if (state == VoiceState.speaking || state == VoiceState.paused) {
+      return;
+    }
+    DebugConsole.log(
+      '[Voice/TTS] bubble state cleared reason=voice_state_${state.name} '
+      'speaking=$_speakingMessageId paused=$_pausedMessageId',
+    );
+    setState(() {
+      _speakingMessageId = null;
+      _pausedMessageId = null;
+    });
   }
 
   BubbleTtsState _bubbleTtsState(ChatMessage message) {
@@ -309,7 +363,15 @@ class _ChatScreenState extends State<ChatScreen> {
             voiceLocale: _voiceLocale,
             defaultVoiceMode: _voiceMode,
             onVoiceInputModeSelected: (mode) => setState(
-              () => _voiceReplyEnabled = mode == VoiceInputMode.conversation,
+              () {
+                _voiceReplyEnabled = mode == VoiceInputMode.conversation;
+                _voiceListenStarting = true;
+                DebugConsole.log(
+                  '[Voice/UI] input mode selected mode=${mode.name} '
+                  'voiceReply=$_voiceReplyEnabled '
+                  'starting=$_voiceListenStarting',
+                );
+              },
             ),
           ),
         ],

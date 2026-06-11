@@ -30,6 +30,7 @@ class VoiceController extends ChangeNotifier {
   String _draftTranscript = '';
   SpeechAdapter? _activeSpeech;
   var _disposed = false;
+  var _listenSessionCounter = 0;
 
   VoiceState get state => _state;
 
@@ -45,12 +46,18 @@ class VoiceController extends ChangeNotifier {
     required String locale,
     VoiceInputMode mode = VoiceInputMode.conversation,
   }) async {
+    final sessionId = ++_listenSessionCounter;
+    DebugConsole.log(
+      '[Voice/STT] session=$sessionId listen requested locale=$locale '
+      'mode=${mode.name} state=${_state.name}',
+    );
     if (_state == VoiceState.listening || _state == VoiceState.sending) {
+      DebugConsole.log(
+        '[Voice/STT] session=$sessionId listen ignored state=${_state.name}',
+      );
       return;
     }
-    if (_state == VoiceState.speaking || _state == VoiceState.paused) {
-      await stopTts();
-    }
+    await _prepareAudioForListening(sessionId);
 
     final speech = switch (mode) {
       VoiceInputMode.conversation => _conversationSpeech,
@@ -59,17 +66,21 @@ class VoiceController extends ChangeNotifier {
     _activeSpeech = speech;
     _draftTranscript = '';
     _setState(VoiceState.listening);
-    DebugConsole.log('[Voice/STT] listen start locale=$locale mode=${mode.name}');
+    DebugConsole.log(
+      '[Voice/STT] session=$sessionId listen start locale=$locale '
+      'mode=${mode.name}',
+    );
     var sentFinal = false;
     String? bestPartialTranscript;
     try {
       await for (final event in speech.listen(locale: locale)) {
         switch (event) {
           case SpeechStatusEvent(:final status):
-            DebugConsole.log('[Voice/STT] status=$status');
+            DebugConsole.log('[Voice/STT] session=$sessionId status=$status');
           case SpeechResultEvent(:final text, :final finalResult):
             DebugConsole.log(
-              '[Voice/STT] result chars=${text.length} final=$finalResult',
+              '[Voice/STT] session=$sessionId result chars=${text.length} '
+              'final=$finalResult',
             );
             final transcript = text.trim();
             if (transcript.isNotEmpty &&
@@ -78,16 +89,17 @@ class VoiceController extends ChangeNotifier {
               bestPartialTranscript = transcript;
               _draftTranscript = transcript;
               DebugConsole.log(
-                '[Voice/STT] partial transcript updated chars=${transcript.length}',
+                '[Voice/STT] session=$sessionId partial transcript updated '
+                'chars=${transcript.length}',
               );
               notifyListeners();
             }
             if (finalResult && transcript.isNotEmpty && !sentFinal) {
               sentFinal = true;
-              await _commitTranscript(transcript);
+              await _commitTranscript(transcript, sessionId: sessionId);
             }
           case SpeechErrorEvent(:final code):
-            DebugConsole.log('[Voice/STT] error code=$code');
+            DebugConsole.log('[Voice/STT] session=$sessionId error code=$code');
             if (!sentFinal) {
               _setState(
                 code == 'error_speech_timeout' || code == 'error_no_match'
@@ -102,16 +114,20 @@ class VoiceController extends ChangeNotifier {
         if (fallbackTranscript != null && fallbackTranscript.isNotEmpty) {
           sentFinal = true;
           DebugConsole.log(
-            '[Voice/STT] commit partial transcript reason=stream_closed '
+            '[Voice/STT] session=$sessionId commit partial transcript '
+            'reason=stream_closed '
             'chars=${fallbackTranscript.length}',
           );
-          await _commitTranscript(fallbackTranscript);
+          await _commitTranscript(fallbackTranscript, sessionId: sessionId);
         } else if (_state == VoiceState.listening) {
+          DebugConsole.log(
+            '[Voice/STT] session=$sessionId stream closed without transcript',
+          );
           _setState(VoiceState.noSpeech);
         }
       }
     } catch (error) {
-      DebugConsole.log('[Voice/STT] error code=$error');
+      DebugConsole.log('[Voice/STT] session=$sessionId error code=$error');
       if (!sentFinal) {
         _setState(VoiceState.error);
       }
@@ -134,15 +150,44 @@ class VoiceController extends ChangeNotifier {
     await _activeSpeech?.stop();
   }
 
-  Future<void> _commitTranscript(String transcript) async {
+  Future<void> _prepareAudioForListening(int sessionId) async {
+    if (_state == VoiceState.speaking || _state == VoiceState.paused) {
+      DebugConsole.log(
+        '[Voice/TTS] barge-in stop requested session=$sessionId '
+        'state=${_state.name}',
+      );
+      await stopTts();
+      return;
+    }
+    DebugConsole.log(
+      '[Voice/TTS] pre-listen stop requested session=$sessionId '
+      'state=${_state.name}',
+    );
+    try {
+      await tts.stop();
+    } catch (error) {
+      DebugConsole.log(
+        '[Voice/TTS] pre-listen stop failed session=$sessionId error=$error',
+      );
+    }
+  }
+
+  Future<void> _commitTranscript(
+    String transcript, {
+    required int sessionId,
+  }) async {
+    DebugConsole.log(
+      '[Voice/STT] session=$sessionId final commit start chars=${transcript.length}',
+    );
     _setState(VoiceState.sending);
     try {
       await onFinalTranscript(transcript);
       _draftTranscript = '';
       notifyListeners();
+      DebugConsole.log('[Voice/STT] session=$sessionId final commit complete');
       _setState(VoiceState.idle);
     } catch (error) {
-      DebugConsole.log('[Voice/STT] send failed error=$error');
+      DebugConsole.log('[Voice/STT] session=$sessionId send failed error=$error');
       _setState(VoiceState.error);
     }
   }

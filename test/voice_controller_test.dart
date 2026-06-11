@@ -29,7 +29,7 @@ void main() {
     expect(sent, 0);
     expect(
       DebugConsole.allText,
-      contains('[Voice/STT] error code=error_speech_timeout'),
+      contains('error code=error_speech_timeout'),
     );
   });
 
@@ -52,7 +52,7 @@ void main() {
     expect(sent, 0);
     expect(
       DebugConsole.allText,
-      contains('[Voice/STT] error code=error_no_match'),
+      contains('error code=error_no_match'),
     );
   });
 
@@ -208,6 +208,27 @@ void main() {
     expect(tts.stopCount, 1);
     tts.complete();
     await speaking;
+  });
+
+  test('listening preflights TTS stop even when controller is idle', () async {
+    final tts = FakeTtsAdapter();
+    final sent = <String>[];
+    final controller = VoiceController(
+      speech: FakeSpeechAdapter(
+        events: const [SpeechEvent.result('uj kerdes', true)],
+      ),
+      tts: tts,
+      onFinalTranscript: (text) async => sent.add(text),
+    );
+
+    await controller.listenOnce(locale: 'hu-HU');
+
+    expect(tts.stopCount, 1);
+    expect(sent, ['uj kerdes']);
+    expect(
+      DebugConsole.allText,
+      contains('[Voice/TTS] pre-listen stop requested session=1 state=idle'),
+    );
   });
 
   test('dispose stops active speech recognition', () {

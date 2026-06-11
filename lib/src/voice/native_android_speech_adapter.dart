@@ -63,12 +63,13 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
             _handleEvent(controller, event);
           },
           onError: (Object error) {
+            DebugConsole.log('[Voice/$debugLabel] event stream error=$error');
             _addTo(controller, SpeechEvent.error(error.toString()));
-            _close(controller);
+            _close(controller, reason: 'event_stream_error');
           },
           onDone: () {
             _commitBestPartialIfNeeded(controller, reason: 'stream_done');
-            _close(controller);
+            _close(controller, reason: 'event_stream_done');
           },
           cancelOnError: true,
         );
@@ -98,7 +99,7 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
       } on MissingPluginException catch (error) {
         DebugConsole.log('[Voice/$debugLabel] missing plugin error=$error');
         controller.add(const SpeechEvent.error('error_plugin_missing'));
-        _close(controller);
+        _close(controller, reason: 'missing_plugin');
       } on PlatformException catch (error) {
         final code = switch (error.code) {
           'permission_denied' => 'error_permission',
@@ -109,11 +110,11 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
           '[Voice/$debugLabel] platform error code=$code error=$error',
         );
         controller.add(SpeechEvent.error(code));
-        _close(controller);
+        _close(controller, reason: 'platform_error');
       } catch (error) {
         DebugConsole.log('[Voice/$debugLabel] listen failed error=$error');
         controller.add(SpeechEvent.error(error.toString()));
-        _close(controller);
+        _close(controller, reason: 'listen_failed');
       }
     });
 
@@ -152,7 +153,7 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
     _stopGraceTimer = Timer(stopGracePeriod, () {
       DebugConsole.log('[Voice/$debugLabel] stop grace elapsed');
       _commitBestPartialIfNeeded(controller, reason: 'stop_timeout');
-      _close(controller);
+      _close(controller, reason: 'stop_timeout');
     });
     await completion.future;
   }
@@ -164,24 +165,36 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
     }
     switch (mapped) {
       case SpeechResultEvent(:final text, :final finalResult):
+        DebugConsole.log(
+          '[Voice/$debugLabel] native result chars=${text.trim().length} '
+          'final=$finalResult stopRequested=$_stopRequested',
+        );
         _rememberBestPartial(text);
         _addTo(controller, mapped);
         if (finalResult) {
-          _close(controller);
+          _close(controller, reason: 'final_result');
         }
       case SpeechErrorEvent(:final code):
+        DebugConsole.log(
+          '[Voice/$debugLabel] native error code=$code '
+          'bestPartialChars=${_bestPartialChars()}',
+        );
         if (_isRecoverableNoResultError(code) &&
             _commitBestPartialIfNeeded(controller, reason: code)) {
-          _close(controller);
+          _close(controller, reason: 'recoverable_error_with_partial');
           return;
         }
         _addTo(controller, mapped);
-        _close(controller);
+        _close(controller, reason: 'error_$code');
       case SpeechStatusEvent(:final status):
+        DebugConsole.log(
+          '[Voice/$debugLabel] native status=$status '
+          'stopRequested=$_stopRequested bestPartialChars=${_bestPartialChars()}',
+        );
         _addTo(controller, mapped);
-        if (_stopRequested && status == 'done') {
+        if (status == 'done') {
           _commitBestPartialIfNeeded(controller, reason: 'done_status');
-          _close(controller);
+          _close(controller, reason: 'done_status');
         }
     }
   }
@@ -216,6 +229,8 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
         return null;
     }
   }
+
+  int _bestPartialChars() => _bestPartialTranscript?.trim().length ?? 0;
 
   void _rememberBestPartial(String text) {
     final transcript = text.trim();
@@ -254,8 +269,15 @@ class NativeAndroidSpeechAdapter implements SpeechAdapter {
     }
   }
 
-  void _close(StreamController<SpeechEvent> controller) {
+  void _close(
+    StreamController<SpeechEvent> controller, {
+    required String reason,
+  }) {
     if (_activeController == controller) {
+      DebugConsole.log(
+        '[Voice/$debugLabel] close reason=$reason session=$_activeSessionId '
+        'nativeSession=${_activeNativeSessionId ?? 'pending'}',
+      );
       _activeController = null;
       _activeSessionId = 0;
       _activeNativeSessionId = null;
