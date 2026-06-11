@@ -5,6 +5,7 @@ import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/settings/data/api_key_store.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
 import 'package:djinn/src/settings/ui/settings_screen.dart';
+import 'package:djinn/src/voice/voice_mode.dart';
 
 void main() {
   setUp(DebugConsole.clear);
@@ -39,7 +40,9 @@ void main() {
     expect(find.text('Chunkolási mód'), findsOneWidget);
     expect(find.text('Nyelv és felolvasás'), findsOneWidget);
     expect(find.text('Felolvasás hangja'), findsOneWidget);
-    expect(find.text('Beszéd'), findsNothing);
+    expect(find.text('Hangmód'), findsOneWidget);
+    expect(find.text('Whisper párbeszéd'), findsOneWidget);
+    expect(find.text('Natív push-to-talk'), findsOneWidget);
     expect(find.text('Működési mód'), findsOneWidget);
     expect(find.text('Validálás'), findsOneWidget);
     expect(find.text('Mentés'), findsNothing);
@@ -105,6 +108,34 @@ void main() {
     expect(settings.voiceLocale, 'en-US');
     expect(find.text('Push-to-talk'), findsNothing);
     expect(find.text('Párbeszéd'), findsNothing);
+  });
+
+  testWidgets('voice mode dropdown autosaves native PTT', (tester) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('voice-mode-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('voice-mode-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Natív push-to-talk').last);
+    await tester.pumpAndSettle();
+
+    expect(settings.voiceMode, VoiceMode.nativeAndroidPtt);
+    expect(DebugConsole.allText, contains('voiceMode=native_android_ptt'));
   });
 
   testWidgets('answer mode selector autosaves forced offline mode', (

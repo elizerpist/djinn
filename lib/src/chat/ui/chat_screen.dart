@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../knowledge/models/knowledge_document.dart';
 import '../../settings/models/app_settings.dart';
-import '../../voice/speech_adapter.dart';
+import '../../voice/voice_mode.dart';
+import '../../voice/voice_backend_factory.dart';
 import '../../voice/tts_adapter.dart';
 import '../../voice/voice_controller.dart';
 import '../data/chat_service.dart';
@@ -45,10 +46,12 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _sending = false;
   bool _voiceReplyEnabled = false;
   String _voiceLocale = 'hu-HU';
+  VoiceMode _voiceMode = VoiceMode.whisperConversation;
   String? _speakingMessageId;
   String? _pausedMessageId;
   late final VoiceController _voiceController;
   late final bool _ownsVoiceController;
+  static const _voiceBackendFactory = VoiceBackendFactory();
 
   @override
   void initState() {
@@ -57,7 +60,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _voiceController =
         widget.voiceController ??
         VoiceController(
-          speech: SpeechToTextAdapter(),
+          conversationSpeech: _voiceBackendFactory.conversation(),
+          pushToTalkSpeech: _voiceBackendFactory.pushToTalk(),
           tts: FlutterTtsAdapter(),
           onFinalTranscript: (text) =>
               _send(text, speakResponse: _voiceReplyEnabled),
@@ -106,6 +110,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     setState(() {
       _voiceLocale = settings.voiceLocale;
+      _voiceMode = settings.voiceMode;
     });
   }
 
@@ -289,6 +294,7 @@ class _ChatScreenState extends State<ChatScreen> {
             sending: _sending,
             voiceController: _voiceController,
             voiceLocale: _voiceLocale,
+            defaultVoiceMode: _voiceMode,
             onVoiceInputModeSelected: (mode) => setState(
               () => _voiceReplyEnabled = mode == VoiceInputMode.conversation,
             ),

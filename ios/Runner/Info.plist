@@ -18,6 +18,8 @@
 	<string>flutteetest</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone access is required for voice input.</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>

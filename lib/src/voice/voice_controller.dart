@@ -5,33 +5,46 @@ import 'package:flutter/foundation.dart';
 import '../debug/debug_console.dart';
 import 'speech_adapter.dart';
 import 'tts_adapter.dart';
+import 'voice_input_mode.dart';
 
 enum VoiceState { idle, listening, noSpeech, sending, speaking, paused, error }
 
 class VoiceController extends ChangeNotifier {
   VoiceController({
-    required this.speech,
+    SpeechAdapter? speech,
+    SpeechAdapter? conversationSpeech,
+    SpeechAdapter? pushToTalkSpeech,
     required this.tts,
     required this.onFinalTranscript,
-  });
+  }) : _conversationSpeech =
+           conversationSpeech ?? speech ?? SpeechToTextAdapter(),
+       _pushToTalkSpeech = pushToTalkSpeech ?? speech ?? SpeechToTextAdapter();
 
-  final SpeechAdapter speech;
+  final SpeechAdapter _conversationSpeech;
+  final SpeechAdapter _pushToTalkSpeech;
   final TtsAdapter tts;
   final Future<void> Function(String text) onFinalTranscript;
 
   VoiceState _state = VoiceState.idle;
   String? _lastSpeakingText;
+  String _draftTranscript = '';
+  SpeechAdapter? _activeSpeech;
   var _disposed = false;
 
   VoiceState get state => _state;
 
   bool get isListening => _state == VoiceState.listening;
 
+  String get draftTranscript => _draftTranscript;
+
   bool get isSpeaking => _state == VoiceState.speaking;
 
   bool get isPaused => _state == VoiceState.paused;
 
-  Future<void> listenOnce({required String locale}) async {
+  Future<void> listenOnce({
+    required String locale,
+    VoiceInputMode mode = VoiceInputMode.conversation,
+  }) async {
     if (_state == VoiceState.listening || _state == VoiceState.sending) {
       return;
     }
@@ -39,8 +52,14 @@ class VoiceController extends ChangeNotifier {
       await stopTts();
     }
 
+    final speech = switch (mode) {
+      VoiceInputMode.conversation => _conversationSpeech,
+      VoiceInputMode.pushToTalk => _pushToTalkSpeech,
+    };
+    _activeSpeech = speech;
+    _draftTranscript = '';
     _setState(VoiceState.listening);
-    DebugConsole.log('[Voice/STT] listen start locale=$locale');
+    DebugConsole.log('[Voice/STT] listen start locale=$locale mode=${mode.name}');
     var sentFinal = false;
     String? bestPartialTranscript;
     try {
@@ -57,9 +76,11 @@ class VoiceController extends ChangeNotifier {
                 (bestPartialTranscript == null ||
                     transcript.length > bestPartialTranscript.length)) {
               bestPartialTranscript = transcript;
+              _draftTranscript = transcript;
               DebugConsole.log(
                 '[Voice/STT] partial transcript updated chars=${transcript.length}',
               );
+              notifyListeners();
             }
             if (finalResult && transcript.isNotEmpty && !sentFinal) {
               sentFinal = true;
@@ -94,13 +115,31 @@ class VoiceController extends ChangeNotifier {
       if (!sentFinal) {
         _setState(VoiceState.error);
       }
+    } finally {
+      if (_activeSpeech == speech) {
+        _activeSpeech = null;
+      }
     }
+  }
+
+  Future<void> listenConversation({required String locale}) async {
+    await listenOnce(locale: locale, mode: VoiceInputMode.conversation);
+  }
+
+  Future<void> listenPushToTalk({required String locale}) async {
+    await listenOnce(locale: locale, mode: VoiceInputMode.pushToTalk);
+  }
+
+  Future<void> stopListening() async {
+    await _activeSpeech?.stop();
   }
 
   Future<void> _commitTranscript(String transcript) async {
     _setState(VoiceState.sending);
     try {
       await onFinalTranscript(transcript);
+      _draftTranscript = '';
+      notifyListeners();
       _setState(VoiceState.idle);
     } catch (error) {
       DebugConsole.log('[Voice/STT] send failed error=$error');
@@ -169,7 +208,11 @@ class VoiceController extends ChangeNotifier {
 
   @override
   void dispose() {
-    unawaited(speech.stop());
+    unawaited(_activeSpeech?.stop());
+    unawaited(_conversationSpeech.stop());
+    if (!identical(_pushToTalkSpeech, _conversationSpeech)) {
+      unawaited(_pushToTalkSpeech.stop());
+    }
     if (_state == VoiceState.speaking || _state == VoiceState.paused) {
       unawaited(tts.stop());
     }

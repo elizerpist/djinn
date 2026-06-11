@@ -5,6 +5,7 @@ import '../../debug/debug_console.dart';
 import '../data/api_key_store.dart';
 import '../models/app_settings.dart';
 import '../models/model_catalog.dart';
+import '../../voice/voice_mode.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -101,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await widget.saveSettings(next);
         DebugConsole.log(
           '${_providerLogPrefix(next.activeProvider)} settings saved '
-          'provider=${next.activeProvider.wireName} voiceMode=${next.voiceMode}',
+          'provider=${next.activeProvider.wireName} voiceMode=${next.voiceMode.wireName}',
         );
       }
     } catch (error) {
@@ -386,6 +387,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   _Section(
+                    title: 'Hangmód',
+                    children: [
+                      _VoiceModeDropdown(
+                        value: _settings.voiceMode,
+                        onChanged: (value) =>
+                            _autoSave(_settings.copyWith(voiceMode: value)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _Section(
                     title: 'Működési mód',
                     children: [
                       RadioGroup<String>(
@@ -574,6 +586,43 @@ class _TtsLocaleDropdown extends StatelessWidget {
                   DropdownMenuItem(value: option.$1, child: Text(option.$2)),
             )
             .toList(growable: false),
+        onChanged: (value) {
+          if (value != null) {
+            onChanged(value);
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _VoiceModeDropdown extends StatelessWidget {
+  const _VoiceModeDropdown({required this.value, required this.onChanged});
+
+  final VoiceMode value;
+  final ValueChanged<VoiceMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: DropdownButtonFormField<VoiceMode>(
+        key: const Key('voice-mode-dropdown'),
+        initialValue: value,
+        decoration: const InputDecoration(
+          labelText: 'Hangbevitel módja',
+          border: OutlineInputBorder(),
+        ),
+        items: const [
+          DropdownMenuItem(
+            value: VoiceMode.whisperConversation,
+            child: Text('Whisper párbeszéd'),
+          ),
+          DropdownMenuItem(
+            value: VoiceMode.nativeAndroidPtt,
+            child: Text('Natív push-to-talk'),
+          ),
+        ],
         onChanged: (value) {
           if (value != null) {
             onChanged(value);

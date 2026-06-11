@@ -4,6 +4,7 @@ import '../../../objectbox.g.dart';
 import '../../ai/ai_provider.dart';
 import '../../local_store/entities.dart';
 import '../models/app_settings.dart';
+import '../../voice/voice_mode.dart';
 
 class AppSettingsRepository {
   AppSettingsRepository({required Store store})
@@ -92,7 +93,7 @@ class AppSettingsRepository {
       offlineFallbackEnabled: entity.offlineFallbackEnabled,
       retrievalLimit: entity.retrievalLimit,
       minimumSimilarity: entity.minimumSimilarity,
-      voiceMode: _fallback(entity.voiceMode, defaults.voiceMode),
+      voiceMode: VoiceMode.fromWireName(entity.voiceMode),
       voiceLocale: _fallback(entity.voiceLocale, defaults.voiceLocale),
       chunkingMode: ChunkingModes.normalize(
         _fallback(entity.chunkingMode, defaults.chunkingMode),
@@ -122,7 +123,7 @@ class AppSettingsRepository {
       offlineFallbackEnabled: settings.offlineFallbackEnabled,
       retrievalLimit: settings.retrievalLimit,
       minimumSimilarity: settings.minimumSimilarity,
-      voiceMode: settings.voiceMode,
+      voiceMode: settings.voiceMode.wireName,
       voiceLocale: settings.voiceLocale,
       chunkingMode: settings.chunkingMode,
     );

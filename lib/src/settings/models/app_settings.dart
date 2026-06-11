@@ -1,4 +1,5 @@
 import '../../ai/ai_provider.dart';
+import '../../voice/voice_mode.dart';
 
 class AnswerModes {
   static const ai = 'ai';
@@ -59,7 +60,7 @@ class AppSettings {
       offlineFallbackEnabled: false,
       retrievalLimit: 8,
       minimumSimilarity: 0.72,
-      voiceMode: 'push_to_talk',
+      voiceMode: VoiceMode.whisperConversation,
       voiceLocale: 'hu-HU',
       chunkingMode: ChunkingModes.normal,
     );
@@ -80,7 +81,7 @@ class AppSettings {
   final bool offlineFallbackEnabled;
   final int retrievalLimit;
   final double minimumSimilarity;
-  final String voiceMode;
+  final VoiceMode voiceMode;
   final String voiceLocale;
   final String chunkingMode;
 
@@ -133,7 +134,7 @@ class AppSettings {
     bool? offlineFallbackEnabled,
     int? retrievalLimit,
     double? minimumSimilarity,
-    String? voiceMode,
+    VoiceMode? voiceMode,
     String? voiceLocale,
     String? chunkingMode,
   }) {

@@ -9,6 +9,7 @@ import 'package:djinn/src/settings/data/api_key_store.dart';
 import 'package:djinn/src/settings/data/app_settings_repository.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
 import 'package:djinn/src/settings/models/model_catalog.dart';
+import 'package:djinn/src/voice/voice_mode.dart';
 
 void main() {
   test('default settings use local ObjectBox mode and OpenAI defaults', () {
@@ -44,6 +45,7 @@ void main() {
     expect(settings.deleteOpenAiFilesAfterProcessing, isTrue);
     expect(settings.groundednessCheckEnabled, isFalse);
     expect(settings.offlineFallbackEnabled, isFalse);
+    expect(settings.voiceMode, VoiceMode.whisperConversation);
     expect(settings.answerMode, AnswerModes.ai);
     expect(settings.chunkingMode, ChunkingModes.normal);
     expect(
@@ -165,7 +167,7 @@ void main() {
       geminiGroundednessModel: 'gemini-2.5-flash-lite',
       geminiEmbeddingModel: 'gemini-embedding-001',
       offlineFallbackEnabled: true,
-      voiceMode: 'hands_free',
+      voiceMode: VoiceMode.nativeAndroidPtt,
       voiceLocale: 'en-US',
       chunkingMode: ChunkingModes.detailed,
     );
@@ -184,7 +186,7 @@ void main() {
     expect(loaded.openAiEmbeddingModel, 'text-embedding-3-small');
     expect(loaded.geminiEmbeddingModel, 'gemini-embedding-001');
     expect(loaded.offlineFallbackEnabled, isTrue);
-    expect(loaded.voiceMode, 'hands_free');
+    expect(loaded.voiceMode, VoiceMode.nativeAndroidPtt);
     expect(loaded.voiceLocale, 'en-US');
     expect(loaded.chunkingMode, ChunkingModes.detailed);
   });
@@ -209,14 +211,14 @@ void main() {
       _settingsEntity(
         AppSettings.defaults().copyWith(
           activeProvider: AiProvider.openAi,
-          voiceMode: 'push_to_talk',
+          voiceMode: VoiceMode.nativeAndroidPtt,
         ),
       ),
     );
     final repository = AppSettingsRepository(store: objectBox.store);
     final geminiSettings = AppSettings.defaults().copyWith(
       activeProvider: AiProvider.gemini,
-      voiceMode: 'conversation',
+      voiceMode: VoiceMode.whisperConversation,
     );
 
     await repository.save(geminiSettings);
@@ -224,7 +226,7 @@ void main() {
 
     expect(box.getAll(), hasLength(1));
     expect(loaded.activeProvider, AiProvider.gemini);
-    expect(loaded.voiceMode, 'conversation');
+    expect(loaded.voiceMode, VoiceMode.whisperConversation);
   });
 
   test('settings repository preserves zero numeric settings', () async {
@@ -276,7 +278,7 @@ AppSettingsEntity _settingsEntity(AppSettings settings) {
     offlineFallbackEnabled: settings.offlineFallbackEnabled,
     retrievalLimit: settings.retrievalLimit,
     minimumSimilarity: settings.minimumSimilarity,
-    voiceMode: settings.voiceMode,
+    voiceMode: settings.voiceMode.wireName,
     voiceLocale: settings.voiceLocale,
     chunkingMode: settings.chunkingMode,
   );
