@@ -31,6 +31,9 @@ class VoiceController extends ChangeNotifier {
   SpeechAdapter? _activeSpeech;
   var _disposed = false;
   var _listenSessionCounter = 0;
+  var _bargeInSessionCounter = 0;
+  var _activeBargeInSessionId = 0;
+  var _activeBargeInDetected = false;
 
   VoiceState get state => _state;
 
@@ -57,6 +60,7 @@ class VoiceController extends ChangeNotifier {
       );
       return;
     }
+    await _cancelBargeInMonitor(reason: 'manual_listen_start');
     await _prepareAudioForListening(sessionId);
 
     final speech = switch (mode) {
@@ -197,6 +201,7 @@ class VoiceController extends ChangeNotifier {
     required String locale,
     double rate = 0.5,
     double pitch = 1.0,
+    bool listenForBargeIn = false,
   }) async {
     final spokenText = text.trim();
     if (spokenText.isEmpty) {
@@ -217,6 +222,9 @@ class VoiceController extends ChangeNotifier {
     }
     _lastSpeakingText = spokenText;
     _setState(VoiceState.speaking);
+    final bargeInSessionId = listenForBargeIn
+        ? _startBargeInMonitor(locale: locale, spokenText: spokenText)
+        : 0;
     DebugConsole.log(
       '[Voice/TTS] speak chars=${spokenText.length} locale=$locale '
       'rate=$rate pitch=$pitch',
@@ -224,12 +232,247 @@ class VoiceController extends ChangeNotifier {
     try {
       await tts.speak(spokenText, locale: locale, rate: rate, pitch: pitch);
     } finally {
+      if (bargeInSessionId != 0 &&
+          _activeBargeInSessionId == bargeInSessionId &&
+          !_activeBargeInDetected) {
+        await _cancelBargeInMonitor(reason: 'tts_finished');
+      }
       if (_lastSpeakingText == spokenText &&
           (_state == VoiceState.speaking || _state == VoiceState.paused)) {
         _lastSpeakingText = null;
         _setState(VoiceState.idle);
       }
     }
+  }
+
+  int _startBargeInMonitor({
+    required String locale,
+    required String spokenText,
+  }) {
+    final sessionId = ++_bargeInSessionCounter;
+    _activeBargeInSessionId = sessionId;
+    _activeBargeInDetected = false;
+    DebugConsole.log(
+      '[Voice/BargeIn] monitor start session=$sessionId locale=$locale '
+      'ttsChars=${spokenText.length}',
+    );
+    unawaited(
+      _runBargeInMonitor(
+        sessionId: sessionId,
+        locale: locale,
+        spokenText: spokenText,
+      ),
+    );
+    return sessionId;
+  }
+
+  Future<void> _runBargeInMonitor({
+    required int sessionId,
+    required String locale,
+    required String spokenText,
+  }) async {
+    var sentFinal = false;
+    String? bestPartialTranscript;
+    try {
+      await for (final event in _conversationSpeech.listen(locale: locale)) {
+        if (_activeBargeInSessionId != sessionId) {
+          DebugConsole.log(
+            '[Voice/BargeIn] drop stale event session=$sessionId '
+            'active=$_activeBargeInSessionId',
+          );
+          break;
+        }
+        switch (event) {
+          case SpeechStatusEvent(:final status):
+            DebugConsole.log(
+              '[Voice/BargeIn] session=$sessionId status=$status '
+              'detected=$_activeBargeInDetected',
+            );
+          case SpeechResultEvent(:final text, :final finalResult):
+            final transcript = text.trim();
+            if (transcript.isEmpty) {
+              continue;
+            }
+            final echo = _looksLikeTtsEcho(transcript, spokenText);
+            DebugConsole.log(
+              '[Voice/BargeIn] session=$sessionId candidate '
+              'chars=${transcript.length} final=$finalResult echo=$echo '
+              'detected=$_activeBargeInDetected',
+            );
+            if (!_activeBargeInDetected && echo) {
+              continue;
+            }
+            if (!_activeBargeInDetected) {
+              _activeBargeInDetected = true;
+              DebugConsole.log(
+                '[Voice/BargeIn] detected session=$sessionId '
+                'chars=${transcript.length}',
+              );
+              await stopTts();
+              _activeSpeech = _conversationSpeech;
+              _setState(VoiceState.listening);
+            }
+            if (bestPartialTranscript == null ||
+                transcript.length > bestPartialTranscript.length) {
+              bestPartialTranscript = transcript;
+              _draftTranscript = transcript;
+              notifyListeners();
+            }
+            if (finalResult && !sentFinal) {
+              sentFinal = true;
+              await _commitTranscript(transcript, sessionId: sessionId);
+              await _finishBargeInMonitor(sessionId, reason: 'final_result');
+              return;
+            }
+          case SpeechErrorEvent(:final code):
+            DebugConsole.log(
+              '[Voice/BargeIn] session=$sessionId error code=$code '
+              'detected=$_activeBargeInDetected',
+            );
+            if (!_activeBargeInDetected &&
+                (code == 'error_speech_timeout' || code == 'error_no_match')) {
+              await _restartBargeInMonitor(
+                sessionId: sessionId,
+                locale: locale,
+                spokenText: spokenText,
+                reason: code,
+              );
+              return;
+            }
+            if (_activeBargeInDetected && !sentFinal) {
+              final fallbackTranscript = bestPartialTranscript;
+              if (fallbackTranscript != null &&
+                  fallbackTranscript.isNotEmpty &&
+                  (code == 'error_speech_timeout' || code == 'error_no_match')) {
+                sentFinal = true;
+                await _commitTranscript(
+                  fallbackTranscript,
+                  sessionId: sessionId,
+                );
+              }
+            }
+            await _finishBargeInMonitor(sessionId, reason: 'error_$code');
+            return;
+        }
+      }
+      if (_activeBargeInSessionId == sessionId &&
+          !_activeBargeInDetected &&
+          (_state == VoiceState.speaking || _state == VoiceState.paused)) {
+        await _restartBargeInMonitor(
+          sessionId: sessionId,
+          locale: locale,
+          spokenText: spokenText,
+          reason: 'stream_closed_no_detection',
+        );
+        return;
+      }
+      if (_activeBargeInSessionId == sessionId &&
+          _activeBargeInDetected &&
+          !sentFinal) {
+        final fallbackTranscript = bestPartialTranscript;
+        if (fallbackTranscript != null && fallbackTranscript.isNotEmpty) {
+          DebugConsole.log(
+            '[Voice/BargeIn] commit partial session=$sessionId '
+            'reason=stream_closed chars=${fallbackTranscript.length}',
+          );
+          await _commitTranscript(fallbackTranscript, sessionId: sessionId);
+        }
+      }
+      await _finishBargeInMonitor(sessionId, reason: 'stream_closed');
+    } catch (error) {
+      DebugConsole.log('[Voice/BargeIn] session=$sessionId error=$error');
+      await _finishBargeInMonitor(sessionId, reason: 'exception');
+    }
+  }
+
+  Future<void> _restartBargeInMonitor({
+    required int sessionId,
+    required String locale,
+    required String spokenText,
+    required String reason,
+  }) async {
+    if (_activeBargeInSessionId != sessionId ||
+        _activeBargeInDetected ||
+        (_state != VoiceState.speaking && _state != VoiceState.paused)) {
+      await _finishBargeInMonitor(sessionId, reason: 'restart_skipped_$reason');
+      return;
+    }
+    DebugConsole.log(
+      '[Voice/BargeIn] restart session=$sessionId reason=$reason',
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    if (_activeBargeInSessionId != sessionId ||
+        _activeBargeInDetected ||
+        (_state != VoiceState.speaking && _state != VoiceState.paused)) {
+      await _finishBargeInMonitor(
+        sessionId,
+        reason: 'restart_cancelled_$reason',
+      );
+      return;
+    }
+    unawaited(
+      _runBargeInMonitor(
+        sessionId: sessionId,
+        locale: locale,
+        spokenText: spokenText,
+      ),
+    );
+  }
+
+  Future<void> _cancelBargeInMonitor({required String reason}) async {
+    final sessionId = _activeBargeInSessionId;
+    if (sessionId == 0) {
+      return;
+    }
+    DebugConsole.log(
+      '[Voice/BargeIn] cancel session=$sessionId reason=$reason',
+    );
+    _activeBargeInSessionId = 0;
+    _activeBargeInDetected = false;
+    await _conversationSpeech.stop();
+  }
+
+  Future<void> _finishBargeInMonitor(
+    int sessionId, {
+    required String reason,
+  }) async {
+    if (_activeBargeInSessionId != sessionId) {
+      return;
+    }
+    DebugConsole.log(
+      '[Voice/BargeIn] finish session=$sessionId reason=$reason',
+    );
+    if (_activeSpeech == _conversationSpeech) {
+      _activeSpeech = null;
+    }
+    _activeBargeInSessionId = 0;
+    _activeBargeInDetected = false;
+  }
+
+  bool _looksLikeTtsEcho(String transcript, String spokenText) {
+    final candidate = _normalizeSpeechComparison(transcript);
+    if (candidate.length < 3) {
+      return true;
+    }
+    final spoken = _normalizeSpeechComparison(spokenText);
+    return spoken.contains(candidate) || candidate.contains(spoken);
+  }
+
+  String _normalizeSpeechComparison(String value) {
+    final buffer = StringBuffer();
+    for (final rune in value.toLowerCase().runes) {
+      final isDigit = rune >= 48 && rune <= 57;
+      final isAsciiLetter = rune >= 97 && rune <= 122;
+      final isNonAsciiLetter = rune > 127;
+      buffer.writeCharCode(
+        isDigit || isAsciiLetter || isNonAsciiLetter ? rune : 32,
+      );
+    }
+    return buffer
+        .toString()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .join(' ');
   }
 
   Future<void> pauseTts() async {
