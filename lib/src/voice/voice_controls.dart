@@ -47,7 +47,7 @@ class VoiceControls extends StatelessWidget {
                   ? const Color(0xFF2563EB)
                   : const Color(0xFF155EEF),
               shape: const CircleBorder(),
-              child: InkResponse(
+              child: GestureDetector(
                 key: const ValueKey('voice-listen'),
                 onTap: busy
                     ? null
@@ -79,8 +79,6 @@ class VoiceControls extends StatelessWidget {
                           unawaited(controller.stopListening());
                         }
                       },
-                customBorder: const CircleBorder(),
-                radius: 28,
                 child: SizedBox(
                   width: 52,
                   height: 52,
