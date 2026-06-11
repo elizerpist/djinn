@@ -320,6 +320,40 @@ void main() {
     await speaking;
   });
 
+  test('automatic barge-in does not restart after silent stream close', () async {
+    final speech = _ManualSpeechAdapter();
+    final tts = _StoppingBlockingTtsAdapter();
+    final controller = VoiceController(
+      speech: speech,
+      tts: tts,
+      onFinalTranscript: (_) async {},
+    );
+
+    final speaking = controller.speak(
+      'Ez egy hosszabb valasz.',
+      locale: 'hu-HU',
+      listenForBargeIn: true,
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    await speech.closeLast();
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+
+    expect(controller.state, VoiceState.speaking);
+    expect(speech.locales, ['hu-HU']);
+    expect(
+      DebugConsole.allText,
+      contains('monitor stream closed without event session=1 state=speaking'),
+    );
+    expect(
+      DebugConsole.allText,
+      isNot(contains('restart session=1 reason=stream_closed_no_detection')),
+    );
+
+    tts.complete();
+    await speaking;
+  });
+
   test('dispose stops active speech recognition', () {
     final speech = FakeSpeechAdapter(events: const []);
     final controller = VoiceController(
@@ -434,6 +468,10 @@ class _ManualSpeechAdapter implements SpeechAdapter {
 
   void add(SpeechEvent event) {
     _controllers.last.add(event);
+  }
+
+  Future<void> closeLast() async {
+    await _controllers.last.close();
   }
 
   @override

@@ -34,6 +34,8 @@ class VoiceController extends ChangeNotifier {
   var _bargeInSessionCounter = 0;
   var _activeBargeInSessionId = 0;
   var _activeBargeInDetected = false;
+  Timer? _bargeInRestartTimer;
+  Completer<void>? _bargeInRestartCompleter;
 
   VoiceState get state => _state;
 
@@ -358,13 +360,10 @@ class VoiceController extends ChangeNotifier {
       if (_activeBargeInSessionId == sessionId &&
           !_activeBargeInDetected &&
           (_state == VoiceState.speaking || _state == VoiceState.paused)) {
-        await _restartBargeInMonitor(
-          sessionId: sessionId,
-          locale: locale,
-          spokenText: spokenText,
-          reason: 'stream_closed_no_detection',
+        DebugConsole.log(
+          '[Voice/BargeIn] monitor stream closed without event '
+          'session=$sessionId state=${_state.name}',
         );
-        return;
       }
       if (_activeBargeInSessionId == sessionId &&
           _activeBargeInDetected &&
@@ -400,7 +399,7 @@ class VoiceController extends ChangeNotifier {
     DebugConsole.log(
       '[Voice/BargeIn] restart session=$sessionId reason=$reason',
     );
-    await Future<void>.delayed(const Duration(milliseconds: 250));
+    await _waitForBargeInRestartDelay();
     if (_activeBargeInSessionId != sessionId ||
         _activeBargeInDetected ||
         (_state != VoiceState.speaking && _state != VoiceState.paused)) {
@@ -429,6 +428,7 @@ class VoiceController extends ChangeNotifier {
     );
     _activeBargeInSessionId = 0;
     _activeBargeInDetected = false;
+    _cancelBargeInRestartTimer();
     await _conversationSpeech.stop();
   }
 
@@ -447,6 +447,31 @@ class VoiceController extends ChangeNotifier {
     }
     _activeBargeInSessionId = 0;
     _activeBargeInDetected = false;
+    _cancelBargeInRestartTimer();
+  }
+
+  Future<void> _waitForBargeInRestartDelay() async {
+    _cancelBargeInRestartTimer();
+    final completer = Completer<void>();
+    _bargeInRestartCompleter = completer;
+    _bargeInRestartTimer = Timer(const Duration(milliseconds: 250), () {
+      _bargeInRestartTimer = null;
+      _bargeInRestartCompleter = null;
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+    await completer.future;
+  }
+
+  void _cancelBargeInRestartTimer() {
+    _bargeInRestartTimer?.cancel();
+    _bargeInRestartTimer = null;
+    final completer = _bargeInRestartCompleter;
+    _bargeInRestartCompleter = null;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
   }
 
   bool _looksLikeTtsEcho(String transcript, String spokenText) {
@@ -496,6 +521,9 @@ class VoiceController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _activeBargeInSessionId = 0;
+    _activeBargeInDetected = false;
+    _cancelBargeInRestartTimer();
     unawaited(_activeSpeech?.stop());
     unawaited(_conversationSpeech.stop());
     if (!identical(_pushToTalkSpeech, _conversationSpeech)) {
