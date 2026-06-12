@@ -81,7 +81,8 @@ class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
     if (repository is! DebugFlowchartSeedRepository) {
       return;
     }
-    await repository.createDebugFlowchartCandidate();
+    final seedRepository = repository as DebugFlowchartSeedRepository;
+    await seedRepository.createDebugFlowchartCandidate();
     await _load();
   }
 
