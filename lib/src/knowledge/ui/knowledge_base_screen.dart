@@ -190,11 +190,11 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   Future<PdfImportResult?> _copyPickedFile(PickedPdfFile file) async {
     final path = file.path;
     if (path != null) {
-      return widget.importService.copyPdfFromPath(path);
+      return widget.importService.copyDocumentFromPath(path);
     }
     final bytes = file.bytes;
     if (bytes != null) {
-      return widget.importService.copyPdfBytes(
+      return widget.importService.copyDocumentBytes(
         filename: file.filename,
         bytes: bytes,
       );
@@ -205,7 +205,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   Future<List<PickedPdfFile>> _pickPdfsFromDevice() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['pdf'],
+      allowedExtensions: const ['pdf', 'png'],
       allowMultiple: true,
       withData: false,
     );
@@ -352,11 +352,11 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('PDF törlése'),
+          title: const Text('Dokumentum törlése'),
           content: Text(
             selectedIds.length == 1
-                ? 'A kijelölt PDF és a hozzá tartozó chunkok törlődnek.'
-                : '${selectedIds.length} PDF és a hozzájuk tartozó chunkok törlődnek.',
+                ? 'A kijelölt dokumentum és a hozzá tartozó chunkok törlődnek.'
+                : '${selectedIds.length} dokumentum és a hozzájuk tartozó chunkok törlődnek.',
           ),
           actions: [
             TextButton(
@@ -649,7 +649,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       }
     }
 
-    final imported = await widget.importService.copyPdfBytes(
+    final imported = await widget.importService.copyDocumentBytes(
       filename: incoming.filename,
       bytes: incoming.pdfBytes,
     );
@@ -690,9 +690,9 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('PDF már létezik'),
+          title: const Text('Dokumentum már létezik'),
           content: Text(
-            'Ez a chunk csomag ugyanahhoz a PDF-hez tartozik: ${existing.filename}.',
+            'Ez a chunk csomag ugyanahhoz a dokumentumhoz tartozik: ${existing.filename}.',
           ),
           actions: [
             TextButton(
@@ -795,7 +795,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     return Scaffold(
       appBar: KnowledgeHeader(
         selectionCount: selectionCount,
-        selectionSummary: '${visibleDocuments.length} PDF ebben a nézetben',
+        selectionSummary: '${visibleDocuments.length} dokumentum ebben a nézetben',
         onExitSelection: _exitSelection,
         onShareSelected: () => _shareKnowledgePack(_selectedDocuments),
         onDeleteSelected: _deleteSelectedDocuments,
@@ -813,7 +813,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
             child: !hasAnyKnowledge
                 ? const Center(
                     child: Text(
-                      'Nincs importált PDF',
+                      'Nincs importált dokumentum',
                       style: TextStyle(color: Color(0xFF6B7280)),
                     ),
                   )
@@ -821,8 +821,8 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
                 ? Center(
                     child: Text(
                       _activeFolderId == null
-                          ? 'Nincs importált PDF'
-                          : 'Nincs PDF ebben a mappában',
+                          ? 'Nincs importált dokumentum'
+                          : 'Nincs dokumentum ebben a mappában',
                       style: const TextStyle(color: Color(0xFF6B7280)),
                     ),
                   )
@@ -856,7 +856,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'PDF hozzáadása',
+        tooltip: 'PDF/PNG hozzáadása',
         onPressed: _importing ? null : _importPdfs,
         child: _importing
             ? const CircularProgressIndicator(strokeWidth: 2)

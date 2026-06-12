@@ -71,6 +71,8 @@ class OpenAiHttpClient implements OpenAiClient {
   }) async {
     final file = File(pdfPath);
     final bytes = await file.readAsBytes();
+    final mimeType = _mimeTypeForPath(pdfPath);
+    final filename = pdfPath.trim().isEmpty ? 'document.pdf' : p.basename(pdfPath);
     final response = await _postJson('/v1/responses', {
       'model': model,
       'input': [
@@ -80,11 +82,12 @@ class OpenAiHttpClient implements OpenAiClient {
             {'type': 'input_text', 'text': _documentExtractionInstruction},
             {'type': 'input_text', 'text': _visualExtractionInstruction},
             {'type': 'input_text', 'text': _chunkingInstruction(chunkingMode)},
-            {
-              'type': 'input_file',
-              'filename': p.basename(pdfPath),
-              'file_data': 'data:application/pdf;base64,${base64Encode(bytes)}',
-            },
+            _documentInputContent(
+              filename: filename,
+              mimeType: mimeType,
+              bytes: bytes,
+            ),
+            {'type': 'input_text', 'text': 'Filename: $filename'},
           ],
         },
       ],
@@ -99,6 +102,28 @@ class OpenAiHttpClient implements OpenAiClient {
     });
     final json = _decodeOutputJson(response);
     return _parseExtraction(json);
+  }
+
+  Map<String, Object?> _documentInputContent({
+    required String filename,
+    required String mimeType,
+    required List<int> bytes,
+  }) {
+    final dataUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
+    if (mimeType.startsWith('image/')) {
+      return {'type': 'input_image', 'image_url': dataUrl};
+    }
+    return {
+      'type': 'input_file',
+      'filename': filename,
+      'file_data': dataUrl,
+    };
+  }
+
+  String _mimeTypeForPath(String path) {
+    return p.extension(path).toLowerCase() == '.png'
+        ? 'image/png'
+        : 'application/pdf';
   }
 
   @override
@@ -505,11 +530,11 @@ class OpenAiHttpClient implements OpenAiClient {
 }
 
 const _documentExtractionInstruction = '''
-Extract this OMSZ PDF into source-grounded chunks. Return JSON only. Include page-aware text chunks and preserve source wording. Flowchart extraction will be validated later, so do not invent missing nodes or arrows.
+Extract this OMSZ document into source-grounded chunks. Return JSON only. Include page-aware text chunks and preserve source wording. Flowchart extraction will be validated later, so do not invent missing nodes or arrows.
 ''';
 
 const _visualExtractionInstruction = '''
-If a page contains a table, score, or flowchart as an image, extract it from the PDF image content. Preserve clinically relevant table rows. For RAVE or other scores, return each criterion as a score item. For flowcharts, return candidate nodes and directed edges; do not invent uncertain nodes.
+If a page contains a table, score, or flowchart as an image, extract it from the document image content. Preserve clinically relevant table rows. For RAVE or other scores, return each criterion as a score item. For flowcharts, return candidate nodes and directed edges; do not invent uncertain nodes.
 ''';
 
 String _chunkingInstruction(String mode) {

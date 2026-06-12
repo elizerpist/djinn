@@ -120,6 +120,57 @@ void main() {
     expect(result.flowcharts.single.nodes.single.label, 'FAST pozitiv');
   });
 
+  test('sends PNG documents as OpenAI input image content', () async {
+    final keyStore = MemoryApiKeyStore();
+    await keyStore.saveKey('sk-test');
+    final tempDir = await Directory.systemTemp.createTemp('djinn_openai_png_');
+    addTearDown(() => tempDir.delete(recursive: true));
+    final png = File('${tempDir.path}/flowchart.png');
+    await png.writeAsBytes([137, 80, 78, 71]);
+
+    final client = OpenAiHttpClient(
+      apiKeyStore: keyStore,
+      httpClient: MockClient((request) async {
+        expect(request.url.path, '/v1/responses');
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        final input = body['input'] as List;
+        final message = input.single as Map;
+        final content = message['content'] as List;
+        final image = content
+            .whereType<Map>()
+            .singleWhere((item) => item['type'] == 'input_image');
+        expect(
+          image['image_url'],
+          startsWith('data:image/png;base64,iVBORw=='),
+        );
+        expect(
+          content.whereType<Map>().any((item) => item['type'] == 'input_file'),
+          isFalse,
+        );
+        return http.Response(
+          jsonEncode({
+            'output_text': jsonEncode({
+              'chunks': [],
+              'tables': [],
+              'scores': [],
+              'flowcharts': [],
+            }),
+          }),
+          200,
+        );
+      }),
+      baseUri: Uri.parse('https://api.openai.test'),
+    );
+
+    final result = await client.extractDocument(
+      pdfPath: png.path,
+      model: 'gpt-5.5',
+      chunkingMode: 'normal',
+    );
+
+    expect(result.chunks, isEmpty);
+  });
+
   test(
     'sends OpenAI answer language policy with grounded answer request',
     () async {

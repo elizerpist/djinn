@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../debug/debug_console.dart';
@@ -14,6 +16,37 @@ class FlowchartValidationScreen extends StatefulWidget {
   @override
   State<FlowchartValidationScreen> createState() =>
       _FlowchartValidationScreenState();
+}
+
+class _EmptyFlowchartState extends StatelessWidget {
+  const _EmptyFlowchartState({required this.reasonText, this.onCreateSample});
+
+  final String reasonText;
+  final VoidCallback? onCreateSample;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(reasonText, textAlign: TextAlign.center),
+            if (onCreateSample != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: const Key('flowchart-debug-sample'),
+                onPressed: onCreateSample,
+                icon: const Icon(Icons.account_tree_outlined),
+                label: const Text('Mintafolyamat létrehozása'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
@@ -41,6 +74,15 @@ class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
       _zeroReason = review.zeroReason;
       _loading = false;
     });
+  }
+
+  Future<void> _createDebugFlowchartCandidate() async {
+    final repository = widget.repository;
+    if (repository is! DebugFlowchartSeedRepository) {
+      return;
+    }
+    await repository.createDebugFlowchartCandidate();
+    await _load();
   }
 
   Future<void> _openFlowchart(FlowchartEntity flowchart) async {
@@ -101,7 +143,15 @@ class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _flowcharts.isEmpty
-          ? Center(child: Text(_zeroText(_zeroReason)))
+          ? _EmptyFlowchartState(
+              reasonText: _zeroText(_zeroReason),
+              onCreateSample:
+                  widget.repository is DebugFlowchartSeedRepository
+                  ? () {
+                      unawaited(_createDebugFlowchartCandidate());
+                    }
+                  : null,
+            )
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: _flowcharts.length,

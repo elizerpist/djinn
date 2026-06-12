@@ -20,6 +20,10 @@ class FlowchartReviewList {
   final FlowchartZeroReason? zeroReason;
 }
 
+abstract class DebugFlowchartSeedRepository {
+  Future<void> createDebugFlowchartCandidate();
+}
+
 abstract class FlowchartValidationRepository {
   Future<FlowchartReviewList> listFlowchartReviewState();
 
@@ -43,7 +47,7 @@ abstract class FlowchartValidationRepository {
 }
 
 class ObjectBoxFlowchartValidationRepository
-    implements FlowchartValidationRepository {
+    implements FlowchartValidationRepository, DebugFlowchartSeedRepository {
   ObjectBoxFlowchartValidationRepository({required Store store})
     : _flowchartBox = store.box<FlowchartEntity>(),
       _documentBox = store.box<KnowledgeDocumentEntity>(),
@@ -139,6 +143,93 @@ class ObjectBoxFlowchartValidationRepository
     final node = _findNode(nodePublicId);
     return node != null &&
         node.validationState != ValidationState.rejected.wireName;
+  }
+
+  @override
+  Future<void> createDebugFlowchartCandidate() async {
+    const flowchartId = 'debug-flowchart';
+    _removeDebugFlowchart(flowchartId);
+    _flowchartBox.put(
+      FlowchartEntity(
+        publicId: flowchartId,
+        documentPublicId: 'debug-document',
+        pageNumber: 1,
+        validationState: ValidationState.unreviewed.wireName,
+        extractionConfidence: 1,
+      ),
+    );
+    _nodeBox.putMany([
+      FlowchartNodeEntity(
+        publicId: '$flowchartId:start',
+        flowchartPublicId: flowchartId,
+        label: 'Betegvizsgálat',
+        validationState: ValidationState.unreviewed.wireName,
+        positionX: 0,
+        positionY: 0,
+      ),
+      FlowchartNodeEntity(
+        publicId: '$flowchartId:decision',
+        flowchartPublicId: flowchartId,
+        label: 'Rizikó fennáll?',
+        validationState: ValidationState.unreviewed.wireName,
+        positionX: 180,
+        positionY: 0,
+      ),
+      FlowchartNodeEntity(
+        publicId: '$flowchartId:end',
+        flowchartPublicId: flowchartId,
+        label: 'Ellátási döntés',
+        validationState: ValidationState.unreviewed.wireName,
+        positionX: 360,
+        positionY: 0,
+      ),
+    ]);
+    _edgeBox.putMany([
+      FlowchartEdgeEntity(
+        publicId: '$flowchartId:edge-1',
+        flowchartPublicId: flowchartId,
+        fromNodePublicId: '$flowchartId:start',
+        toNodePublicId: '$flowchartId:decision',
+        label: 'értékelés',
+        validationState: ValidationState.unreviewed.wireName,
+      ),
+      FlowchartEdgeEntity(
+        publicId: '$flowchartId:edge-2',
+        flowchartPublicId: flowchartId,
+        fromNodePublicId: '$flowchartId:decision',
+        toNodePublicId: '$flowchartId:end',
+        label: 'igen',
+        validationState: ValidationState.unreviewed.wireName,
+      ),
+    ]);
+    DebugConsole.log('[Flowchart] debug sample created flowchart=$flowchartId');
+  }
+
+  void _removeDebugFlowchart(String flowchartId) {
+    final flowcharts = _flowchartBox
+        .getAll()
+        .where((item) => item.publicId == flowchartId)
+        .map((item) => item.id)
+        .toList(growable: false);
+    final nodes = _nodeBox
+        .getAll()
+        .where((item) => item.flowchartPublicId == flowchartId)
+        .map((item) => item.id)
+        .toList(growable: false);
+    final edges = _edgeBox
+        .getAll()
+        .where((item) => item.flowchartPublicId == flowchartId)
+        .map((item) => item.id)
+        .toList(growable: false);
+    if (edges.isNotEmpty) {
+      _edgeBox.removeMany(edges);
+    }
+    if (nodes.isNotEmpty) {
+      _nodeBox.removeMany(nodes);
+    }
+    if (flowcharts.isNotEmpty) {
+      _flowchartBox.removeMany(flowcharts);
+    }
   }
 
   FlowchartNodeEntity? _findNode(String nodePublicId) {

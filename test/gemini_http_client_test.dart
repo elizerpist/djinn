@@ -193,6 +193,62 @@ void main() {
     expect(result.chunks.single.id, 'p1-main');
   });
 
+  test('sends PNG documents to Gemini with image/png inline data', () async {
+    final keyStore = MemoryApiKeyStore();
+    await keyStore.saveKeyForProvider(AiProvider.gemini, 'gemini-key');
+    final tempDir = await Directory.systemTemp.createTemp('djinn_gemini_png_');
+    addTearDown(() => tempDir.delete(recursive: true));
+    final png = File('${tempDir.path}/flowchart.png');
+    await png.writeAsBytes([137, 80, 78, 71]);
+
+    final client = GeminiHttpClient(
+      apiKeyStore: keyStore,
+      httpClient: MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        final contents = body['contents'] as List;
+        final message = contents.single as Map;
+        final parts = message['parts'] as List;
+        final inlineData = parts
+            .whereType<Map>()
+            .map((item) => item['inlineData'])
+            .whereType<Map>()
+            .single;
+        expect(inlineData['mimeType'], 'image/png');
+        expect(inlineData['data'], base64Encode([137, 80, 78, 71]));
+        return http.Response(
+          jsonEncode({
+            'candidates': [
+              {
+                'content': {
+                  'parts': [
+                    {
+                      'text': jsonEncode({
+                        'chunks': [],
+                        'tables': [],
+                        'scores': [],
+                        'flowcharts': [],
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+      baseUri: Uri.parse('https://gemini.test'),
+    );
+
+    final result = await client.extractDocument(
+      pdfPath: png.path,
+      model: 'gemini-2.5-flash',
+      chunkingMode: 'normal',
+    );
+
+    expect(result.chunks, isEmpty);
+  });
+
   test('parses Gemini tables scores and flowchart candidates', () async {
     final keyStore = MemoryApiKeyStore();
     await keyStore.saveKeyForProvider(AiProvider.gemini, 'gemini-key');

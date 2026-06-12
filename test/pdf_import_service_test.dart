@@ -48,4 +48,21 @@ void main() {
     expect(await File(result.localPath).exists(), isTrue);
     expect(await File(result.localPath).readAsBytes(), [1, 2, 3]);
   });
+
+  test('copies picked PNG bytes without converting the extension to PDF', () async {
+    final directory = await Directory.systemTemp.createTemp('djinn-png-bytes-');
+    addTearDown(() => directory.delete(recursive: true));
+    final service = PdfImportService(
+      importDirectory: Directory('${directory.path}/knowledge'),
+    );
+
+    final result = await service.copyPdfBytes(
+      filename: '../RAVE score screenshot.png',
+      bytes: [137, 80, 78, 71],
+    );
+
+    expect(result.filename, 'RAVE_score_screenshot.png');
+    expect(result.localPath, endsWith('RAVE_score_screenshot.png'));
+    expect(await File(result.localPath).readAsBytes(), [137, 80, 78, 71]);
+  });
 }

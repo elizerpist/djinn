@@ -22,18 +22,29 @@ class PdfImportService {
 
   final Directory importDirectory;
 
-  Future<PdfImportResult> copyPdfFromPath(String sourcePath) async {
+  Future<PdfImportResult> copyPdfFromPath(String sourcePath) {
+    return copyDocumentFromPath(sourcePath);
+  }
+
+  Future<PdfImportResult> copyDocumentFromPath(String sourcePath) async {
     final source = File(sourcePath);
     final bytes = await source.readAsBytes();
-    return copyPdfBytes(filename: p.basename(source.path), bytes: bytes);
+    return copyDocumentBytes(filename: p.basename(source.path), bytes: bytes);
   }
 
   Future<PdfImportResult> copyPdfBytes({
     required String filename,
     required List<int> bytes,
+  }) {
+    return copyDocumentBytes(filename: filename, bytes: bytes);
+  }
+
+  Future<PdfImportResult> copyDocumentBytes({
+    required String filename,
+    required List<int> bytes,
   }) async {
     await importDirectory.create(recursive: true);
-    final safeFilename = _safePdfFilename(filename);
+    final safeFilename = _safeDocumentFilename(filename);
     final target = await _nextAvailableFile(safeFilename);
     await target.writeAsBytes(bytes, flush: true);
     return PdfImportResult(
@@ -58,17 +69,23 @@ class PdfImportService {
     return candidate;
   }
 
-  String _safePdfFilename(String filename) {
+  String _safeDocumentFilename(String filename) {
     final basename = p
         .basename(filename)
         .trim()
         .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_');
-    final normalized = basename.isEmpty || basename == '.pdf'
-        ? 'document.pdf'
-        : basename;
-    if (p.extension(normalized).toLowerCase() == '.pdf') {
+    final normalized = _defaultDocumentFilenameIfNeeded(basename);
+    final extension = p.extension(normalized).toLowerCase();
+    if (extension == '.pdf' || extension == '.png') {
       return normalized;
     }
     return '$normalized.pdf';
+  }
+
+  String _defaultDocumentFilenameIfNeeded(String basename) {
+    if (basename.isEmpty || basename == '.pdf' || basename == '.png') {
+      return 'document.pdf';
+    }
+    return basename;
   }
 }

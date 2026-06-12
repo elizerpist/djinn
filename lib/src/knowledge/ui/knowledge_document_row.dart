@@ -51,7 +51,7 @@ class KnowledgeDocumentRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                   ],
-                  const Icon(Icons.picture_as_pdf, color: Color(0xFFB91C1C)),
+                  Icon(_documentIcon, color: _documentIconColor),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -108,6 +108,18 @@ class KnowledgeDocumentRow extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  IconData get _documentIcon {
+    return document.filename.toLowerCase().endsWith('.png')
+        ? Icons.image_outlined
+        : Icons.picture_as_pdf;
+  }
+
+  Color get _documentIconColor {
+    return document.filename.toLowerCase().endsWith('.png')
+        ? const Color(0xFF2563EB)
+        : const Color(0xFFB91C1C);
   }
 
   String _sizeLabel(int bytes) {

@@ -119,6 +119,7 @@ class GeminiHttpClient implements AiClient {
     final filename = pdfPath.trim().isEmpty
         ? 'document.pdf'
         : p.basename(pdfPath);
+    final mimeType = _mimeTypeForPath(pdfPath);
     final response = await _generateContent(
       model: model,
       body: {
@@ -131,7 +132,7 @@ class GeminiHttpClient implements AiClient {
               {'text': _chunkingInstruction(chunkingMode)},
               {
                 'inlineData': {
-                  'mimeType': 'application/pdf',
+                  'mimeType': mimeType,
                   'data': base64Encode(bytes),
                 },
               },
@@ -147,6 +148,12 @@ class GeminiHttpClient implements AiClient {
     );
     final extractionJson = _decodeStructuredText(response);
     return _parseExtraction(extractionJson);
+  }
+
+  String _mimeTypeForPath(String path) {
+    return p.extension(path).toLowerCase() == '.png'
+        ? 'image/png'
+        : 'application/pdf';
   }
 
   @override
@@ -696,11 +703,11 @@ class GeminiHttpClient implements AiClient {
 }
 
 const _documentExtractionInstruction = '''
-Extract this OMSZ PDF into source-grounded chunks. Return JSON only. Include page-aware text chunks and preserve source wording. Flowchart extraction will be validated later, so do not invent missing nodes or arrows.
+Extract this OMSZ document into source-grounded chunks. Return JSON only. Include page-aware text chunks and preserve source wording. Flowchart extraction will be validated later, so do not invent missing nodes or arrows.
 ''';
 
 const _visualExtractionInstruction = '''
-If a page contains a table, score, or flowchart as an image, extract it from the PDF image content. Preserve clinically relevant table rows. For RAVE or other scores, return each criterion as a score item. For flowcharts, return candidate nodes and directed edges; do not invent uncertain nodes.
+If a page contains a table, score, or flowchart as an image, extract it from the document image content. Preserve clinically relevant table rows. For RAVE or other scores, return each criterion as a score item. For flowcharts, return candidate nodes and directed edges; do not invent uncertain nodes.
 ''';
 
 const _answerLanguagePolicy =

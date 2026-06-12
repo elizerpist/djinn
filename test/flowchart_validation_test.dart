@@ -107,13 +107,38 @@ void main() {
       ),
     );
   });
+
+  testWidgets('empty validation screen can create a sample flowchart candidate', (
+    tester,
+  ) async {
+    final repository = MemoryFlowchartValidationRepository(
+      zeroReason: FlowchartZeroReason.noDetectedFlowcharts,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: FlowchartValidationScreen(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Mintafolyamat létrehozása'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Flowchart 1. oldal'), findsOneWidget);
+    expect(
+      DebugConsole.allText,
+      contains('[Flowchart] debug sample created flowchart=debug-flowchart'),
+    );
+  });
 }
 
 class MemoryFlowchartValidationRepository
-    implements FlowchartValidationRepository {
+    implements FlowchartValidationRepository, DebugFlowchartSeedRepository {
   MemoryFlowchartValidationRepository({this.zeroReason});
 
+  final _flowcharts = <FlowchartEntity>[];
   final _nodes = <String, ValidationState>{};
+  final _nodeEntities = <FlowchartNodeEntity>[];
+  final _edgeEntities = <FlowchartEdgeEntity>[];
   final _nodeRejectionReasons = <String, String?>{};
   final FlowchartZeroReason? zeroReason;
 
@@ -123,22 +148,29 @@ class MemoryFlowchartValidationRepository
 
   @override
   Future<List<FlowchartEntity>> listFlowchartsNeedingReview() async {
-    return const [];
+    return _flowcharts;
   }
 
   @override
   Future<FlowchartReviewList> listFlowchartReviewState() async {
-    return FlowchartReviewList(items: const [], zeroReason: zeroReason);
+    return FlowchartReviewList(
+      items: _flowcharts,
+      zeroReason: _flowcharts.isEmpty ? zeroReason : null,
+    );
   }
 
   @override
   Future<List<FlowchartNodeEntity>> listNodes(String flowchartPublicId) async {
-    return const [];
+    return _nodeEntities
+        .where((node) => node.flowchartPublicId == flowchartPublicId)
+        .toList(growable: false);
   }
 
   @override
   Future<List<FlowchartEdgeEntity>> listEdges(String flowchartPublicId) async {
-    return const [];
+    return _edgeEntities
+        .where((edge) => edge.flowchartPublicId == flowchartPublicId)
+        .toList(growable: false);
   }
 
   @override
@@ -164,5 +196,54 @@ class MemoryFlowchartValidationRepository
   @override
   Future<bool> isNodeAnswerable(String nodePublicId) async {
     return _nodes[nodePublicId] != ValidationState.rejected;
+  }
+
+  @override
+  Future<void> createDebugFlowchartCandidate() async {
+    const flowchartId = 'debug-flowchart';
+    _flowcharts
+      ..clear()
+      ..add(
+        FlowchartEntity(
+          publicId: flowchartId,
+          documentPublicId: 'debug-document',
+          pageNumber: 1,
+          validationState: ValidationState.unreviewed.wireName,
+          extractionConfidence: 1,
+        ),
+      );
+    _nodeEntities
+      ..clear()
+      ..addAll([
+        FlowchartNodeEntity(
+          publicId: '$flowchartId:start',
+          flowchartPublicId: flowchartId,
+          label: 'Betegvizsgálat',
+          validationState: ValidationState.unreviewed.wireName,
+          positionX: 0,
+          positionY: 0,
+        ),
+        FlowchartNodeEntity(
+          publicId: '$flowchartId:end',
+          flowchartPublicId: flowchartId,
+          label: 'Ellátási döntés',
+          validationState: ValidationState.unreviewed.wireName,
+          positionX: 160,
+          positionY: 0,
+        ),
+      ]);
+    _edgeEntities
+      ..clear()
+      ..add(
+        FlowchartEdgeEntity(
+          publicId: '$flowchartId:edge-1',
+          flowchartPublicId: flowchartId,
+          fromNodePublicId: '$flowchartId:start',
+          toNodePublicId: '$flowchartId:end',
+          label: 'igen',
+          validationState: ValidationState.unreviewed.wireName,
+        ),
+      );
+    DebugConsole.log('[Flowchart] debug sample created flowchart=$flowchartId');
   }
 }

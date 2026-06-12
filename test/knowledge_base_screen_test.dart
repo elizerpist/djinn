@@ -26,10 +26,10 @@ void main() {
       ),
     );
 
-    await _pumpUntilFound(tester, find.text('Nincs importált PDF'));
+    await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
 
     expect(find.text('Helyi ObjectBox tudástár'), findsNothing);
-    expect(find.text('Nincs importált PDF'), findsOneWidget);
+    expect(find.text('Nincs importált dokumentum'), findsOneWidget);
   });
 
   testWidgets('imports picked PDFs into the local knowledge base', (
@@ -56,9 +56,9 @@ void main() {
         ),
       ),
     );
-    await _pumpUntilFound(tester, find.text('Nincs importált PDF'));
+    await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
 
-    await tester.tap(find.byTooltip('PDF hozzáadása'));
+    await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
     await _pumpUntilFound(tester, find.text('omsz.pdf'));
 
     expect(find.text('omsz.pdf'), findsOneWidget);
@@ -69,6 +69,36 @@ void main() {
     expect(documents, hasLength(1));
     expect(documents.single.filename, 'omsz.pdf');
     expect(documents.single.localPath, '/memory/omsz.pdf');
+    expect(documents.single.status, KnowledgeDocumentStatus.imported);
+  });
+
+  testWidgets('imports picked PNG files into the local knowledge base', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final importService = _FakePdfImportService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: importService,
+          pickPdfs: () async => [
+            PickedPdfFile(filename: 'rave-flowchart.png', bytes: [137, 80, 78, 71]),
+          ],
+          clock: () => DateTime.utc(2026, 1, 1, 12),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
+
+    await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
+    await _pumpUntilFound(tester, find.text('rave-flowchart.png'));
+
+    final documents = await repository.listDocuments();
+    expect(documents, hasLength(1));
+    expect(documents.single.filename, 'rave-flowchart.png');
+    expect(documents.single.localPath, '/memory/rave-flowchart.png');
     expect(documents.single.status, KnowledgeDocumentStatus.imported);
   });
 
@@ -95,9 +125,9 @@ void main() {
         ),
       ),
     );
-    await _pumpUntilFound(tester, find.text('Nincs importált PDF'));
+    await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
 
-    await tester.tap(find.byTooltip('PDF hozzáadása'));
+    await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
     await _pumpUntilFound(tester, find.text('Nincs sync'));
 
     expect(find.text('OpenAI API kulcs szükséges'), findsNothing);
@@ -268,7 +298,7 @@ void main() {
         ),
       ),
     );
-    await _pumpUntilFound(tester, find.text('Nincs importált PDF'));
+    await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
 
     await tester.tap(find.byKey(const Key('knowledge-general-menu')));
     await tester.pumpAndSettle();
@@ -369,7 +399,7 @@ void main() {
 
     await tester.tap(find.byKey(Key('folder-pill-${folder.id}')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('PDF hozzáadása'));
+    await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
     await _pumpUntilFound(tester, find.text('folder.pdf'));
 
     expect((await repository.listDocuments()).single.folderId, folder.id);
@@ -1107,7 +1137,7 @@ class _FakePdfImportService extends PdfImportService {
   _FakePdfImportService() : super(importDirectory: Directory('/memory'));
 
   @override
-  Future<PdfImportResult> copyPdfBytes({
+  Future<PdfImportResult> copyDocumentBytes({
     required String filename,
     required List<int> bytes,
   }) async {
