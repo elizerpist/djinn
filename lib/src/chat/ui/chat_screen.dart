@@ -149,11 +149,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _speakingMessageId = message.id;
       _pausedMessageId = null;
     });
-    await _voiceController.speak(
-      message.text,
-      locale: _voiceLocale,
-      listenForBargeIn: _voiceReplyEnabled,
-    );
+    await _voiceController.speak(message.text, locale: _voiceLocale);
     if (mounted && _speakingMessageId == message.id) {
       setState(() {
         _speakingMessageId = null;
@@ -241,9 +237,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     final state = _voiceController.state;
-    if (state == VoiceState.speaking ||
-        state == VoiceState.paused ||
-        state == VoiceState.sending) {
+    if (state == VoiceState.speaking || state == VoiceState.paused) {
       return;
     }
     DebugConsole.log(
