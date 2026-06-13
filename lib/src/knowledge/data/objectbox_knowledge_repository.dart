@@ -7,6 +7,7 @@ import '../../ai/ai_client.dart';
 import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
 import '../models/chunk_package.dart';
+import '../models/extracted_knowledge_item.dart';
 import 'chunk_package_service.dart';
 import 'document_processing_service.dart';
 
@@ -388,6 +389,43 @@ class ObjectBoxKnowledgeRepository
     _embeddingBox.put(embedding);
   }
 
+
+  Future<List<ExtractedKnowledgeItem>> listExtractedKnowledgeItems(
+    String documentPublicId,
+  ) async {
+    final embeddings = {
+      for (final embedding in _embeddingBox.getAll())
+        if (_generatedEmbeddingSourceTypes.contains(embedding.sourceType))
+          embedding.sourceId: embedding,
+    };
+    final items = <ExtractedKnowledgeItem>[
+      for (final chunk in _chunksForDocument(documentPublicId))
+        ExtractedKnowledgeItem(
+          id: _packageChunkId(documentPublicId, chunk.publicId),
+          documentId: documentPublicId,
+          sourceType: evidenceSourceTypeFromWireName(
+            embeddings[chunk.publicId]?.sourceType ??
+                EvidenceSourceType.textChunk.wireName,
+          ),
+          text: chunk.text,
+          pageNumber: chunk.pageNumber,
+          sectionTitle: chunk.sectionTitle,
+          embeddingModel: embeddings[chunk.publicId]?.model,
+        ),
+      for (final flowchart in _flowchartsForDocument(documentPublicId))
+        ExtractedKnowledgeItem(
+          id: _packageChunkId(documentPublicId, flowchart.publicId),
+          documentId: documentPublicId,
+          sourceType: EvidenceSourceType.flowchartNode,
+          text: _flowchartSummary(flowchart),
+          pageNumber: flowchart.pageNumber,
+          sectionTitle: 'Flowchart',
+        ),
+    ];
+    items.sort(_compareExtractedItems);
+    return List.unmodifiable(items);
+  }
+
   @override
   Future<ChunkPackage> exportChunkPackage(String documentPublicId) async {
     final document = _findDocument(documentPublicId);
@@ -598,6 +636,44 @@ class ObjectBoxKnowledgeRepository
         flowcharts.map((flowchart) => flowchart.id).toList(),
       );
     }
+  }
+
+
+  int _compareExtractedItems(
+    ExtractedKnowledgeItem a,
+    ExtractedKnowledgeItem b,
+  ) {
+    final page = (a.pageNumber ?? 0).compareTo(b.pageNumber ?? 0);
+    if (page != 0) {
+      return page;
+    }
+    final type = a.sourceType.index.compareTo(b.sourceType.index);
+    if (type != 0) {
+      return type;
+    }
+    return a.id.compareTo(b.id);
+  }
+
+  String _flowchartSummary(FlowchartEntity flowchart) {
+    final nodes = _flowchartNodeBox
+        .getAll()
+        .where((node) => node.flowchartPublicId == flowchart.publicId)
+        .map((node) => node.label)
+        .where((label) => label.trim().isNotEmpty)
+        .join(' | ');
+    final edges = _flowchartEdgeBox
+        .getAll()
+        .where((edge) => edge.flowchartPublicId == flowchart.publicId)
+        .map((edge) => edge.label)
+        .where((label) => label.trim().isNotEmpty)
+        .join(' | ');
+    if (edges.isEmpty) {
+      return nodes;
+    }
+    if (nodes.isEmpty) {
+      return edges;
+    }
+    return '$nodes\n$edges';
   }
 
   String _evidenceSourceTypeWireName(AiEvidenceSourceType sourceType) {

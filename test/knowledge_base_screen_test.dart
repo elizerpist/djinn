@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:djinn/src/ai/ai_client.dart';
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/knowledge/data/document_processing_service.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
@@ -469,6 +470,68 @@ void main() {
     expect(find.text('Flowchart validálásra'), findsNothing);
     expect(find.text('Offline index frissítés'), findsNothing);
     expect(_disabledPopupLabels(tester), isEmpty);
+  });
+
+
+
+  testWidgets('selection menu opens extracted table and score inspector', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'race-score.png',
+      localPath: '/memory/race-score.png',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 13),
+      sha256: 'race-hash',
+    );
+    await repository.saveExtractedEvidence(
+      documentPublicId: document.id,
+      evidence: const AiExtractedEvidence(
+        id: 'table--1-row-1',
+        text: 'Arcbénulás: nincs, 0 pont; enyhe, 1 pont; súlyos, 2 pont.',
+        pageNumber: 1,
+        sectionTitle: 'RACE Score',
+        sourceType: AiEvidenceSourceType.table,
+      ),
+      embedding: List<double>.filled(3072, 0.1),
+      embeddingModel: 'gemini-embedding-001',
+    );
+    await repository.saveExtractedEvidence(
+      documentPublicId: document.id,
+      evidence: const AiExtractedEvidence(
+        id: 'score--1',
+        text: 'RACE score: 0-9 pont, magasabb pontszám nagyér-okklúziót valószínűsít.',
+        pageNumber: 1,
+        sectionTitle: 'RACE Score',
+        sourceType: AiEvidenceSourceType.score,
+      ),
+      embedding: List<double>.filled(3072, 0.2),
+      embeddingModel: 'gemini-embedding-001',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('race-score.png'));
+
+    await tester.longPress(find.text('race-score.png'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kinyert tartalom'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kinyert tartalom'), findsOneWidget);
+    expect(find.text('Táblázat'), findsWidgets);
+    expect(find.text('Score'), findsWidgets);
+    expect(find.textContaining('Arcbénulás'), findsOneWidget);
+    expect(find.textContaining('nagyér-okklúziót'), findsOneWidget);
   });
 
   testWidgets(

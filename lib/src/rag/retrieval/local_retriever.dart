@@ -131,13 +131,21 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     required int limit,
   }) async {
     final evidence = <SourceEvidence>[];
+    final embeddingsBySourceId = {
+      for (final embedding in _embeddingBox.getAll())
+        embedding.sourceId: embedding,
+    };
     for (final chunk in _chunkBox.getAll()) {
+      final sourceType = _sourceTypeFromWireName(
+        embeddingsBySourceId[chunk.publicId]?.sourceType ??
+            EvidenceSourceType.textChunk.wireName,
+      );
       evidence.add(
         SourceEvidence(
           id: chunk.publicId,
-          sourceType: EvidenceSourceType.textChunk,
+          sourceType: sourceType,
           text: chunk.text,
-          label: 'Szöveges PDF-részlet',
+          label: _chunkLabel(sourceType),
           validationState: ValidationState.validated,
           documentId: chunk.documentPublicId,
           pageNumber: chunk.pageNumber,
@@ -186,7 +194,11 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
   SourceEvidence? _mapEmbedding(ChunkEmbeddingEntity embedding, double score) {
     switch (embedding.sourceType) {
       case 'text_chunk':
-        return _mapChunk(embedding.sourceId, score);
+        return _mapChunk(embedding.sourceId, score, EvidenceSourceType.textChunk);
+      case 'table_chunk':
+        return _mapChunk(embedding.sourceId, score, EvidenceSourceType.tableChunk);
+      case 'score_chunk':
+        return _mapChunk(embedding.sourceId, score, EvidenceSourceType.scoreChunk);
       case 'flowchart_node':
         return _mapNode(embedding.sourceId, score);
       case 'flowchart_edge':
@@ -195,16 +207,20 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     return null;
   }
 
-  SourceEvidence? _mapChunk(String publicId, double score) {
+  SourceEvidence? _mapChunk(
+    String publicId,
+    double score,
+    EvidenceSourceType sourceType,
+  ) {
     final chunk = _findChunk(publicId);
     if (chunk == null) {
       return null;
     }
     return SourceEvidence(
       id: chunk.publicId,
-      sourceType: EvidenceSourceType.textChunk,
+      sourceType: sourceType,
       text: chunk.text,
-      label: 'Szöveges PDF-részlet',
+      label: _chunkLabel(sourceType),
       validationState: ValidationState.validated,
       documentId: chunk.documentPublicId,
       pageNumber: chunk.pageNumber,
@@ -297,6 +313,24 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     } finally {
       query.close();
     }
+  }
+
+
+  EvidenceSourceType _sourceTypeFromWireName(String value) {
+    return EvidenceSourceType.values.firstWhere(
+      (item) => item.wireName == value,
+      orElse: () => EvidenceSourceType.textChunk,
+    );
+  }
+
+  String _chunkLabel(EvidenceSourceType sourceType) {
+    return switch (sourceType) {
+      EvidenceSourceType.textChunk => 'Szöveges PDF-részlet',
+      EvidenceSourceType.tableChunk => 'Táblázatból kinyert részlet',
+      EvidenceSourceType.scoreChunk => 'Score elem',
+      EvidenceSourceType.flowchartNode || EvidenceSourceType.flowchartEdge =>
+        'Flowchart elem',
+    };
   }
 
   double _similarityFromCosineDistance(double distance) {

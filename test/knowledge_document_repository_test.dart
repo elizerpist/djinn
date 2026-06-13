@@ -6,6 +6,7 @@ import 'package:djinn/src/core/storage/json_file_store.dart';
 import 'package:djinn/src/ai/ai_client.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
+import 'package:djinn/src/local_store/entities.dart';
 import 'package:djinn/src/openai/openai_client.dart';
 
 void main() {
@@ -295,4 +296,52 @@ void main() {
 
     expect((await repository.exportChunkPackage(document.id)).chunks, isEmpty);
   });
+
+  test('lists extracted table and score items with their evidence types', () async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'race-score.png',
+      localPath: '/memory/race-score.png',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 13),
+      sha256: 'hash-race',
+    );
+
+    await repository.saveExtractedEvidence(
+      documentPublicId: document.id,
+      evidence: const AiExtractedEvidence(
+        id: 'table--1-row-1',
+        text: 'Arcbénulás: nincs, 0 pont; enyhe, 1 pont; súlyos, 2 pont.',
+        pageNumber: 1,
+        sectionTitle: 'RACE Score',
+        sourceType: AiEvidenceSourceType.table,
+      ),
+      embedding: List<double>.filled(3072, 0.1),
+      embeddingModel: 'gemini-embedding-001',
+    );
+    await repository.saveExtractedEvidence(
+      documentPublicId: document.id,
+      evidence: const AiExtractedEvidence(
+        id: 'score--1',
+        text: 'RACE score értelmezés: 0-9 pont, magasabb pontszám nagyér-okklúziót valószínűsít.',
+        pageNumber: 1,
+        sectionTitle: 'RACE Score',
+        sourceType: AiEvidenceSourceType.score,
+      ),
+      embedding: List<double>.filled(3072, 0.2),
+      embeddingModel: 'gemini-embedding-001',
+    );
+
+    final items = await repository.listExtractedKnowledgeItems(document.id);
+
+    expect(items.map((item) => item.sourceType), [
+      EvidenceSourceType.tableChunk,
+      EvidenceSourceType.scoreChunk,
+    ]);
+    expect(items.first.typeLabel, 'Táblázat');
+    expect(items.last.typeLabel, 'Score');
+    expect(items.first.text, contains('Arcbénulás'));
+    expect(items.last.embeddingModel, 'gemini-embedding-001');
+  });
+
 }

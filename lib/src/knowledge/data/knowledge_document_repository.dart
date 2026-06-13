@@ -7,6 +7,7 @@ import '../../core/storage/json_file_store.dart';
 import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
 import '../models/chunk_package.dart';
+import '../models/extracted_knowledge_item.dart';
 import '../models/knowledge_document.dart';
 import '../models/knowledge_folder.dart';
 import 'chunk_package_service.dart';
@@ -27,6 +28,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
   List<KnowledgeDocument> _documents = [];
   final List<KnowledgeFolder> _folders = [];
   final Map<String, List<ChunkPackageItem>> _chunksByDocument = {};
+  final Map<String, List<ExtractedKnowledgeItem>> _extractedItemsByDocument = {};
   final Map<String, String> _embeddingModelByDocument = {};
   final Map<String, List<AiFlowchartCandidate>> _flowchartsByDocument = {};
   int _nextDocumentId = 1;
@@ -145,6 +147,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     ];
     for (final document in documentsToDelete) {
       _chunksByDocument.remove(document.id);
+      _extractedItemsByDocument.remove(document.id);
       _embeddingModelByDocument.remove(document.id);
       _flowchartsByDocument.remove(document.id);
       await _deleteLocalFileIfPresent(document.localPath);
@@ -303,6 +306,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
   @override
   Future<void> clearGeneratedKnowledge(String documentPublicId) async {
     _chunksByDocument.remove(documentPublicId);
+    _extractedItemsByDocument.remove(documentPublicId);
     _embeddingModelByDocument.remove(documentPublicId);
     _flowchartsByDocument.remove(documentPublicId);
   }
@@ -325,6 +329,22 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
         embedding: embedding,
       ),
     );
+    final extractedItems = _extractedItemsByDocument.putIfAbsent(
+      documentPublicId,
+      () => [],
+    );
+    extractedItems.removeWhere((item) => item.id == evidence.id);
+    extractedItems.add(
+      ExtractedKnowledgeItem(
+        id: evidence.id,
+        documentId: documentPublicId,
+        sourceType: _evidenceSourceType(evidence.sourceType),
+        text: evidence.text,
+        pageNumber: evidence.pageNumber,
+        sectionTitle: evidence.sectionTitle,
+        embeddingModel: embeddingModel,
+      ),
+    );
     _embeddingModelByDocument[documentPublicId] = embeddingModel;
   }
 
@@ -336,6 +356,26 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     final items = _flowchartsByDocument.putIfAbsent(documentPublicId, () => []);
     items.removeWhere((item) => item.id == flowchart.id);
     items.add(flowchart);
+  }
+
+
+  Future<List<ExtractedKnowledgeItem>> listExtractedKnowledgeItems(
+    String documentPublicId,
+  ) async {
+    final items = [
+      ...?_extractedItemsByDocument[documentPublicId],
+      for (final flowchart in _flowchartsByDocument[documentPublicId] ?? const [])
+        ExtractedKnowledgeItem(
+          id: flowchart.id,
+          documentId: documentPublicId,
+          sourceType: EvidenceSourceType.flowchartNode,
+          text: _flowchartSummary(flowchart),
+          pageNumber: flowchart.pageNumber,
+          sectionTitle: 'Flowchart',
+        ),
+    ];
+    items.sort(_compareExtractedItems);
+    return List.unmodifiable(items);
   }
 
   Future<ChunkPackage> exportChunkPackage(String documentPublicId) async {
@@ -368,6 +408,18 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       expectedDimension: package.embeddingDimension,
     );
     _chunksByDocument[documentPublicId] = package.chunks;
+    _extractedItemsByDocument[documentPublicId] = [
+      for (final item in package.chunks)
+        ExtractedKnowledgeItem(
+          id: item.id,
+          documentId: documentPublicId,
+          sourceType: EvidenceSourceType.textChunk,
+          text: item.text,
+          pageNumber: item.pageNumber,
+          sectionTitle: item.sectionTitle,
+          embeddingModel: package.embeddingModel,
+        ),
+    ];
     _embeddingModelByDocument[documentPublicId] = package.embeddingModel;
     await updateStatus(
       document.id,
@@ -378,6 +430,39 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
           : package.extractionModel,
       clearLastErrorCode: true,
     );
+  }
+
+
+  EvidenceSourceType _evidenceSourceType(AiEvidenceSourceType sourceType) {
+    return switch (sourceType) {
+      AiEvidenceSourceType.textChunk => EvidenceSourceType.textChunk,
+      AiEvidenceSourceType.table => EvidenceSourceType.tableChunk,
+      AiEvidenceSourceType.score => EvidenceSourceType.scoreChunk,
+    };
+  }
+
+  int _compareExtractedItems(
+    ExtractedKnowledgeItem a,
+    ExtractedKnowledgeItem b,
+  ) {
+    final page = (a.pageNumber ?? 0).compareTo(b.pageNumber ?? 0);
+    if (page != 0) {
+      return page;
+    }
+    final type = a.sourceType.index.compareTo(b.sourceType.index);
+    if (type != 0) {
+      return type;
+    }
+    return a.id.compareTo(b.id);
+  }
+
+  String _flowchartSummary(AiFlowchartCandidate flowchart) {
+    final nodeLabels = flowchart.nodes.map((node) => node.label).join(' | ');
+    final edgeLabels = flowchart.edges.map((edge) => edge.label).join(' | ');
+    if (edgeLabels.isEmpty) {
+      return nodeLabels;
+    }
+    return '$nodeLabels\n$edgeLabels';
   }
 
   KnowledgeDocument _findDocument(String documentId) {

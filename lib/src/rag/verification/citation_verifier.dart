@@ -30,7 +30,7 @@ class CitationVerifier {
 
     final hasWarning = citations.any(
       (item) =>
-          item.sourceType != EvidenceSourceType.textChunk &&
+          _isFlowchartEvidence(item.sourceType) &&
           item.validationState != ValidationState.validated,
     );
     return CitationVerificationResult(
@@ -42,4 +42,10 @@ class CitationVerifier {
           : null,
     );
   }
+
+  bool _isFlowchartEvidence(EvidenceSourceType sourceType) {
+    return sourceType == EvidenceSourceType.flowchartNode ||
+        sourceType == EvidenceSourceType.flowchartEdge;
+  }
+
 }

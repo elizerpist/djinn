@@ -13,6 +13,7 @@ import '../data/pdf_import_service.dart';
 import '../models/knowledge_document.dart';
 import '../models/knowledge_folder.dart';
 import '../models/knowledge_pack.dart';
+import 'extracted_knowledge_screen.dart';
 import 'knowledge_document_row.dart';
 import 'knowledge_header.dart';
 import 'pdf_viewer_screen.dart';
@@ -480,6 +481,11 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
           value: 'move',
           child: Text('Mozgatás mappába'),
         ),
+        if (selectedDocuments.length == 1)
+          const PopupMenuItem<String>(
+            value: 'inspect_extracted',
+            child: Text('Kinyert tartalom'),
+          ),
         const PopupMenuItem<String>(
           value: 'export_chunks',
           child: Text('Chunk csomag export'),
@@ -493,9 +499,23 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       await _syncSelectedDocuments();
     } else if (selected == 'move') {
       await _moveSelectedDocuments();
+    } else if (selected == 'inspect_extracted') {
+      _openExtractedKnowledge(selectedDocuments.single);
     } else if (selected == 'export_chunks') {
       await _exportKnowledgePack(_selectedDocuments);
     }
+  }
+
+
+  void _openExtractedKnowledge(KnowledgeDocument document) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ExtractedKnowledgeScreen(
+          repository: widget.repository,
+          document: document,
+        ),
+      ),
+    );
   }
 
   String _syncActionLabel(List<KnowledgeDocument> selectedDocuments) {

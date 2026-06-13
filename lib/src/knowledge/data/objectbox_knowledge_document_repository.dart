@@ -2,6 +2,7 @@ import '../../ai/ai_client.dart';
 import '../../local_store/entities.dart' as local;
 import '../../openai/openai_client.dart';
 import '../models/chunk_package.dart';
+import '../models/extracted_knowledge_item.dart';
 import '../models/knowledge_document.dart';
 import '../models/knowledge_folder.dart';
 import 'document_processing_service.dart';
@@ -187,6 +188,14 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
       documentPublicId: documentPublicId,
       flowchart: flowchart,
     );
+  }
+
+
+  @override
+  Future<List<ExtractedKnowledgeItem>> listExtractedKnowledgeItems(
+    String documentPublicId,
+  ) {
+    return _repository.listExtractedKnowledgeItems(documentPublicId);
   }
 
   @override

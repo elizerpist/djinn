@@ -43,4 +43,31 @@ void main() {
     expect(result.hasValidationWarning, isTrue);
     expect(result.warningText, contains('nem validált'));
   });
+
+  test('accepts table and score citations without flowchart validation warning', () {
+    final verifier = CitationVerifier();
+    final result = verifier.verify(
+      citedSourceIds: ['table-1', 'score-1'],
+      retrieved: const [
+        SourceEvidence(
+          id: 'table-1',
+          sourceType: EvidenceSourceType.tableChunk,
+          text: 'RACE score táblázat',
+          label: 'Táblázatból kinyert részlet',
+          validationState: ValidationState.unreviewed,
+        ),
+        SourceEvidence(
+          id: 'score-1',
+          sourceType: EvidenceSourceType.scoreChunk,
+          text: 'RACE score pontértelmezés',
+          label: 'Score elem',
+          validationState: ValidationState.unreviewed,
+        ),
+      ],
+    );
+
+    expect(result.accepted, isTrue);
+    expect(result.hasValidationWarning, isFalse);
+  });
+
 }
