@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../branding/djinn_brand_mark.dart';
 import '../../debug/debug_console.dart';
+import '../../debug/debug_header_button.dart';
 import '../../knowledge/models/knowledge_document.dart';
 import '../../settings/models/app_settings.dart';
 import '../../voice/voice_mode.dart';
@@ -323,9 +325,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.conversation.title),
+        title: DjinnAppBarTitle(title: widget.conversation.title),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
+        actions: const [DebugHeaderButton()],
       ),
       body: Column(
         children: [
@@ -334,6 +337,9 @@ class _ChatScreenState extends State<ChatScreen> {
             child: _messages.isEmpty
                 ? const Center(child: Text('Ird be az elso kerdest'))
                 : ListView.builder(
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     itemCount: _messages.length,
                     itemBuilder: (context, index) {

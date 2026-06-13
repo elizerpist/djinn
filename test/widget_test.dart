@@ -163,28 +163,25 @@ void main() {
     expect(find.byKey(const Key('openai-api-key-field')), findsOneWidget);
   });
 
-  testWidgets('Djinn shows the onscreen debug button', (tester) async {
+  testWidgets('Djinn shows branded loading and header debug control', (tester) async {
     await tester.pumpWidget(_testApp());
+
+    expect(find.byKey(const ValueKey('djinn-loading-screen')), findsOneWidget);
+    expect(find.byKey(const ValueKey('djinn-brand-mark')), findsOneWidget);
+
     await _pumpUntilFound(tester, find.text('Djinn'));
 
-    expect(find.byKey(const ValueKey('debug-floating-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('debug-header-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('debug-floating-button')), findsNothing);
   });
 
-  testWidgets('Djinn keeps the onscreen debug button on pushed routes', (
+  testWidgets('Djinn keeps the header debug button on main shell routes', (
     tester,
   ) async {
     await tester.pumpWidget(_testApp());
     await _pumpUntilFound(tester, find.text('Djinn'));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Beállítások'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('AI'), findsOneWidget);
-    expect(find.byKey(const ValueKey('debug-floating-button')), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+    await tester.tap(find.byKey(const ValueKey('debug-header-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('Debug Console'), findsOneWidget);

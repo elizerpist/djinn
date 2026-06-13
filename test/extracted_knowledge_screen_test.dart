@@ -6,7 +6,7 @@ import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/ui/extracted_knowledge_screen.dart';
 
 void main() {
-  testWidgets('flowchart tab renders a logical hierarchy with shape labels', (
+  testWidgets('flowchart tab provides named views without color rail clutter', (
     tester,
   ) async {
     final repository = KnowledgeDocumentRepository();
@@ -36,6 +36,12 @@ void main() {
             shape: AiFlowchartNodeShape.process,
             order: 3,
           ),
+          AiFlowchartNode(
+            id: 'n3',
+            label: 'Monitorozás',
+            shape: AiFlowchartNodeShape.process,
+            order: 5,
+          ),
         ],
         edges: [
           AiFlowchartEdge(
@@ -44,6 +50,13 @@ void main() {
             toNodeId: 'n2',
             label: 'igen',
             order: 2,
+          ),
+          AiFlowchartEdge(
+            id: 'e2',
+            fromNodeId: 'n1',
+            toNodeId: 'n3',
+            label: 'nem',
+            order: 4,
           ),
         ],
       ),
@@ -62,15 +75,35 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Légzés algoritmus'), findsOneWidget);
-    expect(find.text('Döntés'), findsOneWidget);
-    expect(find.text('Folyamatlépés'), findsOneWidget);
-    expect(find.text('Folyamvonal: igen'), findsNothing);
+    expect(find.text('Törzs + ágkártyák'), findsOneWidget);
+    expect(find.text('Térkép + olvasólista'), findsOneWidget);
+    expect(find.text('Swimlane ágak'), findsOneWidget);
+    expect(find.text('Kinyitható döntéskártya'), findsOneWidget);
+    expect(find.byKey(const ValueKey('flowchart-group-flow-1')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('flowchart-rename-flow-1')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('flowchart-title-field')), 'Új légzés flow');
+    await tester.tap(find.text('Mentés'));
+    await tester.pumpAndSettle();
+    expect(find.text('Új légzés flow'), findsOneWidget);
+    expect(find.byKey(const ValueKey('flowchart-trunk-view-flow-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('flow-color-rail')), findsNothing);
     expect(find.text('IGEN'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('flow-connector-flow-1:e1')),
-      findsOneWidget,
-    );
-    expect(find.byIcon(Icons.arrow_downward), findsNothing);
+    expect(find.text('NEM'), findsOneWidget);
     expect(find.byIcon(Icons.change_history), findsOneWidget);
+
+    await tester.tap(find.text('Térkép + olvasólista'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('flowchart-map-view-flow-1')), findsOneWidget);
+
+    await tester.tap(find.text('Swimlane ágak'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('flowchart-swimlane-view-flow-1')), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Kinyitható döntéskártya'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kinyitható döntéskártya'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('flowchart-decision-view-flow-1')), findsOneWidget);
   });
 }

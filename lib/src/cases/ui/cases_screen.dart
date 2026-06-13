@@ -1,17 +1,27 @@
 import 'package:flutter/material.dart';
 
+import '../../branding/djinn_brand_mark.dart';
+import '../../debug/debug_header_button.dart';
 import '../data/case_repository.dart';
 import '../models/case_workspace.dart';
+
+typedef CaseLinkCandidatesLoader = Future<List<CaseLinkCandidate>> Function(
+  String caseId,
+);
 
 class CasesScreen extends StatefulWidget {
   const CasesScreen({
     super.key,
     required this.repository,
     this.showAppBar = true,
+    this.loadChatLinkCandidates,
+    this.loadDocumentLinkCandidates,
   });
 
   final CaseRepository repository;
   final bool showAppBar;
+  final CaseLinkCandidatesLoader? loadChatLinkCandidates;
+  final CaseLinkCandidatesLoader? loadDocumentLinkCandidates;
 
   @override
   State<CasesScreen> createState() => _CasesScreenState();
@@ -64,8 +74,12 @@ class _CasesScreenState extends State<CasesScreen> {
   Future<void> _openCase(CaseWorkspace item) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            CaseDetailScreen(repository: widget.repository, item: item),
+        builder: (_) => CaseDetailScreen(
+          repository: widget.repository,
+          item: item,
+          loadChatLinkCandidates: widget.loadChatLinkCandidates,
+          loadDocumentLinkCandidates: widget.loadDocumentLinkCandidates,
+        ),
       ),
     );
     await _load();
@@ -77,9 +91,10 @@ class _CasesScreenState extends State<CasesScreen> {
     return Scaffold(
       appBar: widget.showAppBar
           ? AppBar(
-              title: const Text('Esetek'),
+              title: const DjinnAppBarTitle(title: 'Esetek'),
               backgroundColor: Colors.white,
               surfaceTintColor: Colors.white,
+              actions: const [DebugHeaderButton()],
             )
           : null,
       body: body,
@@ -108,6 +123,9 @@ class _CasesScreenState extends State<CasesScreen> {
       );
     }
     return ListView.separated(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
       itemCount: _cases.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -198,10 +216,14 @@ class CaseDetailScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.item,
+    this.loadChatLinkCandidates,
+    this.loadDocumentLinkCandidates,
   });
 
   final CaseRepository repository;
   final CaseWorkspace item;
+  final CaseLinkCandidatesLoader? loadChatLinkCandidates;
+  final CaseLinkCandidatesLoader? loadDocumentLinkCandidates;
 
   @override
   State<CaseDetailScreen> createState() => _CaseDetailScreenState();
@@ -244,36 +266,49 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   }
 
   Future<void> _addChatLink() async {
-    final id = await _showLinkDialog(
+    final candidate = await _showPickerDialog(
       title: 'Chat kapcsolása',
-      label: 'Chat azonosító',
+      emptyText: 'Nincs választható chat',
+      loader: widget.loadChatLinkCandidates,
     );
-    if (id == null) {
+    if (candidate == null) {
       return;
     }
-    await widget.repository.linkChat(widget.item.id, id);
+    await widget.repository.linkChat(widget.item.id, candidate.id);
     await _loadLinks();
   }
 
   Future<void> _addDocumentLink() async {
-    final id = await _showLinkDialog(
+    final candidate = await _showPickerDialog(
       title: 'PDF kapcsolása',
-      label: 'Dokumentum azonosító',
+      emptyText: 'Nincs választható PDF',
+      loader: widget.loadDocumentLinkCandidates,
     );
-    if (id == null) {
+    if (candidate == null) {
       return;
     }
-    await widget.repository.linkDocument(widget.item.id, id);
+    await widget.repository.linkDocument(widget.item.id, candidate.id);
     await _loadLinks();
   }
 
-  Future<String?> _showLinkDialog({
+  Future<CaseLinkCandidate?> _showPickerDialog({
     required String title,
-    required String label,
-  }) {
-    return showDialog<String>(
+    required String emptyText,
+    required CaseLinkCandidatesLoader? loader,
+  }) async {
+    final candidates = loader == null
+        ? const <CaseLinkCandidate>[]
+        : await loader(widget.item.id);
+    if (!mounted) {
+      return null;
+    }
+    return showDialog<CaseLinkCandidate>(
       context: context,
-      builder: (context) => _AddCaseLinkDialog(title: title, label: label),
+      builder: (context) => _CaseLinkPickerDialog(
+        title: title,
+        emptyText: emptyText,
+        candidates: candidates,
+      ),
     );
   }
 
@@ -284,8 +319,12 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
         title: Text(widget.item.title),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
+        actions: const [DebugHeaderButton()],
       ),
       body: ListView(
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
           const Text(
@@ -405,49 +444,54 @@ class _LinkedCaseSection extends StatelessWidget {
   }
 }
 
-class _AddCaseLinkDialog extends StatefulWidget {
-  const _AddCaseLinkDialog({required this.title, required this.label});
+class _CaseLinkPickerDialog extends StatelessWidget {
+  const _CaseLinkPickerDialog({
+    required this.title,
+    required this.emptyText,
+    required this.candidates,
+  });
 
   final String title;
-  final String label;
-
-  @override
-  State<_AddCaseLinkDialog> createState() => _AddCaseLinkDialogState();
-}
-
-class _AddCaseLinkDialogState extends State<_AddCaseLinkDialog> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  final String emptyText;
+  final List<CaseLinkCandidate> candidates;
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
-        key: const Key('case-link-id-field'),
-        controller: _controller,
-        autofocus: true,
-        decoration: InputDecoration(
-          labelText: widget.label,
-          border: const OutlineInputBorder(),
-        ),
+      title: Text(title),
+      contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: candidates.isEmpty
+            ? Padding(
+                padding: const EdgeInsets.fromLTRB(12, 16, 12, 20),
+                child: Text(
+                  emptyText,
+                  style: const TextStyle(color: Color(0xFF6B7280)),
+                ),
+              )
+            : ListView.separated(
+                shrinkWrap: true,
+                itemCount: candidates.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final item = candidates[index];
+                  return ListTile(
+                    key: ValueKey('case-link-candidate-${item.id}'),
+                    leading: const Icon(Icons.link_outlined),
+                    title: Text(item.title),
+                    subtitle: item.subtitle == null || item.subtitle!.isEmpty
+                        ? null
+                        : Text(item.subtitle!),
+                    onTap: () => Navigator.of(context).pop(item),
+                  );
+                },
+              ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Mégse'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final value = _controller.text.trim();
-            Navigator.of(context).pop(value.isEmpty ? null : value);
-          },
-          child: const Text('Hozzáadás'),
         ),
       ],
     );

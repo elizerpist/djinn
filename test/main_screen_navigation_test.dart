@@ -33,7 +33,7 @@ void main() {
     expect(find.text('Beállítások'), findsOneWidget);
   });
 
-  testWidgets('bottom navigation renders five destinations in fixed order', (
+  testWidgets('bottom navigation renders Flow before Tudástár and opens the hub', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -46,12 +46,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.text('Esetek'), findsOneWidget);
-    expect(find.text('Tudástár'), findsOneWidget);
-    expect(find.text('Chat'), findsOneWidget);
-    expect(find.text('Flow'), findsOneWidget);
-    expect(find.text('Beáll.'), findsOneWidget);
+    final labels = tester
+        .widgetList<NavigationDestination>(find.byType(NavigationDestination))
+        .map((destination) => destination.label)
+        .toList();
+    expect(labels, ['Esetek', 'Flow', 'Chat', 'Tudástár', 'Beáll.']);
     expect(find.byTooltip('Új chat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('debug-header-button')), findsOneWidget);
 
     await tester.tap(find.text('Esetek'));
     await tester.pumpAndSettle();
@@ -61,6 +62,10 @@ void main() {
 
     await tester.tap(find.text('Flow'));
     await tester.pumpAndSettle();
+    expect(find.text('Validálás'), findsOneWidget);
+    expect(find.text('Kinyert'), findsOneWidget);
+    expect(find.text('Építő'), findsOneWidget);
+    expect(find.text('Sablonok'), findsOneWidget);
     expect(
       find.textContaining('Flowchart validáció nem elérhető'),
       findsOneWidget,

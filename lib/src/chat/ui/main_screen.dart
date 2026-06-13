@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../ai/ai_provider.dart';
 import '../../cases/data/case_repository.dart';
+import '../../branding/djinn_brand_mark.dart';
 import '../../cases/ui/cases_screen.dart';
+import '../../debug/debug_header_button.dart';
 import '../../flowchart/data/flowchart_validation_repository.dart';
+import '../../flowchart/ui/flowchart_hub_screen.dart';
 import '../../flowchart/ui/flowchart_validation_screen.dart';
 import '../../knowledge/data/document_processing_service.dart';
 import '../../knowledge/data/knowledge_document_repository.dart';
@@ -174,6 +177,32 @@ class _MainScreenState extends State<MainScreen> {
     await _loadConversations();
   }
 
+  Future<List<CaseLinkCandidate>> _loadChatLinkCandidates(String caseId) async {
+    final conversations = await widget.repository.listConversations();
+    return [
+      for (final conversation in conversations)
+        CaseLinkCandidate(
+          id: conversation.id,
+          title: conversation.title,
+          subtitle: '${conversation.messages.length} üzenet',
+        ),
+    ];
+  }
+
+  Future<List<CaseLinkCandidate>> _loadDocumentLinkCandidates(
+    String caseId,
+  ) async {
+    final documents = await widget.knowledgeRepository.listDocuments();
+    return [
+      for (final document in documents)
+        CaseLinkCandidate(
+          id: document.id,
+          title: document.filename,
+          subtitle: document.syncStatusLabel,
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_settings.navigationMode == AppNavigationMode.bottomNav) {
@@ -186,10 +215,11 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       drawer: _buildDrawer(),
       appBar: AppBar(
-        title: const Text('Djinn'),
+        title: const DjinnAppBarTitle(title: 'Djinn'),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         actions: [
+          const DebugHeaderButton(),
           IconButton(
             tooltip: 'Tudastar',
             onPressed: _openKnowledgeBase,
@@ -214,9 +244,10 @@ class _MainScreenState extends State<MainScreen> {
       appBar: _destinationOwnsScaffold(_selectedDestination)
           ? null
           : AppBar(
-              title: Text(_titleForDestination(_selectedDestination)),
+              title: DjinnAppBarTitle(title: _titleForDestination(_selectedDestination)),
               backgroundColor: Colors.white,
               surfaceTintColor: Colors.white,
+              actions: const [DebugHeaderButton()],
             ),
       body: _buildDestinationBody(_selectedDestination),
       bottomNavigationBar: NavigationBar(
@@ -262,7 +293,11 @@ class _MainScreenState extends State<MainScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) =>
-                        CasesScreen(repository: widget.caseRepository),
+                        CasesScreen(
+                          repository: widget.caseRepository,
+                          loadChatLinkCandidates: _loadChatLinkCandidates,
+                          loadDocumentLinkCandidates: _loadDocumentLinkCandidates,
+                        ),
                   ),
                 );
               },
@@ -310,6 +345,8 @@ class _MainScreenState extends State<MainScreen> {
       AppDestinationId.cases => CasesScreen(
         repository: widget.caseRepository,
         showAppBar: false,
+        loadChatLinkCandidates: _loadChatLinkCandidates,
+        loadDocumentLinkCandidates: _loadDocumentLinkCandidates,
       ),
       AppDestinationId.knowledge => KnowledgeBaseScreen(
         repository: widget.knowledgeRepository,
@@ -330,20 +367,10 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildFlowDestination() {
-    final repository = widget.flowchartValidationRepository;
-    if (repository == null) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'Flowchart validáció nem elérhető ebben a környezetben.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF6B7280)),
-          ),
-        ),
-      );
-    }
-    return FlowchartValidationScreen(repository: repository);
+    return FlowchartHubScreen(
+      validationRepository: widget.flowchartValidationRepository,
+      knowledgeRepository: widget.knowledgeRepository,
+    );
   }
 
   Widget _buildChatListBody() {
@@ -355,6 +382,9 @@ class _MainScreenState extends State<MainScreen> {
             ),
           )
         : ListView.separated(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
             itemCount: _conversations.length,
             separatorBuilder: (_, _) => const SizedBox(height: 8),

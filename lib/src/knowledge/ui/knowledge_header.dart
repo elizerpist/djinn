@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../branding/djinn_brand_mark.dart';
+import '../../debug/debug_header_button.dart';
+
 class KnowledgeHeader extends StatelessWidget implements PreferredSizeWidget {
   const KnowledgeHeader({
     super.key,
@@ -50,6 +53,7 @@ class KnowledgeHeader extends StatelessWidget implements PreferredSizeWidget {
           ],
         ),
         actions: [
+          const DebugHeaderButton(),
           if (onShareSelected != null)
             IconButton(
               key: const Key('knowledge-share-selected'),
@@ -73,10 +77,11 @@ class KnowledgeHeader extends StatelessWidget implements PreferredSizeWidget {
       );
     }
     return AppBar(
-      title: const Text('Tudástár'),
+      title: const DjinnAppBarTitle(title: 'Tudástár'),
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
       actions: [
+        const DebugHeaderButton(),
         IconButton(
           key: const Key('knowledge-general-menu'),
           tooltip: 'Tudástár menü',

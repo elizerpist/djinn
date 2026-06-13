@@ -12,7 +12,7 @@ import 'src/chat/data/local_chat_repository.dart';
 import 'src/chat/models/chat_message.dart';
 import 'src/chat/data/objectbox_chat_repository.dart';
 import 'src/chat/ui/main_screen.dart';
-import 'src/debug/debug_floating_button.dart';
+import 'src/branding/djinn_brand_mark.dart';
 import 'src/flowchart/data/flowchart_validation_repository.dart';
 import 'src/knowledge/data/document_processing_service.dart';
 import 'src/knowledge/data/knowledge_document_repository.dart';
@@ -212,23 +212,12 @@ class _DjinnAppState extends State<DjinnApp> {
         scaffoldBackgroundColor: const Color(0xFFF6F7F9),
         useMaterial3: true,
       ),
-      builder: (context, child) {
-        return Overlay(
-          initialEntries: [
-            OverlayEntry(builder: (_) => child ?? const SizedBox.shrink()),
-            OverlayEntry(
-              builder: (_) => DebugFloatingButton(navigatorKey: _navigatorKey),
-            ),
-          ],
-        );
-      },
+      builder: (context, child) => child ?? const SizedBox.shrink(),
       home: FutureBuilder<_AppDependencies>(
         future: _dependencies,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
+            return const DjinnLoadingScreen();
           }
           final dependencies = snapshot.data;
           if (dependencies == null) {

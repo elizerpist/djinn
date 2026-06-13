@@ -9,9 +9,14 @@ import '../models/flowchart_view_model.dart';
 import 'simple_flowchart_editor.dart';
 
 class FlowchartValidationScreen extends StatefulWidget {
-  const FlowchartValidationScreen({super.key, required this.repository});
+  const FlowchartValidationScreen({
+    super.key,
+    required this.repository,
+    this.showAppBar = true,
+  });
 
   final FlowchartValidationRepository repository;
+  final bool showAppBar;
 
   @override
   State<FlowchartValidationScreen> createState() =>
@@ -140,7 +145,9 @@ class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Flowchart validáció')),
+      appBar: widget.showAppBar
+          ? AppBar(title: const Text('Flowchart validáció'))
+          : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _flowcharts.isEmpty
@@ -154,6 +161,9 @@ class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
                   : null,
             )
           : ListView.separated(
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
               padding: const EdgeInsets.all(16),
               itemCount: _flowcharts.length,
               separatorBuilder: (_, _) => const SizedBox(height: 8),

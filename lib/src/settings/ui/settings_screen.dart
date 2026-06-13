@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../ai/ai_error.dart';
 import '../../ai/ai_provider.dart';
 import '../../debug/debug_console.dart';
+import '../../branding/djinn_brand_mark.dart';
+import '../../debug/debug_header_button.dart';
 import '../../openai/openai_client.dart';
 import '../data/api_key_store.dart';
 import '../models/app_settings.dart';
@@ -289,10 +291,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final provider = _settings.activeProvider;
     return Scaffold(
-      appBar: AppBar(title: const Text('Beállítások')),
+      appBar: AppBar(
+        title: const DjinnAppBarTitle(title: 'Beállítások'),
+        actions: const [DebugHeaderButton()],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
               child: Column(
                 children: [

@@ -6,6 +6,15 @@ import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
 import '../models/case_workspace.dart';
 
+
+class CaseLinkCandidate {
+  const CaseLinkCandidate({required this.id, required this.title, this.subtitle});
+
+  final String id;
+  final String title;
+  final String? subtitle;
+}
+
 abstract class CaseRepository {
   Future<CaseWorkspace> createCase({String title = 'Új eset'});
   Future<List<CaseWorkspace>> listCases();

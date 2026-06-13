@@ -36,7 +36,7 @@ void main() {
     expect((await repository.listCases()).single.notes, 'ABCDE');
   });
 
-  testWidgets('case detail links chats and PDFs instead of placeholder rows', (
+  testWidgets('case detail links chats and PDFs through friendly pickers', (
     tester,
   ) async {
     final repository = MemoryCaseRepository(
@@ -47,7 +47,17 @@ void main() {
     await repository.linkDocument(created.id, 'doc-existing');
 
     await tester.pumpWidget(
-      MaterialApp(home: CasesScreen(repository: repository)),
+      MaterialApp(
+        home: CasesScreen(
+          repository: repository,
+          loadChatLinkCandidates: (_) async => const [
+            CaseLinkCandidate(id: 'chat-new', title: 'Hajnali stroke chat'),
+          ],
+          loadDocumentLinkCandidates: (_) async => const [
+            CaseLinkCandidate(id: 'doc-new', title: 'COPD protokoll.pdf'),
+          ],
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -60,17 +70,26 @@ void main() {
 
     await tester.tap(find.byKey(const Key('add-case-chat-link')));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('case-link-id-field')),
-      'chat-new',
-    );
-    await tester.tap(find.text('Hozzáadás'));
+    expect(find.byKey(const Key('case-link-id-field')), findsNothing);
+    expect(find.text('Hajnali stroke chat'), findsOneWidget);
+    await tester.tap(find.text('Hajnali stroke chat'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('add-case-document-link')));
+    await tester.pumpAndSettle();
+    expect(find.text('COPD protokoll.pdf'), findsOneWidget);
+    await tester.tap(find.text('COPD protokoll.pdf'));
     await tester.pumpAndSettle();
 
     expect(find.text('chat-new'), findsOneWidget);
+    expect(find.text('doc-new'), findsOneWidget);
     expect(await repository.listLinkedChats(created.id), [
       'chat-existing',
       'chat-new',
+    ]);
+    expect(await repository.listLinkedDocuments(created.id), [
+      'doc-existing',
+      'doc-new',
     ]);
   });
 }

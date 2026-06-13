@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum AppDestinationId { cases, knowledge, chat, flow, settings }
+enum AppDestinationId { cases, flow, chat, knowledge, settings }
 
 class AppDestination {
   const AppDestination({
@@ -24,10 +24,10 @@ const appDestinations = [
     icon: Icons.assignment_outlined,
   ),
   AppDestination(
-    id: AppDestinationId.knowledge,
-    label: 'Tudástár',
-    compactLabel: 'Tudástár',
-    icon: Icons.folder_outlined,
+    id: AppDestinationId.flow,
+    label: 'Flow',
+    compactLabel: 'Flow',
+    icon: Icons.account_tree_outlined,
   ),
   AppDestination(
     id: AppDestinationId.chat,
@@ -36,10 +36,10 @@ const appDestinations = [
     icon: Icons.chat_bubble_outline,
   ),
   AppDestination(
-    id: AppDestinationId.flow,
-    label: 'Flow',
-    compactLabel: 'Flow',
-    icon: Icons.account_tree_outlined,
+    id: AppDestinationId.knowledge,
+    label: 'Tudástár',
+    compactLabel: 'Tudástár',
+    icon: Icons.folder_outlined,
   ),
   AppDestination(
     id: AppDestinationId.settings,
