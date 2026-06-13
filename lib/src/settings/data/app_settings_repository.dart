@@ -4,6 +4,7 @@ import '../../../objectbox.g.dart';
 import '../../ai/ai_provider.dart';
 import '../../local_store/entities.dart';
 import '../models/app_settings.dart';
+import '../models/model_catalog.dart';
 import '../../voice/voice_mode.dart';
 
 class AppSettingsRepository {
@@ -48,21 +49,60 @@ class AppSettingsRepository {
     final activeProvider = entity.activeProvider.trim().isEmpty
         ? defaults.activeProvider
         : AiProvider.fromWireName(entity.activeProvider);
-    final openAiAnswerModel = _fallback(
-      entity.openAiAnswerModel,
-      _fallback(entity.answerModel, defaults.openAiAnswerModel),
+    final openAiAnswerModel = _sanitizeModel(
+      AiProvider.openAi,
+      AiModelSlot.answer,
+      _fallback(
+        entity.openAiAnswerModel,
+        _fallback(entity.answerModel, defaults.openAiAnswerModel),
+      ),
     );
-    final openAiExtractionModel = _fallback(
-      entity.openAiExtractionModel,
-      _fallback(entity.extractionModel, defaults.openAiExtractionModel),
+    final openAiExtractionModel = _sanitizeModel(
+      AiProvider.openAi,
+      AiModelSlot.extraction,
+      _fallback(
+        entity.openAiExtractionModel,
+        _fallback(entity.extractionModel, defaults.openAiExtractionModel),
+      ),
     );
-    final openAiGroundednessModel = _fallback(
-      entity.openAiGroundednessModel,
-      _fallback(entity.groundednessModel, defaults.openAiGroundednessModel),
+    final openAiGroundednessModel = _sanitizeModel(
+      AiProvider.openAi,
+      AiModelSlot.groundedness,
+      _fallback(
+        entity.openAiGroundednessModel,
+        _fallback(entity.groundednessModel, defaults.openAiGroundednessModel),
+      ),
     );
-    final openAiEmbeddingModel = _fallback(
-      entity.openAiEmbeddingModel,
-      _fallback(entity.embeddingModel, defaults.openAiEmbeddingModel),
+    final openAiEmbeddingModel = _sanitizeModel(
+      AiProvider.openAi,
+      AiModelSlot.embedding,
+      _fallback(
+        entity.openAiEmbeddingModel,
+        _fallback(entity.embeddingModel, defaults.openAiEmbeddingModel),
+      ),
+    );
+    final geminiAnswerModel = _sanitizeModel(
+      AiProvider.gemini,
+      AiModelSlot.answer,
+      _fallback(entity.geminiAnswerModel, defaults.geminiAnswerModel),
+    );
+    final geminiExtractionModel = _sanitizeModel(
+      AiProvider.gemini,
+      AiModelSlot.extraction,
+      _fallback(entity.geminiExtractionModel, defaults.geminiExtractionModel),
+    );
+    final geminiGroundednessModel = _sanitizeModel(
+      AiProvider.gemini,
+      AiModelSlot.groundedness,
+      _fallback(
+        entity.geminiGroundednessModel,
+        defaults.geminiGroundednessModel,
+      ),
+    );
+    final geminiEmbeddingModel = _sanitizeModel(
+      AiProvider.gemini,
+      AiModelSlot.embedding,
+      _fallback(entity.geminiEmbeddingModel, defaults.geminiEmbeddingModel),
     );
 
     return AppSettings(
@@ -72,22 +112,10 @@ class AppSettingsRepository {
       openAiExtractionModel: openAiExtractionModel,
       openAiGroundednessModel: openAiGroundednessModel,
       openAiEmbeddingModel: openAiEmbeddingModel,
-      geminiAnswerModel: _fallback(
-        entity.geminiAnswerModel,
-        defaults.geminiAnswerModel,
-      ),
-      geminiExtractionModel: _fallback(
-        entity.geminiExtractionModel,
-        defaults.geminiExtractionModel,
-      ),
-      geminiGroundednessModel: _fallback(
-        entity.geminiGroundednessModel,
-        defaults.geminiGroundednessModel,
-      ),
-      geminiEmbeddingModel: _fallback(
-        entity.geminiEmbeddingModel,
-        defaults.geminiEmbeddingModel,
-      ),
+      geminiAnswerModel: geminiAnswerModel,
+      geminiExtractionModel: geminiExtractionModel,
+      geminiGroundednessModel: geminiGroundednessModel,
+      geminiEmbeddingModel: geminiEmbeddingModel,
       deleteOpenAiFilesAfterProcessing: entity.deleteOpenAiFilesAfterProcessing,
       groundednessCheckEnabled: entity.groundednessCheckEnabled,
       offlineFallbackEnabled: entity.offlineFallbackEnabled,
@@ -134,5 +162,9 @@ class AppSettingsRepository {
   String _fallback(String value, String fallback) {
     final trimmed = value.trim();
     return trimmed.isEmpty ? fallback : trimmed;
+  }
+
+  String _sanitizeModel(AiProvider provider, AiModelSlot slot, String model) {
+    return ModelCatalog.sanitize(provider, slot, model);
   }
 }

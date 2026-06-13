@@ -264,4 +264,29 @@ void main() {
       findsNothing,
     );
   });
+  testWidgets('message body text is selectable for copy and highlight', (
+    tester,
+  ) async {
+    final message = ChatMessage(
+      id: 'assistant-selectable',
+      conversationId: 'c1',
+      sender: ChatSender.assistant,
+      text: 'Másolható válasz.',
+      createdAt: DateTime.utc(2026),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ChatBubble(message: message)),
+      ),
+    );
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableText && widget.data == 'Másolható válasz.',
+      ),
+      findsOneWidget,
+    );
+  });
 }

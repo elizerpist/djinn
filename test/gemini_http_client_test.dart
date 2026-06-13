@@ -453,6 +453,43 @@ void main() {
     );
   });
 
+  test(
+    'maps Gemini 500 internal errors to retryable provider server failure',
+    () async {
+      final keyStore = MemoryApiKeyStore();
+      await keyStore.saveKeyForProvider(AiProvider.gemini, 'gemini-key');
+      final client = GeminiHttpClient(
+        apiKeyStore: keyStore,
+        httpClient: MockClient(
+          (_) async => http.Response(
+            '{"error":{"message":"Internal error encountered."}}',
+            500,
+          ),
+        ),
+        baseUri: Uri.parse('https://gemini.test'),
+      );
+
+      expect(
+        () =>
+            client.createEmbedding(input: 'abc', model: 'gemini-embedding-001'),
+        throwsA(
+          isA<AiProviderException>()
+              .having(
+                (error) => error.failure.code,
+                'code',
+                AiFailureCode.providerServerError,
+              )
+              .having((error) => error.failure.retryable, 'retryable', isTrue)
+              .having(
+                (error) => error.failure.userMessage,
+                'userMessage',
+                contains('szerverhiba'),
+              ),
+        ),
+      );
+    },
+  );
+
   test('redacts Gemini API keys from provider failure messages', () async {
     final keyStore = MemoryApiKeyStore();
     await keyStore.saveKeyForProvider(AiProvider.gemini, 'gemini-key');

@@ -209,6 +209,41 @@ void main() {
     expect(client.chunkingModes, [ChunkingModes.compact]);
   });
 
+  test(
+    'training start log includes selected model slots and chunking mode',
+    () async {
+      final repository = MemoryProcessingRepository();
+      final service = DocumentProcessingService(
+        clientForProvider: (_) => _ExtractingOpenAiClient(),
+        loadSettings: () async => AppSettings.defaults().copyWith(
+          activeProvider: AiProvider.gemini,
+          geminiExtractionModel: 'gemini-2.5-flash',
+          geminiEmbeddingModel: 'gemini-embedding-2',
+          geminiGroundednessModel: 'gemini-2.5-flash-lite',
+          chunkingMode: ChunkingModes.detailed,
+        ),
+        hasApiKeyForProvider: (_) async => true,
+        repository: repository,
+      );
+
+      await service.processDocument('doc-1');
+
+      expect(
+        DebugConsole.allText,
+        contains('extractionModel=gemini-2.5-flash'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('embeddingModel=gemini-embedding-2'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('groundednessModel=gemini-2.5-flash-lite'),
+      );
+      expect(DebugConsole.allText, contains('chunking=detailed'));
+    },
+  );
+
   test('provider missing key log includes provider name', () async {
     final repository = MemoryProcessingRepository();
     final service = DocumentProcessingService(

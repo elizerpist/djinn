@@ -209,11 +209,14 @@ class CaseDetailScreen extends StatefulWidget {
 
 class _CaseDetailScreenState extends State<CaseDetailScreen> {
   late final TextEditingController _notesController;
+  List<String> _linkedChats = const [];
+  List<String> _linkedDocuments = const [];
 
   @override
   void initState() {
     super.initState();
     _notesController = TextEditingController(text: widget.item.notes);
+    _loadLinks();
   }
 
   @override
@@ -222,8 +225,56 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     super.dispose();
   }
 
+  Future<void> _loadLinks() async {
+    final chats = await widget.repository.listLinkedChats(widget.item.id);
+    final documents = await widget.repository.listLinkedDocuments(
+      widget.item.id,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _linkedChats = chats;
+      _linkedDocuments = documents;
+    });
+  }
+
   Future<void> _saveNotes(String value) async {
     await widget.repository.updateNotes(widget.item.id, value);
+  }
+
+  Future<void> _addChatLink() async {
+    final id = await _showLinkDialog(
+      title: 'Chat kapcsolása',
+      label: 'Chat azonosító',
+    );
+    if (id == null) {
+      return;
+    }
+    await widget.repository.linkChat(widget.item.id, id);
+    await _loadLinks();
+  }
+
+  Future<void> _addDocumentLink() async {
+    final id = await _showLinkDialog(
+      title: 'PDF kapcsolása',
+      label: 'Dokumentum azonosító',
+    );
+    if (id == null) {
+      return;
+    }
+    await widget.repository.linkDocument(widget.item.id, id);
+    await _loadLinks();
+  }
+
+  Future<String?> _showLinkDialog({
+    required String title,
+    required String label,
+  }) {
+    return showDialog<String>(
+      context: context,
+      builder: (context) => _AddCaseLinkDialog(title: title, label: label),
+    );
   }
 
   @override
@@ -254,20 +305,151 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
             onChanged: _saveNotes,
           ),
           const SizedBox(height: 16),
-          const ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.chat_bubble_outline),
-            title: Text('Kapcsolt chatek'),
-            subtitle: Text('Később innen lehet beszélgetéseket kapcsolni.'),
+          _LinkedCaseSection(
+            title: 'Kapcsolt chatek',
+            emptyText: 'Nincs kapcsolt chat',
+            icon: Icons.chat_bubble_outline,
+            addKey: const Key('add-case-chat-link'),
+            onAdd: _addChatLink,
+            items: _linkedChats,
           ),
-          const ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.picture_as_pdf_outlined),
-            title: Text('Kapcsolt PDF-ek'),
-            subtitle: Text('Később innen lehet forrás PDF-eket kapcsolni.'),
+          const SizedBox(height: 12),
+          _LinkedCaseSection(
+            title: 'Kapcsolt PDF-ek',
+            emptyText: 'Nincs kapcsolt PDF',
+            icon: Icons.picture_as_pdf_outlined,
+            addKey: const Key('add-case-document-link'),
+            onAdd: _addDocumentLink,
+            items: _linkedDocuments,
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LinkedCaseSection extends StatelessWidget {
+  const _LinkedCaseSection({
+    required this.title,
+    required this.emptyText,
+    required this.icon,
+    required this.addKey,
+    required this.onAdd,
+    required this.items,
+  });
+
+  final String title;
+  final String emptyText;
+  final IconData icon;
+  final Key addKey;
+  final VoidCallback onAdd;
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 20, color: const Color(0xFF4B5563)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                IconButton(
+                  key: addKey,
+                  tooltip: 'Hozzáadás',
+                  onPressed: onAdd,
+                  icon: const Icon(Icons.add_circle_outline),
+                ),
+              ],
+            ),
+            if (items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, left: 28),
+                child: Text(
+                  emptyText,
+                  style: const TextStyle(color: Color(0xFF6B7280)),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final item in items)
+                      Chip(
+                        label: Text(item),
+                        visualDensity: VisualDensity.compact,
+                        backgroundColor: const Color(0xFFF3F4F6),
+                        side: const BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddCaseLinkDialog extends StatefulWidget {
+  const _AddCaseLinkDialog({required this.title, required this.label});
+
+  final String title;
+  final String label;
+
+  @override
+  State<_AddCaseLinkDialog> createState() => _AddCaseLinkDialogState();
+}
+
+class _AddCaseLinkDialogState extends State<_AddCaseLinkDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        key: const Key('case-link-id-field'),
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(
+          labelText: widget.label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Mégse'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final value = _controller.text.trim();
+            Navigator.of(context).pop(value.isEmpty ? null : value);
+          },
+          child: const Text('Hozzáadás'),
+        ),
+      ],
     );
   }
 }

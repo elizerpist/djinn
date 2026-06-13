@@ -120,6 +120,61 @@ void main() {
     expect(options, isNot(contains('gpt-5.5-mini')));
   });
 
+  test('Gemini model catalog is filtered by model slot capability', () {
+    final answerOptions = ModelCatalog.options(
+      AiProvider.gemini,
+      AiModelSlot.answer,
+    );
+    final extractionOptions = ModelCatalog.options(
+      AiProvider.gemini,
+      AiModelSlot.extraction,
+    );
+    final groundednessOptions = ModelCatalog.options(
+      AiProvider.gemini,
+      AiModelSlot.groundedness,
+    );
+    final embeddingOptions = ModelCatalog.options(
+      AiProvider.gemini,
+      AiModelSlot.embedding,
+    );
+
+    expect(answerOptions, contains('gemma-4-31b-it'));
+    expect(answerOptions.any((model) => model.endsWith('-tts')), isFalse);
+    expect(ModelCatalog.geminiTtsModels, contains('gemini-3.1-flash-tts'));
+    expect(ModelCatalog.geminiTtsModels, contains('gemini-2.5-flash-tts'));
+    expect(extractionOptions, contains('gemini-2.5-flash-lite'));
+    expect(extractionOptions, isNot(contains('gemma-4-31b-it')));
+    expect(extractionOptions.any((model) => model.endsWith('-tts')), isFalse);
+    expect(extractionOptions, isNot(contains('gemini-embedding-001')));
+    expect(groundednessOptions, isNot(contains('gemma-4-31b-it')));
+    expect(groundednessOptions.any((model) => model.endsWith('-tts')), isFalse);
+    expect(embeddingOptions, contains('gemini-embedding-001'));
+    expect(embeddingOptions, contains('gemini-embedding-2'));
+  });
+
+  test('model catalog sanitizes invalid slot values to app defaults', () {
+    expect(
+      ModelCatalog.sanitize(
+        AiProvider.gemini,
+        AiModelSlot.answer,
+        'gemini-not-real',
+      ),
+      AppSettings.defaults().geminiAnswerModel,
+    );
+    expect(
+      ModelCatalog.sanitize(
+        AiProvider.gemini,
+        AiModelSlot.embedding,
+        'gemini-2.5-flash-lite',
+      ),
+      AppSettings.defaults().geminiEmbeddingModel,
+    );
+    expect(
+      ModelCatalog.sanitize(AiProvider.openAi, AiModelSlot.answer, 'bad'),
+      AppSettings.defaults().openAiAnswerModel,
+    );
+  });
+
   test('memory API key store can save, read, and delete key', () async {
     final store = MemoryApiKeyStore();
 
@@ -264,6 +319,45 @@ void main() {
     expect(loaded.retrievalLimit, 0);
     expect(loaded.minimumSimilarity, 0.0);
   });
+
+  test(
+    'settings repository sanitizes invalid saved Gemini slot models',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'djinn-settings-test-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final ObjectBoxStore objectBox;
+      try {
+        objectBox = await ObjectBoxStore.open(directory: directory);
+      } on ArgumentError catch (error) {
+        markTestSkipped('Host ObjectBox library unavailable: $error');
+        return;
+      }
+      addTearDown(objectBox.close);
+
+      final box = objectBox.store.box<AppSettingsEntity>();
+      box.put(
+        _settingsEntity(
+          AppSettings.defaults().copyWith(
+            activeProvider: AiProvider.gemini,
+            geminiAnswerModel: 'gemma-4-31b-it',
+            geminiExtractionModel: 'gemma-4-31b-it',
+            geminiGroundednessModel: 'gemini-2.5-flash-tts',
+            geminiEmbeddingModel: 'gemini-2.5-flash-lite',
+          ),
+        ),
+      );
+
+      final repository = AppSettingsRepository(store: objectBox.store);
+      final loaded = await repository.load();
+
+      expect(loaded.geminiAnswerModel, 'gemma-4-31b-it');
+      expect(loaded.geminiExtractionModel, 'gemini-2.5-flash-lite');
+      expect(loaded.geminiGroundednessModel, 'gemini-2.5-flash-lite');
+      expect(loaded.geminiEmbeddingModel, 'gemini-embedding-001');
+    },
+  );
 }
 
 AppSettingsEntity _settingsEntity(AppSettings settings) {

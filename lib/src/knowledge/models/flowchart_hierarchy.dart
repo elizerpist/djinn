@@ -20,6 +20,16 @@ class FlowchartHierarchyRow {
   final List<int> colorSlots;
 
   bool get isEdge => item.sourceType == EvidenceSourceType.flowchartEdge;
+
+  bool get isConnector => isEdge;
+
+  String get connectorLabel {
+    final label = item.flowchartEdgeLabel?.trim();
+    if (label == null || label.isEmpty) {
+      return '';
+    }
+    return label.toUpperCase();
+  }
 }
 
 class FlowchartHierarchyBuilder {
@@ -142,7 +152,7 @@ class FlowchartHierarchyBuilder {
         FlowchartHierarchyRow(
           item: edge,
           depth: depth + 1,
-          colorSlots: branchColors,
+          colorSlots: const [],
         ),
       );
       final targetId = edge.flowchartToId;
@@ -154,7 +164,7 @@ class FlowchartHierarchyBuilder {
           edgesByFrom,
           rows,
           expanded,
-          depth: depth + 2,
+          depth: depth + 1,
           colorSlots: branchColors,
           nextSlot: slotCursor,
         );

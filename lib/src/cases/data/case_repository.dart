@@ -12,6 +12,8 @@ abstract class CaseRepository {
   Future<CaseWorkspace> updateNotes(String caseId, String notes);
   Future<void> linkChat(String caseId, String chatThreadId);
   Future<void> linkDocument(String caseId, String documentId);
+  Future<List<String>> listLinkedChats(String caseId);
+  Future<List<String>> listLinkedDocuments(String caseId);
 }
 
 class MemoryCaseRepository implements CaseRepository {
@@ -79,6 +81,18 @@ class MemoryCaseRepository implements CaseRepository {
     DebugConsole.log(
       '[Cases] document linked case=$caseId document=$documentId',
     );
+  }
+
+  @override
+  Future<List<String>> listLinkedChats(String caseId) async {
+    _ensureCase(caseId);
+    return List.unmodifiable(_chatLinks[caseId] ?? const <String>{});
+  }
+
+  @override
+  Future<List<String>> listLinkedDocuments(String caseId) async {
+    _ensureCase(caseId);
+    return List.unmodifiable(_documentLinks[caseId] ?? const <String>{});
   }
 
   void _ensureCase(String caseId) {
@@ -202,6 +216,38 @@ class ObjectBoxCaseRepository implements CaseRepository {
     );
     DebugConsole.log(
       '[Cases] document linked case=$caseId document=$documentId',
+    );
+  }
+
+  @override
+  Future<List<String>> listLinkedChats(String caseId) async {
+    if (_findCase(caseId) == null) {
+      throw StateError('case not found: $caseId');
+    }
+    final links =
+        _chatLinkBox
+            .getAll()
+            .where((link) => link.casePublicId == caseId)
+            .toList(growable: false)
+          ..sort((a, b) => a.id.compareTo(b.id));
+    return List.unmodifiable(
+      links.map((link) => link.chatThreadPublicId).toList(growable: false),
+    );
+  }
+
+  @override
+  Future<List<String>> listLinkedDocuments(String caseId) async {
+    if (_findCase(caseId) == null) {
+      throw StateError('case not found: $caseId');
+    }
+    final links =
+        _documentLinkBox
+            .getAll()
+            .where((link) => link.casePublicId == caseId)
+            .toList(growable: false)
+          ..sort((a, b) => a.id.compareTo(b.id));
+    return List.unmodifiable(
+      links.map((link) => link.documentPublicId).toList(growable: false),
     );
   }
 

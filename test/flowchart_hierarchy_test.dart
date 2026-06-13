@@ -51,7 +51,10 @@ void main() {
         'Légzési elégtelenség? -> Oxigén [igen]',
         'Oxigén',
       ]);
-      expect(groups.single.rows.map((row) => row.depth), [0, 1, 2]);
+      expect(groups.single.rows[1].isConnector, isTrue);
+      expect(groups.single.rows[1].connectorLabel, 'IGEN');
+      expect(groups.single.rows[1].colorSlots, isEmpty);
+      expect(groups.single.rows.map((row) => row.depth), [0, 1, 1]);
       expect(groups.single.rows.last.colorSlots, [0, 1]);
     },
   );

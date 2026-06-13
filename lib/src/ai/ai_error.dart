@@ -6,6 +6,7 @@ enum AiFailureCode {
   quotaOrBilling,
   highDemand,
   modelUnavailable,
+  providerServerError,
   networkAbort,
   invalidJson,
   invalidStructuredResponse,
@@ -75,6 +76,16 @@ class AiFailure {
       message: message,
       userMessage: '${provider.label} modell nem elerheto: $message',
       retryable: false,
+    );
+  }
+
+  factory AiFailure.providerServerError(AiProvider provider, String message) {
+    return AiFailure(
+      provider: provider,
+      code: AiFailureCode.providerServerError,
+      message: message,
+      userMessage: '${provider.label} szerverhiba, ujraprobalhato: $message',
+      retryable: true,
     );
   }
 

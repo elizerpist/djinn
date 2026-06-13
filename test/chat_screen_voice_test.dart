@@ -104,8 +104,11 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('send-message')));
       await tester.pump();
 
-      final input = tester.widget<EditableText>(find.byType(EditableText));
-      expect(input.controller.text, isEmpty);
+      final input = tester.widget<TextField>(
+        find.byKey(const ValueKey('message-input')),
+      );
+      expect(input.controller?.text, isEmpty);
+      expect(input.enabled, isTrue);
       expect(input.readOnly, isFalse);
       expect(tts.started, isTrue);
     },

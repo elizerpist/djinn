@@ -344,6 +344,9 @@ class GeminiHttpClient implements AiClient {
         normalized.contains('overloaded')) {
       return AiFailure.highDemand(AiProvider.gemini, detail);
     }
+    if (statusCode >= 500 && statusCode <= 599) {
+      return AiFailure.providerServerError(AiProvider.gemini, detail);
+    }
     if (statusCode == 404 ||
         (normalized.contains('model') &&
             (normalized.contains('not found') ||
@@ -741,7 +744,7 @@ Extract this OMSZ document into source-grounded chunks. Return JSON only. Includ
 ''';
 
 const _visualExtractionInstruction = '''
-If a page contains a table, score, or flowchart as an image, extract it from the document image content. Preserve clinically relevant table rows. For RAVE or other scores, return each criterion as a score item. For flowcharts, return every visible clinical box and directed arrow, including medication/treatment process boxes. Label each node shape as one of start_end, process, decision, input_output, subprocess, data_store, connector, or unknown. Use order to preserve the reading/flow order. If a bounding box is visible, return source_rect using image-relative x, y, width, height; otherwise return null. Do not invent uncertain nodes.
+If a page contains a table, score, or flowchart as an image, extract it from the document image content. Preserve clinically relevant table rows. For RAVE or other scores, return each criterion as a score item. For flowcharts, capture the visible title or caption immediately above or below the diagram in the flowchart title field. Return every visible clinical box and directed arrow, including medication/treatment process boxes and small process boxes that sit on a branch. Label each node shape as one of start_end, process, decision, input_output, subprocess, data_store, connector, or unknown. Use edge labels for IGEN/NEM/YES/NO branch text; do not create a separate node for a branch label unless the source diagram draws it as its own box. Use order to preserve the reading/flow order. If a bounding box is visible, return source_rect using image-relative x, y, width, height; otherwise return null. Do not invent uncertain nodes.
 ''';
 
 const _answerLanguagePolicy =

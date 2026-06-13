@@ -25,6 +25,8 @@ void main() {
     expect(listed.notes, 'ABCDE megfigyelés');
     expect(listed.linkedChatCount, 1);
     expect(listed.linkedDocumentCount, 1);
+    expect(await repository.listLinkedChats(created.id), ['chat-1']);
+    expect(await repository.listLinkedDocuments(created.id), ['doc-1']);
     expect(listed.updatedAt, DateTime.utc(2026, 6, 13, 10));
   });
 }

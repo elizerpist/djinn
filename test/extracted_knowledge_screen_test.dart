@@ -64,7 +64,13 @@ void main() {
     expect(find.text('Légzés algoritmus'), findsOneWidget);
     expect(find.text('Döntés'), findsOneWidget);
     expect(find.text('Folyamatlépés'), findsOneWidget);
-    expect(find.text('Folyamvonal: igen'), findsOneWidget);
+    expect(find.text('Folyamvonal: igen'), findsNothing);
+    expect(find.text('IGEN'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('flow-connector-flow-1:e1')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.arrow_downward), findsNothing);
     expect(find.byIcon(Icons.change_history), findsOneWidget);
   });
 }

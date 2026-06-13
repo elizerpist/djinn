@@ -245,7 +245,9 @@ class _FlowchartHierarchyListState extends State<_FlowchartHierarchyList> {
                   _FlowchartHierarchyRowTile(
                     row: row,
                     colorForSlot: _colorForSlot,
-                    onLongPress: () => _chooseColor(row),
+                    onLongPress: row.isConnector
+                        ? null
+                        : () => _chooseColor(row),
                   ),
                   const SizedBox(height: 6),
                 ],
@@ -322,26 +324,57 @@ class _FlowchartHierarchyRowTile extends StatelessWidget {
 
   final FlowchartHierarchyRow row;
   final Color Function(int slot) colorForSlot;
-  final VoidCallback onLongPress;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     final item = row.item;
-    final isEdge = row.isEdge;
+    if (row.isConnector) {
+      return Padding(
+        padding: EdgeInsets.only(left: row.depth * 26.0),
+        child: SizedBox(
+          height: 26,
+          child: Center(
+            child: row.connectorLabel.isEmpty
+                ? const SizedBox(width: 28, height: 8)
+                : Container(
+                    key: ValueKey('flow-connector-${item.id}'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: const Color(0xFFD1D5DB)),
+                    ),
+                    child: Text(
+                      row.connectorLabel,
+                      style: const TextStyle(
+                        color: Color(0xFF4B5563),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+      );
+    }
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onLongPress: onLongPress,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
-          color: isEdge ? const Color(0xFFF8FAFC) : const Color(0xFFFFFFFF),
+          color: const Color(0xFFFFFFFF),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(width: row.depth * 10),
+            SizedBox(width: row.depth * 26.0),
             for (final slot in row.colorSlots)
               Container(
                 width: 4,
@@ -354,9 +387,9 @@ class _FlowchartHierarchyRowTile extends StatelessWidget {
               ),
             const SizedBox(width: 5),
             Icon(
-              isEdge ? Icons.arrow_downward : _shapeIcon(item.flowchartShape),
+              _shapeIcon(item.flowchartShape),
               size: 20,
-              color: isEdge ? const Color(0xFF6B7280) : const Color(0xFF111827),
+              color: const Color(0xFF111827),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -364,9 +397,7 @@ class _FlowchartHierarchyRowTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isEdge
-                        ? _edgeLabel(item)
-                        : _shapeLabel(item.flowchartShape),
+                    _shapeLabel(item.flowchartShape),
                     style: const TextStyle(
                       color: Color(0xFF6B7280),
                       fontSize: 11,
@@ -390,13 +421,6 @@ class _FlowchartHierarchyRowTile extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  static String _edgeLabel(ExtractedKnowledgeItem item) {
-    final label = item.flowchartEdgeLabel?.trim();
-    return label == null || label.isEmpty
-        ? 'Folyamvonal'
-        : 'Folyamvonal: $label';
   }
 
   static IconData _shapeIcon(String? shape) {

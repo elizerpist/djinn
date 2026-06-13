@@ -277,13 +277,23 @@ void main() {
   test(
     'Gemini model catalog includes current Gemini, Gemma, TTS and Embedding 2 models',
     () {
-      expect(ModelCatalog.geminiTextModels, contains('gemini-3.5-flash'));
-      expect(ModelCatalog.geminiTextModels, contains('gemini-3-flash-preview'));
-      expect(ModelCatalog.geminiTextModels, contains('gemini-3.1-flash-lite'));
-      expect(ModelCatalog.geminiTextModels, contains('gemini-3.1-flash-tts'));
-      expect(ModelCatalog.geminiTextModels, contains('gemini-2.5-flash-tts'));
-      expect(ModelCatalog.geminiTextModels, contains('gemma-4-26b-a4b-it'));
-      expect(ModelCatalog.geminiTextModels, contains('gemma-4-31b-it'));
+      expect(ModelCatalog.geminiAnswerModels, contains('gemini-3.5-flash'));
+      expect(
+        ModelCatalog.geminiAnswerModels,
+        contains('gemini-3-flash-preview'),
+      );
+      expect(
+        ModelCatalog.geminiAnswerModels,
+        contains('gemini-3.1-flash-lite'),
+      );
+      expect(
+        ModelCatalog.geminiAnswerModels.any((model) => model.endsWith('-tts')),
+        isFalse,
+      );
+      expect(ModelCatalog.geminiTtsModels, contains('gemini-3.1-flash-tts'));
+      expect(ModelCatalog.geminiTtsModels, contains('gemini-2.5-flash-tts'));
+      expect(ModelCatalog.geminiAnswerModels, contains('gemma-4-26b-a4b-it'));
+      expect(ModelCatalog.geminiAnswerModels, contains('gemma-4-31b-it'));
       expect(
         ModelCatalog.geminiEmbeddingModels,
         contains('gemini-embedding-2'),

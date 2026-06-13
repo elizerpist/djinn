@@ -153,7 +153,12 @@ class DocumentProcessingService {
     try {
       final client = _clientFor(provider);
       DebugConsole.log(
-        '[AI Training] start document=$documentPublicId provider=${provider.wireName}',
+        '[AI Training] start document=$documentPublicId '
+        'provider=${provider.wireName} '
+        'extractionModel=${settings.extractionModel} '
+        'embeddingModel=${settings.embeddingModel} '
+        'groundednessModel=${settings.groundednessModel} '
+        'chunking=${settings.chunkingMode}',
       );
       final pdfPath = await repository.localPathForDocument(documentPublicId);
       await repository.markState(
