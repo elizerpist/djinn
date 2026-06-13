@@ -589,6 +589,17 @@ class GeminiHttpClient implements AiClient {
                 return AiFlowchartNode(
                   id: _requiredString(node, 'id', 'flowchart node'),
                   label: _requiredString(node, 'label', 'flowchart node'),
+                  shape: AiFlowchartNodeShape.fromWireName(
+                    _optionalString(node, 'shape', 'flowchart node'),
+                  ),
+                  order:
+                      _optionalNum(node, 'order', 'flowchart node')?.toInt() ??
+                      0,
+                  sourceRect: _optionalMap(
+                    node,
+                    'source_rect',
+                    'flowchart node',
+                  ),
                 );
               })
               .toList(growable: false);
@@ -610,6 +621,14 @@ class GeminiHttpClient implements AiClient {
                     'flowchart edge',
                   ),
                   label: _requiredString(edge, 'label', 'flowchart edge'),
+                  order:
+                      _optionalNum(edge, 'order', 'flowchart edge')?.toInt() ??
+                      0,
+                  sourceRect: _optionalMap(
+                    edge,
+                    'source_rect',
+                    'flowchart edge',
+                  ),
                 );
               })
               .toList(growable: false);
@@ -680,6 +699,21 @@ class GeminiHttpClient implements AiClient {
     throw _invalidStructured('$context $key must be numeric');
   }
 
+  Map<String, Object?>? _optionalMap(
+    Map<dynamic, dynamic> json,
+    String key,
+    String context,
+  ) {
+    final value = json[key];
+    if (value == null) {
+      return null;
+    }
+    if (value is Map) {
+      return Map<String, Object?>.from(value);
+    }
+    throw _invalidStructured('$context $key must be an object');
+  }
+
   num? _optionalNum(Map<dynamic, dynamic> json, String key, String context) {
     final value = json[key];
     if (value == null || value is num) {
@@ -707,7 +741,7 @@ Extract this OMSZ document into source-grounded chunks. Return JSON only. Includ
 ''';
 
 const _visualExtractionInstruction = '''
-If a page contains a table, score, or flowchart as an image, extract it from the document image content. Preserve clinically relevant table rows. For RAVE or other scores, return each criterion as a score item. For flowcharts, return candidate nodes and directed edges; do not invent uncertain nodes.
+If a page contains a table, score, or flowchart as an image, extract it from the document image content. Preserve clinically relevant table rows. For RAVE or other scores, return each criterion as a score item. For flowcharts, return every visible clinical box and directed arrow, including medication/treatment process boxes. Label each node shape as one of start_end, process, decision, input_output, subprocess, data_store, connector, or unknown. Use order to preserve the reading/flow order. If a bounding box is visible, return source_rect using image-relative x, y, width, height; otherwise return null. Do not invent uncertain nodes.
 ''';
 
 const _answerLanguagePolicy =
@@ -805,8 +839,21 @@ const Map<String, Object?> _documentExtractionSchema = {
               'properties': {
                 'id': {'type': 'string'},
                 'label': {'type': 'string'},
+                'shape': {'type': 'string'},
+                'order': {'type': 'integer'},
+                'source_rect': {
+                  'type': 'object',
+                  'nullable': true,
+                  'properties': {
+                    'x': {'type': 'number'},
+                    'y': {'type': 'number'},
+                    'width': {'type': 'number'},
+                    'height': {'type': 'number'},
+                  },
+                  'required': ['x', 'y', 'width', 'height'],
+                },
               },
-              'required': ['id', 'label'],
+              'required': ['id', 'label', 'shape', 'order', 'source_rect'],
             },
           },
           'edges': {
@@ -818,8 +865,27 @@ const Map<String, Object?> _documentExtractionSchema = {
                 'from_node_id': {'type': 'string'},
                 'to_node_id': {'type': 'string'},
                 'label': {'type': 'string'},
+                'order': {'type': 'integer'},
+                'source_rect': {
+                  'type': 'object',
+                  'nullable': true,
+                  'properties': {
+                    'x': {'type': 'number'},
+                    'y': {'type': 'number'},
+                    'width': {'type': 'number'},
+                    'height': {'type': 'number'},
+                  },
+                  'required': ['x', 'y', 'width', 'height'],
+                },
               },
-              'required': ['id', 'from_node_id', 'to_node_id', 'label'],
+              'required': [
+                'id',
+                'from_node_id',
+                'to_node_id',
+                'label',
+                'order',
+                'source_rect',
+              ],
             },
           },
         },

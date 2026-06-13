@@ -32,6 +32,10 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    expect(find.text('Megjelenés'), findsOneWidget);
+    expect(find.text('Navigáció'), findsOneWidget);
+    expect(find.text('Hamburger'), findsOneWidget);
+    expect(find.text('Bottom navigation'), findsOneWidget);
     expect(find.text('AI'), findsOneWidget);
     expect(find.text('OpenAI'), findsOneWidget);
     expect(find.text('Gemini'), findsOneWidget);
@@ -49,6 +53,33 @@ void main() {
     expect(find.text('Validálás'), findsOneWidget);
     expect(find.text('Mentés'), findsNothing);
     expect(find.text('Haladó modellbeállítások'), findsNothing);
+  });
+
+  testWidgets('navigation mode segmented control autosaves bottom navigation', (
+    tester,
+  ) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_, _) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(settings.navigationMode, AppNavigationMode.drawer);
+    await tester.tap(find.text('Bottom navigation'));
+    await tester.pumpAndSettle();
+
+    expect(settings.navigationMode, AppNavigationMode.bottomNav);
+    expect(DebugConsole.allText, contains('navigationMode=bottom_nav'));
   });
 
   testWidgets('chunking mode dropdown autosaves detailed mode', (tester) async {
@@ -243,16 +274,22 @@ void main() {
     );
   });
 
-  test('Gemini model catalog includes current Gemini, Gemma, TTS and Embedding 2 models', () {
-    expect(ModelCatalog.geminiTextModels, contains('gemini-3.5-flash'));
-    expect(ModelCatalog.geminiTextModels, contains('gemini-3-flash-preview'));
-    expect(ModelCatalog.geminiTextModels, contains('gemini-3.1-flash-lite'));
-    expect(ModelCatalog.geminiTextModels, contains('gemini-3.1-flash-tts'));
-    expect(ModelCatalog.geminiTextModels, contains('gemini-2.5-flash-tts'));
-    expect(ModelCatalog.geminiTextModels, contains('gemma-4-26b-a4b-it'));
-    expect(ModelCatalog.geminiTextModels, contains('gemma-4-31b-it'));
-    expect(ModelCatalog.geminiEmbeddingModels, contains('gemini-embedding-2'));
-  });
+  test(
+    'Gemini model catalog includes current Gemini, Gemma, TTS and Embedding 2 models',
+    () {
+      expect(ModelCatalog.geminiTextModels, contains('gemini-3.5-flash'));
+      expect(ModelCatalog.geminiTextModels, contains('gemini-3-flash-preview'));
+      expect(ModelCatalog.geminiTextModels, contains('gemini-3.1-flash-lite'));
+      expect(ModelCatalog.geminiTextModels, contains('gemini-3.1-flash-tts'));
+      expect(ModelCatalog.geminiTextModels, contains('gemini-2.5-flash-tts'));
+      expect(ModelCatalog.geminiTextModels, contains('gemma-4-26b-a4b-it'));
+      expect(ModelCatalog.geminiTextModels, contains('gemma-4-31b-it'));
+      expect(
+        ModelCatalog.geminiEmbeddingModels,
+        contains('gemini-embedding-2'),
+      );
+    },
+  );
 
   testWidgets('Gemini key test uses selected answer model and surfaces quota', (
     tester,

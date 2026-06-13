@@ -88,7 +88,18 @@ void main() {
                   'title': 'Stroke dontesi fa',
                   'confidence': 0.82,
                   'nodes': [
-                    {'id': 'n1', 'label': 'FAST pozitiv'},
+                    {
+                      'id': 'n1',
+                      'label': 'FAST pozitiv',
+                      'shape': 'decision',
+                      'order': 1,
+                      'source_rect': {
+                        'x': 10,
+                        'y': 20,
+                        'width': 120,
+                        'height': 40,
+                      },
+                    },
                   ],
                   'edges': [],
                 },
@@ -118,6 +129,12 @@ void main() {
       contains('RAVE Arcparesis 1 pont'),
     );
     expect(result.flowcharts.single.nodes.single.label, 'FAST pozitiv');
+    expect(
+      result.flowcharts.single.nodes.single.shape,
+      AiFlowchartNodeShape.decision,
+    );
+    expect(result.flowcharts.single.nodes.single.order, 1);
+    expect(result.flowcharts.single.nodes.single.sourceRect?['width'], 120);
   });
 
   test('sends PNG documents as OpenAI input image content', () async {
@@ -136,9 +153,9 @@ void main() {
         final input = body['input'] as List;
         final message = input.single as Map;
         final content = message['content'] as List;
-        final image = content
-            .whereType<Map>()
-            .singleWhere((item) => item['type'] == 'input_image');
+        final image = content.whereType<Map>().singleWhere(
+          (item) => item['type'] == 'input_image',
+        );
         expect(
           image['image_url'],
           startsWith('data:image/png;base64,iVBORw=='),

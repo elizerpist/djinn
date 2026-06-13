@@ -365,8 +365,19 @@ void main() {
         pageNumber: 3,
         title: 'Stroke döntési fa',
         nodes: [
-          AiFlowchartNode(id: 'n1', label: 'ABCDE vizsgálat'),
-          AiFlowchartNode(id: 'n2', label: 'Légzési elégtelenség?'),
+          AiFlowchartNode(
+            id: 'n1',
+            label: 'ABCDE vizsgálat',
+            shape: AiFlowchartNodeShape.startEnd,
+            order: 1,
+            sourceRect: {'x': 1, 'y': 2, 'width': 3, 'height': 4},
+          ),
+          AiFlowchartNode(
+            id: 'n2',
+            label: 'Légzési elégtelenség?',
+            shape: AiFlowchartNodeShape.decision,
+            order: 2,
+          ),
         ],
         edges: [
           AiFlowchartEdge(
@@ -374,6 +385,7 @@ void main() {
             fromNodeId: 'n1',
             toNodeId: 'n2',
             label: 'romlik',
+            order: 3,
           ),
         ],
       ),
@@ -390,6 +402,12 @@ void main() {
       items.last.text,
       'ABCDE vizsgálat -> Légzési elégtelenség? [romlik]',
     );
+    expect(items.first.flowchartShape, AiFlowchartNodeShape.startEnd.wireName);
+    expect(items.first.flowchartOrder, 1);
+    expect(items.first.sourceRectJson, contains('"width":3'));
+    expect(items.last.flowchartFromId, 'n1');
+    expect(items.last.flowchartToId, 'n2');
+    expect(items.last.flowchartOrder, 3);
     expect(items.last.sectionTitle, 'Stroke döntési fa kapcsolat');
   });
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:uuid/uuid.dart';
@@ -368,6 +369,9 @@ class ObjectBoxKnowledgeRepository
             flowchartPublicId: flowchartPublicId,
             label: node.label,
             validationState: ValidationState.unreviewed.wireName,
+            shape: node.shape.wireName,
+            sortOrder: node.order,
+            sourceRectJson: _sourceRectJson(node.sourceRect),
           ),
         );
       }
@@ -380,6 +384,8 @@ class ObjectBoxKnowledgeRepository
             toNodePublicId: '$flowchartPublicId:${edge.toNodeId}',
             label: edge.label,
             validationState: ValidationState.unreviewed.wireName,
+            sortOrder: edge.order,
+            sourceRectJson: _sourceRectJson(edge.sourceRect),
           ),
         );
       }
@@ -683,6 +689,11 @@ class ObjectBoxKnowledgeRepository
           pageNumber: flowchart.pageNumber,
           sectionTitle: 'Flowchart lépés',
           embeddingModel: embeddings[node.publicId]?.model,
+          flowchartId: flowchart.publicId,
+          flowchartElementId: node.publicId,
+          flowchartShape: node.shape,
+          flowchartOrder: node.sortOrder,
+          sourceRectJson: node.sourceRectJson,
         ),
       for (final edge in edges)
         ExtractedKnowledgeItem(
@@ -693,8 +704,22 @@ class ObjectBoxKnowledgeRepository
           pageNumber: flowchart.pageNumber,
           sectionTitle: 'Flowchart kapcsolat',
           embeddingModel: embeddings[edge.publicId]?.model,
+          flowchartId: flowchart.publicId,
+          flowchartElementId: edge.publicId,
+          flowchartFromId: edge.fromNodePublicId,
+          flowchartToId: edge.toNodePublicId,
+          flowchartEdgeLabel: edge.label,
+          flowchartOrder: edge.sortOrder,
+          sourceRectJson: edge.sourceRectJson,
         ),
     ];
+  }
+
+  String? _sourceRectJson(Map<String, Object?>? sourceRect) {
+    if (sourceRect == null) {
+      return null;
+    }
+    return jsonEncode(sourceRect);
   }
 
   String _edgeRelation(

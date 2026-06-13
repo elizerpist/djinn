@@ -12,42 +12,45 @@ import 'package:djinn/src/google/gemini_http_client.dart';
 import 'package:djinn/src/settings/data/api_key_store.dart';
 
 void main() {
-  test('tests the selected Gemini model instead of hard-coded Flash Lite', () async {
-    final keyStore = MemoryApiKeyStore();
-    var requestedPath = '';
+  test(
+    'tests the selected Gemini model instead of hard-coded Flash Lite',
+    () async {
+      final keyStore = MemoryApiKeyStore();
+      var requestedPath = '';
 
-    final client = GeminiHttpClient(
-      apiKeyStore: keyStore,
-      httpClient: MockClient((request) async {
-        requestedPath = request.url.path;
-        return http.Response(
-          jsonEncode({
-            'candidates': [
-              {
-                'content': {
-                  'parts': [
-                    {'text': 'pong'},
-                  ],
+      final client = GeminiHttpClient(
+        apiKeyStore: keyStore,
+        httpClient: MockClient((request) async {
+          requestedPath = request.url.path;
+          return http.Response(
+            jsonEncode({
+              'candidates': [
+                {
+                  'content': {
+                    'parts': [
+                      {'text': 'pong'},
+                    ],
+                  },
                 },
-              },
-            ],
-          }),
-          200,
-        );
-      }),
-      baseUri: Uri.parse('https://gemini.test'),
-    );
+              ],
+            }),
+            200,
+          );
+        }),
+        baseUri: Uri.parse('https://gemini.test'),
+      );
 
-    await client.testApiKey(
-      apiKey: 'gemini-key',
-      model: 'gemma-4-26b-a4b-it',
-    );
+      await client.testApiKey(
+        apiKey: 'gemini-key',
+        model: 'gemma-4-26b-a4b-it',
+      );
 
-    expect(
-      requestedPath,
-      '/v1beta/models/gemma-4-26b-a4b-it:generateContent',
-    );
-  });
+      expect(
+        requestedPath,
+        '/v1beta/models/gemma-4-26b-a4b-it:generateContent',
+      );
+    },
+  );
 
   test('maps Gemini quota test failure without calling it an API key error', () {
     final client = GeminiHttpClient(
@@ -303,7 +306,18 @@ void main() {
                             'title': 'Stroke dontesi fa',
                             'confidence': 0.82,
                             'nodes': [
-                              {'id': 'n1', 'label': 'FAST pozitiv'},
+                              {
+                                'id': 'n1',
+                                'label': 'FAST pozitiv',
+                                'shape': 'decision',
+                                'order': 1,
+                                'source_rect': {
+                                  'x': 10,
+                                  'y': 20,
+                                  'width': 120,
+                                  'height': 40,
+                                },
+                              },
                             ],
                             'edges': [],
                           },
@@ -339,6 +353,12 @@ void main() {
     );
     expect(result.flowcharts.single.id, 'flow-1');
     expect(result.flowcharts.single.nodes.single.label, 'FAST pozitiv');
+    expect(
+      result.flowcharts.single.nodes.single.shape,
+      AiFlowchartNodeShape.decision,
+    );
+    expect(result.flowcharts.single.nodes.single.order, 1);
+    expect(result.flowcharts.single.nodes.single.sourceRect?['width'], 120);
   });
 
   test(

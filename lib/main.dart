@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'src/ai/ai_client.dart';
+import 'src/cases/data/case_repository.dart';
 import 'src/ai/ai_provider.dart';
 import 'src/chat/data/chat_service.dart';
 import 'src/chat/data/local_answer_service.dart';
@@ -39,6 +40,7 @@ class DjinnApp extends StatefulWidget {
     super.key,
     this.chatRepository,
     this.chatService,
+    this.caseRepository,
     this.knowledgeRepository,
     this.pdfImportService,
     this.knowledgeSyncService,
@@ -54,6 +56,7 @@ class DjinnApp extends StatefulWidget {
 
   final LocalChatRepository? chatRepository;
   final ChatService? chatService;
+  final CaseRepository? caseRepository;
   final KnowledgeDocumentRepository? knowledgeRepository;
   final PdfImportService? pdfImportService;
   final KnowledgeSyncService? knowledgeSyncService;
@@ -65,7 +68,7 @@ class DjinnApp extends StatefulWidget {
   final Future<void> Function(AppSettings settings)? saveSettings;
   final Future<bool> Function()? testApiKey;
   final Future<bool> Function(AiProvider provider, String model)?
-      testApiKeyForProvider;
+  testApiKeyForProvider;
 
   @override
   State<DjinnApp> createState() => _DjinnAppState();
@@ -94,6 +97,7 @@ class _DjinnAppState extends State<DjinnApp> {
               repository: widget.chatRepository!,
               answerService: const _UnavailableAnswerService(),
             ),
+        caseRepository: widget.caseRepository ?? MemoryCaseRepository(),
         knowledgeRepository: widget.knowledgeRepository!,
         pdfImportService: widget.pdfImportService!,
         refreshKnowledgeReadiness:
@@ -154,6 +158,7 @@ class _DjinnAppState extends State<DjinnApp> {
       hasReadyDocuments: objectBoxKnowledgeRepository.hasReadyDocuments,
     );
     final chatRepository = ObjectBoxChatRepository(store: store);
+    final caseRepository = ObjectBoxCaseRepository(store: store);
     final chatService = ChatService(
       repository: chatRepository,
       answerService: answerService,
@@ -167,6 +172,7 @@ class _DjinnAppState extends State<DjinnApp> {
     return _AppDependencies(
       chatRepository: chatRepository,
       chatService: chatService,
+      caseRepository: caseRepository,
       knowledgeRepository: knowledgeRepository,
       pdfImportService: pdfImportService,
       refreshKnowledgeReadiness: knowledgeRepository.state,
@@ -231,6 +237,7 @@ class _DjinnAppState extends State<DjinnApp> {
           return MainScreen(
             repository: dependencies.chatRepository,
             chatService: dependencies.chatService,
+            caseRepository: dependencies.caseRepository,
             knowledgeRepository: dependencies.knowledgeRepository,
             pdfImportService: dependencies.pdfImportService,
             refreshKnowledgeReadiness: dependencies.refreshKnowledgeReadiness,
@@ -253,6 +260,7 @@ class _AppDependencies {
   const _AppDependencies({
     required this.chatRepository,
     required this.chatService,
+    required this.caseRepository,
     required this.knowledgeRepository,
     required this.pdfImportService,
     required this.refreshKnowledgeReadiness,
@@ -267,6 +275,7 @@ class _AppDependencies {
 
   final LocalChatRepository chatRepository;
   final ChatService chatService;
+  final CaseRepository caseRepository;
   final KnowledgeDocumentRepository knowledgeRepository;
   final PdfImportService pdfImportService;
   final Future<KnowledgeBaseState> Function() refreshKnowledgeReadiness;
@@ -277,7 +286,7 @@ class _AppDependencies {
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
   final Future<bool> Function(AiProvider provider, String model)
-      testApiKeyForProvider;
+  testApiKeyForProvider;
 }
 
 Future<bool> Function() _buildOpenAiKeyTester(ApiKeyStore apiKeyStore) {
@@ -297,9 +306,7 @@ Future<bool> Function() _buildOpenAiKeyTester(ApiKeyStore apiKeyStore) {
 }
 
 Future<bool> Function(AiProvider provider, String model)
-_buildFallbackProviderKeyTester(
-  Future<bool> Function() openAiTester,
-) {
+_buildFallbackProviderKeyTester(Future<bool> Function() openAiTester) {
   return (provider, _) {
     if (provider == AiProvider.openAi) {
       return openAiTester();
@@ -308,7 +315,8 @@ _buildFallbackProviderKeyTester(
   };
 }
 
-Future<bool> Function(AiProvider provider, String model) _buildProviderKeyTester({
+Future<bool> Function(AiProvider provider, String model)
+_buildProviderKeyTester({
   required ApiKeyStore apiKeyStore,
   required OpenAiHttpClient openAiClient,
   required GeminiHttpClient geminiClient,

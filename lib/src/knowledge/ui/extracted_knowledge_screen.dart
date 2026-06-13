@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../local_store/entities.dart';
 import '../data/knowledge_document_repository.dart';
 import '../models/extracted_knowledge_item.dart';
+import '../models/flowchart_hierarchy.dart';
 import '../models/knowledge_document.dart';
 
 class ExtractedKnowledgeScreen extends StatefulWidget {
@@ -80,7 +81,7 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
                       _ExtractedKnowledgeList(
                         items: _filter(items, EvidenceSourceType.scoreChunk),
                       ),
-                      _ExtractedKnowledgeList(
+                      _FlowchartHierarchyList(
                         items: items
                             .where(
                               (item) =>
@@ -168,6 +169,294 @@ class _ExtractedKnowledgeList extends StatelessWidget {
     );
   }
 }
+
+class _FlowchartHierarchyList extends StatefulWidget {
+  const _FlowchartHierarchyList({required this.items});
+
+  final List<ExtractedKnowledgeItem> items;
+
+  @override
+  State<_FlowchartHierarchyList> createState() =>
+      _FlowchartHierarchyListState();
+}
+
+class _FlowchartHierarchyListState extends State<_FlowchartHierarchyList> {
+  final Map<int, Color> _slotColors = {};
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.items.isEmpty) {
+      return const Center(
+        child: Text(
+          'Nincs ilyen típusú kinyert tartalom',
+          style: TextStyle(color: Color(0xFF6B7280)),
+        ),
+      );
+    }
+    final groups = const FlowchartHierarchyBuilder().build(widget.items);
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      itemCount: groups.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final group = groups[index];
+        final title = group.rows.isEmpty
+            ? 'Flowchart'
+            : group.rows.first.item.sectionTitle ?? 'Flowchart';
+        return Material(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: const BorderSide(color: Color(0xFFE5E7EB)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.account_tree_outlined,
+                      color: Color(0xFF7C3AED),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${group.rows.length} elem',
+                      style: const TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                for (final row in group.rows) ...[
+                  _FlowchartHierarchyRowTile(
+                    row: row,
+                    colorForSlot: _colorForSlot,
+                    onLongPress: () => _chooseColor(row),
+                  ),
+                  const SizedBox(height: 6),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Color _colorForSlot(int slot) {
+    return _slotColors[slot] ??
+        _tailwindColors[slot % _tailwindColors.length].color;
+  }
+
+  Future<void> _chooseColor(FlowchartHierarchyRow row) async {
+    final slot = row.colorSlots.isEmpty ? 0 : row.colorSlots.last;
+    final selected = await showModalBottomSheet<Color>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Színslot ${slot + 1}',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final color in _tailwindColors)
+                        Tooltip(
+                          message: color.name,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: () => Navigator.of(context).pop(color.color),
+                            child: CircleAvatar(
+                              radius: 18,
+                              backgroundColor: color.color,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null) {
+      setState(() => _slotColors[slot] = selected);
+    }
+  }
+}
+
+class _FlowchartHierarchyRowTile extends StatelessWidget {
+  const _FlowchartHierarchyRowTile({
+    required this.row,
+    required this.colorForSlot,
+    required this.onLongPress,
+  });
+
+  final FlowchartHierarchyRow row;
+  final Color Function(int slot) colorForSlot;
+  final VoidCallback onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = row.item;
+    final isEdge = row.isEdge;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onLongPress: onLongPress,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: isEdge ? const Color(0xFFF8FAFC) : const Color(0xFFFFFFFF),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: row.depth * 10),
+            for (final slot in row.colorSlots)
+              Container(
+                width: 4,
+                height: 42,
+                margin: const EdgeInsets.only(right: 3),
+                decoration: BoxDecoration(
+                  color: colorForSlot(slot),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            const SizedBox(width: 5),
+            Icon(
+              isEdge ? Icons.arrow_downward : _shapeIcon(item.flowchartShape),
+              size: 20,
+              color: isEdge ? const Color(0xFF6B7280) : const Color(0xFF111827),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isEdge
+                        ? _edgeLabel(item)
+                        : _shapeLabel(item.flowchartShape),
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  SelectableText(
+                    item.text,
+                    style: const TextStyle(
+                      color: Color(0xFF111827),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _edgeLabel(ExtractedKnowledgeItem item) {
+    final label = item.flowchartEdgeLabel?.trim();
+    return label == null || label.isEmpty
+        ? 'Folyamvonal'
+        : 'Folyamvonal: $label';
+  }
+
+  static IconData _shapeIcon(String? shape) {
+    return switch (shape) {
+      'start_end' => Icons.play_circle_outline,
+      'decision' => Icons.change_history,
+      'input_output' => Icons.input,
+      'subprocess' => Icons.view_agenda_outlined,
+      'data_store' => Icons.storage,
+      'connector' => Icons.radio_button_unchecked,
+      'process' => Icons.crop_square,
+      _ => Icons.help_outline,
+    };
+  }
+
+  static String _shapeLabel(String? shape) {
+    return switch (shape) {
+      'start_end' => 'Kezdés/Vége',
+      'decision' => 'Döntés',
+      'input_output' => 'Bemenet/Kimenet',
+      'subprocess' => 'Alfolyamat',
+      'data_store' => 'Adattárolás',
+      'connector' => 'Kapcsoló',
+      'process' => 'Folyamatlépés',
+      _ => 'Ismeretlen elem',
+    };
+  }
+}
+
+class _NamedColor {
+  const _NamedColor(this.name, this.color);
+
+  final String name;
+  final Color color;
+}
+
+const _tailwindColors = [
+  _NamedColor('Slate', Color(0xFF64748B)),
+  _NamedColor('Gray', Color(0xFF6B7280)),
+  _NamedColor('Zinc', Color(0xFF71717A)),
+  _NamedColor('Neutral', Color(0xFF737373)),
+  _NamedColor('Stone', Color(0xFF78716C)),
+  _NamedColor('Red', Color(0xFFEF4444)),
+  _NamedColor('Orange', Color(0xFFF97316)),
+  _NamedColor('Amber', Color(0xFFF59E0B)),
+  _NamedColor('Yellow', Color(0xFFEAB308)),
+  _NamedColor('Lime', Color(0xFF84CC16)),
+  _NamedColor('Green', Color(0xFF22C55E)),
+  _NamedColor('Emerald', Color(0xFF10B981)),
+  _NamedColor('Teal', Color(0xFF14B8A6)),
+  _NamedColor('Cyan', Color(0xFF06B6D4)),
+  _NamedColor('Sky', Color(0xFF0EA5E9)),
+  _NamedColor('Blue', Color(0xFF3B82F6)),
+  _NamedColor('Indigo', Color(0xFF6366F1)),
+  _NamedColor('Violet', Color(0xFF8B5CF6)),
+  _NamedColor('Purple', Color(0xFFA855F7)),
+  _NamedColor('Fuchsia', Color(0xFFD946EF)),
+  _NamedColor('Pink', Color(0xFFEC4899)),
+  _NamedColor('Rose', Color(0xFFF43F5E)),
+];
 
 class _ExtractedKnowledgeTile extends StatelessWidget {
   const _ExtractedKnowledgeTile({required this.item});

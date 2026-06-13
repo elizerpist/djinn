@@ -98,6 +98,7 @@ class AppSettingsRepository {
       chunkingMode: ChunkingModes.normalize(
         _fallback(entity.chunkingMode, defaults.chunkingMode),
       ),
+      navigationMode: AppNavigationMode.fromWireName(entity.navigationMode),
     );
   }
 
@@ -126,6 +127,7 @@ class AppSettingsRepository {
       voiceMode: settings.voiceMode.wireName,
       voiceLocale: settings.voiceLocale,
       chunkingMode: settings.chunkingMode,
+      navigationMode: settings.navigationMode.wireName,
     );
   }
 

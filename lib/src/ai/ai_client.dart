@@ -80,11 +80,44 @@ class AiFlowchartCandidate {
   final List<AiFlowchartEdge> edges;
 }
 
+enum AiFlowchartNodeShape {
+  startEnd('start_end'),
+  process('process'),
+  decision('decision'),
+  inputOutput('input_output'),
+  subprocess('subprocess'),
+  dataStore('data_store'),
+  connector('connector'),
+  unknown('unknown');
+
+  const AiFlowchartNodeShape(this.wireName);
+
+  final String wireName;
+
+  static AiFlowchartNodeShape fromWireName(String? value) {
+    for (final shape in AiFlowchartNodeShape.values) {
+      if (shape.wireName == value) {
+        return shape;
+      }
+    }
+    return AiFlowchartNodeShape.unknown;
+  }
+}
+
 class AiFlowchartNode {
-  const AiFlowchartNode({required this.id, required this.label});
+  const AiFlowchartNode({
+    required this.id,
+    required this.label,
+    this.shape = AiFlowchartNodeShape.process,
+    this.order = 0,
+    this.sourceRect,
+  });
 
   final String id;
   final String label;
+  final AiFlowchartNodeShape shape;
+  final int order;
+  final Map<String, Object?>? sourceRect;
 }
 
 class AiFlowchartEdge {
@@ -93,12 +126,16 @@ class AiFlowchartEdge {
     required this.fromNodeId,
     required this.toNodeId,
     required this.label,
+    this.order = 0,
+    this.sourceRect,
   });
 
   final String id;
   final String fromNodeId;
   final String toNodeId;
   final String label;
+  final int order;
+  final Map<String, Object?>? sourceRect;
 }
 
 class AiExtractionResult {

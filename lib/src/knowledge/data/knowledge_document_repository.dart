@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:uuid/uuid.dart';
@@ -476,6 +477,11 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
           pageNumber: flowchart.pageNumber,
           sectionTitle: sectionTitle,
           embeddingModel: _embeddingModelByDocument[documentPublicId],
+          flowchartId: flowchart.id,
+          flowchartElementId: node.id,
+          flowchartShape: node.shape.wireName,
+          flowchartOrder: node.order,
+          sourceRectJson: _sourceRectJson(node.sourceRect),
         ),
       for (final edge in flowchart.edges)
         ExtractedKnowledgeItem(
@@ -486,8 +492,22 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
           pageNumber: flowchart.pageNumber,
           sectionTitle: '$sectionTitle kapcsolat',
           embeddingModel: _embeddingModelByDocument[documentPublicId],
+          flowchartId: flowchart.id,
+          flowchartElementId: edge.id,
+          flowchartFromId: edge.fromNodeId,
+          flowchartToId: edge.toNodeId,
+          flowchartEdgeLabel: edge.label,
+          flowchartOrder: edge.order,
+          sourceRectJson: _sourceRectJson(edge.sourceRect),
         ),
     ];
+  }
+
+  String? _sourceRectJson(Map<String, Object?>? sourceRect) {
+    if (sourceRect == null) {
+      return null;
+    }
+    return jsonEncode(sourceRect);
   }
 
   String _flowchartEdgeText(

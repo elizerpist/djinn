@@ -17,6 +17,7 @@ class SettingsScreen extends StatefulWidget {
     required this.saveSettings,
     required this.testApiKey,
     this.testApiKeyForProvider,
+    this.onSettingsChanged,
   });
 
   final ApiKeyStore apiKeyStore;
@@ -24,7 +25,8 @@ class SettingsScreen extends StatefulWidget {
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
   final Future<bool> Function(AiProvider provider, String model)?
-      testApiKeyForProvider;
+  testApiKeyForProvider;
+  final ValueChanged<AppSettings>? onSettingsChanged;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -103,9 +105,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
         _pendingSettings = null;
         await widget.saveSettings(next);
+        widget.onSettingsChanged?.call(next);
         DebugConsole.log(
           '${_providerLogPrefix(next.activeProvider)} settings saved '
-          'provider=${next.activeProvider.wireName} voiceMode=${next.voiceMode.wireName}',
+          'provider=${next.activeProvider.wireName} '
+          'voiceMode=${next.voiceMode.wireName} '
+          'navigationMode=${next.navigationMode.wireName}',
         );
       }
     } catch (error) {
@@ -291,6 +296,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
               child: Column(
                 children: [
+                  _Section(
+                    title: 'Megjelenés',
+                    children: [
+                      const Text(
+                        'Navigáció',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
+                      SegmentedButton<AppNavigationMode>(
+                        segments: const [
+                          ButtonSegment(
+                            value: AppNavigationMode.drawer,
+                            label: Text('Hamburger'),
+                          ),
+                          ButtonSegment(
+                            value: AppNavigationMode.bottomNav,
+                            label: Text('Bottom navigation'),
+                          ),
+                        ],
+                        selected: {_settings.navigationMode},
+                        onSelectionChanged: (selection) => _autoSave(
+                          _settings.copyWith(navigationMode: selection.single),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   _Section(
                     title: 'AI',
                     children: [

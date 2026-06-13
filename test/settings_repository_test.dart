@@ -48,6 +48,13 @@ void main() {
     expect(settings.voiceMode, VoiceMode.whisperConversation);
     expect(settings.answerMode, AnswerModes.ai);
     expect(settings.chunkingMode, ChunkingModes.normal);
+    expect(settings.navigationMode, AppNavigationMode.drawer);
+    expect(
+      settings
+          .copyWith(navigationMode: AppNavigationMode.bottomNav)
+          .navigationMode,
+      AppNavigationMode.bottomNav,
+    );
     expect(
       settings.copyWith(chunkingMode: ChunkingModes.detailed).chunkingMode,
       ChunkingModes.detailed,
@@ -170,6 +177,7 @@ void main() {
       voiceMode: VoiceMode.nativeAndroidPtt,
       voiceLocale: 'en-US',
       chunkingMode: ChunkingModes.detailed,
+      navigationMode: AppNavigationMode.bottomNav,
     );
 
     await repository.save(settings);
@@ -189,6 +197,7 @@ void main() {
     expect(loaded.voiceMode, VoiceMode.nativeAndroidPtt);
     expect(loaded.voiceLocale, 'en-US');
     expect(loaded.chunkingMode, ChunkingModes.detailed);
+    expect(loaded.navigationMode, AppNavigationMode.bottomNav);
   });
 
   test('settings repository consolidates duplicate settings rows', () async {
@@ -281,5 +290,6 @@ AppSettingsEntity _settingsEntity(AppSettings settings) {
     voiceMode: settings.voiceMode.wireName,
     voiceLocale: settings.voiceLocale,
     chunkingMode: settings.chunkingMode,
+    navigationMode: settings.navigationMode.wireName,
   );
 }

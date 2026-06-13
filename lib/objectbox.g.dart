@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 273186095957995459),
     name: 'AppSettingsEntity',
-    lastPropertyId: const obx_int.IdUid(23, 4227626760840467567),
+    lastPropertyId: const obx_int.IdUid(24, 5870046742764235293),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -160,6 +160,12 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(23, 4227626760840467567),
         name: 'chunkingMode',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(24, 5870046742764235293),
+        name: 'navigationMode',
         type: 9,
         flags: 0,
       ),
@@ -453,7 +459,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(7, 1380656129107944180),
     name: 'FlowchartEdgeEntity',
-    lastPropertyId: const obx_int.IdUid(8, 4415689705722391472),
+    lastPropertyId: const obx_int.IdUid(10, 1147308889653075818),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -506,6 +512,18 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(8, 4415689705722391472),
         name: 'rejectionReason',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 1215957641228073803),
+        name: 'sortOrder',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(10, 1147308889653075818),
+        name: 'sourceRectJson',
         type: 9,
         flags: 0,
       ),
@@ -571,7 +589,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(9, 8189989850069876083),
     name: 'FlowchartNodeEntity',
-    lastPropertyId: const obx_int.IdUid(8, 7047686114766363714),
+    lastPropertyId: const obx_int.IdUid(12, 2062772467636463400),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -623,6 +641,30 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(8, 7047686114766363714),
         name: 'positionY',
         type: 8,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 2110118542972028306),
+        name: 'shape',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(10, 2478055112928034120),
+        name: 'sortOrder',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 3822327384415088718),
+        name: 'sourceRectJson',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 2062772467636463400),
+        name: 'colorSlot',
+        type: 6,
         flags: 0,
       ),
     ],
@@ -835,6 +877,134 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(13, 8331410197646792343),
+    name: 'CaseChatLinkEntity',
+    lastPropertyId: const obx_int.IdUid(4, 7149974916273081465),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 5284053933645392693),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 5660822405057004636),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(30, 7813913822463373989),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 4824122736082127848),
+        name: 'casePublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(31, 4135847190806906225),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 7149974916273081465),
+        name: 'chatThreadPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(32, 3421571975781610866),
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(14, 3598742986997018602),
+    name: 'CaseDocumentLinkEntity',
+    lastPropertyId: const obx_int.IdUid(4, 2346448514583154437),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 5213330306347250414),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 140657177444885812),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(33, 444749050799028978),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 4684616616459098095),
+        name: 'casePublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(34, 1713857656070008605),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 2346448514583154437),
+        name: 'documentPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(35, 4463842555593368237),
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(15, 6991698022716353084),
+    name: 'CaseEntity',
+    lastPropertyId: const obx_int.IdUid(7, 5302358811458865444),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 1281563381161598257),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 3317173884338585122),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(36, 1496797476098529589),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 1054685829702859873),
+        name: 'title',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(37, 1787844394609503170),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 4667261123417091041),
+        name: 'notes',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 6750635640271645096),
+        name: 'createdAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 605571212701423109),
+        name: 'updatedAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 5302358811458865444),
+        name: 'archived',
+        type: 1,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -880,8 +1050,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(12, 3704183058245934020),
-    lastIndexId: const obx_int.IdUid(29, 1936837688981446356),
+    lastEntityId: const obx_int.IdUid(15, 6991698022716353084),
+    lastIndexId: const obx_int.IdUid(37, 1787844394609503170),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -938,7 +1108,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final voiceModeOffset = fbb.writeString(object.voiceMode);
         final voiceLocaleOffset = fbb.writeString(object.voiceLocale);
         final chunkingModeOffset = fbb.writeString(object.chunkingMode);
-        fbb.startTable(24);
+        final navigationModeOffset = fbb.writeString(object.navigationMode);
+        fbb.startTable(25);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, runtimeModeOffset);
         fbb.addOffset(2, answerModelOffset);
@@ -962,6 +1133,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(20, voiceLocaleOffset);
         fbb.addBool(21, object.offlineFallbackEnabled);
         fbb.addOffset(22, chunkingModeOffset);
+        fbb.addOffset(23, navigationModeOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1051,6 +1223,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final chunkingModeParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 48, '');
+        final navigationModeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 50, '');
         final object = AppSettingsEntity(
           id: idParam,
           runtimeMode: runtimeModeParam,
@@ -1076,6 +1251,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           voiceMode: voiceModeParam,
           voiceLocale: voiceLocaleParam,
           chunkingMode: chunkingModeParam,
+          navigationMode: navigationModeParam,
         );
 
         return object;
@@ -1473,7 +1649,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final rejectionReasonOffset = object.rejectionReason == null
             ? null
             : fbb.writeString(object.rejectionReason!);
-        fbb.startTable(9);
+        final sourceRectJsonOffset = object.sourceRectJson == null
+            ? null
+            : fbb.writeString(object.sourceRectJson!);
+        fbb.startTable(11);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, publicIdOffset);
         fbb.addOffset(2, flowchartPublicIdOffset);
@@ -1482,6 +1661,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(5, labelOffset);
         fbb.addOffset(6, validationStateOffset);
         fbb.addOffset(7, rejectionReasonOffset);
+        fbb.addInt64(8, object.sortOrder);
+        fbb.addOffset(9, sourceRectJsonOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1515,6 +1696,15 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final rejectionReasonParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 18);
+        final sortOrderParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          20,
+          0,
+        );
+        final sourceRectJsonParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 22);
         final object = FlowchartEdgeEntity(
           id: idParam,
           publicId: publicIdParam,
@@ -1524,6 +1714,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           label: labelParam,
           validationState: validationStateParam,
           rejectionReason: rejectionReasonParam,
+          sortOrder: sortOrderParam,
+          sourceRectJson: sourceRectJsonParam,
         );
 
         return object;
@@ -1615,7 +1807,11 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final rejectionReasonOffset = object.rejectionReason == null
             ? null
             : fbb.writeString(object.rejectionReason!);
-        fbb.startTable(9);
+        final shapeOffset = fbb.writeString(object.shape);
+        final sourceRectJsonOffset = object.sourceRectJson == null
+            ? null
+            : fbb.writeString(object.sourceRectJson!);
+        fbb.startTable(13);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, publicIdOffset);
         fbb.addOffset(2, flowchartPublicIdOffset);
@@ -1624,6 +1820,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(5, rejectionReasonOffset);
         fbb.addFloat64(6, object.positionX);
         fbb.addFloat64(7, object.positionY);
+        fbb.addOffset(8, shapeOffset);
+        fbb.addInt64(9, object.sortOrder);
+        fbb.addOffset(10, sourceRectJsonOffset);
+        fbb.addInt64(11, object.colorSlot);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1663,6 +1863,23 @@ obx_int.ModelDefinition getObjectBoxModel() {
           18,
           0,
         );
+        final shapeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 20, '');
+        final sortOrderParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          22,
+          0,
+        );
+        final sourceRectJsonParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 24);
+        final colorSlotParam = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          26,
+        );
         final object = FlowchartNodeEntity(
           id: idParam,
           publicId: publicIdParam,
@@ -1672,6 +1889,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
           rejectionReason: rejectionReasonParam,
           positionX: positionXParam,
           positionY: positionYParam,
+          shape: shapeParam,
+          sortOrder: sortOrderParam,
+          sourceRectJson: sourceRectJsonParam,
+          colorSlot: colorSlotParam,
         );
 
         return object;
@@ -1949,6 +2170,176 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    CaseChatLinkEntity: obx_int.EntityDefinition<CaseChatLinkEntity>(
+      model: _entities[12],
+      toOneRelations: (CaseChatLinkEntity object) => [],
+      toManyRelations: (CaseChatLinkEntity object) => {},
+      getId: (CaseChatLinkEntity object) => object.id,
+      setId: (CaseChatLinkEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (CaseChatLinkEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final casePublicIdOffset = fbb.writeString(object.casePublicId);
+        final chatThreadPublicIdOffset = fbb.writeString(
+          object.chatThreadPublicId,
+        );
+        fbb.startTable(5);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, casePublicIdOffset);
+        fbb.addOffset(3, chatThreadPublicIdOffset);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final casePublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final chatThreadPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final object = CaseChatLinkEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          casePublicId: casePublicIdParam,
+          chatThreadPublicId: chatThreadPublicIdParam,
+        );
+
+        return object;
+      },
+    ),
+    CaseDocumentLinkEntity: obx_int.EntityDefinition<CaseDocumentLinkEntity>(
+      model: _entities[13],
+      toOneRelations: (CaseDocumentLinkEntity object) => [],
+      toManyRelations: (CaseDocumentLinkEntity object) => {},
+      getId: (CaseDocumentLinkEntity object) => object.id,
+      setId: (CaseDocumentLinkEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (CaseDocumentLinkEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final casePublicIdOffset = fbb.writeString(object.casePublicId);
+        final documentPublicIdOffset = fbb.writeString(object.documentPublicId);
+        fbb.startTable(5);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, casePublicIdOffset);
+        fbb.addOffset(3, documentPublicIdOffset);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final casePublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final documentPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final object = CaseDocumentLinkEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          casePublicId: casePublicIdParam,
+          documentPublicId: documentPublicIdParam,
+        );
+
+        return object;
+      },
+    ),
+    CaseEntity: obx_int.EntityDefinition<CaseEntity>(
+      model: _entities[14],
+      toOneRelations: (CaseEntity object) => [],
+      toManyRelations: (CaseEntity object) => {},
+      getId: (CaseEntity object) => object.id,
+      setId: (CaseEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (CaseEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final titleOffset = fbb.writeString(object.title);
+        final notesOffset = fbb.writeString(object.notes);
+        fbb.startTable(8);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, titleOffset);
+        fbb.addOffset(3, notesOffset);
+        fbb.addInt64(4, object.createdAtMillis);
+        fbb.addInt64(5, object.updatedAtMillis);
+        fbb.addBool(6, object.archived);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final titleParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final notesParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final createdAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          12,
+          0,
+        );
+        final updatedAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          14,
+          0,
+        );
+        final archivedParam = const fb.BoolReader().vTableGet(
+          buffer,
+          rootOffset,
+          16,
+          false,
+        );
+        final object = CaseEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          title: titleParam,
+          notes: notesParam,
+          createdAtMillis: createdAtMillisParam,
+          updatedAtMillis: updatedAtMillisParam,
+          archived: archivedParam,
+        );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -2060,6 +2451,11 @@ class AppSettingsEntity_ {
   /// See [AppSettingsEntity.chunkingMode].
   static final chunkingMode = obx.QueryStringProperty<AppSettingsEntity>(
     _entities[0].properties[22],
+  );
+
+  /// See [AppSettingsEntity.navigationMode].
+  static final navigationMode = obx.QueryStringProperty<AppSettingsEntity>(
+    _entities[0].properties[23],
   );
 }
 
@@ -2303,6 +2699,16 @@ class FlowchartEdgeEntity_ {
   static final rejectionReason = obx.QueryStringProperty<FlowchartEdgeEntity>(
     _entities[6].properties[7],
   );
+
+  /// See [FlowchartEdgeEntity.sortOrder].
+  static final sortOrder = obx.QueryIntegerProperty<FlowchartEdgeEntity>(
+    _entities[6].properties[8],
+  );
+
+  /// See [FlowchartEdgeEntity.sourceRectJson].
+  static final sourceRectJson = obx.QueryStringProperty<FlowchartEdgeEntity>(
+    _entities[6].properties[9],
+  );
 }
 
 /// [FlowchartEntity] entity fields to define ObjectBox queries.
@@ -2383,6 +2789,26 @@ class FlowchartNodeEntity_ {
   /// See [FlowchartNodeEntity.positionY].
   static final positionY = obx.QueryDoubleProperty<FlowchartNodeEntity>(
     _entities[8].properties[7],
+  );
+
+  /// See [FlowchartNodeEntity.shape].
+  static final shape = obx.QueryStringProperty<FlowchartNodeEntity>(
+    _entities[8].properties[8],
+  );
+
+  /// See [FlowchartNodeEntity.sortOrder].
+  static final sortOrder = obx.QueryIntegerProperty<FlowchartNodeEntity>(
+    _entities[8].properties[9],
+  );
+
+  /// See [FlowchartNodeEntity.sourceRectJson].
+  static final sourceRectJson = obx.QueryStringProperty<FlowchartNodeEntity>(
+    _entities[8].properties[10],
+  );
+
+  /// See [FlowchartNodeEntity.colorSlot].
+  static final colorSlot = obx.QueryIntegerProperty<FlowchartNodeEntity>(
+    _entities[8].properties[11],
   );
 }
 
@@ -2538,5 +2964,90 @@ class KnowledgeFolderEntity_ {
   /// See [KnowledgeFolderEntity.sortOrder].
   static final sortOrder = obx.QueryIntegerProperty<KnowledgeFolderEntity>(
     _entities[11].properties[5],
+  );
+}
+
+/// [CaseChatLinkEntity] entity fields to define ObjectBox queries.
+class CaseChatLinkEntity_ {
+  /// See [CaseChatLinkEntity.id].
+  static final id = obx.QueryIntegerProperty<CaseChatLinkEntity>(
+    _entities[12].properties[0],
+  );
+
+  /// See [CaseChatLinkEntity.publicId].
+  static final publicId = obx.QueryStringProperty<CaseChatLinkEntity>(
+    _entities[12].properties[1],
+  );
+
+  /// See [CaseChatLinkEntity.casePublicId].
+  static final casePublicId = obx.QueryStringProperty<CaseChatLinkEntity>(
+    _entities[12].properties[2],
+  );
+
+  /// See [CaseChatLinkEntity.chatThreadPublicId].
+  static final chatThreadPublicId = obx.QueryStringProperty<CaseChatLinkEntity>(
+    _entities[12].properties[3],
+  );
+}
+
+/// [CaseDocumentLinkEntity] entity fields to define ObjectBox queries.
+class CaseDocumentLinkEntity_ {
+  /// See [CaseDocumentLinkEntity.id].
+  static final id = obx.QueryIntegerProperty<CaseDocumentLinkEntity>(
+    _entities[13].properties[0],
+  );
+
+  /// See [CaseDocumentLinkEntity.publicId].
+  static final publicId = obx.QueryStringProperty<CaseDocumentLinkEntity>(
+    _entities[13].properties[1],
+  );
+
+  /// See [CaseDocumentLinkEntity.casePublicId].
+  static final casePublicId = obx.QueryStringProperty<CaseDocumentLinkEntity>(
+    _entities[13].properties[2],
+  );
+
+  /// See [CaseDocumentLinkEntity.documentPublicId].
+  static final documentPublicId =
+      obx.QueryStringProperty<CaseDocumentLinkEntity>(
+        _entities[13].properties[3],
+      );
+}
+
+/// [CaseEntity] entity fields to define ObjectBox queries.
+class CaseEntity_ {
+  /// See [CaseEntity.id].
+  static final id = obx.QueryIntegerProperty<CaseEntity>(
+    _entities[14].properties[0],
+  );
+
+  /// See [CaseEntity.publicId].
+  static final publicId = obx.QueryStringProperty<CaseEntity>(
+    _entities[14].properties[1],
+  );
+
+  /// See [CaseEntity.title].
+  static final title = obx.QueryStringProperty<CaseEntity>(
+    _entities[14].properties[2],
+  );
+
+  /// See [CaseEntity.notes].
+  static final notes = obx.QueryStringProperty<CaseEntity>(
+    _entities[14].properties[3],
+  );
+
+  /// See [CaseEntity.createdAtMillis].
+  static final createdAtMillis = obx.QueryIntegerProperty<CaseEntity>(
+    _entities[14].properties[4],
+  );
+
+  /// See [CaseEntity.updatedAtMillis].
+  static final updatedAtMillis = obx.QueryIntegerProperty<CaseEntity>(
+    _entities[14].properties[5],
+  );
+
+  /// See [CaseEntity.archived].
+  static final archived = obx.QueryBooleanProperty<CaseEntity>(
+    _entities[14].properties[6],
   );
 }

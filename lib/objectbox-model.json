@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:273186095957995459",
-      "lastPropertyId": "23:4227626760840467567",
+      "lastPropertyId": "24:5870046742764235293",
       "name": "AppSettingsEntity",
       "properties": [
         {
@@ -122,6 +122,11 @@
         {
           "id": "23:4227626760840467567",
           "name": "chunkingMode",
+          "type": 9
+        },
+        {
+          "id": "24:5870046742764235293",
+          "name": "navigationMode",
           "type": 9
         }
       ],
@@ -379,7 +384,7 @@
     },
     {
       "id": "7:1380656129107944180",
-      "lastPropertyId": "8:4415689705722391472",
+      "lastPropertyId": "10:1147308889653075818",
       "name": "FlowchartEdgeEntity",
       "properties": [
         {
@@ -431,6 +436,16 @@
         {
           "id": "8:4415689705722391472",
           "name": "rejectionReason",
+          "type": 9
+        },
+        {
+          "id": "9:1215957641228073803",
+          "name": "sortOrder",
+          "type": 6
+        },
+        {
+          "id": "10:1147308889653075818",
+          "name": "sourceRectJson",
           "type": 9
         }
       ],
@@ -488,7 +503,7 @@
     },
     {
       "id": "9:8189989850069876083",
-      "lastPropertyId": "8:7047686114766363714",
+      "lastPropertyId": "12:2062772467636463400",
       "name": "FlowchartNodeEntity",
       "properties": [
         {
@@ -537,6 +552,26 @@
           "id": "8:7047686114766363714",
           "name": "positionY",
           "type": 8
+        },
+        {
+          "id": "9:2110118542972028306",
+          "name": "shape",
+          "type": 9
+        },
+        {
+          "id": "10:2478055112928034120",
+          "name": "sortOrder",
+          "type": 6
+        },
+        {
+          "id": "11:3822327384415088718",
+          "name": "sourceRectJson",
+          "type": 9
+        },
+        {
+          "id": "12:2062772467636463400",
+          "name": "colorSlot",
+          "type": 6
         }
       ],
       "relations": []
@@ -723,10 +758,128 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "13:8331410197646792343",
+      "lastPropertyId": "4:7149974916273081465",
+      "name": "CaseChatLinkEntity",
+      "properties": [
+        {
+          "id": "1:5284053933645392693",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5660822405057004636",
+          "name": "publicId",
+          "indexId": "30:7813913822463373989",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:4824122736082127848",
+          "name": "casePublicId",
+          "indexId": "31:4135847190806906225",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:7149974916273081465",
+          "name": "chatThreadPublicId",
+          "indexId": "32:3421571975781610866",
+          "type": 9,
+          "flags": 2048
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "14:3598742986997018602",
+      "lastPropertyId": "4:2346448514583154437",
+      "name": "CaseDocumentLinkEntity",
+      "properties": [
+        {
+          "id": "1:5213330306347250414",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:140657177444885812",
+          "name": "publicId",
+          "indexId": "33:444749050799028978",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:4684616616459098095",
+          "name": "casePublicId",
+          "indexId": "34:1713857656070008605",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:2346448514583154437",
+          "name": "documentPublicId",
+          "indexId": "35:4463842555593368237",
+          "type": 9,
+          "flags": 2048
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "15:6991698022716353084",
+      "lastPropertyId": "7:5302358811458865444",
+      "name": "CaseEntity",
+      "properties": [
+        {
+          "id": "1:1281563381161598257",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3317173884338585122",
+          "name": "publicId",
+          "indexId": "36:1496797476098529589",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:1054685829702859873",
+          "name": "title",
+          "indexId": "37:1787844394609503170",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:4667261123417091041",
+          "name": "notes",
+          "type": 9
+        },
+        {
+          "id": "5:6750635640271645096",
+          "name": "createdAtMillis",
+          "type": 6
+        },
+        {
+          "id": "6:605571212701423109",
+          "name": "updatedAtMillis",
+          "type": 6
+        },
+        {
+          "id": "7:5302358811458865444",
+          "name": "archived",
+          "type": 1
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "12:3704183058245934020",
-  "lastIndexId": "29:1936837688981446356",
+  "lastEntityId": "15:6991698022716353084",
+  "lastIndexId": "37:1787844394609503170",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

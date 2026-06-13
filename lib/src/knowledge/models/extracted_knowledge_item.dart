@@ -9,6 +9,14 @@ class ExtractedKnowledgeItem {
     this.pageNumber,
     this.sectionTitle,
     this.embeddingModel,
+    this.flowchartId,
+    this.flowchartElementId,
+    this.flowchartFromId,
+    this.flowchartToId,
+    this.flowchartEdgeLabel,
+    this.flowchartShape,
+    this.flowchartOrder = 0,
+    this.sourceRectJson,
   });
 
   final String id;
@@ -18,14 +26,22 @@ class ExtractedKnowledgeItem {
   final int? pageNumber;
   final String? sectionTitle;
   final String? embeddingModel;
+  final String? flowchartId;
+  final String? flowchartElementId;
+  final String? flowchartFromId;
+  final String? flowchartToId;
+  final String? flowchartEdgeLabel;
+  final String? flowchartShape;
+  final int flowchartOrder;
+  final String? sourceRectJson;
 
   String get typeLabel {
     return switch (sourceType) {
       EvidenceSourceType.textChunk => 'Szöveg',
       EvidenceSourceType.tableChunk => 'Táblázat',
       EvidenceSourceType.scoreChunk => 'Score',
-      EvidenceSourceType.flowchartNode || EvidenceSourceType.flowchartEdge =>
-        'Flowchart',
+      EvidenceSourceType.flowchartNode ||
+      EvidenceSourceType.flowchartEdge => 'Flowchart',
     };
   }
 

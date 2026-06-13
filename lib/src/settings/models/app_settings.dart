@@ -7,6 +7,22 @@ class AnswerModes {
   static const autoFallback = 'auto_fallback';
 }
 
+enum AppNavigationMode {
+  drawer('drawer'),
+  bottomNav('bottom_nav');
+
+  const AppNavigationMode(this.wireName);
+
+  final String wireName;
+
+  static AppNavigationMode fromWireName(String value) {
+    return AppNavigationMode.values.firstWhere(
+      (mode) => mode.wireName == value,
+      orElse: () => AppNavigationMode.drawer,
+    );
+  }
+}
+
 class ChunkingModes {
   static const compact = 'compact';
   static const normal = 'normal';
@@ -41,6 +57,7 @@ class AppSettings {
     required this.voiceMode,
     required this.voiceLocale,
     required this.chunkingMode,
+    required this.navigationMode,
   });
 
   factory AppSettings.defaults() {
@@ -63,6 +80,7 @@ class AppSettings {
       voiceMode: VoiceMode.whisperConversation,
       voiceLocale: 'hu-HU',
       chunkingMode: ChunkingModes.normal,
+      navigationMode: AppNavigationMode.drawer,
     );
   }
 
@@ -84,6 +102,7 @@ class AppSettings {
   final VoiceMode voiceMode;
   final String voiceLocale;
   final String chunkingMode;
+  final AppNavigationMode navigationMode;
 
   String get answerMode {
     return switch (runtimeMode) {
@@ -137,6 +156,7 @@ class AppSettings {
     VoiceMode? voiceMode,
     String? voiceLocale,
     String? chunkingMode,
+    AppNavigationMode? navigationMode,
   }) {
     final effectiveProvider = activeProvider ?? this.activeProvider;
     final aliasesTargetOpenAi = effectiveProvider == AiProvider.openAi;
@@ -196,6 +216,7 @@ class AppSettings {
       voiceMode: voiceMode ?? this.voiceMode,
       voiceLocale: voiceLocale ?? this.voiceLocale,
       chunkingMode: ChunkingModes.normalize(chunkingMode ?? this.chunkingMode),
+      navigationMode: navigationMode ?? this.navigationMode,
     );
   }
 }

@@ -260,6 +260,10 @@ class FlowchartNodeEntity {
     this.rejectionReason,
     this.positionX = 0,
     this.positionY = 0,
+    this.shape = 'process',
+    this.sortOrder = 0,
+    this.sourceRectJson,
+    this.colorSlot,
   });
 
   @Id()
@@ -279,6 +283,10 @@ class FlowchartNodeEntity {
   String? rejectionReason;
   double positionX;
   double positionY;
+  String shape;
+  int sortOrder;
+  String? sourceRectJson;
+  int? colorSlot;
 }
 
 @Entity()
@@ -292,6 +300,8 @@ class FlowchartEdgeEntity {
     required this.label,
     required this.validationState,
     this.rejectionReason,
+    this.sortOrder = 0,
+    this.sourceRectJson,
   });
 
   @Id()
@@ -315,6 +325,8 @@ class FlowchartEdgeEntity {
   String validationState;
 
   String? rejectionReason;
+  int sortOrder;
+  String? sourceRectJson;
 }
 
 @Entity()
@@ -380,6 +392,77 @@ class ProcessingJobEntity {
 }
 
 @Entity()
+class CaseEntity {
+  CaseEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.title,
+    required this.notes,
+    required this.createdAtMillis,
+    required this.updatedAtMillis,
+    this.archived = false,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String title;
+
+  String notes;
+  int createdAtMillis;
+  int updatedAtMillis;
+  bool archived;
+}
+
+@Entity()
+class CaseChatLinkEntity {
+  CaseChatLinkEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.casePublicId,
+    required this.chatThreadPublicId,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String casePublicId;
+
+  @Index()
+  String chatThreadPublicId;
+}
+
+@Entity()
+class CaseDocumentLinkEntity {
+  CaseDocumentLinkEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.casePublicId,
+    required this.documentPublicId,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String casePublicId;
+
+  @Index()
+  String documentPublicId;
+}
+
+@Entity()
 class AppSettingsEntity {
   AppSettingsEntity({
     this.id = 0,
@@ -405,6 +488,7 @@ class AppSettingsEntity {
     required this.voiceMode,
     required this.voiceLocale,
     required this.chunkingMode,
+    required this.navigationMode,
   });
 
   @Id()
@@ -432,4 +516,5 @@ class AppSettingsEntity {
   String voiceMode;
   String voiceLocale;
   String chunkingMode;
+  String navigationMode;
 }

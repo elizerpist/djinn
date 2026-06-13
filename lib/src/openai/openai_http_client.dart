@@ -72,7 +72,9 @@ class OpenAiHttpClient implements OpenAiClient {
     final file = File(pdfPath);
     final bytes = await file.readAsBytes();
     final mimeType = _mimeTypeForPath(pdfPath);
-    final filename = pdfPath.trim().isEmpty ? 'document.pdf' : p.basename(pdfPath);
+    final filename = pdfPath.trim().isEmpty
+        ? 'document.pdf'
+        : p.basename(pdfPath);
     final response = await _postJson('/v1/responses', {
       'model': model,
       'input': [
@@ -113,11 +115,7 @@ class OpenAiHttpClient implements OpenAiClient {
     if (mimeType.startsWith('image/')) {
       return {'type': 'input_image', 'image_url': dataUrl};
     }
-    return {
-      'type': 'input_file',
-      'filename': filename,
-      'file_data': dataUrl,
-    };
+    return {'type': 'input_file', 'filename': filename, 'file_data': dataUrl};
   }
 
   String _mimeTypeForPath(String path) {
@@ -427,6 +425,21 @@ class OpenAiHttpClient implements OpenAiClient {
                   return AiFlowchartNode(
                     id: _requiredString(node, 'id', 'flowchart node'),
                     label: _requiredString(node, 'label', 'flowchart node'),
+                    shape: AiFlowchartNodeShape.fromWireName(
+                      _optionalString(node, 'shape', 'flowchart node'),
+                    ),
+                    order:
+                        _optionalNum(
+                          node,
+                          'order',
+                          'flowchart node',
+                        )?.toInt() ??
+                        0,
+                    sourceRect: _optionalMap(
+                      node,
+                      'source_rect',
+                      'flowchart node',
+                    ),
                   );
                 })
                 .toList(growable: false),
@@ -450,6 +463,18 @@ class OpenAiHttpClient implements OpenAiClient {
                       'flowchart edge',
                     ),
                     label: _requiredString(edge, 'label', 'flowchart edge'),
+                    order:
+                        _optionalNum(
+                          edge,
+                          'order',
+                          'flowchart edge',
+                        )?.toInt() ??
+                        0,
+                    sourceRect: _optionalMap(
+                      edge,
+                      'source_rect',
+                      'flowchart edge',
+                    ),
                   );
                 })
                 .toList(growable: false),
@@ -513,6 +538,21 @@ class OpenAiHttpClient implements OpenAiClient {
     throw OpenAiException('invalid OpenAI extraction $context $key');
   }
 
+  Map<String, Object?>? _optionalMap(
+    Map<dynamic, dynamic> json,
+    String key,
+    String context,
+  ) {
+    final value = json[key];
+    if (value == null) {
+      return null;
+    }
+    if (value is Map) {
+      return Map<String, Object?>.from(value);
+    }
+    throw OpenAiException('invalid OpenAI extraction $context $key');
+  }
+
   num? _optionalNum(Map<dynamic, dynamic> json, String key, String context) {
     final value = json[key];
     if (value == null || value is num) {
@@ -534,7 +574,7 @@ Extract this OMSZ document into source-grounded chunks. Return JSON only. Includ
 ''';
 
 const _visualExtractionInstruction = '''
-If a page contains a table, score, or flowchart as an image, extract it from the document image content. Preserve clinically relevant table rows. For RAVE or other scores, return each criterion as a score item. For flowcharts, return candidate nodes and directed edges; do not invent uncertain nodes.
+If a page contains a table, score, or flowchart as an image, extract it from the document image content. Preserve clinically relevant table rows. For RAVE or other scores, return each criterion as a score item. For flowcharts, return every visible clinical box and directed arrow, including medication/treatment process boxes. Label each node shape as one of start_end, process, decision, input_output, subprocess, data_store, connector, or unknown. Use order to preserve the reading/flow order. If a bounding box is visible, return source_rect using image-relative x, y, width, height; otherwise return null. Do not invent uncertain nodes.
 ''';
 
 String _chunkingInstruction(String mode) {
@@ -655,8 +695,21 @@ const Map<String, Object?> _documentExtractionSchema = {
               'properties': {
                 'id': {'type': 'string'},
                 'label': {'type': 'string'},
+                'shape': {'type': 'string'},
+                'order': {'type': 'integer'},
+                'source_rect': {
+                  'type': ['object', 'null'],
+                  'additionalProperties': false,
+                  'properties': {
+                    'x': {'type': 'number'},
+                    'y': {'type': 'number'},
+                    'width': {'type': 'number'},
+                    'height': {'type': 'number'},
+                  },
+                  'required': ['x', 'y', 'width', 'height'],
+                },
               },
-              'required': ['id', 'label'],
+              'required': ['id', 'label', 'shape', 'order', 'source_rect'],
             },
           },
           'edges': {
@@ -669,8 +722,27 @@ const Map<String, Object?> _documentExtractionSchema = {
                 'from_node_id': {'type': 'string'},
                 'to_node_id': {'type': 'string'},
                 'label': {'type': 'string'},
+                'order': {'type': 'integer'},
+                'source_rect': {
+                  'type': ['object', 'null'],
+                  'additionalProperties': false,
+                  'properties': {
+                    'x': {'type': 'number'},
+                    'y': {'type': 'number'},
+                    'width': {'type': 'number'},
+                    'height': {'type': 'number'},
+                  },
+                  'required': ['x', 'y', 'width', 'height'],
+                },
               },
-              'required': ['id', 'from_node_id', 'to_node_id', 'label'],
+              'required': [
+                'id',
+                'from_node_id',
+                'to_node_id',
+                'label',
+                'order',
+                'source_rect',
+              ],
             },
           },
         },
