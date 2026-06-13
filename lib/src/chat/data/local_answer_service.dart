@@ -251,6 +251,7 @@ class LocalAnswerService implements AnswerService {
       section: null,
       excerpt: evidence.text,
       sourceId: evidence.id,
+      sourceType: evidence.sourceType.wireName,
       sourceLabel: evidence.label,
       validationState: evidence.validationState.wireName,
     );
@@ -275,7 +276,8 @@ class LocalAnswerService implements AnswerService {
     const maxChars = 1800;
     const maxMessageChars = 420;
     final lines = <String>[];
-    for (final message in messages.reversed.take(maxMessages).toList().reversed) {
+    for (final message
+        in messages.reversed.take(maxMessages).toList().reversed) {
       final text = _truncate(message.text.trim(), maxMessageChars);
       if (text.isEmpty) {
         continue;

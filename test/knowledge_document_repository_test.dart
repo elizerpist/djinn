@@ -297,51 +297,99 @@ void main() {
     expect((await repository.exportChunkPackage(document.id)).chunks, isEmpty);
   });
 
-  test('lists extracted table and score items with their evidence types', () async {
+  test(
+    'lists extracted table and score items with their evidence types',
+    () async {
+      final repository = KnowledgeDocumentRepository();
+      final document = await repository.addDocument(
+        filename: 'race-score.png',
+        localPath: '/memory/race-score.png',
+        sizeBytes: 4,
+        importedAt: DateTime.utc(2026, 6, 13),
+        sha256: 'hash-race',
+      );
+
+      await repository.saveExtractedEvidence(
+        documentPublicId: document.id,
+        evidence: const AiExtractedEvidence(
+          id: 'table--1-row-1',
+          text: 'Arcbénulás: nincs, 0 pont; enyhe, 1 pont; súlyos, 2 pont.',
+          pageNumber: 1,
+          sectionTitle: 'RACE Score',
+          sourceType: AiEvidenceSourceType.table,
+        ),
+        embedding: List<double>.filled(3072, 0.1),
+        embeddingModel: 'gemini-embedding-001',
+      );
+      await repository.saveExtractedEvidence(
+        documentPublicId: document.id,
+        evidence: const AiExtractedEvidence(
+          id: 'score--1',
+          text:
+              'RACE score értelmezés: 0-9 pont, magasabb pontszám nagyér-okklúziót valószínűsít.',
+          pageNumber: 1,
+          sectionTitle: 'RACE Score',
+          sourceType: AiEvidenceSourceType.score,
+        ),
+        embedding: List<double>.filled(3072, 0.2),
+        embeddingModel: 'gemini-embedding-001',
+      );
+
+      final items = await repository.listExtractedKnowledgeItems(document.id);
+
+      expect(items.map((item) => item.sourceType), [
+        EvidenceSourceType.tableChunk,
+        EvidenceSourceType.scoreChunk,
+      ]);
+      expect(items.first.typeLabel, 'Táblázat');
+      expect(items.last.typeLabel, 'Score');
+      expect(items.first.text, contains('Arcbénulás'));
+      expect(items.last.embeddingModel, 'gemini-embedding-001');
+    },
+  );
+
+  test('lists flowchart nodes and edges as separate extracted items', () async {
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
-      filename: 'race-score.png',
-      localPath: '/memory/race-score.png',
+      filename: 'stroke.pdf',
+      localPath: '/memory/stroke.pdf',
       sizeBytes: 4,
       importedAt: DateTime.utc(2026, 6, 13),
-      sha256: 'hash-race',
+      sha256: 'hash-flow',
     );
 
-    await repository.saveExtractedEvidence(
+    await repository.saveFlowchartCandidate(
       documentPublicId: document.id,
-      evidence: const AiExtractedEvidence(
-        id: 'table--1-row-1',
-        text: 'Arcbénulás: nincs, 0 pont; enyhe, 1 pont; súlyos, 2 pont.',
-        pageNumber: 1,
-        sectionTitle: 'RACE Score',
-        sourceType: AiEvidenceSourceType.table,
+      flowchart: const AiFlowchartCandidate(
+        id: 'flow-1',
+        pageNumber: 3,
+        title: 'Stroke döntési fa',
+        nodes: [
+          AiFlowchartNode(id: 'n1', label: 'ABCDE vizsgálat'),
+          AiFlowchartNode(id: 'n2', label: 'Légzési elégtelenség?'),
+        ],
+        edges: [
+          AiFlowchartEdge(
+            id: 'e1',
+            fromNodeId: 'n1',
+            toNodeId: 'n2',
+            label: 'romlik',
+          ),
+        ],
       ),
-      embedding: List<double>.filled(3072, 0.1),
-      embeddingModel: 'gemini-embedding-001',
-    );
-    await repository.saveExtractedEvidence(
-      documentPublicId: document.id,
-      evidence: const AiExtractedEvidence(
-        id: 'score--1',
-        text: 'RACE score értelmezés: 0-9 pont, magasabb pontszám nagyér-okklúziót valószínűsít.',
-        pageNumber: 1,
-        sectionTitle: 'RACE Score',
-        sourceType: AiEvidenceSourceType.score,
-      ),
-      embedding: List<double>.filled(3072, 0.2),
-      embeddingModel: 'gemini-embedding-001',
     );
 
     final items = await repository.listExtractedKnowledgeItems(document.id);
 
     expect(items.map((item) => item.sourceType), [
-      EvidenceSourceType.tableChunk,
-      EvidenceSourceType.scoreChunk,
+      EvidenceSourceType.flowchartNode,
+      EvidenceSourceType.flowchartNode,
+      EvidenceSourceType.flowchartEdge,
     ]);
-    expect(items.first.typeLabel, 'Táblázat');
-    expect(items.last.typeLabel, 'Score');
-    expect(items.first.text, contains('Arcbénulás'));
-    expect(items.last.embeddingModel, 'gemini-embedding-001');
+    expect(
+      items.last.text,
+      'ABCDE vizsgálat -> Légzési elégtelenség? [romlik]',
+    );
+    expect(items.last.sectionTitle, 'Stroke döntési fa kapcsolat');
   });
-
 }

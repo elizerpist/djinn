@@ -6,6 +6,7 @@ class ChatCitation {
     this.page,
     this.section,
     this.sourceId,
+    this.sourceType,
     this.sourceLabel,
     this.validationState,
   });
@@ -16,6 +17,7 @@ class ChatCitation {
   final String? section;
   final String excerpt;
   final String? sourceId;
+  final String? sourceType;
   final String? sourceLabel;
   final String? validationState;
 
@@ -27,6 +29,7 @@ class ChatCitation {
       'section': section,
       'excerpt': excerpt,
       'sourceId': sourceId,
+      'sourceType': sourceType,
       'sourceLabel': sourceLabel,
       'validationState': validationState,
     };
@@ -41,6 +44,8 @@ class ChatCitation {
       section: json['section'] as String?,
       excerpt: json['excerpt'] as String? ?? '',
       sourceId: json['sourceId'] as String? ?? json['source_id'] as String?,
+      sourceType:
+          json['sourceType'] as String? ?? json['source_type'] as String?,
       sourceLabel:
           json['sourceLabel'] as String? ?? json['source_label'] as String?,
       validationState:

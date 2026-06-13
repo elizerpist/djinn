@@ -72,10 +72,13 @@ class KnowledgeDocumentRow extends StatelessWidget {
                           spacing: 4,
                           runSpacing: 4,
                           children: [
-                            _Badge(text: document.syncStatusLabel),
+                            _Badge(
+                              text: document.syncStatusLabel,
+                              style: _BadgeStyle.forStatus(document.status),
+                            ),
                             _Badge(text: _sizeLabel(document.sizeBytes)),
                             if (document.status.isReady)
-                              const _Badge(text: 'RAG'),
+                              const _Badge(text: 'RAG', style: _BadgeStyle.rag),
                           ],
                         ),
                       ],
@@ -134,29 +137,94 @@ class KnowledgeDocumentRow extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge({required this.text});
+  const _Badge({required this.text, this.style = _BadgeStyle.neutral});
 
   final String text;
+  final _BadgeStyle style;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
+        color: style.background,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: style.border),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         child: Text(
           text,
-          style: const TextStyle(
-            color: Color(0xFF374151),
+          style: TextStyle(
+            color: style.foreground,
             fontSize: 11,
             fontWeight: FontWeight.w600,
           ),
         ),
       ),
     );
+  }
+}
+
+class _BadgeStyle {
+  const _BadgeStyle({
+    required this.background,
+    required this.foreground,
+    required this.border,
+  });
+
+  final Color background;
+  final Color foreground;
+  final Color border;
+
+  static const neutral = _BadgeStyle(
+    background: Color(0xFFF3F4F6),
+    foreground: Color(0xFF374151),
+    border: Color(0xFFE5E7EB),
+  );
+
+  static const ready = _BadgeStyle(
+    background: Color(0xFFDCFCE7),
+    foreground: Color(0xFF166534),
+    border: Color(0xFFBBF7D0),
+  );
+
+  static const rag = _BadgeStyle(
+    background: Color(0xFFE0F2FE),
+    foreground: Color(0xFF075985),
+    border: Color(0xFFBAE6FD),
+  );
+
+  static const working = _BadgeStyle(
+    background: Color(0xFFDBEAFE),
+    foreground: Color(0xFF1D4ED8),
+    border: Color(0xFFBFDBFE),
+  );
+
+  static const review = _BadgeStyle(
+    background: Color(0xFFFEF3C7),
+    foreground: Color(0xFF92400E),
+    border: Color(0xFFFDE68A),
+  );
+
+  static const danger = _BadgeStyle(
+    background: Color(0xFFFEE2E2),
+    foreground: Color(0xFF991B1B),
+    border: Color(0xFFFECACA),
+  );
+
+  static _BadgeStyle forStatus(KnowledgeDocumentStatus status) {
+    return switch (status) {
+      KnowledgeDocumentStatus.imported ||
+      KnowledgeDocumentStatus.pendingIngest => neutral,
+      KnowledgeDocumentStatus.uploading ||
+      KnowledgeDocumentStatus.processing ||
+      KnowledgeDocumentStatus.embedded => working,
+      KnowledgeDocumentStatus.ready ||
+      KnowledgeDocumentStatus.processed => ready,
+      KnowledgeDocumentStatus.needsReview => review,
+      KnowledgeDocumentStatus.blockedMissingApiKey ||
+      KnowledgeDocumentStatus.blockedOffline ||
+      KnowledgeDocumentStatus.failed => danger,
+    };
   }
 }

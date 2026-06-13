@@ -37,7 +37,9 @@ class AiExtractedChunk {
 enum AiEvidenceSourceType {
   textChunk('text_chunk'),
   table('table_chunk'),
-  score('score_chunk');
+  score('score_chunk'),
+  flowchartNode('flowchart_node'),
+  flowchartEdge('flowchart_edge');
 
   const AiEvidenceSourceType(this.wireName);
 
@@ -120,7 +122,44 @@ class AiExtractionResult {
         sourceType: AiEvidenceSourceType.textChunk,
       ),
     ...evidence,
+    for (final flowchart in flowcharts) ..._flowchartEvidence(flowchart),
   ];
+}
+
+List<AiExtractedEvidence> _flowchartEvidence(AiFlowchartCandidate flowchart) {
+  final title = (flowchart.title ?? 'Flowchart').trim();
+  final nodeLabels = {
+    for (final node in flowchart.nodes) node.id: node.label.trim(),
+  };
+  final items = <AiExtractedEvidence>[
+    for (final node in flowchart.nodes)
+      if (node.label.trim().isNotEmpty)
+        AiExtractedEvidence(
+          id: '${flowchart.id}:${node.id}',
+          text: node.label.trim(),
+          pageNumber: flowchart.pageNumber,
+          sectionTitle: title.isEmpty ? 'Flowchart' : title,
+          sourceType: AiEvidenceSourceType.flowchartNode,
+        ),
+  ];
+  for (final edge in flowchart.edges) {
+    final from = nodeLabels[edge.fromNodeId] ?? edge.fromNodeId;
+    final to = nodeLabels[edge.toNodeId] ?? edge.toNodeId;
+    final label = edge.label.trim();
+    final relation = label.isEmpty ? '$from -> $to' : '$from -> $to [$label]';
+    items.add(
+      AiExtractedEvidence(
+        id: '${flowchart.id}:${edge.id}',
+        text: relation,
+        pageNumber: flowchart.pageNumber,
+        sectionTitle: title.isEmpty
+            ? 'Flowchart kapcsolat'
+            : '$title kapcsolat',
+        sourceType: AiEvidenceSourceType.flowchartEdge,
+      ),
+    );
+  }
+  return items;
 }
 
 abstract class AiClient {

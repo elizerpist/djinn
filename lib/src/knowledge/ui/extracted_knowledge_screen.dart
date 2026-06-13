@@ -16,7 +16,8 @@ class ExtractedKnowledgeScreen extends StatefulWidget {
   final KnowledgeDocument document;
 
   @override
-  State<ExtractedKnowledgeScreen> createState() => _ExtractedKnowledgeScreenState();
+  State<ExtractedKnowledgeScreen> createState() =>
+      _ExtractedKnowledgeScreenState();
 }
 
 class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
@@ -83,8 +84,10 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
                         items: items
                             .where(
                               (item) =>
-                                  item.sourceType == EvidenceSourceType.flowchartNode ||
-                                  item.sourceType == EvidenceSourceType.flowchartEdge,
+                                  item.sourceType ==
+                                      EvidenceSourceType.flowchartNode ||
+                                  item.sourceType ==
+                                      EvidenceSourceType.flowchartEdge,
                             )
                             .toList(growable: false),
                       ),
@@ -160,9 +163,8 @@ class _ExtractedKnowledgeList extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       itemCount: items.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) => _ExtractedKnowledgeTile(
-        item: items[index],
-      ),
+      itemBuilder: (context, index) =>
+          _ExtractedKnowledgeTile(item: items[index]),
     );
   }
 }
@@ -212,19 +214,13 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: SelectableText(item.text),
-          ),
+          _ExtractedKnowledgeBody(item: item),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
               _metadata(item),
-              style: const TextStyle(
-                color: Color(0xFF6B7280),
-                fontSize: 12,
-              ),
+              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
             ),
           ),
         ],
@@ -233,7 +229,10 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
   }
 
   static String _metadata(ExtractedKnowledgeItem item) {
-    final parts = <String>['id: ${item.id}', 'típus: ${item.sourceType.wireName}'];
+    final parts = <String>[
+      'id: ${item.id}',
+      'típus: ${item.sourceType.wireName}',
+    ];
     final model = item.embeddingModel;
     if (model != null && model.isNotEmpty) {
       parts.add('embedding: $model');
@@ -246,8 +245,8 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
       EvidenceSourceType.textChunk => Icons.subject,
       EvidenceSourceType.tableChunk => Icons.table_chart_outlined,
       EvidenceSourceType.scoreChunk => Icons.format_list_numbered,
-      EvidenceSourceType.flowchartNode || EvidenceSourceType.flowchartEdge =>
-        Icons.account_tree_outlined,
+      EvidenceSourceType.flowchartNode ||
+      EvidenceSourceType.flowchartEdge => Icons.account_tree_outlined,
     };
   }
 
@@ -256,9 +255,148 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
       EvidenceSourceType.textChunk => const Color(0xFF2563EB),
       EvidenceSourceType.tableChunk => const Color(0xFF047857),
       EvidenceSourceType.scoreChunk => const Color(0xFFB45309),
-      EvidenceSourceType.flowchartNode || EvidenceSourceType.flowchartEdge =>
-        const Color(0xFF7C3AED),
+      EvidenceSourceType.flowchartNode ||
+      EvidenceSourceType.flowchartEdge => const Color(0xFF7C3AED),
     };
+  }
+}
+
+class _ExtractedKnowledgeBody extends StatelessWidget {
+  const _ExtractedKnowledgeBody({required this.item});
+
+  final ExtractedKnowledgeItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (item.sourceType) {
+      EvidenceSourceType.tableChunk ||
+      EvidenceSourceType.scoreChunk => _StructuredTableBlock(item: item),
+      EvidenceSourceType.flowchartNode ||
+      EvidenceSourceType.flowchartEdge => _FlowchartBlock(item: item),
+      EvidenceSourceType.textChunk => Align(
+        alignment: Alignment.centerLeft,
+        child: SelectableText(item.text),
+      ),
+    };
+  }
+}
+
+class _StructuredTableBlock extends StatelessWidget {
+  const _StructuredTableBlock({required this.item});
+
+  final ExtractedKnowledgeItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = _rows(item.text);
+    if (rows.isEmpty) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: SelectableText(item.text),
+      );
+    }
+    final columns = rows.fold<int>(
+      0,
+      (max, row) => row.length > max ? row.length : max,
+    );
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Table(
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        columnWidths: {
+          for (var i = 0; i < columns; i += 1) i: const FlexColumnWidth(),
+        },
+        children: [
+          for (var index = 0; index < rows.length; index += 1)
+            TableRow(
+              decoration: BoxDecoration(
+                color: index == 0 ? const Color(0xFFF8FAFC) : Colors.white,
+              ),
+              children: [
+                for (var column = 0; column < columns; column += 1)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
+                    child: SelectableText(
+                      column < rows[index].length ? rows[index][column] : '',
+                      style: TextStyle(
+                        color: const Color(0xFF111827),
+                        fontSize: 12,
+                        fontWeight: index == 0
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<List<String>> _rows(String value) {
+    final lines = value
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    return [
+      for (final line in lines)
+        line
+            .split(line.contains('|') ? '|' : ';')
+            .map((part) => part.trim())
+            .where((part) => part.isNotEmpty)
+            .toList(growable: false),
+    ].where((row) => row.isNotEmpty).toList(growable: false);
+  }
+}
+
+class _FlowchartBlock extends StatelessWidget {
+  const _FlowchartBlock({required this.item});
+
+  final ExtractedKnowledgeItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdge = item.sourceType == EvidenceSourceType.flowchartEdge;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAF5FF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE9D5FF)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isEdge ? Icons.arrow_forward : Icons.radio_button_unchecked,
+            size: 18,
+            color: const Color(0xFF7C3AED),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SelectableText(
+              item.text,
+              style: const TextStyle(
+                color: Color(0xFF4C1D95),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -275,7 +413,11 @@ class _EmptyExtractedKnowledge extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.find_in_page_outlined, size: 42, color: Color(0xFF9CA3AF)),
+            const Icon(
+              Icons.find_in_page_outlined,
+              size: 42,
+              color: Color(0xFF9CA3AF),
+            ),
             const SizedBox(height: 12),
             Text(
               filename,

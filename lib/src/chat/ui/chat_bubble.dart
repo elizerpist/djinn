@@ -272,38 +272,205 @@ class _CitationRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (citation.sourceLabel case final label?)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: const Color(0xFFBFDBFE)),
-                  ),
-                  child: Text(
-                    label,
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (citation.sourceLabel case final label?)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          color: Color(0xFF1D4ED8),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  Text(
+                    titleText,
                     style: const TextStyle(
-                      color: Color(0xFF1D4ED8),
+                      color: Color(0xFF6B7280),
                       fontSize: 11,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              Text(
-                titleText,
-                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11),
+                ],
               ),
+              if (_StructuredCitationCard.supports(citation)) ...[
+                const SizedBox(height: 6),
+                _StructuredCitationCard(
+                  citation: citation,
+                  sourceKey: sourceKey,
+                ),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _StructuredCitationCard extends StatelessWidget {
+  const _StructuredCitationCard({
+    required this.citation,
+    required this.sourceKey,
+  });
+
+  final ChatCitation citation;
+  final String sourceKey;
+
+  static bool supports(ChatCitation citation) {
+    return switch (citation.sourceType) {
+      'table_chunk' ||
+      'score_chunk' ||
+      'flowchart_node' ||
+      'flowchart_edge' => citation.excerpt.trim().isNotEmpty,
+      _ => false,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (citation.sourceType == 'flowchart_node' ||
+        citation.sourceType == 'flowchart_edge') {
+      return _FlowchartCitationCard(citation: citation, sourceKey: sourceKey);
+    }
+    return _TableCitationCard(citation: citation, sourceKey: sourceKey);
+  }
+}
+
+class _TableCitationCard extends StatelessWidget {
+  const _TableCitationCard({required this.citation, required this.sourceKey});
+
+  final ChatCitation citation;
+  final String sourceKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = _rows(citation.excerpt);
+    final columns = rows.fold<int>(
+      0,
+      (max, row) => row.length > max ? row.length : max,
+    );
+    return Container(
+      key: ValueKey('citation-card-$sourceKey'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Table(
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        columnWidths: {
+          for (var i = 0; i < columns; i += 1) i: const FlexColumnWidth(),
+        },
+        children: [
+          for (var index = 0; index < rows.length; index += 1)
+            TableRow(
+              decoration: BoxDecoration(
+                color: index == 0
+                    ? const Color(0xFFEFF6FF)
+                    : Colors.transparent,
+              ),
+              children: [
+                for (var column = 0; column < columns; column += 1)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 5,
+                    ),
+                    child: Text(
+                      column < rows[index].length ? rows[index][column] : '',
+                      style: TextStyle(
+                        color: const Color(0xFF334155),
+                        fontSize: 11,
+                        fontWeight: index == 0
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<List<String>> _rows(String value) {
+    final lines = value
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    return [
+      for (final line in lines)
+        line
+            .split(line.contains('|') ? '|' : ';')
+            .map((part) => part.trim())
+            .where((part) => part.isNotEmpty)
+            .toList(growable: false),
+    ].where((row) => row.isNotEmpty).toList(growable: false);
+  }
+}
+
+class _FlowchartCitationCard extends StatelessWidget {
+  const _FlowchartCitationCard({
+    required this.citation,
+    required this.sourceKey,
+  });
+
+  final ChatCitation citation;
+  final String sourceKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: ValueKey('citation-card-$sourceKey'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAF5FF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE9D5FF)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.account_tree_outlined,
+            size: 16,
+            color: Color(0xFF7C3AED),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              citation.excerpt,
+              style: const TextStyle(
+                color: Color(0xFF4C1D95),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

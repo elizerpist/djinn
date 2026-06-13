@@ -62,6 +62,7 @@ void main() {
     expect(result.status, 'grounded');
     expect(result.hasValidationWarning, isTrue);
     expect(result.citations.single.sourceId, 'node-1');
+    expect(result.citations.single.sourceType, 'flowchart_node');
     expect(DebugConsole.allText, contains('[Chat/RAG] retrieved count=1'));
     expect(
       DebugConsole.allText,
@@ -105,57 +106,66 @@ void main() {
     );
   });
 
-  test('uses recent chat context for follow-up retrieval and generation', () async {
-    final client = _RecordingAiClient(
-      answerText: 'Azert, mert idofuggo beavatkozas.',
-    );
-    final service = LocalAnswerService(
-      openAiClient: client,
-      retriever: MemoryLocalRetriever(const [
-        SourceEvidence(
-          id: 'chunk-1',
-          sourceType: EvidenceSourceType.textChunk,
-          text: 'A trombolizis idofuggo beavatkozas.',
-          label: 'Stroke protokoll',
-          validationState: ValidationState.validated,
-          score: 0.95,
-        ),
-      ]),
-      citationVerifier: CitationVerifier(),
-      loadSettings: () async => AppSettings.defaults(),
-      hasApiKey: () async => true,
-      hasReadyDocuments: () async => true,
-    );
+  test(
+    'uses recent chat context for follow-up retrieval and generation',
+    () async {
+      final client = _RecordingAiClient(
+        answerText: 'Azert, mert idofuggo beavatkozas.',
+      );
+      final service = LocalAnswerService(
+        openAiClient: client,
+        retriever: MemoryLocalRetriever(const [
+          SourceEvidence(
+            id: 'chunk-1',
+            sourceType: EvidenceSourceType.textChunk,
+            text: 'A trombolizis idofuggo beavatkozas.',
+            label: 'Stroke protokoll',
+            validationState: ValidationState.validated,
+            score: 0.95,
+          ),
+        ]),
+        citationVerifier: CitationVerifier(),
+        loadSettings: () async => AppSettings.defaults(),
+        hasApiKey: () async => true,
+        hasReadyDocuments: () async => true,
+      );
 
-    final result = await service.answer(
-      'Miért?',
-      context: [
-        ChatMessage(
-          id: 'message-1',
-          conversationId: 'conversation-1',
-          sender: ChatSender.user,
-          text: 'Mikor kell trombolizis?',
-          createdAt: DateTime.utc(2026, 1, 1, 12),
-        ),
-        ChatMessage(
-          id: 'message-2',
-          conversationId: 'conversation-1',
-          sender: ChatSender.assistant,
-          text: 'A dokumentum szerint 4,5 oran belul merul fel.',
-          createdAt: DateTime.utc(2026, 1, 1, 12, 1),
-          status: 'grounded',
-        ),
-      ],
-    );
+      final result = await service.answer(
+        'Miért?',
+        context: [
+          ChatMessage(
+            id: 'message-1',
+            conversationId: 'conversation-1',
+            sender: ChatSender.user,
+            text: 'Mikor kell trombolizis?',
+            createdAt: DateTime.utc(2026, 1, 1, 12),
+          ),
+          ChatMessage(
+            id: 'message-2',
+            conversationId: 'conversation-1',
+            sender: ChatSender.assistant,
+            text: 'A dokumentum szerint 4,5 oran belul merul fel.',
+            createdAt: DateTime.utc(2026, 1, 1, 12, 1),
+            status: 'grounded',
+          ),
+        ],
+      );
 
-    expect(result.status, 'grounded');
-    expect(client.embeddingInputs.single, contains('Mikor kell trombolizis?'));
-    expect(client.embeddingInputs.single, contains('Aktualis kerdes: Miért?'));
-    expect(
-      client.conversationContexts.single,
-      contains('A dokumentum szerint 4,5 oran belul merul fel.'),
-    );
-  });
+      expect(result.status, 'grounded');
+      expect(
+        client.embeddingInputs.single,
+        contains('Mikor kell trombolizis?'),
+      );
+      expect(
+        client.embeddingInputs.single,
+        contains('Aktualis kerdes: Miért?'),
+      );
+      expect(
+        client.conversationContexts.single,
+        contains('A dokumentum szerint 4,5 oran belul merul fel.'),
+      );
+    },
+  );
 
   test('missing provider key log includes provider name in chat', () async {
     final service = LocalAnswerService(

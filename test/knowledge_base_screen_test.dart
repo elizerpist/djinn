@@ -85,7 +85,10 @@ void main() {
           repository: repository,
           importService: importService,
           pickPdfs: () async => [
-            PickedPdfFile(filename: 'rave-flowchart.png', bytes: [137, 80, 78, 71]),
+            PickedPdfFile(
+              filename: 'rave-flowchart.png',
+              bytes: [137, 80, 78, 71],
+            ),
           ],
           clock: () => DateTime.utc(2026, 1, 1, 12),
         ),
@@ -472,8 +475,6 @@ void main() {
     expect(_disabledPopupLabels(tester), isEmpty);
   });
 
-
-
   testWidgets('selection menu opens extracted table and score inspector', (
     tester,
   ) async {
@@ -501,7 +502,8 @@ void main() {
       documentPublicId: document.id,
       evidence: const AiExtractedEvidence(
         id: 'score--1',
-        text: 'RACE score: 0-9 pont, magasabb pontszám nagyér-okklúziót valószínűsít.',
+        text:
+            'RACE score: 0-9 pont, magasabb pontszám nagyér-okklúziót valószínűsít.',
         pageNumber: 1,
         sectionTitle: 'RACE Score',
         sourceType: AiEvidenceSourceType.score,
@@ -1143,6 +1145,70 @@ void main() {
     expect(find.text('Embedding 4/15'), findsOneWidget);
     expect(find.byKey(const Key('document-progress-doc-1')), findsOneWidget);
   });
+
+  testWidgets('document row status badges use semantic colors', (tester) async {
+    final failedDocument = KnowledgeDocument(
+      id: 'doc-1',
+      filename: 'failed.pdf',
+      localPath: '/memory/failed.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      status: KnowledgeDocumentStatus.failed,
+    );
+    final readyDocument = KnowledgeDocument(
+      id: 'doc-2',
+      filename: 'ready.pdf',
+      localPath: '/memory/ready.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 10),
+      status: KnowledgeDocumentStatus.ready,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              KnowledgeDocumentRow(
+                document: failedDocument,
+                selectionMode: false,
+                selected: false,
+                processing: false,
+                onTap: () {},
+                onLongPress: () {},
+                onSelectionChanged: (_) {},
+              ),
+              KnowledgeDocumentRow(
+                document: readyDocument,
+                selectionMode: false,
+                selected: false,
+                processing: false,
+                onTap: () {},
+                onLongPress: () {},
+                onSelectionChanged: (_) {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(_badgeDecoration(tester, 'Hiba').color, const Color(0xFFFEE2E2));
+    expect(_badgeTextStyle(tester, 'Hiba').color, const Color(0xFF991B1B));
+    expect(_badgeDecoration(tester, 'Kész').color, const Color(0xFFDCFCE7));
+    expect(_badgeDecoration(tester, 'RAG').color, const Color(0xFFE0F2FE));
+  });
+}
+
+BoxDecoration _badgeDecoration(WidgetTester tester, String label) {
+  final decoration = tester.widget<DecoratedBox>(
+    find.ancestor(of: find.text(label), matching: find.byType(DecoratedBox)),
+  );
+  return decoration.decoration as BoxDecoration;
+}
+
+TextStyle _badgeTextStyle(WidgetTester tester, String label) {
+  return tester.widget<Text>(find.text(label)).style!;
 }
 
 KnowledgePack _knowledgePack({

@@ -158,6 +158,7 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
           _flowchartRejected(node.flowchartPublicId)) {
         continue;
       }
+      final flowchart = _findFlowchart(node.flowchartPublicId);
       evidence.add(
         SourceEvidence(
           id: node.publicId,
@@ -165,6 +166,8 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
           text: node.label,
           label: _flowchartLabel(state),
           validationState: state,
+          documentId: flowchart?.documentPublicId,
+          pageNumber: flowchart?.pageNumber,
         ),
       );
     }
@@ -174,13 +177,16 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
           _flowchartRejected(edge.flowchartPublicId)) {
         continue;
       }
+      final flowchart = _findFlowchart(edge.flowchartPublicId);
       evidence.add(
         SourceEvidence(
           id: edge.publicId,
           sourceType: EvidenceSourceType.flowchartEdge,
-          text: edge.label,
+          text: _edgeRelation(edge),
           label: _flowchartLabel(state),
           validationState: state,
+          documentId: flowchart?.documentPublicId,
+          pageNumber: flowchart?.pageNumber,
         ),
       );
     }
@@ -194,11 +200,23 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
   SourceEvidence? _mapEmbedding(ChunkEmbeddingEntity embedding, double score) {
     switch (embedding.sourceType) {
       case 'text_chunk':
-        return _mapChunk(embedding.sourceId, score, EvidenceSourceType.textChunk);
+        return _mapChunk(
+          embedding.sourceId,
+          score,
+          EvidenceSourceType.textChunk,
+        );
       case 'table_chunk':
-        return _mapChunk(embedding.sourceId, score, EvidenceSourceType.tableChunk);
+        return _mapChunk(
+          embedding.sourceId,
+          score,
+          EvidenceSourceType.tableChunk,
+        );
       case 'score_chunk':
-        return _mapChunk(embedding.sourceId, score, EvidenceSourceType.scoreChunk);
+        return _mapChunk(
+          embedding.sourceId,
+          score,
+          EvidenceSourceType.scoreChunk,
+        );
       case 'flowchart_node':
         return _mapNode(embedding.sourceId, score);
       case 'flowchart_edge':
@@ -239,12 +257,15 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
       DebugConsole.log('[VectorGraph] skipped rejected node=${node.publicId}');
       return null;
     }
+    final flowchart = _findFlowchart(node.flowchartPublicId);
     return SourceEvidence(
       id: node.publicId,
       sourceType: EvidenceSourceType.flowchartNode,
       text: node.label,
       label: _flowchartLabel(validationState),
       validationState: validationState,
+      documentId: flowchart?.documentPublicId,
+      pageNumber: flowchart?.pageNumber,
       score: score,
     );
   }
@@ -260,12 +281,15 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
       DebugConsole.log('[VectorGraph] skipped rejected edge=${edge.publicId}');
       return null;
     }
+    final flowchart = _findFlowchart(edge.flowchartPublicId);
     return SourceEvidence(
       id: edge.publicId,
       sourceType: EvidenceSourceType.flowchartEdge,
-      text: edge.label,
+      text: _edgeRelation(edge),
       label: _flowchartLabel(validationState),
       validationState: validationState,
+      documentId: flowchart?.documentPublicId,
+      pageNumber: flowchart?.pageNumber,
       score: score,
     );
   }
@@ -303,18 +327,29 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     }
   }
 
-  bool _flowchartRejected(String publicId) {
+  FlowchartEntity? _findFlowchart(String publicId) {
     final query = _flowchartBox
         .query(FlowchartEntity_.publicId.equals(publicId))
         .build();
     try {
-      final flowchart = query.findFirst();
-      return flowchart?.validationState == ValidationState.rejected.wireName;
+      return query.findFirst();
     } finally {
       query.close();
     }
   }
 
+  String _edgeRelation(FlowchartEdgeEntity edge) {
+    final from =
+        _findNode(edge.fromNodePublicId)?.label ?? edge.fromNodePublicId;
+    final to = _findNode(edge.toNodePublicId)?.label ?? edge.toNodePublicId;
+    final label = edge.label.trim();
+    return label.isEmpty ? '$from -> $to' : '$from -> $to [$label]';
+  }
+
+  bool _flowchartRejected(String publicId) {
+    final flowchart = _findFlowchart(publicId);
+    return flowchart?.validationState == ValidationState.rejected.wireName;
+  }
 
   EvidenceSourceType _sourceTypeFromWireName(String value) {
     return EvidenceSourceType.values.firstWhere(
@@ -328,8 +363,8 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
       EvidenceSourceType.textChunk => 'Szöveges PDF-részlet',
       EvidenceSourceType.tableChunk => 'Táblázatból kinyert részlet',
       EvidenceSourceType.scoreChunk => 'Score elem',
-      EvidenceSourceType.flowchartNode || EvidenceSourceType.flowchartEdge =>
-        'Flowchart elem',
+      EvidenceSourceType.flowchartNode ||
+      EvidenceSourceType.flowchartEdge => 'Flowchart elem',
     };
   }
 

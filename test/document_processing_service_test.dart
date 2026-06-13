@@ -127,10 +127,12 @@ void main() {
     await service.processDocument('doc-1');
 
     expect(repository.savedFlowcharts.single.id, 'flow-1');
-    expect(
-      repository.savedEmbeddings.map((embedding) => embedding.sourceType),
-      contains(EvidenceSourceType.scoreChunk.wireName),
+    final savedTypes = repository.savedEmbeddings.map(
+      (embedding) => embedding.sourceType,
     );
+    expect(savedTypes, contains(EvidenceSourceType.scoreChunk.wireName));
+    expect(savedTypes, contains(EvidenceSourceType.flowchartNode.wireName));
+    expect(savedTypes, contains(EvidenceSourceType.flowchartEdge.wireName));
     expect(
       DebugConsole.allText,
       contains('[Flowchart] extraction candidates=1 document=doc-1'),
@@ -372,6 +374,10 @@ class MemoryProcessingRepository implements ProcessingRepository {
       AiEvidenceSourceType.textChunk => EvidenceSourceType.textChunk.wireName,
       AiEvidenceSourceType.table => EvidenceSourceType.tableChunk.wireName,
       AiEvidenceSourceType.score => EvidenceSourceType.scoreChunk.wireName,
+      AiEvidenceSourceType.flowchartNode =>
+        EvidenceSourceType.flowchartNode.wireName,
+      AiEvidenceSourceType.flowchartEdge =>
+        EvidenceSourceType.flowchartEdge.wireName,
     };
   }
 }
@@ -433,8 +439,18 @@ class _FlowchartExtractingClient extends FakeOpenAiClient {
           pageNumber: 3,
           title: 'Stroke dontesi fa',
           confidence: 0.82,
-          nodes: [AiFlowchartNode(id: 'n1', label: 'FAST pozitiv')],
-          edges: [],
+          nodes: [
+            AiFlowchartNode(id: 'n1', label: 'FAST pozitiv'),
+            AiFlowchartNode(id: 'n2', label: 'Stroke centrum riasztása'),
+          ],
+          edges: [
+            AiFlowchartEdge(
+              id: 'e1',
+              fromNodeId: 'n1',
+              toNodeId: 'n2',
+              label: 'igen',
+            ),
+          ],
         ),
       ],
     );

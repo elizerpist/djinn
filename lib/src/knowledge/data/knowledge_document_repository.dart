@@ -28,7 +28,8 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
   List<KnowledgeDocument> _documents = [];
   final List<KnowledgeFolder> _folders = [];
   final Map<String, List<ChunkPackageItem>> _chunksByDocument = {};
-  final Map<String, List<ExtractedKnowledgeItem>> _extractedItemsByDocument = {};
+  final Map<String, List<ExtractedKnowledgeItem>> _extractedItemsByDocument =
+      {};
   final Map<String, String> _embeddingModelByDocument = {};
   final Map<String, List<AiFlowchartCandidate>> _flowchartsByDocument = {};
   int _nextDocumentId = 1;
@@ -318,6 +319,12 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     required List<double> embedding,
     required String embeddingModel,
   }) async {
+    final sourceType = _evidenceSourceType(evidence.sourceType);
+    if (sourceType == EvidenceSourceType.flowchartNode ||
+        sourceType == EvidenceSourceType.flowchartEdge) {
+      _embeddingModelByDocument[documentPublicId] = embeddingModel;
+      return;
+    }
     final items = _chunksByDocument.putIfAbsent(documentPublicId, () => []);
     items.removeWhere((item) => item.id == evidence.id);
     items.add(
@@ -338,7 +345,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       ExtractedKnowledgeItem(
         id: evidence.id,
         documentId: documentPublicId,
-        sourceType: _evidenceSourceType(evidence.sourceType),
+        sourceType: sourceType,
         text: evidence.text,
         pageNumber: evidence.pageNumber,
         sectionTitle: evidence.sectionTitle,
@@ -358,21 +365,14 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     items.add(flowchart);
   }
 
-
   Future<List<ExtractedKnowledgeItem>> listExtractedKnowledgeItems(
     String documentPublicId,
   ) async {
     final items = [
       ...?_extractedItemsByDocument[documentPublicId],
-      for (final flowchart in _flowchartsByDocument[documentPublicId] ?? const [])
-        ExtractedKnowledgeItem(
-          id: flowchart.id,
-          documentId: documentPublicId,
-          sourceType: EvidenceSourceType.flowchartNode,
-          text: _flowchartSummary(flowchart),
-          pageNumber: flowchart.pageNumber,
-          sectionTitle: 'Flowchart',
-        ),
+      for (final flowchart
+          in _flowchartsByDocument[documentPublicId] ?? const [])
+        ..._flowchartItems(documentPublicId, flowchart),
     ];
     items.sort(_compareExtractedItems);
     return List.unmodifiable(items);
@@ -432,12 +432,13 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     );
   }
 
-
   EvidenceSourceType _evidenceSourceType(AiEvidenceSourceType sourceType) {
     return switch (sourceType) {
       AiEvidenceSourceType.textChunk => EvidenceSourceType.textChunk,
       AiEvidenceSourceType.table => EvidenceSourceType.tableChunk,
       AiEvidenceSourceType.score => EvidenceSourceType.scoreChunk,
+      AiEvidenceSourceType.flowchartNode => EvidenceSourceType.flowchartNode,
+      AiEvidenceSourceType.flowchartEdge => EvidenceSourceType.flowchartEdge,
     };
   }
 
@@ -456,13 +457,47 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     return a.id.compareTo(b.id);
   }
 
-  String _flowchartSummary(AiFlowchartCandidate flowchart) {
-    final nodeLabels = flowchart.nodes.map((node) => node.label).join(' | ');
-    final edgeLabels = flowchart.edges.map((edge) => edge.label).join(' | ');
-    if (edgeLabels.isEmpty) {
-      return nodeLabels;
-    }
-    return '$nodeLabels\n$edgeLabels';
+  List<ExtractedKnowledgeItem> _flowchartItems(
+    String documentPublicId,
+    AiFlowchartCandidate flowchart,
+  ) {
+    final title = (flowchart.title ?? 'Flowchart').trim();
+    final sectionTitle = title.isEmpty ? 'Flowchart' : title;
+    final nodeLabels = {
+      for (final node in flowchart.nodes) node.id: node.label.trim(),
+    };
+    return [
+      for (final node in flowchart.nodes)
+        ExtractedKnowledgeItem(
+          id: '${flowchart.id}:${node.id}',
+          documentId: documentPublicId,
+          sourceType: EvidenceSourceType.flowchartNode,
+          text: node.label.trim(),
+          pageNumber: flowchart.pageNumber,
+          sectionTitle: sectionTitle,
+          embeddingModel: _embeddingModelByDocument[documentPublicId],
+        ),
+      for (final edge in flowchart.edges)
+        ExtractedKnowledgeItem(
+          id: '${flowchart.id}:${edge.id}',
+          documentId: documentPublicId,
+          sourceType: EvidenceSourceType.flowchartEdge,
+          text: _flowchartEdgeText(edge, nodeLabels),
+          pageNumber: flowchart.pageNumber,
+          sectionTitle: '$sectionTitle kapcsolat',
+          embeddingModel: _embeddingModelByDocument[documentPublicId],
+        ),
+    ];
+  }
+
+  String _flowchartEdgeText(
+    AiFlowchartEdge edge,
+    Map<String, String> nodeLabels,
+  ) {
+    final from = nodeLabels[edge.fromNodeId] ?? edge.fromNodeId;
+    final to = nodeLabels[edge.toNodeId] ?? edge.toNodeId;
+    final label = edge.label.trim();
+    return label.isEmpty ? '$from -> $to' : '$from -> $to [$label]';
   }
 
   KnowledgeDocument _findDocument(String documentId) {

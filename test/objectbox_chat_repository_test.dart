@@ -37,6 +37,7 @@ void main() {
           section: null,
           excerpt: 'Forrás',
           sourceId: 'chunk-1',
+          sourceType: 'table_chunk',
           sourceLabel: 'Szöveges PDF-részlet',
           validationState: 'validated',
         ),
@@ -54,5 +55,6 @@ void main() {
     expect(messages, hasLength(2));
     expect(messages.last.sender, ChatSender.assistant);
     expect(messages.last.citations.single.sourceLabel, 'Szöveges PDF-részlet');
+    expect(messages.last.citations.single.sourceType, 'table_chunk');
   });
 }

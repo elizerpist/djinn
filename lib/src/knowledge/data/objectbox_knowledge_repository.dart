@@ -320,6 +320,18 @@ class ObjectBoxKnowledgeRepository
     required String embeddingModel,
   }) async {
     final sourceId = '$documentPublicId:${evidence.id}';
+    final sourceType = _evidenceSourceTypeWireName(evidence.sourceType);
+    final embeddingEntity = ChunkEmbeddingEntity(
+      sourceId: sourceId,
+      sourceType: sourceType,
+      vector: embedding,
+      model: embeddingModel,
+      createdAtMillis: DateTime.now().millisecondsSinceEpoch,
+    );
+    if (_isFlowchartSourceType(sourceType)) {
+      _embeddingBox.put(embeddingEntity);
+      return;
+    }
     await saveChunk(
       DocumentChunkEntity(
         publicId: sourceId,
@@ -328,13 +340,7 @@ class ObjectBoxKnowledgeRepository
         pageNumber: evidence.pageNumber,
         sectionTitle: evidence.sectionTitle,
       ),
-      ChunkEmbeddingEntity(
-        sourceId: sourceId,
-        sourceType: _evidenceSourceTypeWireName(evidence.sourceType),
-        vector: embedding,
-        model: embeddingModel,
-        createdAtMillis: DateTime.now().millisecondsSinceEpoch,
-      ),
+      embeddingEntity,
     );
   }
 
@@ -389,12 +395,15 @@ class ObjectBoxKnowledgeRepository
     _embeddingBox.put(embedding);
   }
 
-
   Future<List<ExtractedKnowledgeItem>> listExtractedKnowledgeItems(
     String documentPublicId,
   ) async {
-    final embeddings = {
+    final allEmbeddings = {
       for (final embedding in _embeddingBox.getAll())
+        embedding.sourceId: embedding,
+    };
+    final embeddings = {
+      for (final embedding in allEmbeddings.values)
         if (_generatedEmbeddingSourceTypes.contains(embedding.sourceType))
           embedding.sourceId: embedding,
     };
@@ -413,14 +422,7 @@ class ObjectBoxKnowledgeRepository
           embeddingModel: embeddings[chunk.publicId]?.model,
         ),
       for (final flowchart in _flowchartsForDocument(documentPublicId))
-        ExtractedKnowledgeItem(
-          id: _packageChunkId(documentPublicId, flowchart.publicId),
-          documentId: documentPublicId,
-          sourceType: EvidenceSourceType.flowchartNode,
-          text: _flowchartSummary(flowchart),
-          pageNumber: flowchart.pageNumber,
-          sectionTitle: 'Flowchart',
-        ),
+        ..._flowchartItems(documentPublicId, flowchart, allEmbeddings),
     ];
     items.sort(_compareExtractedItems);
     return List.unmodifiable(items);
@@ -638,7 +640,6 @@ class ObjectBoxKnowledgeRepository
     }
   }
 
-
   int _compareExtractedItems(
     ExtractedKnowledgeItem a,
     ExtractedKnowledgeItem b,
@@ -654,26 +655,61 @@ class ObjectBoxKnowledgeRepository
     return a.id.compareTo(b.id);
   }
 
-  String _flowchartSummary(FlowchartEntity flowchart) {
-    final nodes = _flowchartNodeBox
-        .getAll()
-        .where((node) => node.flowchartPublicId == flowchart.publicId)
-        .map((node) => node.label)
-        .where((label) => label.trim().isNotEmpty)
-        .join(' | ');
-    final edges = _flowchartEdgeBox
-        .getAll()
-        .where((edge) => edge.flowchartPublicId == flowchart.publicId)
-        .map((edge) => edge.label)
-        .where((label) => label.trim().isNotEmpty)
-        .join(' | ');
-    if (edges.isEmpty) {
-      return nodes;
-    }
-    if (nodes.isEmpty) {
-      return edges;
-    }
-    return '$nodes\n$edges';
+  List<ExtractedKnowledgeItem> _flowchartItems(
+    String documentPublicId,
+    FlowchartEntity flowchart,
+    Map<String, ChunkEmbeddingEntity> embeddings,
+  ) {
+    final nodes =
+        _flowchartNodeBox
+            .getAll()
+            .where((node) => node.flowchartPublicId == flowchart.publicId)
+            .toList(growable: false)
+          ..sort((a, b) => a.publicId.compareTo(b.publicId));
+    final edges =
+        _flowchartEdgeBox
+            .getAll()
+            .where((edge) => edge.flowchartPublicId == flowchart.publicId)
+            .toList(growable: false)
+          ..sort((a, b) => a.publicId.compareTo(b.publicId));
+    final nodeLabels = {for (final node in nodes) node.publicId: node.label};
+    return [
+      for (final node in nodes)
+        ExtractedKnowledgeItem(
+          id: _packageChunkId(documentPublicId, node.publicId),
+          documentId: documentPublicId,
+          sourceType: EvidenceSourceType.flowchartNode,
+          text: node.label,
+          pageNumber: flowchart.pageNumber,
+          sectionTitle: 'Flowchart lépés',
+          embeddingModel: embeddings[node.publicId]?.model,
+        ),
+      for (final edge in edges)
+        ExtractedKnowledgeItem(
+          id: _packageChunkId(documentPublicId, edge.publicId),
+          documentId: documentPublicId,
+          sourceType: EvidenceSourceType.flowchartEdge,
+          text: _edgeRelation(edge, nodeLabels),
+          pageNumber: flowchart.pageNumber,
+          sectionTitle: 'Flowchart kapcsolat',
+          embeddingModel: embeddings[edge.publicId]?.model,
+        ),
+    ];
+  }
+
+  String _edgeRelation(
+    FlowchartEdgeEntity edge,
+    Map<String, String> nodeLabels,
+  ) {
+    final from = nodeLabels[edge.fromNodePublicId] ?? edge.fromNodePublicId;
+    final to = nodeLabels[edge.toNodePublicId] ?? edge.toNodePublicId;
+    final label = edge.label.trim();
+    return label.isEmpty ? '$from -> $to' : '$from -> $to [$label]';
+  }
+
+  bool _isFlowchartSourceType(String sourceType) {
+    return sourceType == EvidenceSourceType.flowchartNode.wireName ||
+        sourceType == EvidenceSourceType.flowchartEdge.wireName;
   }
 
   String _evidenceSourceTypeWireName(AiEvidenceSourceType sourceType) {
@@ -681,6 +717,10 @@ class ObjectBoxKnowledgeRepository
       AiEvidenceSourceType.textChunk => EvidenceSourceType.textChunk.wireName,
       AiEvidenceSourceType.table => EvidenceSourceType.tableChunk.wireName,
       AiEvidenceSourceType.score => EvidenceSourceType.scoreChunk.wireName,
+      AiEvidenceSourceType.flowchartNode =>
+        EvidenceSourceType.flowchartNode.wireName,
+      AiEvidenceSourceType.flowchartEdge =>
+        EvidenceSourceType.flowchartEdge.wireName,
     };
   }
 

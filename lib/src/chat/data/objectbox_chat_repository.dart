@@ -130,7 +130,7 @@ class ObjectBoxChatRepository extends LocalChatRepository {
           publicId: _uuid.v4(),
           messagePublicId: message.publicId,
           sourceId: citation.sourceId ?? citation.documentId,
-          sourceType: 'text_chunk',
+          sourceType: citation.sourceType ?? 'text_chunk',
           sourceLabel: citation.sourceLabel ?? citation.title,
           documentPublicId: citation.documentId,
           pageNumber: citation.page,
@@ -170,6 +170,7 @@ class ObjectBoxChatRepository extends LocalChatRepository {
       section: null,
       excerpt: entity.excerpt ?? '',
       sourceId: entity.sourceId,
+      sourceType: entity.sourceType,
       sourceLabel: entity.sourceLabel,
       validationState: null,
     );

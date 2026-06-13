@@ -158,6 +158,77 @@ void main() {
     expect(opened, citation);
   });
 
+  testWidgets('renders table citation as a compact structured card', (
+    tester,
+  ) async {
+    final message = ChatMessage(
+      id: 'm-table',
+      conversationId: 'c1',
+      sender: ChatSender.assistant,
+      text: 'A táblázat szerint.',
+      createdAt: DateTime.utc(2026),
+      citations: const [
+        ChatCitation(
+          documentId: 'doc-1',
+          title: 'rave.png',
+          page: 2,
+          section: 'RAVE',
+          excerpt: 'Tünet | Érték | Pont\nArcparesis | jelen | 1',
+          sourceId: 'table-1',
+          sourceType: 'table_chunk',
+          sourceLabel: 'Táblázatból kinyert részlet',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ChatBubble(message: message)),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('citation-card-table-1')), findsOneWidget);
+    expect(find.text('Tünet'), findsOneWidget);
+    expect(find.text('Arcparesis'), findsOneWidget);
+  });
+
+  testWidgets('renders flowchart citation as a relationship card', (
+    tester,
+  ) async {
+    final message = ChatMessage(
+      id: 'm-flow',
+      conversationId: 'c1',
+      sender: ChatSender.assistant,
+      text: 'Az algoritmus szerint.',
+      createdAt: DateTime.utc(2026),
+      citations: const [
+        ChatCitation(
+          documentId: 'doc-1',
+          title: 'stroke.pdf',
+          page: 3,
+          section: 'Stroke döntési fa',
+          excerpt: 'ABCDE vizsgálat -> Légzési elégtelenség? [romlik]',
+          sourceId: 'flow-1:e1',
+          sourceType: 'flowchart_edge',
+          sourceLabel: 'Nem validált flowchart',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ChatBubble(message: message)),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('citation-card-flow-1:e1')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('ABCDE vizsgálat'), findsOneWidget);
+    expect(find.byIcon(Icons.account_tree_outlined), findsOneWidget);
+  });
+
   testWidgets('speaking assistant bubble shows pause and stop', (tester) async {
     final message = ChatMessage(
       id: 'assistant-1',
