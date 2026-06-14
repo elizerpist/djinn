@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:djinn/src/knowledge/data/chunk_package_service.dart';
 import 'package:djinn/src/knowledge/data/objectbox_knowledge_repository.dart';
 import 'package:djinn/src/knowledge/models/chunk_package.dart';
+import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/local_store/entities.dart';
 import 'package:djinn/src/local_store/objectbox_store.dart';
 
@@ -173,6 +174,60 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+
+  test(
+    'ObjectBox repository saves local chunks with repeated section titles',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'djinn-local-graph-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final ObjectBoxStore objectBox;
+      try {
+        objectBox = await ObjectBoxStore.open(directory: directory);
+      } on ArgumentError catch (error) {
+        markTestSkipped('Host ObjectBox library unavailable: $error');
+        return;
+      }
+      addTearDown(objectBox.close);
+      final repository = ObjectBoxKnowledgeRepository(store: objectBox.store);
+      final document = await repository.addImportedDocument(
+        filename: 'copd.pdf',
+        localPath: '/memory/copd.pdf',
+        sizeBytes: 4,
+        sha256: 'hash-copd-local',
+      );
+
+      await repository.saveLocalChunks(
+        document.publicId,
+        const [
+          LocalChunk(
+            id: 'local-text-p1-1',
+            documentId: 'document-1',
+            text: 'Első lokális OCR sor.',
+            pageNumber: 1,
+            sectionTitle: 'COPDAE kiváltó okai',
+            pipeline: LocalExtractionPipeline.localOcr,
+          ),
+          LocalChunk(
+            id: 'local-text-p1-2',
+            documentId: 'document-1',
+            text: 'Második lokális OCR sor.',
+            pageNumber: 1,
+            sectionTitle: 'COPDAE kiváltó okai',
+            pipeline: LocalExtractionPipeline.localOcr,
+          ),
+        ],
+      );
+
+      final items = await repository.listExtractedKnowledgeItems(
+        document.publicId,
+        pipeline: LocalExtractionPipeline.localOcr,
+      );
+
+      expect(items, hasLength(2));
+    },
+  );
 
   test(
     'ObjectBox repository exports and imports text chunk packages',

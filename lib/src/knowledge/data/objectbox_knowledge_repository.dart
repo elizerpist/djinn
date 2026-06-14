@@ -490,7 +490,7 @@ class ObjectBoxKnowledgeRepository
             updatedAtMillis: now,
           ),
         );
-        _knowledgeNodeBox.put(
+        _putKnowledgeNode(
           KnowledgeNodeEntity(
             publicId: nodeId,
             documentPublicId: documentPublicId,
@@ -518,7 +518,7 @@ class ObjectBoxKnowledgeRepository
             sectionKey,
             () => '$documentPublicId:section:$sectionKey',
           );
-          _knowledgeNodeBox.put(
+          _putKnowledgeNode(
             KnowledgeNodeEntity(
               publicId: sectionNodeId,
               documentPublicId: documentPublicId,
@@ -769,6 +769,25 @@ class ObjectBoxKnowledgeRepository
     } finally {
       query.close();
     }
+  }
+
+  KnowledgeNodeEntity? _findKnowledgeNode(String publicId) {
+    final query = _knowledgeNodeBox
+        .query(KnowledgeNodeEntity_.publicId.equals(publicId))
+        .build();
+    try {
+      return query.findFirst();
+    } finally {
+      query.close();
+    }
+  }
+
+  void _putKnowledgeNode(KnowledgeNodeEntity node) {
+    final existing = _findKnowledgeNode(node.publicId);
+    if (existing != null) {
+      node.id = existing.id;
+    }
+    _knowledgeNodeBox.put(node);
   }
 
   List<DocumentChunkEntity> _chunksForDocument(String documentPublicId) {
