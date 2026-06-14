@@ -18,7 +18,7 @@ enum AppNavigationMode {
   static AppNavigationMode fromWireName(String value) {
     return AppNavigationMode.values.firstWhere(
       (mode) => mode.wireName == value,
-      orElse: () => AppNavigationMode.drawer,
+      orElse: () => AppNavigationMode.bottomNav,
     );
   }
 }
@@ -128,7 +128,7 @@ class AppSettings {
       voiceLocale: 'hu-HU',
       chunkingMode: ChunkingModes.normal,
       localIndexingMode: LocalIndexingModes.keywordBm25,
-      navigationMode: AppNavigationMode.drawer,
+      navigationMode: AppNavigationMode.bottomNav,
     );
   }
 
@@ -269,7 +269,7 @@ class AppSettings {
       localIndexingMode: LocalIndexingModes.normalize(
         localIndexingMode ?? this.localIndexingMode,
       ),
-      navigationMode: navigationMode ?? this.navigationMode,
+      navigationMode: AppNavigationMode.bottomNav,
     );
   }
 }

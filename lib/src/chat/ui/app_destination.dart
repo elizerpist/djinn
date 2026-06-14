@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum AppDestinationId { cases, flow, chat, knowledge, settings }
+enum AppDestinationId { notes, knowledge, chat, search, settings }
 
 class AppDestination {
   const AppDestination({
@@ -18,16 +18,16 @@ class AppDestination {
 
 const appDestinations = [
   AppDestination(
-    id: AppDestinationId.cases,
-    label: 'Esetek',
-    compactLabel: 'Esetek',
-    icon: Icons.assignment_outlined,
+    id: AppDestinationId.notes,
+    label: 'Jegyzetek',
+    compactLabel: 'Jegyzetek',
+    icon: Icons.edit_note_outlined,
   ),
   AppDestination(
-    id: AppDestinationId.flow,
-    label: 'Audit',
-    compactLabel: 'Audit',
-    icon: Icons.fact_check_outlined,
+    id: AppDestinationId.knowledge,
+    label: 'Tudástár',
+    compactLabel: 'Tudástár',
+    icon: Icons.folder_outlined,
   ),
   AppDestination(
     id: AppDestinationId.chat,
@@ -36,10 +36,10 @@ const appDestinations = [
     icon: Icons.chat_bubble_outline,
   ),
   AppDestination(
-    id: AppDestinationId.knowledge,
-    label: 'Tudástár',
-    compactLabel: 'Tudástár',
-    icon: Icons.folder_outlined,
+    id: AppDestinationId.search,
+    label: 'Keresés',
+    compactLabel: 'Keresés',
+    icon: Icons.search,
   ),
   AppDestination(
     id: AppDestinationId.settings,

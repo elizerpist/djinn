@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../../ai/ai_provider.dart';
-import '../../cases/data/case_repository.dart';
 import '../../branding/djinn_brand_mark.dart';
-import '../../cases/ui/cases_screen.dart';
+import '../../cases/data/case_repository.dart';
 import '../../debug/debug_header_button.dart';
 import '../../flowchart/data/flowchart_validation_repository.dart';
-import '../../flowchart/ui/flowchart_hub_screen.dart';
-import '../../flowchart/ui/flowchart_validation_screen.dart';
 import '../../knowledge/data/document_processing_service.dart';
 import '../../knowledge/data/knowledge_document_repository.dart';
 import '../../knowledge/data/local_document_processing_service.dart';
 import '../../knowledge/data/pdf_import_service.dart';
 import '../../knowledge/models/knowledge_document.dart';
 import '../../knowledge/ui/knowledge_base_screen.dart';
+import '../../notes/data/note_repository.dart';
+import '../../notes/ui/notes_screen.dart';
+import '../../search/ui/search_screen.dart';
 import '../../settings/data/api_key_store.dart';
 import '../../settings/models/app_settings.dart';
 import '../../settings/ui/settings_screen.dart';
@@ -29,6 +29,7 @@ class MainScreen extends StatefulWidget {
     required this.repository,
     required this.chatService,
     required this.knowledgeRepository,
+    required this.noteRepository,
     required this.pdfImportService,
     required this.refreshKnowledgeReadiness,
     required this.apiKeyStore,
@@ -45,6 +46,7 @@ class MainScreen extends StatefulWidget {
   final LocalChatRepository repository;
   final ChatService chatService;
   final KnowledgeDocumentRepository knowledgeRepository;
+  final NoteRepository noteRepository;
   final PdfImportService pdfImportService;
   final Future<KnowledgeBaseState> Function() refreshKnowledgeReadiness;
   final ApiKeyStore apiKeyStore;
@@ -53,7 +55,7 @@ class MainScreen extends StatefulWidget {
   final Future<bool> Function() testApiKey;
   final CaseRepository caseRepository;
   final Future<bool> Function(AiProvider provider, String model)?
-  testApiKeyForProvider;
+      testApiKeyForProvider;
   final DocumentProcessingService? processingService;
   final LocalDocumentProcessingService? localProcessingService;
   final FlowchartValidationRepository? flowchartValidationRepository;
@@ -64,39 +66,19 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   List<ChatConversation> _conversations = const [];
-  AppSettings _settings = AppSettings.defaults();
   AppDestinationId _selectedDestination = AppDestinationId.chat;
 
   @override
   void initState() {
     super.initState();
-    _loadSettings();
     _loadConversations();
-  }
-
-  Future<void> _loadSettings() async {
-    final settings = await widget.loadSettings();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _settings = settings;
-      if (settings.navigationMode == AppNavigationMode.drawer) {
-        _selectedDestination = AppDestinationId.chat;
-      }
-    });
   }
 
   void _handleSettingsChanged(AppSettings settings) {
     if (!mounted) {
       return;
     }
-    setState(() {
-      _settings = settings;
-      if (settings.navigationMode == AppNavigationMode.drawer) {
-        _selectedDestination = AppDestinationId.chat;
-      }
-    });
+    setState(() {});
   }
 
   Future<void> _loadConversations() async {
@@ -105,46 +87,6 @@ class _MainScreenState extends State<MainScreen> {
       return;
     }
     setState(() => _conversations = conversations);
-  }
-
-  Future<void> _openKnowledgeBase() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => KnowledgeBaseScreen(
-          repository: widget.knowledgeRepository,
-          importService: widget.pdfImportService,
-          processingService: widget.processingService,
-          localProcessingService: widget.localProcessingService,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openFlowchartValidation() async {
-    final repository = widget.flowchartValidationRepository;
-    if (repository == null) {
-      return;
-    }
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => FlowchartValidationScreen(repository: repository),
-      ),
-    );
-  }
-
-  Future<void> _openSettings() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SettingsScreen(
-          apiKeyStore: widget.apiKeyStore,
-          loadSettings: widget.loadSettings,
-          saveSettings: widget.saveSettings,
-          testApiKey: widget.testApiKey,
-          testApiKeyForProvider: widget.testApiKeyForProvider,
-          onSettingsChanged: _handleSettingsChanged,
-        ),
-      ),
-    );
   }
 
   Future<void> _openNewChat() async {
@@ -181,63 +123,9 @@ class _MainScreenState extends State<MainScreen> {
     await _loadConversations();
   }
 
-  Future<List<CaseLinkCandidate>> _loadChatLinkCandidates(String caseId) async {
-    final conversations = await widget.repository.listConversations();
-    return [
-      for (final conversation in conversations)
-        CaseLinkCandidate(
-          id: conversation.id,
-          title: conversation.title,
-          subtitle: '${conversation.messages.length} üzenet',
-        ),
-    ];
-  }
-
-  Future<List<CaseLinkCandidate>> _loadDocumentLinkCandidates(
-    String caseId,
-  ) async {
-    final documents = await widget.knowledgeRepository.listDocuments();
-    return [
-      for (final document in documents)
-        CaseLinkCandidate(
-          id: document.id,
-          title: document.filename,
-          subtitle: document.syncStatusLabel,
-        ),
-    ];
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_settings.navigationMode == AppNavigationMode.bottomNav) {
-      return _buildBottomNavShell();
-    }
-    return _buildDrawerShell();
-  }
-
-  Widget _buildDrawerShell() {
-    return Scaffold(
-      drawer: _buildDrawer(),
-      appBar: AppBar(
-        title: const DjinnAppBarTitle(title: 'Djinn'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        actions: [
-          const DebugHeaderButton(),
-          IconButton(
-            tooltip: 'Tudastar',
-            onPressed: _openKnowledgeBase,
-            icon: const Icon(Icons.folder),
-          ),
-        ],
-      ),
-      body: _buildChatListBody(),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'Új chat',
-        onPressed: _openNewChat,
-        child: const Icon(Icons.add_comment),
-      ),
-    );
+    return _buildBottomNavShell();
   }
 
   Widget _buildBottomNavShell() {
@@ -248,7 +136,9 @@ class _MainScreenState extends State<MainScreen> {
       appBar: _destinationOwnsScaffold(_selectedDestination)
           ? null
           : AppBar(
-              title: DjinnAppBarTitle(title: _titleForDestination(_selectedDestination)),
+              title: DjinnAppBarTitle(
+                title: _titleForDestination(_selectedDestination),
+              ),
               backgroundColor: Colors.white,
               surfaceTintColor: Colors.white,
               actions: const [DebugHeaderButton()],
@@ -279,103 +169,29 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildDrawer() {
-    return Drawer(
-      child: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            const ListTile(
-              title: Text('Djinn'),
-              subtitle: Text('Local ObjectBox mód'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.assignment_outlined),
-              title: const Text('Esetek'),
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        CasesScreen(
-                          repository: widget.caseRepository,
-                          loadChatLinkCandidates: _loadChatLinkCandidates,
-                          loadDocumentLinkCandidates: _loadDocumentLinkCandidates,
-                        ),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.chat),
-              title: const Text('Beszélgetések'),
-              onTap: () => Navigator.of(context).pop(),
-            ),
-            ListTile(
-              leading: const Icon(Icons.folder),
-              title: const Text('Tudástár'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openKnowledgeBase();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.account_tree),
-              title: const Text('Kinyert tartalom audit'),
-              enabled: widget.flowchartValidationRepository != null,
-              onTap: widget.flowchartValidationRepository == null
-                  ? null
-                  : () {
-                      Navigator.of(context).pop();
-                      _openFlowchartValidation();
-                    },
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Beállítások'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openSettings();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildDestinationBody(AppDestinationId destination) {
     return switch (destination) {
-      AppDestinationId.cases => CasesScreen(
-        repository: widget.caseRepository,
-        showAppBar: false,
-        loadChatLinkCandidates: _loadChatLinkCandidates,
-        loadDocumentLinkCandidates: _loadDocumentLinkCandidates,
-      ),
+      AppDestinationId.notes => NotesScreen(repository: widget.noteRepository),
       AppDestinationId.knowledge => KnowledgeBaseScreen(
-        repository: widget.knowledgeRepository,
-        importService: widget.pdfImportService,
-        processingService: widget.processingService,
-        localProcessingService: widget.localProcessingService,
-      ),
+          repository: widget.knowledgeRepository,
+          importService: widget.pdfImportService,
+          processingService: widget.processingService,
+          localProcessingService: widget.localProcessingService,
+        ),
       AppDestinationId.chat => _buildChatListBody(),
-      AppDestinationId.flow => _buildFlowDestination(),
+      AppDestinationId.search => SearchScreen(
+          knowledgeRepository: widget.knowledgeRepository,
+          noteRepository: widget.noteRepository,
+        ),
       AppDestinationId.settings => SettingsScreen(
-        apiKeyStore: widget.apiKeyStore,
-        loadSettings: widget.loadSettings,
-        saveSettings: widget.saveSettings,
-        testApiKey: widget.testApiKey,
-        testApiKeyForProvider: widget.testApiKeyForProvider,
-        onSettingsChanged: _handleSettingsChanged,
-      ),
+          apiKeyStore: widget.apiKeyStore,
+          loadSettings: widget.loadSettings,
+          saveSettings: widget.saveSettings,
+          testApiKey: widget.testApiKey,
+          testApiKeyForProvider: widget.testApiKeyForProvider,
+          onSettingsChanged: _handleSettingsChanged,
+        ),
     };
-  }
-
-  Widget _buildFlowDestination() {
-    return FlowchartHubScreen(
-      validationRepository: widget.flowchartValidationRepository,
-      knowledgeRepository: widget.knowledgeRepository,
-    );
   }
 
   Widget _buildChatListBody() {
@@ -411,19 +227,20 @@ class _MainScreenState extends State<MainScreen> {
 
   bool _destinationOwnsScaffold(AppDestinationId destination) {
     return switch (destination) {
+      AppDestinationId.notes ||
       AppDestinationId.knowledge ||
-      AppDestinationId.flow ||
+      AppDestinationId.search ||
       AppDestinationId.settings => true,
-      AppDestinationId.cases || AppDestinationId.chat => false,
+      AppDestinationId.chat => false,
     };
   }
 
   String _titleForDestination(AppDestinationId destination) {
     return switch (destination) {
-      AppDestinationId.cases => 'Esetek',
+      AppDestinationId.notes => 'Jegyzetek',
       AppDestinationId.knowledge => 'Tudástár',
       AppDestinationId.chat => 'Djinn',
-      AppDestinationId.flow => 'Audit',
+      AppDestinationId.search => 'Keresés',
       AppDestinationId.settings => 'Beállítások',
     };
   }

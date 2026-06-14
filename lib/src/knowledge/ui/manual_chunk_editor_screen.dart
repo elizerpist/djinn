@@ -9,6 +9,8 @@ import '../data/mlkit_ocr_engine.dart';
 import '../data/pdfrx_local_page_extractor.dart';
 import '../models/knowledge_document.dart';
 import '../models/local_extraction.dart';
+import '../../shared/ui/draggable_bottom_card.dart';
+import '../../flowchart/ui/manual_flowchart_draft_editor_screen.dart';
 
 class ManualChunkEditorScreen extends StatefulWidget {
   const ManualChunkEditorScreen({
@@ -274,6 +276,27 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
     });
   }
 
+  Future<void> _openFlowchartDraftEditor() async {
+    final pageNumber = int.tryParse(_pageController.text.trim()) ?? _pageNumber;
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => ManualFlowchartDraftEditorScreen(
+          initialText: _contentController.text,
+          documentId: widget.document.id,
+          pageNumber: pageNumber,
+        ),
+      ),
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _kind = LocalChunkKind.flowchart;
+      _sourceMode = 'flowchart';
+      _contentController.text = result;
+    });
+  }
+
   String? _emptyToNull(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
@@ -358,24 +381,28 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
               left: 0,
               right: 0,
               bottom: 0,
-              child: _ManualChunkCard(
-                kind: _kind,
-                sourceMode: _sourceMode,
-                pageController: _pageController,
-                titleController: _titleController,
-                contentController: _contentController,
-                loading: _loadingSelectionText,
-                saving: _saving,
-                errorText: _errorText,
-                onKindChanged: (value) => setState(() {
-                  _kind = value;
-                  _sourceMode = _sourceModeForKind(value);
-                }),
-                onSourceModeChanged: (value) => setState(() {
-                  _sourceMode = value;
-                }),
-                onCancel: _cancelCard,
-                onSave: _save,
+              child: DraggableBottomCard(
+                onDismiss: _cancelCard,
+                child: _ManualChunkCard(
+                  kind: _kind,
+                  sourceMode: _sourceMode,
+                  pageController: _pageController,
+                  titleController: _titleController,
+                  contentController: _contentController,
+                  loading: _loadingSelectionText,
+                  saving: _saving,
+                  errorText: _errorText,
+                  onKindChanged: (value) => setState(() {
+                    _kind = value;
+                    _sourceMode = _sourceModeForKind(value);
+                  }),
+                  onSourceModeChanged: (value) => setState(() {
+                    _sourceMode = value;
+                  }),
+                  onCancel: _cancelCard,
+                  onEditFlowchart: _openFlowchartDraftEditor,
+                  onSave: _save,
+                ),
               ),
             ),
         ],
@@ -537,6 +564,7 @@ class _ManualChunkCard extends StatelessWidget {
     required this.onKindChanged,
     required this.onSourceModeChanged,
     required this.onCancel,
+    required this.onEditFlowchart,
     required this.onSave,
   });
 
@@ -551,6 +579,7 @@ class _ManualChunkCard extends StatelessWidget {
   final ValueChanged<LocalChunkKind> onKindChanged;
   final ValueChanged<String> onSourceModeChanged;
   final VoidCallback onCancel;
+  final VoidCallback onEditFlowchart;
   final VoidCallback onSave;
 
   @override
@@ -654,6 +683,15 @@ class _ManualChunkCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (kind == LocalChunkKind.flowchart) ...[
+                  OutlinedButton.icon(
+                    key: const Key('manual-flowchart-open-editor'),
+                    onPressed: loading || saving ? null : onEditFlowchart,
+                    icon: const Icon(Icons.account_tree_outlined),
+                    label: const Text('Interaktív flowchart szerkesztő'),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Stack(
                   children: [
                     TextField(

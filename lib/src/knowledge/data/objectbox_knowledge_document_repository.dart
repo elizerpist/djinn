@@ -1,4 +1,5 @@
 import '../../ai/ai_client.dart';
+import '../../flowchart/models/editable_flowchart.dart';
 import '../../local_store/entities.dart' as local;
 import '../../openai/openai_client.dart';
 import '../models/chunk_package.dart';
@@ -191,6 +192,22 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
     );
   }
 
+  @override
+  Future<EditableFlowchart?> loadEditableFlowchart({
+    required String documentId,
+    required String flowchartId,
+  }) {
+    return _repository.loadEditableFlowchart(
+      documentId: documentId,
+      flowchartId: flowchartId,
+    );
+  }
+
+  @override
+  Future<void> saveEditableFlowchart(EditableFlowchart flowchart) {
+    return _repository.saveEditableFlowchart(flowchart);
+  }
+
 
   @override
   Future<List<ExtractedKnowledgeItem>> listExtractedKnowledgeItems(
@@ -222,12 +239,14 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
     String itemId,
     LocalAuditState auditState, {
     String? text,
+    String? reason,
   }) {
     return _repository.updateExtractedKnowledgeAuditState(
       documentPublicId,
       itemId,
       auditState,
       text: text,
+      reason: reason,
     );
   }
 

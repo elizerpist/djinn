@@ -7,6 +7,7 @@ import '../../../objectbox.g.dart';
 import '../../ai/ai_client.dart';
 import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
+import '../../flowchart/models/editable_flowchart.dart';
 import '../models/chunk_package.dart';
 import '../models/extracted_knowledge_item.dart';
 import '../models/local_extraction.dart';
@@ -410,6 +411,98 @@ class ObjectBoxKnowledgeRepository
     });
   }
 
+  Future<EditableFlowchart?> loadEditableFlowchart({
+    required String documentId,
+    required String flowchartId,
+  }) async {
+    final flowchartPublicId = flowchartId.startsWith('$documentId:')
+        ? flowchartId
+        : '$documentId:$flowchartId';
+    FlowchartEntity? flowchart;
+    for (final item in _flowchartsForDocument(documentId)) {
+      if (item.publicId == flowchartPublicId) {
+        flowchart = item;
+        break;
+      }
+    }
+    if (flowchart == null) {
+      return null;
+    }
+    final nodes = _flowchartNodeBox
+        .getAll()
+        .where((node) => node.flowchartPublicId == flowchartPublicId)
+        .toList(growable: false)
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final edges = _flowchartEdgeBox
+        .getAll()
+        .where((edge) => edge.flowchartPublicId == flowchartPublicId)
+        .toList(growable: false)
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return EditableFlowchart(
+      id: flowchart.publicId,
+      documentId: documentId,
+      pageNumber: flowchart.pageNumber,
+      nodes: [
+        for (final node in nodes)
+          EditableFlowchartNode(
+            id: node.publicId,
+            label: node.label,
+            shape: AiFlowchartNodeShape.fromWireName(node.shape),
+            order: node.sortOrder,
+          ),
+      ],
+      edges: [
+        for (final edge in edges)
+          EditableFlowchartEdge(
+            id: edge.publicId,
+            fromNodeId: edge.fromNodePublicId,
+            toNodeId: edge.toNodePublicId,
+            label: edge.label,
+            order: edge.sortOrder,
+          ),
+      ],
+    );
+  }
+
+  Future<void> saveEditableFlowchart(EditableFlowchart flowchart) async {
+    _store.runInTransaction(TxMode.write, () {
+      _removeFlowchart(flowchart.id);
+      _flowchartBox.put(
+        FlowchartEntity(
+          publicId: flowchart.id,
+          documentPublicId: flowchart.documentId,
+          pageNumber: flowchart.pageNumber,
+          validationState: ValidationState.unreviewed.wireName,
+        ),
+      );
+      for (final node in flowchart.nodes) {
+        _flowchartNodeBox.put(
+          FlowchartNodeEntity(
+            publicId: node.id,
+            flowchartPublicId: flowchart.id,
+            label: node.label,
+            validationState: ValidationState.unreviewed.wireName,
+            shape: node.shape.wireName,
+            sortOrder: node.order,
+          ),
+        );
+      }
+      for (final edge in flowchart.edges) {
+        _flowchartEdgeBox.put(
+          FlowchartEdgeEntity(
+            publicId: edge.id,
+            flowchartPublicId: flowchart.id,
+            fromNodePublicId: edge.fromNodeId,
+            toNodePublicId: edge.toNodeId,
+            label: edge.label,
+            validationState: ValidationState.unreviewed.wireName,
+            sortOrder: edge.order,
+          ),
+        );
+      }
+    });
+  }
+
   @override
   Future<void> saveChunk(
     DocumentChunkEntity chunk,
@@ -562,6 +655,7 @@ class ObjectBoxKnowledgeRepository
     String itemId,
     LocalAuditState auditState, {
     String? text,
+    String? reason,
   }) async {
     final sourceId = itemId.startsWith('$documentPublicId:')
         ? itemId
@@ -578,6 +672,7 @@ class ObjectBoxKnowledgeRepository
           if (auditItem.sourceId == sourceId) {
             auditItem.auditState = auditState.wireName;
             auditItem.previewText = text ?? auditItem.previewText;
+            auditItem.reason = reason;
             auditItem.updatedAtMillis = DateTime.now().millisecondsSinceEpoch;
             _auditItemBox.put(auditItem);
           }
@@ -591,12 +686,14 @@ class ObjectBoxKnowledgeRepository
         if (text != null) {
           node.label = text;
         }
+        node.rejectionReason = reason;
         _flowchartNodeBox.put(node);
         return;
       }
       final edge = _findEdge(sourceId);
       if (edge != null) {
         edge.validationState = validationState.wireName;
+        edge.rejectionReason = reason;
         _flowchartEdgeBox.put(edge);
       }
     });

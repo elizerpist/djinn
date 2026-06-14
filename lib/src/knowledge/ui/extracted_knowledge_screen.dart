@@ -6,6 +6,10 @@ import '../models/extracted_knowledge_item.dart';
 import '../models/flowchart_hierarchy.dart';
 import '../models/knowledge_document.dart';
 import '../models/local_extraction.dart';
+import '../../shared/chunks/chunk_card.dart';
+import '../../shared/chunks/chunk_validation_card.dart';
+import '../../shared/ui/draggable_bottom_card.dart';
+import '../../flowchart/ui/interactive_flowchart_editor_screen.dart';
 
 class ExtractedKnowledgeScreen extends StatefulWidget {
   const ExtractedKnowledgeScreen({
@@ -23,7 +27,7 @@ class ExtractedKnowledgeScreen extends StatefulWidget {
 }
 
 class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
-  late final Future<_ExtractedKnowledgeData> _dataFuture;
+  late Future<_ExtractedKnowledgeData> _dataFuture;
   _ExtractedPipelineView _pipelineView = _ExtractedPipelineView.ai;
   _ExtractedTypeFilter _typeFilter = _ExtractedTypeFilter.all;
 
@@ -57,6 +61,59 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
           .toList(growable: false),
       comparison: comparison,
     );
+  }
+
+  void _reloadData() {
+    setState(() => _dataFuture = _loadData());
+  }
+
+  Future<void> _openValidationCard(ExtractedKnowledgeItem item) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: false,
+      isDismissible: false,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableBottomCard(
+        onDismiss: () => Navigator.of(context).pop(),
+        child: ChunkValidationCard(
+          title: item.sectionTitle?.trim().isNotEmpty == true
+              ? item.sectionTitle!.trim()
+              : item.pageLabel,
+          initialText: item.text,
+          initialAuditState: item.auditState,
+          onCancel: () => Navigator.of(context).pop(),
+          onSave: (result) async {
+            await widget.repository.updateExtractedKnowledgeAuditState(
+              widget.document.id,
+              item.id,
+              result.auditState,
+              text: result.text,
+              reason: result.reason,
+            );
+            if (context.mounted) {
+              Navigator.of(context).pop();
+            }
+            _reloadData();
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFlowchartEditor(String flowchartId) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => InteractiveFlowchartEditorScreen(
+          repository: widget.repository,
+          documentId: widget.document.id,
+          flowchartId: flowchartId,
+        ),
+      ),
+    );
+    if (changed == true) {
+      _reloadData();
+    }
   }
 
   @override
@@ -112,7 +169,11 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
               Expanded(
                 child: _pipelineView == _ExtractedPipelineView.comparison
                     ? _ChunkComparisonList(comparison: data.comparison)
-                    : _ExtractedKnowledgeList(items: filteredItems),
+                    : _ExtractedKnowledgeList(
+                        items: filteredItems,
+                        onValidate: _openValidationCard,
+                        onEditFlowchart: _openFlowchartEditor,
+                      ),
               ),
             ],
           );
@@ -283,9 +344,15 @@ class _DocumentSummary extends StatelessWidget {
 }
 
 class _ExtractedKnowledgeList extends StatelessWidget {
-  const _ExtractedKnowledgeList({required this.items});
+  const _ExtractedKnowledgeList({
+    required this.items,
+    required this.onValidate,
+    required this.onEditFlowchart,
+  });
 
   final List<ExtractedKnowledgeItem> items;
+  final ValueChanged<ExtractedKnowledgeItem> onValidate;
+  final ValueChanged<String> onEditFlowchart;
 
   @override
   Widget build(BuildContext context) {
@@ -305,7 +372,10 @@ class _ExtractedKnowledgeList extends StatelessWidget {
         )
         .toList(growable: false);
     if (flowchartItems.length == items.length) {
-      return _FlowchartHierarchyList(items: flowchartItems);
+      return _FlowchartHierarchyList(
+        items: flowchartItems,
+        onEditFlowchart: onEditFlowchart,
+      );
     }
     return ListView.separated(
       physics: const BouncingScrollPhysics(
@@ -315,7 +385,10 @@ class _ExtractedKnowledgeList extends StatelessWidget {
       itemCount: items.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) =>
-          _ExtractedKnowledgeTile(item: items[index]),
+          _ExtractedKnowledgeTile(
+            item: items[index],
+            onValidate: () => onValidate(items[index]),
+          ),
     );
   }
 }
@@ -508,9 +581,13 @@ class _ComparisonSide extends StatelessWidget {
 }
 
 class _FlowchartHierarchyList extends StatefulWidget {
-  const _FlowchartHierarchyList({required this.items});
+  const _FlowchartHierarchyList({
+    required this.items,
+    required this.onEditFlowchart,
+  });
 
   final List<ExtractedKnowledgeItem> items;
+  final ValueChanged<String> onEditFlowchart;
 
   @override
   State<_FlowchartHierarchyList> createState() =>
@@ -619,6 +696,7 @@ class _FlowchartHierarchyListState extends State<_FlowchartHierarchyList> {
                 mode: _mode,
                 title: _renamedTitles[group.id] ?? group.title,
                 onRename: () => _renameGroup(group),
+                onEdit: () => widget.onEditFlowchart(group.id),
               );
             },
           ),
@@ -634,12 +712,14 @@ class _FlowchartGroupCard extends StatelessWidget {
     required this.mode,
     required this.title,
     required this.onRename,
+    required this.onEdit,
   });
 
   final FlowchartHierarchyGroup group;
   final _FlowchartReadMode mode;
   final String title;
   final VoidCallback onRename;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -667,6 +747,13 @@ class _FlowchartGroupCard extends StatelessWidget {
                       color: Color(0xFF111827),
                     ),
                   ),
+                ),
+                IconButton(
+                  key: ValueKey('flowchart-edit-${group.id}'),
+                  tooltip: 'Flowchart szerkesztése',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.account_tree_outlined, size: 18),
                 ),
                 IconButton(
                   key: ValueKey('flowchart-rename-${group.id}'),
@@ -1052,61 +1139,30 @@ String _shapeLabel(String? shape) {
 }
 
 class _ExtractedKnowledgeTile extends StatelessWidget {
-  const _ExtractedKnowledgeTile({required this.item});
+  const _ExtractedKnowledgeTile({
+    required this.item,
+    required this.onValidate,
+  });
 
   final ExtractedKnowledgeItem item;
+  final VoidCallback onValidate;
 
   @override
   Widget build(BuildContext context) {
-    final color = _colorFor(item.sourceType);
-    return Material(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: Color(0xFFE5E7EB)),
+    return ChunkCard(
+      viewModel: ChunkCardViewModel(
+        id: item.id,
+        title: item.pageLabel,
+        preview: item.text,
+        kind: _cardKindFor(item),
+        auditState: item.auditState,
+        sourceLabel: item.typeLabel,
+        pipelineLabel: item.pipelineLabel,
+        pageLabel: item.pageLabel,
       ),
-      child: ExpansionTile(
-        leading: CircleAvatar(
-          radius: 18,
-          backgroundColor: color.withValues(alpha: 0.12),
-          foregroundColor: color,
-          child: Icon(_iconFor(item.sourceType), size: 20),
-        ),
-        title: Text(
-          item.pageLabel,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if ((item.sectionTitle ?? '').trim().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(item.sectionTitle!),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                item.text,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        children: [
-          _ExtractedKnowledgeBody(item: item),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              _metadata(item),
-              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
-            ),
-          ),
-        ],
-      ),
+      onLongPress: onValidate,
+      expandedChild: _ExtractedKnowledgeBody(item: item),
+      metadata: _metadata(item),
     );
   }
 
@@ -1124,25 +1180,24 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
     return parts.join('  •  ');
   }
 
-  static IconData _iconFor(EvidenceSourceType type) {
-    return switch (type) {
-      EvidenceSourceType.textChunk => Icons.subject,
-      EvidenceSourceType.tableChunk => Icons.table_chart_outlined,
-      EvidenceSourceType.scoreChunk => Icons.format_list_numbered,
-      EvidenceSourceType.flowchartNode ||
-      EvidenceSourceType.flowchartEdge => Icons.account_tree_outlined,
+  static ChunkCardKind _cardKindFor(ExtractedKnowledgeItem item) {
+    return switch (item.chunkKind) {
+      LocalChunkKind.list => ChunkCardKind.list,
+      LocalChunkKind.table => ChunkCardKind.table,
+      LocalChunkKind.score => ChunkCardKind.score,
+      LocalChunkKind.flowchart => ChunkCardKind.flowchart,
+      LocalChunkKind.imageRegion => ChunkCardKind.imageRegion,
+      LocalChunkKind.visualFact => ChunkCardKind.visualFact,
+      LocalChunkKind.text || LocalChunkKind.unknown => switch (item.sourceType) {
+        EvidenceSourceType.tableChunk => ChunkCardKind.table,
+        EvidenceSourceType.scoreChunk => ChunkCardKind.score,
+        EvidenceSourceType.flowchartNode ||
+        EvidenceSourceType.flowchartEdge => ChunkCardKind.flowchart,
+        EvidenceSourceType.textChunk => ChunkCardKind.text,
+      },
     };
   }
 
-  static Color _colorFor(EvidenceSourceType type) {
-    return switch (type) {
-      EvidenceSourceType.textChunk => const Color(0xFF2563EB),
-      EvidenceSourceType.tableChunk => const Color(0xFF047857),
-      EvidenceSourceType.scoreChunk => const Color(0xFFB45309),
-      EvidenceSourceType.flowchartNode ||
-      EvidenceSourceType.flowchartEdge => const Color(0xFF7C3AED),
-    };
-  }
 }
 
 class _ExtractedKnowledgeBody extends StatelessWidget {

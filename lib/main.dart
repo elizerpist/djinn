@@ -25,6 +25,7 @@ import 'src/knowledge/data/local_document_processing_service.dart';
 import 'src/knowledge/data/mlkit_ocr_engine.dart';
 import 'src/knowledge/data/pdfrx_local_page_extractor.dart';
 import 'src/knowledge/data/pdf_import_service.dart';
+import 'src/notes/data/note_repository.dart';
 import 'src/local_store/objectbox_store.dart';
 import 'src/google/gemini_http_client.dart';
 import 'src/openai/openai_client.dart';
@@ -48,6 +49,7 @@ class DjinnApp extends StatefulWidget {
     this.chatService,
     this.caseRepository,
     this.knowledgeRepository,
+    this.noteRepository,
     this.pdfImportService,
     this.knowledgeSyncService,
     this.refreshKnowledgeReadiness,
@@ -65,6 +67,7 @@ class DjinnApp extends StatefulWidget {
   final ChatService? chatService;
   final CaseRepository? caseRepository;
   final KnowledgeDocumentRepository? knowledgeRepository;
+  final NoteRepository? noteRepository;
   final PdfImportService? pdfImportService;
   final KnowledgeSyncService? knowledgeSyncService;
   final Future<KnowledgeBaseState> Function()? refreshKnowledgeReadiness;
@@ -107,6 +110,7 @@ class _DjinnAppState extends State<DjinnApp> {
             ),
         caseRepository: widget.caseRepository ?? MemoryCaseRepository(),
         knowledgeRepository: widget.knowledgeRepository!,
+        noteRepository: widget.noteRepository ?? MemoryNoteRepository(),
         pdfImportService: widget.pdfImportService!,
         refreshKnowledgeReadiness:
             widget.refreshKnowledgeReadiness ??
@@ -180,6 +184,10 @@ class _DjinnAppState extends State<DjinnApp> {
     final pdfImportService = PdfImportService(
       importDirectory: Directory('${directory.path}/knowledge_pdfs'),
     );
+    final noteRepository = FileNoteRepository(
+      file: File('${directory.path}/notes/notes.json'),
+    );
+    await noteRepository.load();
     final flowchartValidationRepository =
         ObjectBoxFlowchartValidationRepository(store: store);
 
@@ -188,6 +196,7 @@ class _DjinnAppState extends State<DjinnApp> {
       chatService: chatService,
       caseRepository: caseRepository,
       knowledgeRepository: knowledgeRepository,
+      noteRepository: noteRepository,
       pdfImportService: pdfImportService,
       refreshKnowledgeReadiness: knowledgeRepository.state,
       processingService: processingService,
@@ -243,6 +252,7 @@ class _DjinnAppState extends State<DjinnApp> {
             chatService: dependencies.chatService,
             caseRepository: dependencies.caseRepository,
             knowledgeRepository: dependencies.knowledgeRepository,
+            noteRepository: dependencies.noteRepository,
             pdfImportService: dependencies.pdfImportService,
             refreshKnowledgeReadiness: dependencies.refreshKnowledgeReadiness,
             apiKeyStore: dependencies.apiKeyStore,
@@ -267,6 +277,7 @@ class _AppDependencies {
     required this.chatService,
     required this.caseRepository,
     required this.knowledgeRepository,
+    required this.noteRepository,
     required this.pdfImportService,
     required this.refreshKnowledgeReadiness,
     required this.apiKeyStore,
@@ -283,6 +294,7 @@ class _AppDependencies {
   final ChatService chatService;
   final CaseRepository caseRepository;
   final KnowledgeDocumentRepository knowledgeRepository;
+  final NoteRepository noteRepository;
   final PdfImportService pdfImportService;
   final Future<KnowledgeBaseState> Function() refreshKnowledgeReadiness;
   final DocumentProcessingService? processingService;

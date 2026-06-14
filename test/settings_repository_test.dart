@@ -49,11 +49,9 @@ void main() {
     expect(settings.answerMode, AnswerModes.ai);
     expect(settings.chunkingMode, ChunkingModes.normal);
     expect(settings.localIndexingMode, LocalIndexingModes.keywordBm25);
-    expect(settings.navigationMode, AppNavigationMode.drawer);
+    expect(settings.navigationMode, AppNavigationMode.bottomNav);
     expect(
-      settings
-          .copyWith(navigationMode: AppNavigationMode.bottomNav)
-          .navigationMode,
+      settings.copyWith(navigationMode: AppNavigationMode.drawer).navigationMode,
       AppNavigationMode.bottomNav,
     );
     expect(

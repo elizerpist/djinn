@@ -33,7 +33,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('settings-card-ai')), findsOneWidget);
-    expect(find.byKey(const Key('settings-card-appearance')), findsOneWidget);
+    expect(find.byKey(const Key('settings-card-appearance')), findsNothing);
     expect(find.byKey(const Key('settings-card-language')), findsOneWidget);
     expect(find.byKey(const Key('settings-card-voice')), findsOneWidget);
     expect(find.byKey(const Key('settings-card-mode')), findsOneWidget);
@@ -54,9 +54,7 @@ void main() {
     expect(find.text('Haladó modellbeállítások'), findsNothing);
   });
 
-  testWidgets('navigation mode segmented control autosaves bottom navigation', (
-    tester,
-  ) async {
+  testWidgets('navigation mode selector is no longer exposed', (tester) async {
     final keyStore = MemoryApiKeyStore();
     var settings = AppSettings.defaults();
 
@@ -73,13 +71,11 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await _openSettingsSection(tester, 'appearance');
-    expect(settings.navigationMode, AppNavigationMode.drawer);
-    await tester.tap(find.text('Bottom navigation'));
-    await tester.pumpAndSettle();
 
     expect(settings.navigationMode, AppNavigationMode.bottomNav);
-    expect(DebugConsole.allText, contains('navigationMode=bottom_nav'));
+    expect(find.byKey(const Key('settings-card-appearance')), findsNothing);
+    expect(find.text('Hamburger'), findsNothing);
+    expect(find.text('Bottom navigation'), findsNothing);
   });
 
   testWidgets('chunking mode dropdown autosaves detailed mode', (tester) async {

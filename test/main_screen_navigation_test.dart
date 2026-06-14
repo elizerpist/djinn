@@ -12,64 +12,55 @@ import 'package:djinn/src/chat/models/chat_message.dart';
 import 'package:djinn/src/chat/ui/main_screen.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/data/pdf_import_service.dart';
+import 'package:djinn/src/notes/data/note_repository.dart';
 import 'package:djinn/src/settings/data/api_key_store.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
 
 void main() {
-  testWidgets('drawer navigation is the default shell', (tester) async {
+  testWidgets('main shell always uses fixed bottom navigation', (tester) async {
     await tester.pumpWidget(_mainScreenApp(AppSettings.defaults()));
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.menu), findsOneWidget);
-    expect(find.byType(NavigationBar), findsNothing);
-    expect(find.text('Beszélgetések'), findsNothing);
-
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Esetek'), findsOneWidget);
-    expect(find.text('Tudástár'), findsOneWidget);
-    expect(find.text('Kinyert tartalom audit'), findsOneWidget);
-    expect(find.text('Beállítások'), findsOneWidget);
-  });
-
-  testWidgets('bottom navigation renders Audit before Chat and opens the hub', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _mainScreenApp(
-        AppSettings.defaults().copyWith(
-          navigationMode: AppNavigationMode.bottomNav,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
     expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byIcon(Icons.menu), findsNothing);
+
     final labels = tester
         .widgetList<NavigationDestination>(find.byType(NavigationDestination))
         .map((destination) => destination.label)
         .toList();
-    expect(labels, ['Esetek', 'Audit', 'Chat', 'Tudástár', 'Beáll.']);
-    expect(find.byTooltip('Új chat'), findsOneWidget);
-    expect(find.byKey(const ValueKey('debug-header-button')), findsOneWidget);
+    expect(labels, ['Jegyzetek', 'Tudástár', 'Chat', 'Keresés', 'Beáll.']);
+    expect(find.text('Audit'), findsNothing);
+    expect(find.text('Validálás'), findsNothing);
+    expect(find.text('Flow'), findsNothing);
+  });
 
-    await tester.tap(find.text('Esetek'));
+  testWidgets('bottom navigation opens notes, knowledge, chat, search, settings', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_mainScreenApp(AppSettings.defaults()));
     await tester.pumpAndSettle();
-    expect(find.text('Nincs mentett eset'), findsOneWidget);
+
+    await tester.tap(find.text('Jegyzetek'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nincs mentett jegyzet'), findsOneWidget);
     expect(find.byTooltip('Új chat'), findsNothing);
-    expect(find.byTooltip('Új eset'), findsOneWidget);
 
-    await tester.tap(find.text('Audit'));
+    await tester.tap(find.text('Tudástár'));
     await tester.pumpAndSettle();
-    expect(find.text('Audit'), findsWidgets);
-    expect(find.text('Kinyert tartalom'), findsOneWidget);
-    expect(find.text('Építő'), findsOneWidget);
-    expect(find.text('Sablonok'), findsOneWidget);
-    expect(
-      find.textContaining('Nincs a szűrésnek megfelelő audit elem'),
-      findsOneWidget,
-    );
+    expect(find.text('Nincs importált dokumentum'), findsOneWidget);
+
+    await tester.tap(find.text('Chat'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nincs még beszélgetés'), findsOneWidget);
+    expect(find.byTooltip('Új chat'), findsOneWidget);
+
+    await tester.tap(find.text('Keresés'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('search-query-field')), findsOneWidget);
+
+    await tester.tap(find.text('Beáll.'));
+    await tester.pumpAndSettle();
+    expect(find.text('AI'), findsOneWidget);
   });
 }
 
@@ -85,6 +76,7 @@ Widget _mainScreenApp(AppSettings initialSettings) {
         answerService: const _StubAnswerService(),
       ),
       knowledgeRepository: knowledgeRepository,
+      noteRepository: MemoryNoteRepository(),
       pdfImportService: PdfImportService(importDirectory: Directory('/memory')),
       refreshKnowledgeReadiness: knowledgeRepository.state,
       apiKeyStore: MemoryApiKeyStore(),

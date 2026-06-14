@@ -27,7 +27,7 @@ void main() {
 
     expect(find.text('Djinn'), findsOneWidget);
     expect(find.text('Nincs még beszélgetés'), findsOneWidget);
-    expect(find.byTooltip('Tudastar'), findsOneWidget);
+    expect(find.text('Tudástár'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Új chat'));
     await _pumpUntilFound(tester, find.byKey(const ValueKey('message-input')));
@@ -135,14 +135,14 @@ void main() {
     expect(find.text('Nem tamaszthato ala teljesen'), findsOneWidget);
   });
 
-  testWidgets('Djinn opens the knowledge base screen from the folder button', (
+  testWidgets('Djinn opens the knowledge base screen from bottom navigation', (
     tester,
   ) async {
     await tester.pumpWidget(_testApp());
     await _pumpUntilFound(tester, find.text('Djinn'));
 
-    await tester.tap(find.byTooltip('Tudastar'));
-    await _pumpUntilFound(tester, find.text('Tudástár'));
+    await tester.tap(find.text('Tudástár'));
+    await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('Tudástár'), findsOneWidget);
@@ -150,13 +150,11 @@ void main() {
     expect(find.byTooltip('PDF/PNG hozzáadása'), findsOneWidget);
   });
 
-  testWidgets('Djinn opens settings from the hamburger menu', (tester) async {
+  testWidgets('Djinn opens settings from bottom navigation', (tester) async {
     await tester.pumpWidget(_testApp());
     await _pumpUntilFound(tester, find.text('Djinn'));
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Beállítások'));
+    await tester.tap(find.text('Beáll.'));
     await tester.pumpAndSettle();
 
     expect(find.text('AI'), findsOneWidget);

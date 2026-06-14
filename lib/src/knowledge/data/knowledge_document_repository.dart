@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:uuid/uuid.dart';
 
 import '../../ai/ai_client.dart';
+import '../../flowchart/models/editable_flowchart.dart';
 import '../../core/storage/json_file_store.dart';
 import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
@@ -382,6 +383,73 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     items.add(flowchart);
   }
 
+  Future<EditableFlowchart?> loadEditableFlowchart({
+    required String documentId,
+    required String flowchartId,
+  }) async {
+    final flowcharts = _flowchartsByDocument[documentId] ?? const [];
+    for (final flowchart in flowcharts) {
+      if (flowchart.id == flowchartId) {
+        return EditableFlowchart(
+          id: flowchart.id,
+          documentId: documentId,
+          pageNumber: flowchart.pageNumber,
+          title: flowchart.title,
+          nodes: [
+            for (final node in flowchart.nodes)
+              EditableFlowchartNode(
+                id: node.id,
+                label: node.label,
+                shape: node.shape,
+                order: node.order,
+              ),
+          ],
+          edges: [
+            for (final edge in flowchart.edges)
+              EditableFlowchartEdge(
+                id: edge.id,
+                fromNodeId: edge.fromNodeId,
+                toNodeId: edge.toNodeId,
+                label: edge.label,
+                order: edge.order,
+              ),
+          ],
+        );
+      }
+    }
+    return null;
+  }
+
+  Future<void> saveEditableFlowchart(EditableFlowchart flowchart) async {
+    await saveFlowchartCandidate(
+      documentPublicId: flowchart.documentId,
+      flowchart: AiFlowchartCandidate(
+        id: flowchart.id,
+        pageNumber: flowchart.pageNumber,
+        title: flowchart.title,
+        nodes: [
+          for (final node in flowchart.nodes)
+            AiFlowchartNode(
+              id: node.id,
+              label: node.label,
+              shape: node.shape,
+              order: node.order,
+            ),
+        ],
+        edges: [
+          for (final edge in flowchart.edges)
+            AiFlowchartEdge(
+              id: edge.id,
+              fromNodeId: edge.fromNodeId,
+              toNodeId: edge.toNodeId,
+              label: edge.label,
+              order: edge.order,
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<List<ExtractedKnowledgeItem>> listExtractedKnowledgeItems(
     String documentPublicId, {
     LocalExtractionPipeline? pipeline,
@@ -426,6 +494,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     String itemId,
     LocalAuditState auditState, {
     String? text,
+    String? reason,
   }) async {
     final extractedItems = _extractedItemsByDocument[documentPublicId];
     if (extractedItems == null) {

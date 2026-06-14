@@ -129,7 +129,7 @@ class AppSettingsRepository {
       localIndexingMode: LocalIndexingModes.normalize(
         _fallback(entity.localIndexingMode, defaults.localIndexingMode),
       ),
-      navigationMode: AppNavigationMode.fromWireName(entity.navigationMode),
+      navigationMode: AppNavigationMode.bottomNav,
     );
   }
 
@@ -159,7 +159,7 @@ class AppSettingsRepository {
       voiceLocale: settings.voiceLocale,
       chunkingMode: settings.chunkingMode,
       localIndexingMode: settings.localIndexingMode,
-      navigationMode: settings.navigationMode.wireName,
+      navigationMode: AppNavigationMode.bottomNav.wireName,
     );
   }
 

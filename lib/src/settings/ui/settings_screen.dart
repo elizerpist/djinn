@@ -27,7 +27,7 @@ class SettingsScreen extends StatefulWidget {
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
   final Future<bool> Function(AiProvider provider, String model)?
-  testApiKeyForProvider;
+      testApiKeyForProvider;
   final ValueChanged<AppSettings>? onSettingsChanged;
 
   @override
@@ -112,7 +112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           '${_providerLogPrefix(next.activeProvider)} settings saved '
           'provider=${next.activeProvider.wireName} '
           'voiceMode=${next.voiceMode.wireName} '
-          'navigationMode=${next.navigationMode.wireName}',
+          'navigationMode=${AppNavigationMode.bottomNav.wireName}',
         );
       }
     } catch (error) {
@@ -358,17 +358,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 _SettingsMenuCard(
-                  key: const Key('settings-card-appearance'),
-                  icon: Icons.dashboard_customize_outlined,
-                  title: 'Megjelenés',
-                  subtitle: 'Navigációs mód és fő felület',
-                  onTap: () => _openSection(
-                    title: 'Megjelenés',
-                    icon: Icons.dashboard_customize_outlined,
-                    builder: _buildAppearanceSection,
-                  ),
-                ),
-                _SettingsMenuCard(
                   key: const Key('settings-card-about'),
                   icon: Icons.info_outline,
                   title: 'Az app működése',
@@ -397,35 +386,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: builder,
         ),
       ),
-    );
-  }
-
-  Widget _buildAppearanceSection(BuildContext context, VoidCallback refresh) {
-    return _Section(
-      title: 'Megjelenés',
-      children: [
-        const Text('Navigáció', style: TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        SegmentedButton<AppNavigationMode>(
-          segments: const [
-            ButtonSegment(
-              value: AppNavigationMode.drawer,
-              label: Text('Hamburger'),
-            ),
-            ButtonSegment(
-              value: AppNavigationMode.bottomNav,
-              label: Text('Bottom navigation'),
-            ),
-          ],
-          selected: {_settings.navigationMode},
-          onSelectionChanged: (selection) async {
-            await _autoSave(
-              _settings.copyWith(navigationMode: selection.single),
-            );
-            refresh();
-          },
-        ),
-      ],
     );
   }
 
