@@ -32,11 +32,17 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Megjelenés'), findsOneWidget);
-    expect(find.text('Navigáció'), findsOneWidget);
-    expect(find.text('Hamburger'), findsOneWidget);
-    expect(find.text('Bottom navigation'), findsOneWidget);
-    expect(find.text('AI'), findsOneWidget);
+    expect(find.byKey(const Key('settings-card-ai')), findsOneWidget);
+    expect(find.byKey(const Key('settings-card-appearance')), findsOneWidget);
+    expect(find.byKey(const Key('settings-card-language')), findsOneWidget);
+    expect(find.byKey(const Key('settings-card-voice')), findsOneWidget);
+    expect(find.byKey(const Key('settings-card-mode')), findsOneWidget);
+    expect(find.byKey(const Key('settings-card-validation')), findsOneWidget);
+    expect(find.byKey(const Key('settings-card-about')), findsOneWidget);
+    expect(find.text('Az app működése'), findsOneWidget);
+
+    await _openSettingsSection(tester, 'ai');
+
     expect(find.text('OpenAI'), findsOneWidget);
     expect(find.text('Gemini'), findsOneWidget);
     expect(find.text('Válaszadó modell'), findsOneWidget);
@@ -44,13 +50,6 @@ void main() {
     expect(find.text('Groundedness modell'), findsOneWidget);
     expect(find.text('Embedding modell'), findsOneWidget);
     expect(find.text('Chunkolási mód'), findsOneWidget);
-    expect(find.text('Nyelv és felolvasás'), findsOneWidget);
-    expect(find.text('Felolvasás hangja'), findsOneWidget);
-    expect(find.text('Hangmód'), findsOneWidget);
-    expect(find.text('Párbeszéd mód'), findsOneWidget);
-    expect(find.byKey(const Key('voice-mode-dropdown')), findsOneWidget);
-    expect(find.text('Működési mód'), findsOneWidget);
-    expect(find.text('Validálás'), findsOneWidget);
     expect(find.text('Mentés'), findsNothing);
     expect(find.text('Haladó modellbeállítások'), findsNothing);
   });
@@ -74,6 +73,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'appearance');
     expect(settings.navigationMode, AppNavigationMode.drawer);
     await tester.tap(find.text('Bottom navigation'));
     await tester.pumpAndSettle();
@@ -99,6 +99,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'ai');
 
     expect(settings.chunkingMode, ChunkingModes.normal);
 
@@ -131,6 +132,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'language');
     await tester.ensureVisible(find.byKey(const Key('tts-locale-dropdown')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tts-locale-dropdown')));
@@ -160,6 +162,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'voice');
     await tester.ensureVisible(find.byKey(const Key('voice-mode-dropdown')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('voice-mode-dropdown')));
@@ -190,6 +193,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'mode');
     await tester.ensureVisible(find.text('Offline keresés'));
     await tester.pumpAndSettle();
 
@@ -223,6 +227,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'ai');
     await tester.tap(find.text('Gemini'));
     await tester.pumpAndSettle();
 
@@ -260,6 +265,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'ai');
     await tester.tap(find.byKey(const Key('extraction-model-dropdown')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('gemini-2.5-flash').last);
@@ -301,6 +307,31 @@ void main() {
     },
   );
 
+  testWidgets('about section explains chunking vector search and graph', (tester) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_, _) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'about');
+
+    expect(find.text('Mi az a chunkolás?'), findsOneWidget);
+    expect(find.text('Mi az a vektorsearch?'), findsOneWidget);
+    expect(find.text('Mi az a graph / VectorGraph?'), findsOneWidget);
+    expect(find.text('Mi a kézi chunk?'), findsOneWidget);
+  });
+
   testWidgets('Gemini key test uses selected answer model and surfaces quota', (
     tester,
   ) async {
@@ -334,6 +365,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'ai');
     await tester.tap(find.text('Kulcs tesztelése'));
     await tester.pumpAndSettle();
 
@@ -364,6 +396,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'ai');
     await tester.enterText(
       find.byKey(const Key('openai-api-key-field')),
       'sk-test',
@@ -403,6 +436,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'ai');
     await tester.enterText(
       find.byKey(const Key('openai-api-key-field')),
       'sk-test',
@@ -437,6 +471,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'ai');
     await tester.enterText(
       find.byKey(const Key('openai-api-key-field')),
       'sk-partial',
@@ -454,6 +489,11 @@ void main() {
 
     expect(await keyStore.readKeyForProvider(AiProvider.openAi), 'sk-newer');
   });
+}
+
+Future<void> _openSettingsSection(WidgetTester tester, String id) async {
+  await tester.tap(find.byKey(Key('settings-card-$id')));
+  await tester.pumpAndSettle();
 }
 
 class _DelayedMemoryApiKeyStore extends MemoryApiKeyStore {

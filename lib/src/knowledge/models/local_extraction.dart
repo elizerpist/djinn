@@ -4,7 +4,8 @@ enum LocalExtractionPipeline {
   localOcr('local_ocr'),
   localTable('local_table'),
   localFlowchart('local_flowchart'),
-  localVisual('local_visual');
+  localVisual('local_visual'),
+  manual('manual');
 
   const LocalExtractionPipeline(this.wireName);
 

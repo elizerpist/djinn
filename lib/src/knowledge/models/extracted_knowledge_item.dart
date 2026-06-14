@@ -117,6 +117,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
       LocalExtractionPipeline.localTable => 'Lokális táblázat',
       LocalExtractionPipeline.localFlowchart => 'Lokális flowchart',
       LocalExtractionPipeline.localVisual => 'Lokális kép',
+      LocalExtractionPipeline.manual => 'Kézi chunk',
     };
   }
 }

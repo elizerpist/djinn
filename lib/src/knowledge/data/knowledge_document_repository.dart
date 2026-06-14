@@ -401,16 +401,22 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
 
   Future<void> saveLocalChunks(
     String documentPublicId,
-    List<LocalChunk> chunks,
-  ) async {
+    List<LocalChunk> chunks, {
+    bool replaceExisting = true,
+  }) async {
     final extractedItems = _extractedItemsByDocument.putIfAbsent(
       documentPublicId,
       () => [],
     );
-    extractedItems.removeWhere(
-      (item) => item.pipeline != LocalExtractionPipeline.ai,
-    );
+    if (replaceExisting) {
+      extractedItems.removeWhere(
+        (item) => _isGeneratedLocalPipeline(item.pipeline),
+      );
+    }
     for (final chunk in chunks) {
+      extractedItems.removeWhere(
+        (item) => item.id == chunk.id && item.pipeline == chunk.pipeline,
+      );
       extractedItems.add(_itemFromLocalChunk(documentPublicId, chunk));
     }
   }
@@ -441,7 +447,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       pipeline: LocalExtractionPipeline.ai,
     );
     final localItems = (await listExtractedKnowledgeItems(documentPublicId))
-        .where((item) => item.pipeline != LocalExtractionPipeline.ai)
+        .where((item) => _isGeneratedLocalPipeline(item.pipeline))
         .toList(growable: false);
     return ChunkComparison(
       rows: _compareChunkLists(aiItems: aiItems, localItems: localItems),
@@ -544,6 +550,11 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     };
   }
 
+  bool _isGeneratedLocalPipeline(LocalExtractionPipeline pipeline) {
+    return pipeline != LocalExtractionPipeline.ai &&
+        pipeline != LocalExtractionPipeline.manual;
+  }
+
   LocalChunkKind _localKindForSourceType(EvidenceSourceType sourceType) {
     return switch (sourceType) {
       EvidenceSourceType.textChunk => LocalChunkKind.text,
@@ -566,14 +577,21 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     final matchedLocalIds = <String>{};
     for (final ai in aiItems) {
       ExtractedKnowledgeItem? local;
-      for (final candidate in localByKey[_comparisonKey(ai)] ?? const <ExtractedKnowledgeItem>[]) {
+      final candidates =
+          localByKey[_comparisonKey(ai)] ?? const <ExtractedKnowledgeItem>[];
+      for (final candidate in candidates) {
         if (!matchedLocalIds.contains(candidate.id)) {
           local = candidate;
           break;
         }
       }
       if (local == null) {
-        rows.add(ChunkComparisonRow(status: ChunkComparisonStatus.aiOnly, aiChunk: ai));
+        rows.add(
+          ChunkComparisonRow(
+            status: ChunkComparisonStatus.aiOnly,
+            aiChunk: ai,
+          ),
+        );
         continue;
       }
       matchedLocalIds.add(local.id);
@@ -589,7 +607,12 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       if (matchedLocalIds.contains(local.id)) {
         continue;
       }
-      rows.add(ChunkComparisonRow(status: ChunkComparisonStatus.localOnly, localChunk: local));
+      rows.add(
+        ChunkComparisonRow(
+          status: ChunkComparisonStatus.localOnly,
+          localChunk: local,
+        ),
+      );
     }
     rows.sort((a, b) {
       final page = (a.pageNumber ?? 0).compareTo(b.pageNumber ?? 0);

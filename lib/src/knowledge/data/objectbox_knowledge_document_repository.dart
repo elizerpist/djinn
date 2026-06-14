@@ -206,9 +206,14 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
   @override
   Future<void> saveLocalChunks(
     String documentPublicId,
-    List<LocalChunk> chunks,
-  ) {
-    return _repository.saveLocalChunks(documentPublicId, chunks);
+    List<LocalChunk> chunks, {
+    bool replaceExisting = true,
+  }) {
+    return _repository.saveLocalChunks(
+      documentPublicId,
+      chunks,
+      replaceExisting: replaceExisting,
+    );
   }
 
   @override

@@ -77,6 +77,79 @@ void main() {
     expect(rejectedLocalItems.single.auditState, LocalAuditState.rejected);
   });
 
+  test('manual chunks append without replacing AI or generated local chunks', () async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'manual.pdf',
+      localPath: '/memory/manual.pdf',
+      sizeBytes: 10,
+      importedAt: DateTime.utc(2026, 6, 14),
+      sha256: 'hash-manual',
+    );
+
+    await repository.saveExtractedEvidence(
+      documentPublicId: document.id,
+      evidence: const AiExtractedEvidence(
+        id: 'ai-1',
+        text: 'AI chunk',
+        pageNumber: 1,
+        sourceType: AiEvidenceSourceType.textChunk,
+      ),
+      embedding: List<double>.filled(3072, 0.1),
+      embeddingModel: 'gemini-embedding-001',
+    );
+    await repository.saveLocalChunks(
+      document.id,
+      const [
+        LocalChunk(
+          id: 'local-1',
+          documentId: 'document-1',
+          text: 'Lokális OCR chunk',
+          pageNumber: 1,
+          pipeline: LocalExtractionPipeline.localOcr,
+        ),
+      ],
+    );
+    await repository.saveLocalChunks(
+      document.id,
+      const [
+        LocalChunk(
+          id: 'manual-1',
+          documentId: 'document-1',
+          text: 'Kézi chunk',
+          pageNumber: 1,
+          sectionTitle: 'Kézi javítás',
+          pipeline: LocalExtractionPipeline.manual,
+          auditState: LocalAuditState.edited,
+        ),
+      ],
+      replaceExisting: false,
+    );
+    await repository.saveLocalChunks(
+      document.id,
+      const [
+        LocalChunk(
+          id: 'local-2',
+          documentId: 'document-1',
+          text: 'Friss lokális OCR chunk',
+          pageNumber: 2,
+          pipeline: LocalExtractionPipeline.localOcr,
+        ),
+      ],
+    );
+
+    final all = await repository.listExtractedKnowledgeItems(document.id);
+    expect(
+      all.map((item) => item.id),
+      containsAll(['ai-1', 'manual-1', 'local-2']),
+    );
+    expect(all.map((item) => item.id), isNot(contains('local-1')));
+    expect(
+      all.singleWhere((item) => item.id == 'manual-1').pipeline,
+      LocalExtractionPipeline.manual,
+    );
+  });
+
   test('document chunk entity defaults old AI chunks to accepted AI text chunks', () {
     final entity = DocumentChunkEntity(
       publicId: 'doc-1:chunk-1',

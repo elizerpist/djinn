@@ -447,10 +447,13 @@ class ObjectBoxKnowledgeRepository
 
   Future<void> saveLocalChunks(
     String documentPublicId,
-    List<LocalChunk> chunks,
-  ) async {
+    List<LocalChunk> chunks, {
+    bool replaceExisting = true,
+  }) async {
     _store.runInTransaction(TxMode.write, () {
-      _clearLocalKnowledgeForDocument(documentPublicId);
+      if (replaceExisting) {
+        _clearLocalKnowledgeForDocument(documentPublicId);
+      }
       final now = DateTime.now().millisecondsSinceEpoch;
       final sectionNodeIds = <String, String>{};
       String? previousNodeId;
@@ -605,7 +608,7 @@ class ObjectBoxKnowledgeRepository
       pipeline: LocalExtractionPipeline.ai,
     );
     final localItems = (await listExtractedKnowledgeItems(documentPublicId))
-        .where((item) => item.pipeline != LocalExtractionPipeline.ai)
+        .where((item) => _isGeneratedLocalPipeline(item.pipeline))
         .toList(growable: false);
     return ChunkComparison(
       rows: _compareChunkLists(aiItems: aiItems, localItems: localItems),
@@ -787,7 +790,7 @@ class ObjectBoxKnowledgeRepository
 
   void _clearLocalKnowledgeForDocument(String documentPublicId) {
     final localChunks = _chunksForDocument(documentPublicId)
-        .where((chunk) => chunk.pipeline != LocalExtractionPipeline.ai.wireName)
+        .where((chunk) => _isGeneratedLocalPipelineName(chunk.pipeline))
         .toList(growable: false);
     final sourceIds = localChunks.map((chunk) => chunk.publicId).toSet();
     final embeddingIds = _embeddingBox
@@ -801,6 +804,7 @@ class ObjectBoxKnowledgeRepository
     if (localChunks.isNotEmpty) {
       _chunkBox.removeMany(localChunks.map((chunk) => chunk.id).toList());
     }
+    _removeLocalGraphRowsForSources(documentPublicId, sourceIds);
     final visualObjectIds = _visualObjectBox
         .getAll()
         .where((object) => object.documentPublicId == documentPublicId)
@@ -818,10 +822,6 @@ class ObjectBoxKnowledgeRepository
       _visualAttributeBox.removeMany(visualAttributes);
     }
     _removeDocumentRows(_documentPageBox, documentPublicId);
-    _removeDocumentRows(_auditItemBox, documentPublicId);
-    _removeDocumentRows(_knowledgeNodeBox, documentPublicId);
-    _removeDocumentRows(_knowledgeEdgeBox, documentPublicId);
-    _removeDocumentRows(_knowledgeEvidenceBox, documentPublicId);
     _removeDocumentRows(_visualObjectBox, documentPublicId);
   }
 
@@ -1018,14 +1018,21 @@ class ObjectBoxKnowledgeRepository
     final matchedLocalIds = <String>{};
     for (final ai in aiItems) {
       ExtractedKnowledgeItem? local;
-      for (final candidate in localByKey[_comparisonKey(ai)] ?? const <ExtractedKnowledgeItem>[]) {
+      final candidates =
+          localByKey[_comparisonKey(ai)] ?? const <ExtractedKnowledgeItem>[];
+      for (final candidate in candidates) {
         if (!matchedLocalIds.contains(candidate.id)) {
           local = candidate;
           break;
         }
       }
       if (local == null) {
-        rows.add(ChunkComparisonRow(status: ChunkComparisonStatus.aiOnly, aiChunk: ai));
+        rows.add(
+          ChunkComparisonRow(
+            status: ChunkComparisonStatus.aiOnly,
+            aiChunk: ai,
+          ),
+        );
         continue;
       }
       matchedLocalIds.add(local.id);
@@ -1041,7 +1048,12 @@ class ObjectBoxKnowledgeRepository
       if (matchedLocalIds.contains(local.id)) {
         continue;
       }
-      rows.add(ChunkComparisonRow(status: ChunkComparisonStatus.localOnly, localChunk: local));
+      rows.add(
+        ChunkComparisonRow(
+          status: ChunkComparisonStatus.localOnly,
+          localChunk: local,
+        ),
+      );
     }
     rows.sort((a, b) {
       final page = (a.pageNumber ?? 0).compareTo(b.pageNumber ?? 0);
@@ -1107,6 +1119,81 @@ class ObjectBoxKnowledgeRepository
     if (ids.isNotEmpty) {
       box.removeMany(ids);
     }
+  }
+
+  void _removeLocalGraphRowsForSources(
+    String documentPublicId,
+    Set<String> sourceIds,
+  ) {
+    if (sourceIds.isEmpty) {
+      return;
+    }
+    final auditIds = _auditItemBox
+        .getAll()
+        .where(
+          (item) =>
+              item.documentPublicId == documentPublicId &&
+              sourceIds.contains(item.sourceId),
+        )
+        .map((item) => item.id)
+        .toList(growable: false);
+    if (auditIds.isNotEmpty) {
+      _auditItemBox.removeMany(auditIds);
+    }
+    final nodeIds = _knowledgeNodeBox
+        .getAll()
+        .where(
+          (node) =>
+              node.documentPublicId == documentPublicId &&
+              node.sourceId != null &&
+              sourceIds.contains(node.sourceId),
+        )
+        .map((node) => node.publicId)
+        .toSet();
+    final nodeRowIds = _knowledgeNodeBox
+        .getAll()
+        .where((node) => nodeIds.contains(node.publicId))
+        .map((node) => node.id)
+        .toList(growable: false);
+    if (nodeRowIds.isNotEmpty) {
+      _knowledgeNodeBox.removeMany(nodeRowIds);
+    }
+    final evidenceIds = _knowledgeEvidenceBox
+        .getAll()
+        .where(
+          (evidence) =>
+              evidence.documentPublicId == documentPublicId &&
+              sourceIds.contains(evidence.sourceId),
+        )
+        .map((evidence) => evidence.id)
+        .toList(growable: false);
+    if (evidenceIds.isNotEmpty) {
+      _knowledgeEvidenceBox.removeMany(evidenceIds);
+    }
+    final edgeIds = _knowledgeEdgeBox
+        .getAll()
+        .where(
+          (edge) =>
+              edge.documentPublicId == documentPublicId &&
+              (sourceIds.contains(edge.sourceId) ||
+                  nodeIds.contains(edge.fromNodePublicId) ||
+                  nodeIds.contains(edge.toNodePublicId)),
+        )
+        .map((edge) => edge.id)
+        .toList(growable: false);
+    if (edgeIds.isNotEmpty) {
+      _knowledgeEdgeBox.removeMany(edgeIds);
+    }
+  }
+
+  bool _isGeneratedLocalPipeline(LocalExtractionPipeline pipeline) {
+    return pipeline != LocalExtractionPipeline.ai &&
+        pipeline != LocalExtractionPipeline.manual;
+  }
+
+  bool _isGeneratedLocalPipelineName(String pipeline) {
+    return pipeline != LocalExtractionPipeline.ai.wireName &&
+        pipeline != LocalExtractionPipeline.manual.wireName;
   }
 
   List<ExtractedKnowledgeItem> _flowchartItems(

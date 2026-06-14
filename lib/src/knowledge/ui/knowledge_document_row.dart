@@ -77,8 +77,24 @@ class KnowledgeDocumentRow extends StatelessWidget {
                               style: _BadgeStyle.forStatus(document.status),
                             ),
                             _Badge(text: _sizeLabel(document.sizeBytes)),
-                            if (document.status.isReady)
+                            if (document.status ==
+                                KnowledgeDocumentStatus.needsReview) ...[
+                              const _Badge(
+                                text: 'Kinyerve',
+                                style: _BadgeStyle.review,
+                              ),
+                              const _Badge(
+                                text: 'Audit kell',
+                                style: _BadgeStyle.review,
+                              ),
+                            ],
+                            if (document.status.isReady) ...[
+                              const _Badge(
+                                text: 'Indexelve',
+                                style: _BadgeStyle.ready,
+                              ),
                               const _Badge(text: 'RAG', style: _BadgeStyle.rag),
+                            ],
                           ],
                         ),
                       ],

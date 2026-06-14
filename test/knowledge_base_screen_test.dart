@@ -7,9 +7,11 @@ import 'package:djinn/src/ai/ai_client.dart';
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/knowledge/data/document_processing_service.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
+import 'package:djinn/src/knowledge/data/local_document_processing_service.dart';
 import 'package:djinn/src/knowledge/data/pdf_import_service.dart';
 import 'package:djinn/src/knowledge/models/chunk_package.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
+import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/knowledge/models/knowledge_pack.dart';
 import 'package:djinn/src/knowledge/ui/knowledge_base_screen.dart';
 import 'package:djinn/src/knowledge/ui/knowledge_document_row.dart';
@@ -1077,6 +1079,102 @@ void main() {
     expect(processingService.processedIds, hasLength(1));
   });
 
+  testWidgets(
+    'selection menu offers local chunking for AI-ready PDFs',
+    (tester) async {
+      final repository = KnowledgeDocumentRepository();
+      final document = await repository.addDocument(
+        filename: 'ai-ready-local.pdf',
+        localPath: '/memory/ai-ready-local.pdf',
+        sizeBytes: 4,
+        importedAt: DateTime.utc(2026, 6, 14),
+        sha256: 'ai-ready-local',
+      );
+      await repository.updateStatus(document.id, KnowledgeDocumentStatus.ready);
+      final localProcessingService = _RecordingLocalProcessingService(
+        repository: repository,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: KnowledgeBaseScreen(
+            repository: repository,
+            importService: _FakePdfImportService(),
+            processingService: _RecordingProcessingService(
+              repository: repository,
+            ),
+            localProcessingService: localProcessingService,
+          ),
+        ),
+      );
+      await _pumpUntilFound(tester, find.text('ai-ready-local.pdf'));
+
+      await tester.longPress(find.text('ai-ready-local.pdf'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('AI újrachunkolás'), findsOneWidget);
+      expect(find.text('Lokális chunkolás'), findsOneWidget);
+      expect(find.text('Lokális újrachunkolás'), findsNothing);
+
+      await tester.tap(find.text('Lokális chunkolás'));
+      await tester.pumpAndSettle();
+
+      expect(localProcessingService.processedIds, [document.id]);
+      expect(localProcessingService.forceReprocessFlags, [true]);
+    },
+  );
+
+  testWidgets('manual chunk editor saves a selected PDF chunk', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'manual-source.pdf',
+      localPath: '/memory/manual-source.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 14),
+      sha256: 'manual-source',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('manual-source.pdf'));
+
+    await tester.longPress(find.text('manual-source.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kézi chunkolás'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kézi chunkolás'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('manual-chunk-title-field')),
+      'COPDAE kiváltó okai',
+    );
+    await tester.enterText(
+      find.byKey(const Key('manual-chunk-content-field')),
+      'Infekció, pneumothorax, pulmonális embólia.',
+    );
+    await tester.tap(find.byKey(const Key('manual-chunk-save')));
+    await tester.pumpAndSettle();
+
+    final manualItems = await repository.listExtractedKnowledgeItems(
+      document.id,
+      pipeline: LocalExtractionPipeline.manual,
+    );
+    expect(manualItems, hasLength(1));
+    expect(manualItems.single.sectionTitle, 'COPDAE kiváltó okai');
+    expect(manualItems.single.text, contains('pneumothorax'));
+    expect(manualItems.single.auditState, LocalAuditState.edited);
+  });
+
   testWidgets('selection menu re-syncs ready PDF', (tester) async {
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
@@ -1276,6 +1374,43 @@ class _FakePdfImportService extends PdfImportService {
       sizeBytes: bytes.length,
       sha256: 'fake-sha256-${bytes.length}',
     );
+  }
+}
+
+class _RecordingLocalProcessingService extends LocalDocumentProcessingService {
+  _RecordingLocalProcessingService({
+    required KnowledgeDocumentRepository repository,
+  })
+    : _repository = repository,
+      super(repository: repository, pageExtractor: _NoopLocalPageExtractor());
+
+  final KnowledgeDocumentRepository _repository;
+  final processedIds = <String>[];
+  final forceReprocessFlags = <bool>[];
+
+  @override
+  Future<ProcessingResult> processDocument(
+    String documentPublicId, {
+    bool forceReprocess = false,
+    void Function(ProcessingProgress progress)? onProgress,
+  }) async {
+    processedIds.add(documentPublicId);
+    forceReprocessFlags.add(forceReprocess);
+    await _repository.updateStatus(
+      documentPublicId,
+      KnowledgeDocumentStatus.needsReview,
+    );
+    return ProcessingResult(state: KnowledgeDocumentStatus.needsReview.wireName);
+  }
+}
+
+class _NoopLocalPageExtractor implements LocalPageExtractor {
+  @override
+  Future<List<LocalDocumentPage>> extractPages({
+    required String documentId,
+    required String path,
+  }) async {
+    return const [];
   }
 }
 

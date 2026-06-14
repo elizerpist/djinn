@@ -17,6 +17,7 @@ import '../models/knowledge_pack.dart';
 import 'extracted_knowledge_screen.dart';
 import 'knowledge_document_row.dart';
 import 'knowledge_header.dart';
+import 'manual_chunk_editor_screen.dart';
 import 'pdf_viewer_screen.dart';
 
 typedef PickPdfs = Future<List<PickedPdfFile>> Function();
@@ -538,17 +539,22 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         if (widget.localProcessingService != null)
           PopupMenuItem<String>(
             value: 'local_chunk',
-            child: Text(_localChunkActionLabel(selectedDocuments)),
+            child: Text(_localChunkActionLabel()),
           ),
         const PopupMenuItem<String>(
           value: 'move',
           child: Text('Mozgatás mappába'),
         ),
-        if (selectedDocuments.length == 1)
+        if (selectedDocuments.length == 1) ...[
+          const PopupMenuItem<String>(
+            value: 'manual_chunk',
+            child: Text('Kézi chunkolás'),
+          ),
           const PopupMenuItem<String>(
             value: 'inspect_extracted',
             child: Text('Kinyert chunkok'),
           ),
+        ],
         const PopupMenuItem<String>(
           value: 'export_chunks',
           child: Text('Chunk+PDF csomag export'),
@@ -564,6 +570,8 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       await _processSelectedDocumentsLocally();
     } else if (selected == 'move') {
       await _moveSelectedDocuments();
+    } else if (selected == 'manual_chunk') {
+      await _openManualChunkEditor(selectedDocuments.single);
     } else if (selected == 'inspect_extracted') {
       _openExtractedKnowledge(selectedDocuments.single);
     } else if (selected == 'export_chunks') {
@@ -583,6 +591,24 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     );
   }
 
+  Future<void> _openManualChunkEditor(KnowledgeDocument document) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => ManualChunkEditorScreen(
+          repository: widget.repository,
+          document: document,
+        ),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (saved == true) {
+      _exitSelection();
+      await _loadDocuments();
+    }
+  }
+
   String _aiChunkActionLabel(List<KnowledgeDocument> selectedDocuments) {
     if (selectedDocuments.any((document) => document.status.isReady)) {
       return 'AI újrachunkolás';
@@ -593,14 +619,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     return 'AI chunkolás';
   }
 
-  String _localChunkActionLabel(List<KnowledgeDocument> selectedDocuments) {
-    if (selectedDocuments.any(
-      (document) =>
-          document.status.isReady ||
-          document.status == KnowledgeDocumentStatus.needsReview,
-    )) {
-      return 'Lokális újrachunkolás';
-    }
+  String _localChunkActionLabel() {
     return 'Lokális chunkolás';
   }
 

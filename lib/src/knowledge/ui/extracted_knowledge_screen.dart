@@ -44,7 +44,14 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
           .where((item) => item.pipeline == LocalExtractionPipeline.ai)
           .toList(growable: false),
       localItems: allItems
-          .where((item) => item.pipeline != LocalExtractionPipeline.ai)
+          .where(
+            (item) =>
+                item.pipeline != LocalExtractionPipeline.ai &&
+                item.pipeline != LocalExtractionPipeline.manual,
+          )
+          .toList(growable: false),
+      manualItems: allItems
+          .where((item) => item.pipeline == LocalExtractionPipeline.manual)
           .toList(growable: false),
       comparison: comparison,
     );
@@ -65,7 +72,7 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
             return _EmptyExtractedKnowledge(filename: widget.document.filename);
           }
           return DefaultTabController(
-            length: 3,
+            length: 4,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -80,6 +87,7 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
                   tabs: [
                     Tab(text: 'AI chunkok'),
                     Tab(text: 'Lokális chunkok'),
+                    Tab(text: 'Manuális chunkok'),
                     Tab(text: 'Összehasonlítás'),
                   ],
                 ),
@@ -88,6 +96,7 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
                     children: [
                       _ExtractedKnowledgeList(items: data.aiItems),
                       _ExtractedKnowledgeList(items: data.localItems),
+                      _ExtractedKnowledgeList(items: data.manualItems),
                       _ChunkComparisonList(comparison: data.comparison),
                     ],
                   ),
@@ -106,12 +115,14 @@ class _ExtractedKnowledgeData {
     required this.allItems,
     required this.aiItems,
     required this.localItems,
+    required this.manualItems,
     required this.comparison,
   });
 
   final List<ExtractedKnowledgeItem> allItems;
   final List<ExtractedKnowledgeItem> aiItems;
   final List<ExtractedKnowledgeItem> localItems;
+  final List<ExtractedKnowledgeItem> manualItems;
   final ChunkComparison comparison;
 }
 
