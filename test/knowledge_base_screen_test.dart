@@ -532,7 +532,7 @@ void main() {
     await tester.tap(find.text('Kinyert chunkok'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Kinyert chunkok'), findsOneWidget);
+    expect(find.text('AI chunkok'), findsOneWidget);
     expect(find.textContaining('Táblázat'), findsWidgets);
     expect(find.textContaining('Score'), findsWidgets);
     expect(find.textContaining('Arcbénulás'), findsOneWidget);
@@ -1155,6 +1155,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Kézi chunkolás'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Szöveg').last);
+    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.text('Húzz kijelölő téglalapot a PDF-en vagy képen.'),
+    );
+    await tester.drag(
+      find.byKey(const Key('manual-chunk-selection-layer')),
+      const Offset(260, 160),
+    );
+    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const Key('manual-chunk-title-field')),
+    );
+
     await tester.enterText(
       find.byKey(const Key('manual-chunk-title-field')),
       'COPDAE kiváltó okai',

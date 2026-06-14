@@ -24,6 +24,8 @@ class ExtractedKnowledgeScreen extends StatefulWidget {
 
 class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
   late final Future<_ExtractedKnowledgeData> _dataFuture;
+  _ExtractedPipelineView _pipelineView = _ExtractedPipelineView.ai;
+  _ExtractedTypeFilter _typeFilter = _ExtractedTypeFilter.all;
 
   @override
   void initState() {
@@ -60,7 +62,26 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Kinyert chunkok')),
+      appBar: AppBar(
+        title: Text(_pipelineView.title),
+        actions: [
+          PopupMenuButton<_ExtractedPipelineView>(
+            key: const Key('extracted-pipeline-menu'),
+            tooltip: 'Kinyert tartalom nézet',
+            initialValue: _pipelineView,
+            onSelected: (value) {
+              setState(() {
+                _pipelineView = value;
+                _typeFilter = _ExtractedTypeFilter.all;
+              });
+            },
+            itemBuilder: (context) => [
+              for (final view in _ExtractedPipelineView.values)
+                PopupMenuItem(value: view, child: Text(view.title)),
+            ],
+          ),
+        ],
+      ),
       body: FutureBuilder<_ExtractedKnowledgeData>(
         future: _dataFuture,
         builder: (context, snapshot) {
@@ -71,40 +92,143 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
           if (data == null || data.allItems.isEmpty) {
             return _EmptyExtractedKnowledge(filename: widget.document.filename);
           }
-          return DefaultTabController(
-            length: 4,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: _DocumentSummary(
-                    filename: widget.document.filename,
-                    count: data.allItems.length,
-                  ),
+          final sourceItems = _itemsFor(data);
+          final filteredItems = _filterByType(sourceItems);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: _DocumentSummary(
+                  filename: widget.document.filename,
+                  count: sourceItems.length,
                 ),
-                const TabBar(
-                  tabs: [
-                    Tab(text: 'AI chunkok'),
-                    Tab(text: 'Lokális chunkok'),
-                    Tab(text: 'Manuális chunkok'),
-                    Tab(text: 'Összehasonlítás'),
-                  ],
+              ),
+              if (_pipelineView != _ExtractedPipelineView.comparison)
+                _ContentTypeFilterBar(
+                  selected: _typeFilter,
+                  onSelected: (value) => setState(() => _typeFilter = value),
                 ),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      _ExtractedKnowledgeList(items: data.aiItems),
-                      _ExtractedKnowledgeList(items: data.localItems),
-                      _ExtractedKnowledgeList(items: data.manualItems),
-                      _ChunkComparisonList(comparison: data.comparison),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              Expanded(
+                child: _pipelineView == _ExtractedPipelineView.comparison
+                    ? _ChunkComparisonList(comparison: data.comparison)
+                    : _ExtractedKnowledgeList(items: filteredItems),
+              ),
+            ],
           );
         },
+      ),
+    );
+  }
+
+  List<ExtractedKnowledgeItem> _itemsFor(_ExtractedKnowledgeData data) {
+    return switch (_pipelineView) {
+      _ExtractedPipelineView.ai => data.aiItems,
+      _ExtractedPipelineView.local => data.localItems,
+      _ExtractedPipelineView.manual => data.manualItems,
+      _ExtractedPipelineView.comparison => data.allItems,
+    };
+  }
+
+  List<ExtractedKnowledgeItem> _filterByType(
+    List<ExtractedKnowledgeItem> items,
+  ) {
+    if (_typeFilter == _ExtractedTypeFilter.all) {
+      return items;
+    }
+    return items.where(_typeFilter.matches).toList(growable: false);
+  }
+}
+
+enum _ExtractedPipelineView { ai, local, manual, comparison }
+
+extension _ExtractedPipelineViewLabel on _ExtractedPipelineView {
+  String get title {
+    return switch (this) {
+      _ExtractedPipelineView.ai => 'AI chunkok',
+      _ExtractedPipelineView.local => 'Lokális chunkok',
+      _ExtractedPipelineView.manual => 'Manuális chunkok',
+      _ExtractedPipelineView.comparison => 'Összehasonlítás',
+    };
+  }
+}
+
+enum _ExtractedTypeFilter {
+  all,
+  text,
+  list,
+  table,
+  score,
+  flowchart,
+  imageRegion,
+  visualFact,
+}
+
+extension _ExtractedTypeFilterLabel on _ExtractedTypeFilter {
+  String get label {
+    return switch (this) {
+      _ExtractedTypeFilter.all => 'Összes',
+      _ExtractedTypeFilter.text => 'Szöveg',
+      _ExtractedTypeFilter.list => 'Felsorolás',
+      _ExtractedTypeFilter.table => 'Táblázat',
+      _ExtractedTypeFilter.score => 'Score',
+      _ExtractedTypeFilter.flowchart => 'Flowchart',
+      _ExtractedTypeFilter.imageRegion => 'Kép',
+      _ExtractedTypeFilter.visualFact => 'Vizuális tény',
+    };
+  }
+
+  bool matches(ExtractedKnowledgeItem item) {
+    return switch (this) {
+      _ExtractedTypeFilter.all => true,
+      _ExtractedTypeFilter.text =>
+        item.chunkKind == LocalChunkKind.text ||
+            item.sourceType == EvidenceSourceType.textChunk,
+      _ExtractedTypeFilter.list => item.chunkKind == LocalChunkKind.list,
+      _ExtractedTypeFilter.table =>
+        item.chunkKind == LocalChunkKind.table ||
+            item.sourceType == EvidenceSourceType.tableChunk,
+      _ExtractedTypeFilter.score =>
+        item.chunkKind == LocalChunkKind.score ||
+            item.sourceType == EvidenceSourceType.scoreChunk,
+      _ExtractedTypeFilter.flowchart =>
+        item.chunkKind == LocalChunkKind.flowchart ||
+            item.sourceType == EvidenceSourceType.flowchartNode ||
+            item.sourceType == EvidenceSourceType.flowchartEdge,
+      _ExtractedTypeFilter.imageRegion =>
+        item.chunkKind == LocalChunkKind.imageRegion,
+      _ExtractedTypeFilter.visualFact =>
+        item.chunkKind == LocalChunkKind.visualFact,
+    };
+  }
+}
+
+class _ContentTypeFilterBar extends StatelessWidget {
+  const _ContentTypeFilterBar({required this.selected, required this.onSelected});
+
+  final _ExtractedTypeFilter selected;
+  final ValueChanged<_ExtractedTypeFilter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        child: Row(
+          children: [
+            for (final filter in _ExtractedTypeFilter.values) ...[
+              ChoiceChip(
+                key: ValueKey('extracted-type-${filter.name}'),
+                label: Text(filter.label),
+                selected: filter == selected,
+                onSelected: (_) => onSelected(filter),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ],
+        ),
       ),
     );
   }

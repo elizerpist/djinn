@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:273186095957995459",
-      "lastPropertyId": "24:5870046742764235293",
+      "lastPropertyId": "25:8730096027805590913",
       "name": "AppSettingsEntity",
       "properties": [
         {
@@ -127,6 +127,11 @@
         {
           "id": "24:5870046742764235293",
           "name": "navigationMode",
+          "type": 9
+        },
+        {
+          "id": "25:8730096027805590913",
+          "name": "localIndexingMode",
           "type": 9
         }
       ],

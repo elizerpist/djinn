@@ -20,4 +20,26 @@ void main() {
     expect(results.single.id, 'c1');
     expect(results.single.generatedAnswer, isFalse);
   });
+
+  test('boosts repeated terms and label matches for BM25-like ranking', () {
+    final service = OfflineSearchService();
+    final results = service.search(
+      query: 'oxigen terapia',
+      chunks: const [
+        OfflineChunk(
+          id: 'weak',
+          label: 'Egyeb ellatas',
+          text: 'Oxigen egyszer szerepel ebben a reszben.',
+        ),
+        OfflineChunk(
+          id: 'strong',
+          label: 'Oxigen terapia',
+          text: 'Oxigen terapia celja. Oxigen adasa es terapia kovetese.',
+        ),
+      ],
+    );
+
+    expect(results.first.id, 'strong');
+  });
+
 }

@@ -36,15 +36,45 @@ class OfflineSearchService {
     if (terms.isEmpty) {
       return const [];
     }
-    final scored = <({OfflineChunk chunk, int score})>[];
+    final phrase = _normalize(query);
+    final documentFrequencies = <String, int>{};
+    for (final term in terms) {
+      documentFrequencies[term] = chunks.where((chunk) {
+        final normalized = _normalize('${chunk.label} ${chunk.text}');
+        return normalized.contains(term);
+      }).length;
+    }
+
+    final scored = <({OfflineChunk chunk, double score})>[];
     for (final chunk in chunks) {
+      final label = _normalize(chunk.label);
       final text = _normalize(chunk.text);
-      final score = terms.where(text.contains).length;
+      final combined = '$label $text';
+      var score = 0.0;
+      for (final term in terms) {
+        final occurrences = _occurrences(combined, term);
+        if (occurrences == 0) {
+          continue;
+        }
+        final df = documentFrequencies[term] ?? 1;
+        final idf = 1 + (chunks.length / (1 + df));
+        final labelBoost = label.contains(term) ? 1.8 : 1.0;
+        score += occurrences * idf * labelBoost;
+      }
+      if (phrase.length > 8 && text.contains(phrase)) {
+        score += terms.length * 4;
+      }
       if (score > 0) {
         scored.add((chunk: chunk, score: score));
       }
     }
-    scored.sort((a, b) => b.score.compareTo(a.score));
+    scored.sort((a, b) {
+      final score = b.score.compareTo(a.score);
+      if (score != 0) {
+        return score;
+      }
+      return a.chunk.label.compareTo(b.chunk.label);
+    });
     return scored
         .take(limit)
         .map((item) {
@@ -65,7 +95,32 @@ class OfflineSearchService {
         .toList(growable: false);
   }
 
+  int _occurrences(String text, String term) {
+    var count = 0;
+    var start = 0;
+    while (true) {
+      final index = text.indexOf(term, start);
+      if (index == -1) {
+        return count;
+      }
+      count += 1;
+      start = index + term.length;
+    }
+  }
+
   String _normalize(String value) {
-    return value.toLowerCase().trim();
+    return value
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ö', 'o')
+        .replaceAll('ő', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ü', 'u')
+        .replaceAll('ű', 'u')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
   }
 }

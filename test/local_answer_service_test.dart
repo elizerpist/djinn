@@ -247,6 +247,37 @@ void main() {
     expect(result.citations.single.sourceId, 'chunk-1');
     expect(DebugConsole.allText, contains('[Offline] mode=forced'));
   });
+
+
+  test('model-backed offline embedding mode requires a local model asset', () async {
+    final service = LocalAnswerService(
+      openAiClient: _ThrowingAiClient(),
+      retriever: MemoryLocalRetriever(const [
+        SourceEvidence(
+          id: 'chunk-1',
+          sourceType: EvidenceSourceType.textChunk,
+          text: 'Thrombectomia indikaciok.',
+          label: '1. oldal',
+          validationState: ValidationState.validated,
+          score: 0.9,
+        ),
+      ]),
+      citationVerifier: CitationVerifier(),
+      loadSettings: () async => AppSettings.defaults().copyWith(
+        answerMode: AnswerModes.offline,
+        localIndexingMode: LocalIndexingModes.embeddingGemma,
+      ),
+      hasApiKey: () async => throw StateError('api key should not be checked'),
+      hasReadyDocuments: () async => true,
+    );
+
+    final result = await service.answer('thrombectomia');
+
+    expect(result.status, 'offline_index_unavailable');
+    expect(result.refusalReason, 'local_embedding_model_missing');
+    expect(result.citations, isEmpty);
+    expect(DebugConsole.allText, contains('[Offline] index unavailable'));
+  });
 }
 
 class _ThrowingAiClient extends FakeOpenAiClient {

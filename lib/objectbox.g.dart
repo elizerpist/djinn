@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 273186095957995459),
     name: 'AppSettingsEntity',
-    lastPropertyId: const obx_int.IdUid(24, 5870046742764235293),
+    lastPropertyId: const obx_int.IdUid(25, 8730096027805590913),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -166,6 +166,12 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(24, 5870046742764235293),
         name: 'navigationMode',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(25, 8730096027805590913),
+        name: 'localIndexingMode',
         type: 9,
         flags: 0,
       ),
@@ -1109,7 +1115,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final voiceLocaleOffset = fbb.writeString(object.voiceLocale);
         final chunkingModeOffset = fbb.writeString(object.chunkingMode);
         final navigationModeOffset = fbb.writeString(object.navigationMode);
-        fbb.startTable(25);
+        final localIndexingModeOffset = fbb.writeString(
+          object.localIndexingMode,
+        );
+        fbb.startTable(26);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, runtimeModeOffset);
         fbb.addOffset(2, answerModelOffset);
@@ -1134,6 +1143,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addBool(21, object.offlineFallbackEnabled);
         fbb.addOffset(22, chunkingModeOffset);
         fbb.addOffset(23, navigationModeOffset);
+        fbb.addOffset(24, localIndexingModeOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1226,6 +1236,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final navigationModeParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 50, '');
+        final localIndexingModeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 52, '');
         final object = AppSettingsEntity(
           id: idParam,
           runtimeMode: runtimeModeParam,
@@ -1251,6 +1264,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           voiceMode: voiceModeParam,
           voiceLocale: voiceLocaleParam,
           chunkingMode: chunkingModeParam,
+          localIndexingMode: localIndexingModeParam,
           navigationMode: navigationModeParam,
         );
 
@@ -2456,6 +2470,11 @@ class AppSettingsEntity_ {
   /// See [AppSettingsEntity.navigationMode].
   static final navigationMode = obx.QueryStringProperty<AppSettingsEntity>(
     _entities[0].properties[23],
+  );
+
+  /// See [AppSettingsEntity.localIndexingMode].
+  static final localIndexingMode = obx.QueryStringProperty<AppSettingsEntity>(
+    _entities[0].properties[24],
   );
 }
 

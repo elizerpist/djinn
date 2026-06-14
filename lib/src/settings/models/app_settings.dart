@@ -37,6 +37,52 @@ class ChunkingModes {
   }
 }
 
+class LocalIndexingModes {
+  static const mediapipeTextEmbedder = 'mediapipe_text_embedder';
+  static const onnxMultilingualE5 = 'onnx_multilingual_e5';
+  static const embeddingGemma = 'embedding_gemma';
+  static const keywordBm25 = 'keyword_bm25';
+
+  static const values = [
+    mediapipeTextEmbedder,
+    onnxMultilingualE5,
+    embeddingGemma,
+    keywordBm25,
+  ];
+
+  static String normalize(String value) {
+    return values.contains(value) ? value : keywordBm25;
+  }
+
+  static String label(String value) {
+    return switch (normalize(value)) {
+      mediapipeTextEmbedder => 'MediaPipe/LiteRT Text Embedder',
+      onnxMultilingualE5 => 'ONNX multilingual E5',
+      embeddingGemma => 'LiteRT EmbeddingGemma',
+      keywordBm25 => 'Kulcsszó/BM25/regex',
+      _ => 'Kulcsszó/BM25/regex',
+    };
+  }
+
+  static String description(String value) {
+    return switch (normalize(value)) {
+      mediapipeTextEmbedder =>
+        'Lokális szemantikus embedding, ha a Text Embedder modell asset telepítve van.',
+      onnxMultilingualE5 =>
+        'Multilingual lokális embedding ONNX Runtime-mal, külön modell assettel.',
+      embeddingGemma =>
+        'Google EmbeddingGemma alapú lokális embedding LiteRT futtatóval.',
+      keywordBm25 =>
+        'Azonnal működő offline kulcsszó, BM25-szerű és regex keresés, vektor nélkül.',
+      _ => 'Azonnal működő offline kulcsszó/BM25 keresés.',
+    };
+  }
+
+  static bool isModelBacked(String value) {
+    return normalize(value) != keywordBm25;
+  }
+}
+
 class AppSettings {
   const AppSettings({
     required this.runtimeMode,
@@ -57,6 +103,7 @@ class AppSettings {
     required this.voiceMode,
     required this.voiceLocale,
     required this.chunkingMode,
+    required this.localIndexingMode,
     required this.navigationMode,
   });
 
@@ -80,6 +127,7 @@ class AppSettings {
       voiceMode: VoiceMode.whisperConversation,
       voiceLocale: 'hu-HU',
       chunkingMode: ChunkingModes.normal,
+      localIndexingMode: LocalIndexingModes.keywordBm25,
       navigationMode: AppNavigationMode.drawer,
     );
   }
@@ -102,6 +150,7 @@ class AppSettings {
   final VoiceMode voiceMode;
   final String voiceLocale;
   final String chunkingMode;
+  final String localIndexingMode;
   final AppNavigationMode navigationMode;
 
   String get answerMode {
@@ -156,6 +205,7 @@ class AppSettings {
     VoiceMode? voiceMode,
     String? voiceLocale,
     String? chunkingMode,
+    String? localIndexingMode,
     AppNavigationMode? navigationMode,
   }) {
     final effectiveProvider = activeProvider ?? this.activeProvider;
@@ -216,6 +266,9 @@ class AppSettings {
       voiceMode: voiceMode ?? this.voiceMode,
       voiceLocale: voiceLocale ?? this.voiceLocale,
       chunkingMode: ChunkingModes.normalize(chunkingMode ?? this.chunkingMode),
+      localIndexingMode: LocalIndexingModes.normalize(
+        localIndexingMode ?? this.localIndexingMode,
+      ),
       navigationMode: navigationMode ?? this.navigationMode,
     );
   }

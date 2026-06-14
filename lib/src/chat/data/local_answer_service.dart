@@ -90,14 +90,22 @@ class LocalAnswerService implements AnswerService {
           citations: [],
         );
       }
-      return _offlineAnswer(question, settings);
+      return _offlineAnswer(
+        question,
+        settings,
+        retrievalQuery: retrievalQuery,
+      );
     }
     if (!await _hasKey(provider)) {
       if (settings.offlineFallbackEnabled && await hasReadyDocuments()) {
         DebugConsole.log(
           '[Chat/RAG] fallback reason=missing_api_key provider=${provider.wireName}',
         );
-        return _offlineAnswer(question, settings);
+        return _offlineAnswer(
+          question,
+          settings,
+          retrievalQuery: retrievalQuery,
+        );
       }
       DebugConsole.log(
         '[Chat/RAG] refused reason=missing_api_key provider=${provider.wireName}',
@@ -140,7 +148,11 @@ class LocalAnswerService implements AnswerService {
         DebugConsole.log(
           '[Chat/RAG] fallback reason=${error.failure.code.name} provider=${provider.wireName}',
         );
-        return _offlineAnswer(question, settings);
+        return _offlineAnswer(
+          question,
+          settings,
+          retrievalQuery: retrievalQuery,
+        );
       }
       rethrow;
     } on OpenAiException catch (error) {
@@ -148,7 +160,11 @@ class LocalAnswerService implements AnswerService {
         DebugConsole.log(
           '[Chat/RAG] fallback reason=openai_error error=${error.message}',
         );
-        return _offlineAnswer(question, settings);
+        return _offlineAnswer(
+          question,
+          settings,
+          retrievalQuery: retrievalQuery,
+        );
       }
       rethrow;
     }
@@ -302,10 +318,25 @@ class LocalAnswerService implements AnswerService {
 
   Future<LocalAnswerResult> _offlineAnswer(
     String question,
-    AppSettings settings,
-  ) async {
+    AppSettings settings, {
+    String? retrievalQuery,
+  }) async {
+    DebugConsole.log('[Offline] index mode=${settings.localIndexingMode}');
+    if (LocalIndexingModes.isModelBacked(settings.localIndexingMode)) {
+      DebugConsole.log(
+        '[Offline] index unavailable mode=${settings.localIndexingMode}',
+      );
+      return LocalAnswerResult(
+        text: 'A kiválasztott lokális embedding módhoz még nincs telepített '
+            'modell asset. Válts Kulcsszó/BM25/regex módra, vagy telepítsd '
+            'a választott offline embedding modellt.',
+        status: 'offline_index_unavailable',
+        refusalReason: 'local_embedding_model_missing',
+        citations: const [],
+      );
+    }
     final results = await retriever.retrieveOffline(
-      query: question,
+      query: retrievalQuery ?? question,
       limit: settings.retrievalLimit,
     );
     if (results.isEmpty) {

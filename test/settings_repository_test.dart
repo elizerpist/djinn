@@ -48,6 +48,7 @@ void main() {
     expect(settings.voiceMode, VoiceMode.whisperConversation);
     expect(settings.answerMode, AnswerModes.ai);
     expect(settings.chunkingMode, ChunkingModes.normal);
+    expect(settings.localIndexingMode, LocalIndexingModes.keywordBm25);
     expect(settings.navigationMode, AppNavigationMode.drawer);
     expect(
       settings
@@ -58,6 +59,12 @@ void main() {
     expect(
       settings.copyWith(chunkingMode: ChunkingModes.detailed).chunkingMode,
       ChunkingModes.detailed,
+    );
+    expect(
+      settings
+          .copyWith(localIndexingMode: LocalIndexingModes.onnxMultilingualE5)
+          .localIndexingMode,
+      LocalIndexingModes.onnxMultilingualE5,
     );
     expect(
       settings.copyWith(offlineFallbackEnabled: true).offlineFallbackEnabled,
@@ -233,6 +240,7 @@ void main() {
       voiceLocale: 'en-US',
       chunkingMode: ChunkingModes.detailed,
       navigationMode: AppNavigationMode.bottomNav,
+      localIndexingMode: LocalIndexingModes.embeddingGemma,
     );
 
     await repository.save(settings);
@@ -253,6 +261,7 @@ void main() {
     expect(loaded.voiceLocale, 'en-US');
     expect(loaded.chunkingMode, ChunkingModes.detailed);
     expect(loaded.navigationMode, AppNavigationMode.bottomNav);
+    expect(loaded.localIndexingMode, LocalIndexingModes.embeddingGemma);
   });
 
   test('settings repository consolidates duplicate settings rows', () async {
@@ -384,6 +393,7 @@ AppSettingsEntity _settingsEntity(AppSettings settings) {
     voiceMode: settings.voiceMode.wireName,
     voiceLocale: settings.voiceLocale,
     chunkingMode: settings.chunkingMode,
+    localIndexingMode: settings.localIndexingMode,
     navigationMode: settings.navigationMode.wireName,
   );
 }

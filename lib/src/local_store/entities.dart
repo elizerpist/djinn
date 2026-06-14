@@ -720,6 +720,7 @@ class AppSettingsEntity {
     required this.voiceMode,
     required this.voiceLocale,
     required this.chunkingMode,
+    required this.localIndexingMode,
     required this.navigationMode,
   });
 
@@ -748,5 +749,6 @@ class AppSettingsEntity {
   String voiceMode;
   String voiceLocale;
   String chunkingMode;
+  String localIndexingMode;
   String navigationMode;
 }

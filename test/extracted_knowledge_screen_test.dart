@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/src/ai/ai_client.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
+import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/knowledge/ui/extracted_knowledge_screen.dart';
 
 void main() {
@@ -103,4 +104,87 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('flowchart-decision-view-flow-1')), findsOneWidget);
   });
+
+  testWidgets('pipeline menu and type chips filter extracted chunks', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'mixed.pdf',
+      localPath: '/memory/mixed.pdf',
+      sizeBytes: 8,
+      importedAt: DateTime.utc(2026, 6, 14),
+      sha256: 'hash-mixed-ui',
+    );
+    await repository.saveExtractedEvidence(
+      documentPublicId: document.id,
+      evidence: const AiExtractedEvidence(
+        id: 'ai-text',
+        text: 'AI szöveg chunk',
+        pageNumber: 1,
+        sourceType: AiEvidenceSourceType.textChunk,
+      ),
+      embedding: List<double>.filled(3072, 0.1),
+      embeddingModel: 'gemini-embedding-001',
+    );
+    await repository.saveLocalChunks(
+      document.id,
+      const [
+        LocalChunk(
+          id: 'local-table',
+          documentId: 'document-1',
+          text: 'Lokális táblázat chunk',
+          pageNumber: 2,
+          pipeline: LocalExtractionPipeline.localOcr,
+          kind: LocalChunkKind.table,
+        ),
+        LocalChunk(
+          id: 'manual-text',
+          documentId: 'document-1',
+          text: 'Manuális szöveg chunk',
+          pageNumber: 3,
+          pipeline: LocalExtractionPipeline.manual,
+          kind: LocalChunkKind.text,
+        ),
+      ],
+      replaceExisting: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExtractedKnowledgeScreen(
+          repository: repository,
+          document: document,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('AI szöveg chunk'), findsOneWidget);
+    expect(find.text('Lokális táblázat chunk'), findsNothing);
+    expect(find.text('Szöveg'), findsOneWidget);
+    expect(find.text('Táblázat'), findsOneWidget);
+    expect(find.text('Flowchart'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('extracted-pipeline-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lokális chunkok').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('extracted-type-table')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Lokális táblázat chunk'), findsOneWidget);
+    expect(find.text('AI szöveg chunk'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('extracted-pipeline-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manuális chunkok').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Manuális chunkok'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('extracted-type-all')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Manuális szöveg chunk'), findsOneWidget);
+  });
+
 }

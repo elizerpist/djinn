@@ -113,6 +113,40 @@ void main() {
     expect(settings.chunkingMode, ChunkingModes.detailed);
   });
 
+
+  testWidgets('local indexing mode dropdown autosaves selected option', (
+    tester,
+  ) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_, _) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'mode');
+
+    await tester.ensureVisible(
+      find.byKey(const Key('local-indexing-mode-dropdown')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('local-indexing-mode-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('LiteRT EmbeddingGemma').last);
+    await tester.pumpAndSettle();
+
+    expect(settings.localIndexingMode, LocalIndexingModes.embeddingGemma);
+  });
+
   testWidgets('tts locale dropdown autosaves selected voice locale', (
     tester,
   ) async {

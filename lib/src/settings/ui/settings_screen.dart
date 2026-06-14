@@ -604,11 +604,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        const ListTile(
+        _LocalIndexingModeDropdown(
+          value: _settings.localIndexingMode,
+          onChanged: (value) async {
+            await _autoSave(_settings.copyWith(localIndexingMode: value));
+            refresh();
+          },
+        ),
+        const SizedBox(height: 8),
+        ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: Icon(Icons.search),
-          title: Text('Offline forráskeresés'),
-          subtitle: Text('Lokális ObjectBox chunkokból, AI hívás nélkül'),
+          leading: const Icon(Icons.search),
+          title: const Text('Offline forráskeresés'),
+          subtitle: Text(
+            LocalIndexingModes.description(_settings.localIndexingMode),
+          ),
         ),
         const ListTile(
           contentPadding: EdgeInsets.zero,
@@ -903,6 +913,44 @@ class _ChunkingModeDropdown extends StatelessWidget {
             value: ChunkingModes.detailed,
             child: Text('Részletes'),
           ),
+        ],
+        onChanged: (value) {
+          if (value != null) {
+            onChanged(value);
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _LocalIndexingModeDropdown extends StatelessWidget {
+  const _LocalIndexingModeDropdown({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = LocalIndexingModes.normalize(value);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: DropdownButtonFormField<String>(
+        key: const Key('local-indexing-mode-dropdown'),
+        initialValue: normalized,
+        decoration: const InputDecoration(
+          labelText: 'Lokális indexelés',
+          border: OutlineInputBorder(),
+        ),
+        items: [
+          for (final option in LocalIndexingModes.values)
+            DropdownMenuItem(
+              value: option,
+              child: Text(LocalIndexingModes.label(option)),
+            ),
         ],
         onChanged: (value) {
           if (value != null) {
