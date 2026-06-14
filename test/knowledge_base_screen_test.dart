@@ -15,6 +15,7 @@ import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/knowledge/models/knowledge_pack.dart';
 import 'package:djinn/src/knowledge/ui/knowledge_base_screen.dart';
 import 'package:djinn/src/knowledge/ui/knowledge_document_row.dart';
+import 'package:djinn/src/local_store/entities.dart';
 import 'package:djinn/src/openai/openai_client.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
 
@@ -1429,10 +1430,7 @@ class _RecordingProcessingService extends DocumentProcessingService {
   }) async {
     processedIds.add(documentPublicId);
     forceReprocessFlags.add(forceReprocess);
-    await repository.updateStatus(
-      documentPublicId,
-      KnowledgeDocumentStatus.ready,
-    );
+    await repository.markState(documentPublicId, ProcessingState.ready);
     return ProcessingResult(state: KnowledgeDocumentStatus.ready.wireName);
   }
 }
