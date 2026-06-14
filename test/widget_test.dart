@@ -160,6 +160,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('AI'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('settings-card-ai')));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('openai-api-key-field')), findsOneWidget);
   });
 

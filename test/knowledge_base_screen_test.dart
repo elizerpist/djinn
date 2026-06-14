@@ -1163,6 +1163,8 @@ void main() {
       find.byKey(const Key('manual-chunk-content-field')),
       'Infekció, pneumothorax, pulmonális embólia.',
     );
+    await tester.ensureVisible(find.byKey(const Key('manual-chunk-save')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('manual-chunk-save')));
     await tester.pumpAndSettle();
 
