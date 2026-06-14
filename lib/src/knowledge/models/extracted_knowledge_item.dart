@@ -1,6 +1,7 @@
 import '../../local_store/entities.dart';
+import 'local_extraction.dart';
 
-class ExtractedKnowledgeItem {
+class ExtractedKnowledgeItem implements ChunkComparisonItem {
   const ExtractedKnowledgeItem({
     required this.id,
     required this.documentId,
@@ -17,6 +18,12 @@ class ExtractedKnowledgeItem {
     this.flowchartShape,
     this.flowchartOrder = 0,
     this.sourceRectJson,
+    this.pipeline = LocalExtractionPipeline.ai,
+    this.chunkKind = LocalChunkKind.text,
+    this.auditState = LocalAuditState.accepted,
+    this.endPageNumber,
+    this.confidence,
+    this.sourcePageImagePath,
   });
 
   final String id;
@@ -34,6 +41,44 @@ class ExtractedKnowledgeItem {
   final String? flowchartShape;
   final int flowchartOrder;
   final String? sourceRectJson;
+  final LocalExtractionPipeline pipeline;
+  final LocalChunkKind chunkKind;
+  final LocalAuditState auditState;
+  final int? endPageNumber;
+  final double? confidence;
+  final String? sourcePageImagePath;
+
+  ExtractedKnowledgeItem copyWith({
+    String? text,
+    LocalAuditState? auditState,
+    String? sectionTitle,
+  }) {
+    return ExtractedKnowledgeItem(
+      id: id,
+      documentId: documentId,
+      sourceType: sourceType,
+      text: text ?? this.text,
+      pageNumber: pageNumber,
+      sectionTitle: sectionTitle ?? this.sectionTitle,
+      embeddingModel: embeddingModel,
+      flowchartId: flowchartId,
+      flowchartElementId: flowchartElementId,
+      flowchartFromId: flowchartFromId,
+      flowchartToId: flowchartToId,
+      flowchartEdgeLabel: flowchartEdgeLabel,
+      flowchartShape: flowchartShape,
+      flowchartOrder: flowchartOrder,
+      sourceRectJson: sourceRectJson,
+      pipeline: pipeline,
+      chunkKind: chunkKind,
+      auditState: auditState ?? this.auditState,
+      endPageNumber: endPageNumber,
+      confidence: confidence,
+      sourcePageImagePath: sourcePageImagePath,
+    );
+  }
+
+  bool get isLocal => pipeline.isLocal;
 
   String get typeLabel {
     return switch (sourceType) {
@@ -50,9 +95,25 @@ class ExtractedKnowledgeItem {
     if (page == null || page <= 0) {
       return typeLabel;
     }
+    final endPage = endPageNumber;
+    if (endPage != null && endPage > page) {
+      return '$typeLabel - $page-$endPage. oldal';
+    }
     return '$typeLabel - $page. oldal';
   }
+
+  String get pipelineLabel {
+    return switch (pipeline) {
+      LocalExtractionPipeline.ai => 'AI chunk',
+      LocalExtractionPipeline.localPdfText => 'Lokális PDF szöveg',
+      LocalExtractionPipeline.localOcr => 'Lokális OCR',
+      LocalExtractionPipeline.localTable => 'Lokális táblázat',
+      LocalExtractionPipeline.localFlowchart => 'Lokális flowchart',
+      LocalExtractionPipeline.localVisual => 'Lokális kép',
+    };
+  }
 }
+
 
 EvidenceSourceType evidenceSourceTypeFromWireName(String value) {
   return EvidenceSourceType.values.firstWhere(

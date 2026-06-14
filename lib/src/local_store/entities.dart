@@ -175,6 +175,12 @@ class DocumentChunkEntity {
     required this.pageNumber,
     this.sectionTitle,
     this.sourceRectJson,
+    this.pipeline = 'ai',
+    this.chunkKind = 'text',
+    this.auditState = 'accepted',
+    this.endPageNumber,
+    this.confidence,
+    this.sourcePageImagePath,
   });
 
   @Id()
@@ -190,6 +196,232 @@ class DocumentChunkEntity {
   int pageNumber;
   String? sectionTitle;
   String? sourceRectJson;
+  String pipeline;
+  String chunkKind;
+  String auditState;
+  int? endPageNumber;
+  double? confidence;
+  String? sourcePageImagePath;
+}
+
+@Entity()
+class DocumentPageEntity {
+  DocumentPageEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.documentPublicId,
+    required this.pageNumber,
+    this.pdfText,
+    this.ocrText,
+    this.sourceImagePath,
+    this.ocrBlocksJson,
+    this.confidence,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String documentPublicId;
+
+  int pageNumber;
+  String? pdfText;
+  String? ocrText;
+  String? sourceImagePath;
+  String? ocrBlocksJson;
+  double? confidence;
+}
+
+@Entity()
+class ExtractionAuditItemEntity {
+  ExtractionAuditItemEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.documentPublicId,
+    required this.sourceId,
+    required this.itemKind,
+    required this.auditState,
+    required this.createdAtMillis,
+    this.pageNumber,
+    this.title,
+    this.previewText,
+    this.reason,
+    this.updatedAtMillis,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String documentPublicId;
+
+  @Index()
+  String sourceId;
+
+  String itemKind;
+
+  @Index()
+  String auditState;
+
+  int createdAtMillis;
+  int? updatedAtMillis;
+  int? pageNumber;
+  String? title;
+  String? previewText;
+  String? reason;
+}
+
+@Entity()
+class KnowledgeNodeEntity {
+  KnowledgeNodeEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.documentPublicId,
+    required this.label,
+    required this.nodeType,
+    this.pageNumber,
+    this.sourceId,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String documentPublicId;
+
+  String label;
+  String nodeType;
+  int? pageNumber;
+  String? sourceId;
+}
+
+@Entity()
+class KnowledgeEdgeEntity {
+  KnowledgeEdgeEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.documentPublicId,
+    required this.fromNodePublicId,
+    required this.toNodePublicId,
+    required this.relationType,
+    this.sourceId,
+    this.weight,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String documentPublicId;
+
+  @Index()
+  String fromNodePublicId;
+
+  @Index()
+  String toNodePublicId;
+
+  String relationType;
+  String? sourceId;
+  double? weight;
+}
+
+@Entity()
+class KnowledgeEvidenceEntity {
+  KnowledgeEvidenceEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.documentPublicId,
+    required this.nodePublicId,
+    required this.sourceId,
+    required this.pipeline,
+    this.pageNumber,
+    this.quote,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String documentPublicId;
+
+  @Index()
+  String nodePublicId;
+
+  @Index()
+  String sourceId;
+
+  String pipeline;
+  int? pageNumber;
+  String? quote;
+}
+
+@Entity()
+class VisualObjectEntity {
+  VisualObjectEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.documentPublicId,
+    required this.label,
+    required this.objectType,
+    this.pageNumber,
+    this.sourceRectJson,
+    this.confidence,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String documentPublicId;
+
+  String label;
+  String objectType;
+  int? pageNumber;
+  String? sourceRectJson;
+  double? confidence;
+}
+
+@Entity()
+class VisualAttributeEntity {
+  VisualAttributeEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.visualObjectPublicId,
+    required this.name,
+    required this.value,
+    this.confidence,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String visualObjectPublicId;
+
+  String name;
+  String value;
+  double? confidence;
 }
 
 @Entity()

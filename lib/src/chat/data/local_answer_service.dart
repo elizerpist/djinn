@@ -133,6 +133,7 @@ class LocalAnswerService implements AnswerService {
         queryVector: queryVector,
         limit: settings.retrievalLimit,
         minimumSimilarity: settings.minimumSimilarity,
+        query: retrievalQuery,
       );
     } on AiProviderException catch (error) {
       if (settings.offlineFallbackEnabled) {

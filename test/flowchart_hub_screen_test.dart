@@ -12,12 +12,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Flowchart'), findsOneWidget);
-    expect(find.text('Validálás'), findsOneWidget);
-    expect(find.text('Kinyert'), findsOneWidget);
+    expect(find.text('Audit'), findsWidgets);
+    expect(find.text('Kinyert tartalom'), findsOneWidget);
     expect(find.text('Építő'), findsOneWidget);
     expect(find.text('Sablonok'), findsOneWidget);
-    expect(find.textContaining('Flowchart validáció nem elérhető'), findsOneWidget);
+    expect(find.textContaining('Kinyert tartalom audit nem elérhető'), findsOneWidget);
 
     await tester.tap(find.text('Építő'));
     await tester.pumpAndSettle();

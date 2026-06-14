@@ -5,6 +5,7 @@ import '../models/chunk_package.dart';
 import '../models/extracted_knowledge_item.dart';
 import '../models/knowledge_document.dart';
 import '../models/knowledge_folder.dart';
+import '../models/local_extraction.dart';
 import 'document_processing_service.dart';
 import 'knowledge_document_repository.dart';
 import 'objectbox_knowledge_repository.dart';
@@ -193,9 +194,41 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
 
   @override
   Future<List<ExtractedKnowledgeItem>> listExtractedKnowledgeItems(
+    String documentPublicId, {
+    LocalExtractionPipeline? pipeline,
+  }) {
+    return _repository.listExtractedKnowledgeItems(
+      documentPublicId,
+      pipeline: pipeline,
+    );
+  }
+
+  @override
+  Future<void> saveLocalChunks(
     String documentPublicId,
+    List<LocalChunk> chunks,
   ) {
-    return _repository.listExtractedKnowledgeItems(documentPublicId);
+    return _repository.saveLocalChunks(documentPublicId, chunks);
+  }
+
+  @override
+  Future<void> updateExtractedKnowledgeAuditState(
+    String documentPublicId,
+    String itemId,
+    LocalAuditState auditState, {
+    String? text,
+  }) {
+    return _repository.updateExtractedKnowledgeAuditState(
+      documentPublicId,
+      itemId,
+      auditState,
+      text: text,
+    );
+  }
+
+  @override
+  Future<ChunkComparison> compareExtractedChunks(String documentPublicId) {
+    return _repository.compareExtractedChunks(documentPublicId);
   }
 
   @override

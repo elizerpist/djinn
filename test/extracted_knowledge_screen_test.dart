@@ -71,9 +71,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Flowchart'));
-    await tester.pumpAndSettle();
-
     expect(find.text('Légzés algoritmus'), findsOneWidget);
     expect(find.text('Törzs + ágkártyák'), findsOneWidget);
     expect(find.text('Térkép + olvasólista'), findsOneWidget);

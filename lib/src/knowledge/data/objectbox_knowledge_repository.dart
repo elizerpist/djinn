@@ -9,6 +9,7 @@ import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
 import '../models/chunk_package.dart';
 import '../models/extracted_knowledge_item.dart';
+import '../models/local_extraction.dart';
 import 'chunk_package_service.dart';
 import 'document_processing_service.dart';
 
@@ -75,6 +76,13 @@ class ObjectBoxKnowledgeRepository
       _flowchartBox = store.box<FlowchartEntity>(),
       _flowchartNodeBox = store.box<FlowchartNodeEntity>(),
       _flowchartEdgeBox = store.box<FlowchartEdgeEntity>(),
+      _documentPageBox = store.box<DocumentPageEntity>(),
+      _auditItemBox = store.box<ExtractionAuditItemEntity>(),
+      _knowledgeNodeBox = store.box<KnowledgeNodeEntity>(),
+      _knowledgeEdgeBox = store.box<KnowledgeEdgeEntity>(),
+      _knowledgeEvidenceBox = store.box<KnowledgeEvidenceEntity>(),
+      _visualObjectBox = store.box<VisualObjectEntity>(),
+      _visualAttributeBox = store.box<VisualAttributeEntity>(),
       _uuid = uuid ?? const Uuid();
 
   static const _vectorEmbeddingDimension = 3072;
@@ -92,6 +100,13 @@ class ObjectBoxKnowledgeRepository
   final Box<FlowchartEntity> _flowchartBox;
   final Box<FlowchartNodeEntity> _flowchartNodeBox;
   final Box<FlowchartEdgeEntity> _flowchartEdgeBox;
+  final Box<DocumentPageEntity> _documentPageBox;
+  final Box<ExtractionAuditItemEntity> _auditItemBox;
+  final Box<KnowledgeNodeEntity> _knowledgeNodeBox;
+  final Box<KnowledgeEdgeEntity> _knowledgeEdgeBox;
+  final Box<KnowledgeEvidenceEntity> _knowledgeEvidenceBox;
+  final Box<VisualObjectEntity> _visualObjectBox;
+  final Box<VisualAttributeEntity> _visualAttributeBox;
   final Uuid _uuid;
 
   @override
@@ -212,7 +227,7 @@ class ObjectBoxKnowledgeRepository
         .toList(growable: false);
     _store.runInTransaction(TxMode.write, () {
       for (final document in documents) {
-        _clearGeneratedKnowledgeForDocument(document.publicId);
+        _clearGeneratedKnowledgeForDocument(document.publicId, includeLocal: true);
         _documentBox.remove(document.id);
       }
     });
@@ -340,6 +355,9 @@ class ObjectBoxKnowledgeRepository
         text: evidence.text,
         pageNumber: evidence.pageNumber,
         sectionTitle: evidence.sectionTitle,
+        pipeline: LocalExtractionPipeline.ai.wireName,
+        chunkKind: _localKindForSourceType(sourceType).wireName,
+        auditState: LocalAuditState.accepted.wireName,
       ),
       embeddingEntity,
     );
@@ -402,8 +420,9 @@ class ObjectBoxKnowledgeRepository
   }
 
   Future<List<ExtractedKnowledgeItem>> listExtractedKnowledgeItems(
-    String documentPublicId,
-  ) async {
+    String documentPublicId, {
+    LocalExtractionPipeline? pipeline,
+  }) async {
     final allEmbeddings = {
       for (final embedding in _embeddingBox.getAll())
         embedding.sourceId: embedding,
@@ -415,23 +434,182 @@ class ObjectBoxKnowledgeRepository
     };
     final items = <ExtractedKnowledgeItem>[
       for (final chunk in _chunksForDocument(documentPublicId))
-        ExtractedKnowledgeItem(
-          id: _packageChunkId(documentPublicId, chunk.publicId),
-          documentId: documentPublicId,
-          sourceType: evidenceSourceTypeFromWireName(
-            embeddings[chunk.publicId]?.sourceType ??
-                EvidenceSourceType.textChunk.wireName,
-          ),
-          text: chunk.text,
-          pageNumber: chunk.pageNumber,
-          sectionTitle: chunk.sectionTitle,
-          embeddingModel: embeddings[chunk.publicId]?.model,
-        ),
+        _itemFromChunk(documentPublicId, chunk, embeddings[chunk.publicId]),
       for (final flowchart in _flowchartsForDocument(documentPublicId))
         ..._flowchartItems(documentPublicId, flowchart, allEmbeddings),
     ];
-    items.sort(_compareExtractedItems);
-    return List.unmodifiable(items);
+    final filtered = pipeline == null
+        ? items
+        : items.where((item) => item.pipeline == pipeline).toList();
+    filtered.sort(_compareExtractedItems);
+    return List.unmodifiable(filtered);
+  }
+
+  Future<void> saveLocalChunks(
+    String documentPublicId,
+    List<LocalChunk> chunks,
+  ) async {
+    _store.runInTransaction(TxMode.write, () {
+      _clearLocalKnowledgeForDocument(documentPublicId);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final sectionNodeIds = <String, String>{};
+      String? previousNodeId;
+      for (final chunk in chunks) {
+        final sourceId = '$documentPublicId:${chunk.id}';
+        final nodeId = '$sourceId:node';
+        _chunkBox.put(
+          DocumentChunkEntity(
+            publicId: sourceId,
+            documentPublicId: documentPublicId,
+            text: chunk.text,
+            pageNumber: chunk.pageNumber,
+            sectionTitle: chunk.sectionTitle,
+            sourceRectJson: chunk.sourceRectJson,
+            pipeline: chunk.pipeline.wireName,
+            chunkKind: chunk.kind.wireName,
+            auditState: chunk.auditState.wireName,
+            endPageNumber: chunk.endPageNumber,
+            confidence: chunk.confidence,
+            sourcePageImagePath: chunk.sourcePageImagePath,
+          ),
+        );
+        _auditItemBox.put(
+          ExtractionAuditItemEntity(
+            publicId: '$sourceId:audit',
+            documentPublicId: documentPublicId,
+            sourceId: sourceId,
+            itemKind: chunk.kind.wireName,
+            auditState: chunk.auditState.wireName,
+            pageNumber: chunk.pageNumber,
+            title: chunk.sectionTitle,
+            previewText: chunk.text,
+            createdAtMillis: now,
+            updatedAtMillis: now,
+          ),
+        );
+        _knowledgeNodeBox.put(
+          KnowledgeNodeEntity(
+            publicId: nodeId,
+            documentPublicId: documentPublicId,
+            label: chunk.sectionTitle ?? _shortNodeLabel(chunk.text),
+            nodeType: chunk.kind.wireName,
+            pageNumber: chunk.pageNumber,
+            sourceId: sourceId,
+          ),
+        );
+        _knowledgeEvidenceBox.put(
+          KnowledgeEvidenceEntity(
+            publicId: '$sourceId:evidence',
+            documentPublicId: documentPublicId,
+            nodePublicId: nodeId,
+            sourceId: sourceId,
+            pipeline: chunk.pipeline.wireName,
+            pageNumber: chunk.pageNumber,
+            quote: chunk.text,
+          ),
+        );
+        final sectionTitle = chunk.sectionTitle?.trim();
+        if (sectionTitle != null && sectionTitle.isNotEmpty) {
+          final sectionKey = _graphKey(sectionTitle);
+          final sectionNodeId = sectionNodeIds.putIfAbsent(
+            sectionKey,
+            () => '$documentPublicId:section:$sectionKey',
+          );
+          _knowledgeNodeBox.put(
+            KnowledgeNodeEntity(
+              publicId: sectionNodeId,
+              documentPublicId: documentPublicId,
+              label: sectionTitle,
+              nodeType: 'section',
+              pageNumber: chunk.pageNumber,
+            ),
+          );
+          _knowledgeEdgeBox.put(
+            KnowledgeEdgeEntity(
+              publicId: '$nodeId:part_of:$sectionNodeId',
+              documentPublicId: documentPublicId,
+              fromNodePublicId: nodeId,
+              toNodePublicId: sectionNodeId,
+              relationType: 'part_of',
+              sourceId: sourceId,
+              weight: 1,
+            ),
+          );
+        }
+        if (previousNodeId != null) {
+          _knowledgeEdgeBox.put(
+            KnowledgeEdgeEntity(
+              publicId: '$previousNodeId:continues:$nodeId',
+              documentPublicId: documentPublicId,
+              fromNodePublicId: previousNodeId!,
+              toNodePublicId: nodeId,
+              relationType: 'continues',
+              sourceId: sourceId,
+              weight: 0.75,
+            ),
+          );
+        }
+        previousNodeId = nodeId;
+      }
+    });
+  }
+
+  Future<void> updateExtractedKnowledgeAuditState(
+    String documentPublicId,
+    String itemId,
+    LocalAuditState auditState, {
+    String? text,
+  }) async {
+    final sourceId = itemId.startsWith('$documentPublicId:')
+        ? itemId
+        : '$documentPublicId:$itemId';
+    _store.runInTransaction(TxMode.write, () {
+      final chunk = _findChunk(sourceId);
+      if (chunk != null) {
+        chunk.auditState = auditState.wireName;
+        if (text != null) {
+          chunk.text = text;
+        }
+        _chunkBox.put(chunk);
+        for (final auditItem in _auditItemBox.getAll()) {
+          if (auditItem.sourceId == sourceId) {
+            auditItem.auditState = auditState.wireName;
+            auditItem.previewText = text ?? auditItem.previewText;
+            auditItem.updatedAtMillis = DateTime.now().millisecondsSinceEpoch;
+            _auditItemBox.put(auditItem);
+          }
+        }
+        return;
+      }
+      final validationState = _validationStateForAuditState(auditState);
+      final node = _findNode(sourceId);
+      if (node != null) {
+        node.validationState = validationState.wireName;
+        if (text != null) {
+          node.label = text;
+        }
+        _flowchartNodeBox.put(node);
+        return;
+      }
+      final edge = _findEdge(sourceId);
+      if (edge != null) {
+        edge.validationState = validationState.wireName;
+        _flowchartEdgeBox.put(edge);
+      }
+    });
+  }
+
+  Future<ChunkComparison> compareExtractedChunks(String documentPublicId) async {
+    final aiItems = await listExtractedKnowledgeItems(
+      documentPublicId,
+      pipeline: LocalExtractionPipeline.ai,
+    );
+    final localItems = (await listExtractedKnowledgeItems(documentPublicId))
+        .where((item) => item.pipeline != LocalExtractionPipeline.ai)
+        .toList(growable: false);
+    return ChunkComparison(
+      rows: _compareChunkLists(aiItems: aiItems, localItems: localItems),
+    );
   }
 
   @override
@@ -440,7 +618,7 @@ class ObjectBoxKnowledgeRepository
     if (document == null) {
       throw StateError('knowledge document not found: $documentPublicId');
     }
-    final chunks = _chunksForDocument(documentPublicId);
+    final chunks = _aiChunksForDocument(documentPublicId);
     final embeddings = {
       for (final embedding in _embeddingBox.getAll())
         if (_generatedEmbeddingSourceTypes.contains(embedding.sourceType))
@@ -501,6 +679,9 @@ class ObjectBoxKnowledgeRepository
             text: item.text,
             pageNumber: item.pageNumber,
             sectionTitle: item.sectionTitle,
+            pipeline: LocalExtractionPipeline.ai.wireName,
+            chunkKind: LocalChunkKind.text.wireName,
+            auditState: LocalAuditState.accepted.wireName,
           ),
         );
         _embeddingBox.put(
@@ -565,8 +746,59 @@ class ObjectBoxKnowledgeRepository
     }
   }
 
-  void _clearGeneratedKnowledgeForDocument(String documentPublicId) {
-    final chunks = _chunksForDocument(documentPublicId);
+  List<DocumentChunkEntity> _aiChunksForDocument(String documentPublicId) {
+    return _chunksForDocument(documentPublicId)
+        .where((chunk) => chunk.pipeline == LocalExtractionPipeline.ai.wireName)
+        .toList(growable: false);
+  }
+
+  void _clearLocalKnowledgeForDocument(String documentPublicId) {
+    final localChunks = _chunksForDocument(documentPublicId)
+        .where((chunk) => chunk.pipeline != LocalExtractionPipeline.ai.wireName)
+        .toList(growable: false);
+    final sourceIds = localChunks.map((chunk) => chunk.publicId).toSet();
+    final embeddingIds = _embeddingBox
+        .getAll()
+        .where((embedding) => sourceIds.contains(embedding.sourceId))
+        .map((embedding) => embedding.id)
+        .toList(growable: false);
+    if (embeddingIds.isNotEmpty) {
+      _embeddingBox.removeMany(embeddingIds);
+    }
+    if (localChunks.isNotEmpty) {
+      _chunkBox.removeMany(localChunks.map((chunk) => chunk.id).toList());
+    }
+    final visualObjectIds = _visualObjectBox
+        .getAll()
+        .where((object) => object.documentPublicId == documentPublicId)
+        .map((object) => object.publicId)
+        .toSet();
+    final visualAttributes = _visualAttributeBox
+        .getAll()
+        .where(
+          (attribute) =>
+              visualObjectIds.contains(attribute.visualObjectPublicId),
+        )
+        .map((attribute) => attribute.id)
+        .toList(growable: false);
+    if (visualAttributes.isNotEmpty) {
+      _visualAttributeBox.removeMany(visualAttributes);
+    }
+    _removeDocumentRows(_documentPageBox, documentPublicId);
+    _removeDocumentRows(_auditItemBox, documentPublicId);
+    _removeDocumentRows(_knowledgeNodeBox, documentPublicId);
+    _removeDocumentRows(_knowledgeEdgeBox, documentPublicId);
+    _removeDocumentRows(_knowledgeEvidenceBox, documentPublicId);
+    _removeDocumentRows(_visualObjectBox, documentPublicId);
+  }
+
+  void _clearGeneratedKnowledgeForDocument(
+    String documentPublicId, {
+    bool includeLocal = false,
+  }) {
+    final chunks = includeLocal
+        ? _chunksForDocument(documentPublicId)
+        : _aiChunksForDocument(documentPublicId);
     final sourceIds = chunks.map((chunk) => chunk.publicId).toSet();
     final embeddingIds = _embeddingBox
         .getAll()
@@ -582,6 +814,30 @@ class ObjectBoxKnowledgeRepository
     }
     if (chunks.isNotEmpty) {
       _chunkBox.removeMany(chunks.map((chunk) => chunk.id).toList());
+    }
+    if (includeLocal) {
+      final visualObjectIds = _visualObjectBox
+          .getAll()
+          .where((object) => object.documentPublicId == documentPublicId)
+          .map((object) => object.publicId)
+          .toSet();
+      final visualAttributes = _visualAttributeBox
+          .getAll()
+          .where(
+            (attribute) =>
+                visualObjectIds.contains(attribute.visualObjectPublicId),
+          )
+          .map((attribute) => attribute.id)
+          .toList(growable: false);
+      if (visualAttributes.isNotEmpty) {
+        _visualAttributeBox.removeMany(visualAttributes);
+      }
+      _removeDocumentRows(_documentPageBox, documentPublicId);
+      _removeDocumentRows(_auditItemBox, documentPublicId);
+      _removeDocumentRows(_knowledgeNodeBox, documentPublicId);
+      _removeDocumentRows(_knowledgeEdgeBox, documentPublicId);
+      _removeDocumentRows(_knowledgeEvidenceBox, documentPublicId);
+      _removeDocumentRows(_visualObjectBox, documentPublicId);
     }
 
     final flowcharts = _flowchartsForDocument(documentPublicId);
@@ -661,6 +917,165 @@ class ObjectBoxKnowledgeRepository
     return a.id.compareTo(b.id);
   }
 
+
+  ExtractedKnowledgeItem _itemFromChunk(
+    String documentPublicId,
+    DocumentChunkEntity chunk,
+    ChunkEmbeddingEntity? embedding,
+  ) {
+    final pipeline = LocalExtractionPipeline.fromWireName(chunk.pipeline);
+    return ExtractedKnowledgeItem(
+      id: _packageChunkId(documentPublicId, chunk.publicId),
+      documentId: documentPublicId,
+      sourceType: pipeline == LocalExtractionPipeline.ai
+          ? evidenceSourceTypeFromWireName(
+              embedding?.sourceType ?? EvidenceSourceType.textChunk.wireName,
+            )
+          : _sourceTypeForLocalKind(LocalChunkKind.fromWireName(chunk.chunkKind)),
+      text: chunk.text,
+      pageNumber: chunk.pageNumber,
+      sectionTitle: chunk.sectionTitle,
+      embeddingModel: embedding?.model,
+      sourceRectJson: chunk.sourceRectJson,
+      pipeline: pipeline,
+      chunkKind: LocalChunkKind.fromWireName(chunk.chunkKind),
+      auditState: LocalAuditState.fromWireName(chunk.auditState),
+      endPageNumber: chunk.endPageNumber,
+      confidence: chunk.confidence,
+      sourcePageImagePath: chunk.sourcePageImagePath,
+    );
+  }
+
+  EvidenceSourceType _sourceTypeForLocalKind(LocalChunkKind kind) {
+    return switch (kind) {
+      LocalChunkKind.table => EvidenceSourceType.tableChunk,
+      LocalChunkKind.score => EvidenceSourceType.scoreChunk,
+      LocalChunkKind.flowchart => EvidenceSourceType.flowchartNode,
+      LocalChunkKind.text ||
+      LocalChunkKind.list ||
+      LocalChunkKind.imageRegion ||
+      LocalChunkKind.visualFact ||
+      LocalChunkKind.unknown => EvidenceSourceType.textChunk,
+    };
+  }
+
+  LocalChunkKind _localKindForSourceType(String sourceType) {
+    if (sourceType == EvidenceSourceType.tableChunk.wireName) {
+      return LocalChunkKind.table;
+    }
+    if (sourceType == EvidenceSourceType.scoreChunk.wireName) {
+      return LocalChunkKind.score;
+    }
+    if (sourceType == EvidenceSourceType.flowchartNode.wireName ||
+        sourceType == EvidenceSourceType.flowchartEdge.wireName) {
+      return LocalChunkKind.flowchart;
+    }
+    return LocalChunkKind.text;
+  }
+
+  List<ChunkComparisonRow> _compareChunkLists({
+    required List<ExtractedKnowledgeItem> aiItems,
+    required List<ExtractedKnowledgeItem> localItems,
+  }) {
+    final rows = <ChunkComparisonRow>[];
+    final localByKey = <String, List<ExtractedKnowledgeItem>>{};
+    for (final local in localItems) {
+      localByKey.putIfAbsent(_comparisonKey(local), () => []).add(local);
+    }
+    final matchedLocalIds = <String>{};
+    for (final ai in aiItems) {
+      ExtractedKnowledgeItem? local;
+      for (final candidate in localByKey[_comparisonKey(ai)] ?? const <ExtractedKnowledgeItem>[]) {
+        if (!matchedLocalIds.contains(candidate.id)) {
+          local = candidate;
+          break;
+        }
+      }
+      if (local == null) {
+        rows.add(ChunkComparisonRow(status: ChunkComparisonStatus.aiOnly, aiChunk: ai));
+        continue;
+      }
+      matchedLocalIds.add(local.id);
+      rows.add(
+        ChunkComparisonRow(
+          status: ChunkComparisonStatus.matched,
+          aiChunk: ai,
+          localChunk: local,
+        ),
+      );
+    }
+    for (final local in localItems) {
+      if (matchedLocalIds.contains(local.id)) {
+        continue;
+      }
+      rows.add(ChunkComparisonRow(status: ChunkComparisonStatus.localOnly, localChunk: local));
+    }
+    rows.sort((a, b) {
+      final page = (a.pageNumber ?? 0).compareTo(b.pageNumber ?? 0);
+      if (page != 0) {
+        return page;
+      }
+      return a.sectionTitle.compareTo(b.sectionTitle);
+    });
+    return rows;
+  }
+
+  String _comparisonKey(ExtractedKnowledgeItem item) {
+    final section = (item.sectionTitle ?? '').trim().toLowerCase();
+    if (section.isNotEmpty) {
+      return '${item.pageNumber ?? 0}:$section';
+    }
+    return '${item.pageNumber ?? 0}:${item.sourceType.wireName}';
+  }
+
+  String _graphKey(String value) {
+    final normalized = value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9áéíóöőúüű]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    return normalized.isEmpty ? 'section' : normalized;
+  }
+
+  String _shortNodeLabel(String text) {
+    final singleLine = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (singleLine.length <= 72) {
+      return singleLine;
+    }
+    return '${singleLine.substring(0, 69)}...';
+  }
+
+  void _removeDocumentRows<T extends Object>(
+    Box<T> box,
+    String documentPublicId,
+  ) {
+    final ids = box
+        .getAll()
+        .where((entity) => switch (entity) {
+              DocumentPageEntity item => item.documentPublicId == documentPublicId,
+              ExtractionAuditItemEntity item => item.documentPublicId == documentPublicId,
+              KnowledgeNodeEntity item => item.documentPublicId == documentPublicId,
+              KnowledgeEdgeEntity item => item.documentPublicId == documentPublicId,
+              KnowledgeEvidenceEntity item => item.documentPublicId == documentPublicId,
+              VisualObjectEntity item => item.documentPublicId == documentPublicId,
+              _ => false,
+            })
+        .map((entity) => switch (entity) {
+              DocumentPageEntity item => item.id,
+              ExtractionAuditItemEntity item => item.id,
+              KnowledgeNodeEntity item => item.id,
+              KnowledgeEdgeEntity item => item.id,
+              KnowledgeEvidenceEntity item => item.id,
+              VisualObjectEntity item => item.id,
+              _ => 0,
+            })
+        .where((id) => id > 0)
+        .toList(growable: false);
+    if (ids.isNotEmpty) {
+      box.removeMany(ids);
+    }
+  }
+
   List<ExtractedKnowledgeItem> _flowchartItems(
     String documentPublicId,
     FlowchartEntity flowchart,
@@ -694,6 +1109,9 @@ class ObjectBoxKnowledgeRepository
           flowchartShape: node.shape,
           flowchartOrder: node.sortOrder,
           sourceRectJson: node.sourceRectJson,
+          pipeline: LocalExtractionPipeline.ai,
+          chunkKind: LocalChunkKind.flowchart,
+          auditState: _auditStateForValidationState(node.validationState),
         ),
       for (final edge in edges)
         ExtractedKnowledgeItem(
@@ -711,6 +1129,9 @@ class ObjectBoxKnowledgeRepository
           flowchartEdgeLabel: edge.label,
           flowchartOrder: edge.sortOrder,
           sourceRectJson: edge.sourceRectJson,
+          pipeline: LocalExtractionPipeline.ai,
+          chunkKind: LocalChunkKind.flowchart,
+          auditState: _auditStateForValidationState(edge.validationState),
         ),
     ];
   }
@@ -735,6 +1156,22 @@ class ObjectBoxKnowledgeRepository
   bool _isFlowchartSourceType(String sourceType) {
     return sourceType == EvidenceSourceType.flowchartNode.wireName ||
         sourceType == EvidenceSourceType.flowchartEdge.wireName;
+  }
+
+  LocalAuditState _auditStateForValidationState(String value) {
+    return switch (value) {
+      'validated' || 'partially_validated' => LocalAuditState.accepted,
+      'rejected' => LocalAuditState.rejected,
+      _ => LocalAuditState.unreviewed,
+    };
+  }
+
+  ValidationState _validationStateForAuditState(LocalAuditState state) {
+    return switch (state) {
+      LocalAuditState.accepted || LocalAuditState.edited => ValidationState.validated,
+      LocalAuditState.rejected => ValidationState.rejected,
+      LocalAuditState.unreviewed => ValidationState.unreviewed,
+    };
   }
 
   String _evidenceSourceTypeWireName(AiEvidenceSourceType sourceType) {

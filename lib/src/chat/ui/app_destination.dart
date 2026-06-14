@@ -25,9 +25,9 @@ const appDestinations = [
   ),
   AppDestination(
     id: AppDestinationId.flow,
-    label: 'Flow',
-    compactLabel: 'Flow',
-    icon: Icons.account_tree_outlined,
+    label: 'Audit',
+    compactLabel: 'Audit',
+    icon: Icons.fact_check_outlined,
   ),
   AppDestination(
     id: AppDestinationId.chat,

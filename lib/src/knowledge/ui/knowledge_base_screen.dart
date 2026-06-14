@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../debug/debug_console.dart';
 import '../data/document_processing_service.dart';
 import '../data/knowledge_document_repository.dart';
+import '../data/local_document_processing_service.dart';
 import '../data/knowledge_pack_share_service.dart';
 import '../data/knowledge_pack_service.dart';
 import '../data/pdf_import_service.dart';
@@ -57,6 +58,7 @@ class KnowledgeBaseScreen extends StatefulWidget {
     required this.repository,
     required this.importService,
     this.processingService,
+    this.localProcessingService,
     this.packService = const KnowledgePackService(),
     this.pickPdfs,
     this.clock,
@@ -71,6 +73,7 @@ class KnowledgeBaseScreen extends StatefulWidget {
   final KnowledgeDocumentRepository repository;
   final PdfImportService importService;
   final DocumentProcessingService? processingService;
+  final LocalDocumentProcessingService? localProcessingService;
   final KnowledgePackService packService;
   final PickPdfs? pickPdfs;
   final DateTime Function()? clock;
@@ -262,6 +265,46 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     }
   }
 
+
+  Future<void> _processDocumentLocally(KnowledgeDocument document) async {
+    final processingService = widget.localProcessingService;
+    if (processingService == null) {
+      return;
+    }
+    final documentId = document.id;
+    setState(() {
+      _processingDocumentId = documentId;
+      _processingProgressByDocumentId = {
+        ..._processingProgressByDocumentId,
+        documentId: ProcessingProgress(
+          documentId: documentId,
+          phase: ProcessingPhase.extracting,
+          label: 'Lokális OCR...',
+        ),
+      };
+    });
+    try {
+      await processingService.processDocument(
+        documentId,
+        forceReprocess: document.status.isReady ||
+            document.status == KnowledgeDocumentStatus.needsReview,
+        onProgress: _handleProcessingProgress,
+      );
+      await _loadDocuments();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingDocumentId = null;
+          final next = Map<String, ProcessingProgress>.of(
+            _processingProgressByDocumentId,
+          );
+          next.remove(documentId);
+          _processingProgressByDocumentId = next;
+        });
+      }
+    }
+  }
+
   void _handleProcessingProgress(ProcessingProgress progress) {
     if (!mounted) {
       return;
@@ -308,7 +351,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     setState(() => _selectedDocumentIds = {});
   }
 
-  Future<void> _syncSelectedDocuments() async {
+  Future<void> _processSelectedDocumentsWithAi() async {
     final selectedIds = Set<String>.of(_selectedDocumentIds);
     final documentsToProcess = _documents.where(
       (document) =>
@@ -317,6 +360,21 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     );
     for (final document in documentsToProcess) {
       await _processDocument(document);
+    }
+    if (mounted) {
+      _exitSelection();
+    }
+  }
+
+  Future<void> _processSelectedDocumentsLocally() async {
+    final selectedIds = Set<String>.of(_selectedDocumentIds);
+    final documentsToProcess = _documents.where(
+      (document) =>
+          selectedIds.contains(document.id) &&
+          _canProcessManually(document.status),
+    );
+    for (final document in documentsToProcess) {
+      await _processDocumentLocally(document);
     }
     if (mounted) {
       _exitSelection();
@@ -474,8 +532,13 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       items: [
         if (widget.processingService != null)
           PopupMenuItem<String>(
-            value: 'sync',
-            child: Text(_syncActionLabel(selectedDocuments)),
+            value: 'ai_chunk',
+            child: Text(_aiChunkActionLabel(selectedDocuments)),
+          ),
+        if (widget.localProcessingService != null)
+          PopupMenuItem<String>(
+            value: 'local_chunk',
+            child: Text(_localChunkActionLabel(selectedDocuments)),
           ),
         const PopupMenuItem<String>(
           value: 'move',
@@ -484,19 +547,21 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         if (selectedDocuments.length == 1)
           const PopupMenuItem<String>(
             value: 'inspect_extracted',
-            child: Text('Kinyert tartalom'),
+            child: Text('Kinyert chunkok'),
           ),
         const PopupMenuItem<String>(
           value: 'export_chunks',
-          child: Text('Chunk csomag export'),
+          child: Text('Chunk+PDF csomag export'),
         ),
       ],
     );
     if (!mounted) {
       return;
     }
-    if (selected == 'sync') {
-      await _syncSelectedDocuments();
+    if (selected == 'ai_chunk') {
+      await _processSelectedDocumentsWithAi();
+    } else if (selected == 'local_chunk') {
+      await _processSelectedDocumentsLocally();
     } else if (selected == 'move') {
       await _moveSelectedDocuments();
     } else if (selected == 'inspect_extracted') {
@@ -518,14 +583,25 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     );
   }
 
-  String _syncActionLabel(List<KnowledgeDocument> selectedDocuments) {
+  String _aiChunkActionLabel(List<KnowledgeDocument> selectedDocuments) {
     if (selectedDocuments.any((document) => document.status.isReady)) {
-      return 'Újraszinkronizálás';
+      return 'AI újrachunkolás';
     }
     if (selectedDocuments.any((document) => document.status.canRetry)) {
-      return 'Újrapróbálás';
+      return 'AI újrapróbálás';
     }
-    return 'Szinkronizálás';
+    return 'AI chunkolás';
+  }
+
+  String _localChunkActionLabel(List<KnowledgeDocument> selectedDocuments) {
+    if (selectedDocuments.any(
+      (document) =>
+          document.status.isReady ||
+          document.status == KnowledgeDocumentStatus.needsReview,
+    )) {
+      return 'Lokális újrachunkolás';
+    }
+    return 'Lokális chunkolás';
   }
 
   Future<void> _exportKnowledgePack(List<KnowledgeDocument> documents) async {

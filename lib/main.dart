@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 import 'src/ai/ai_client.dart';
 import 'src/cases/data/case_repository.dart';
@@ -20,6 +21,9 @@ import 'src/knowledge/data/knowledge_sync_service.dart';
 import 'src/knowledge/models/knowledge_document.dart';
 import 'src/knowledge/data/objectbox_knowledge_document_repository.dart';
 import 'src/knowledge/data/objectbox_knowledge_repository.dart';
+import 'src/knowledge/data/local_document_processing_service.dart';
+import 'src/knowledge/data/mlkit_ocr_engine.dart';
+import 'src/knowledge/data/pdfrx_local_page_extractor.dart';
 import 'src/knowledge/data/pdf_import_service.dart';
 import 'src/local_store/objectbox_store.dart';
 import 'src/google/gemini_http_client.dart';
@@ -32,6 +36,8 @@ import 'src/settings/data/app_settings_repository.dart';
 import 'src/settings/models/app_settings.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  pdfrxFlutterInitialize();
   runApp(const DjinnApp());
 }
 
@@ -46,6 +52,7 @@ class DjinnApp extends StatefulWidget {
     this.knowledgeSyncService,
     this.refreshKnowledgeReadiness,
     this.processingService,
+    this.localProcessingService,
     this.flowchartValidationRepository,
     this.apiKeyStore,
     this.loadSettings,
@@ -62,6 +69,7 @@ class DjinnApp extends StatefulWidget {
   final KnowledgeSyncService? knowledgeSyncService;
   final Future<KnowledgeBaseState> Function()? refreshKnowledgeReadiness;
   final DocumentProcessingService? processingService;
+  final LocalDocumentProcessingService? localProcessingService;
   final FlowchartValidationRepository? flowchartValidationRepository;
   final ApiKeyStore? apiKeyStore;
   final Future<AppSettings> Function()? loadSettings;
@@ -105,6 +113,7 @@ class _DjinnAppState extends State<DjinnApp> {
             widget.knowledgeSyncService?.refreshReadiness ??
             widget.knowledgeRepository!.state,
         processingService: widget.processingService,
+        localProcessingService: widget.localProcessingService,
         flowchartValidationRepository: widget.flowchartValidationRepository,
         apiKeyStore: apiKeyStore,
         loadSettings: loadSettings,
@@ -148,6 +157,11 @@ class _DjinnAppState extends State<DjinnApp> {
       hasApiKeyForProvider: hasKeyForProvider,
       repository: knowledgeRepository,
     );
+    final localOcrEngine = MlKitOcrEngine();
+    final localProcessingService = LocalDocumentProcessingService(
+      repository: knowledgeRepository,
+      pageExtractor: PdfrxLocalPageExtractor(ocrEngine: localOcrEngine),
+    );
     final retriever = ObjectBoxLocalRetriever(store: store);
     final answerService = LocalAnswerService(
       clientForProvider: clientForProvider,
@@ -177,6 +191,7 @@ class _DjinnAppState extends State<DjinnApp> {
       pdfImportService: pdfImportService,
       refreshKnowledgeReadiness: knowledgeRepository.state,
       processingService: processingService,
+      localProcessingService: localProcessingService,
       flowchartValidationRepository: flowchartValidationRepository,
       apiKeyStore: apiKeyStore,
       loadSettings: settingsRepository.load,
@@ -236,6 +251,7 @@ class _DjinnAppState extends State<DjinnApp> {
             testApiKey: dependencies.testApiKey,
             testApiKeyForProvider: dependencies.testApiKeyForProvider,
             processingService: dependencies.processingService,
+            localProcessingService: dependencies.localProcessingService,
             flowchartValidationRepository:
                 dependencies.flowchartValidationRepository,
           );
@@ -259,6 +275,7 @@ class _AppDependencies {
     required this.testApiKey,
     required this.testApiKeyForProvider,
     this.processingService,
+    this.localProcessingService,
     this.flowchartValidationRepository,
   });
 
@@ -269,6 +286,7 @@ class _AppDependencies {
   final PdfImportService pdfImportService;
   final Future<KnowledgeBaseState> Function() refreshKnowledgeReadiness;
   final DocumentProcessingService? processingService;
+  final LocalDocumentProcessingService? localProcessingService;
   final FlowchartValidationRepository? flowchartValidationRepository;
   final ApiKeyStore apiKeyStore;
   final Future<AppSettings> Function() loadSettings;

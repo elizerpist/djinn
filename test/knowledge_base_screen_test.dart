@@ -144,7 +144,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Szinkronizálás'));
+    await tester.tap(find.text('AI chunkolás'));
     await _pumpUntilFound(tester, find.text('OpenAI API kulcs szükséges'));
 
     expect(
@@ -431,7 +431,7 @@ void main() {
 
     expect(find.byKey(const Key('knowledge-general-menu')), findsOneWidget);
     expect(find.byKey(Key('document-menu-${document.id}')), findsNothing);
-    expect(find.byTooltip('Szinkronizálás'), findsNothing);
+    expect(find.byTooltip('AI chunkolás'), findsNothing);
   });
 
   testWidgets('menus do not show disabled placeholder items', (tester) async {
@@ -1025,7 +1025,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Újraszinkronizálás'));
+    await tester.tap(find.text('AI újrachunkolás'));
     await tester.pumpAndSettle();
 
     final forceByDocument = <String, bool>{
@@ -1071,7 +1071,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Szinkronizálás'));
+    await tester.tap(find.text('AI chunkolás'));
     await tester.pumpAndSettle();
 
     expect(processingService.processedIds, hasLength(1));
@@ -1106,8 +1106,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
     await tester.pumpAndSettle();
-    expect(find.text('Újraszinkronizálás'), findsOneWidget);
-    await tester.tap(find.text('Újraszinkronizálás'));
+    expect(find.text('AI újrachunkolás'), findsOneWidget);
+    await tester.tap(find.text('AI újrachunkolás'));
     await tester.pumpAndSettle();
 
     expect(processingService.processedIds, [document.id]);

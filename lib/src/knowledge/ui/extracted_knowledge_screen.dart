@@ -5,6 +5,7 @@ import '../data/knowledge_document_repository.dart';
 import '../models/extracted_knowledge_item.dart';
 import '../models/flowchart_hierarchy.dart';
 import '../models/knowledge_document.dart';
+import '../models/local_extraction.dart';
 
 class ExtractedKnowledgeScreen extends StatefulWidget {
   const ExtractedKnowledgeScreen({
@@ -22,32 +23,49 @@ class ExtractedKnowledgeScreen extends StatefulWidget {
 }
 
 class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
-  late final Future<List<ExtractedKnowledgeItem>> _itemsFuture;
+  late final Future<_ExtractedKnowledgeData> _dataFuture;
 
   @override
   void initState() {
     super.initState();
-    _itemsFuture = widget.repository.listExtractedKnowledgeItems(
+    _dataFuture = _loadData();
+  }
+
+  Future<_ExtractedKnowledgeData> _loadData() async {
+    final allItems = await widget.repository.listExtractedKnowledgeItems(
       widget.document.id,
+    );
+    final comparison = await widget.repository.compareExtractedChunks(
+      widget.document.id,
+    );
+    return _ExtractedKnowledgeData(
+      allItems: allItems,
+      aiItems: allItems
+          .where((item) => item.pipeline == LocalExtractionPipeline.ai)
+          .toList(growable: false),
+      localItems: allItems
+          .where((item) => item.pipeline != LocalExtractionPipeline.ai)
+          .toList(growable: false),
+      comparison: comparison,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Kinyert tartalom')),
-      body: FutureBuilder<List<ExtractedKnowledgeItem>>(
-        future: _itemsFuture,
+      appBar: AppBar(title: const Text('Kinyert chunkok')),
+      body: FutureBuilder<_ExtractedKnowledgeData>(
+        future: _dataFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
-          final items = snapshot.data ?? const [];
-          if (items.isEmpty) {
+          final data = snapshot.data;
+          if (data == null || data.allItems.isEmpty) {
             return _EmptyExtractedKnowledge(filename: widget.document.filename);
           }
           return DefaultTabController(
-            length: 5,
+            length: 3,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -55,43 +73,22 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                   child: _DocumentSummary(
                     filename: widget.document.filename,
-                    count: items.length,
+                    count: data.allItems.length,
                   ),
                 ),
                 const TabBar(
-                  isScrollable: true,
                   tabs: [
-                    Tab(text: 'Összes'),
-                    Tab(text: 'Szöveg'),
-                    Tab(text: 'Táblázat'),
-                    Tab(text: 'Score'),
-                    Tab(text: 'Flowchart'),
+                    Tab(text: 'AI chunkok'),
+                    Tab(text: 'Lokális chunkok'),
+                    Tab(text: 'Összehasonlítás'),
                   ],
                 ),
                 Expanded(
                   child: TabBarView(
                     children: [
-                      _ExtractedKnowledgeList(items: items),
-                      _ExtractedKnowledgeList(
-                        items: _filter(items, EvidenceSourceType.textChunk),
-                      ),
-                      _ExtractedKnowledgeList(
-                        items: _filter(items, EvidenceSourceType.tableChunk),
-                      ),
-                      _ExtractedKnowledgeList(
-                        items: _filter(items, EvidenceSourceType.scoreChunk),
-                      ),
-                      _FlowchartHierarchyList(
-                        items: items
-                            .where(
-                              (item) =>
-                                  item.sourceType ==
-                                      EvidenceSourceType.flowchartNode ||
-                                  item.sourceType ==
-                                      EvidenceSourceType.flowchartEdge,
-                            )
-                            .toList(growable: false),
-                      ),
+                      _ExtractedKnowledgeList(items: data.aiItems),
+                      _ExtractedKnowledgeList(items: data.localItems),
+                      _ChunkComparisonList(comparison: data.comparison),
                     ],
                   ),
                 ),
@@ -102,15 +99,20 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
       ),
     );
   }
+}
 
-  static List<ExtractedKnowledgeItem> _filter(
-    List<ExtractedKnowledgeItem> items,
-    EvidenceSourceType sourceType,
-  ) {
-    return items
-        .where((item) => item.sourceType == sourceType)
-        .toList(growable: false);
-  }
+class _ExtractedKnowledgeData {
+  const _ExtractedKnowledgeData({
+    required this.allItems,
+    required this.aiItems,
+    required this.localItems,
+    required this.comparison,
+  });
+
+  final List<ExtractedKnowledgeItem> allItems;
+  final List<ExtractedKnowledgeItem> aiItems;
+  final List<ExtractedKnowledgeItem> localItems;
+  final ChunkComparison comparison;
 }
 
 class _DocumentSummary extends StatelessWidget {
@@ -160,6 +162,16 @@ class _ExtractedKnowledgeList extends StatelessWidget {
         ),
       );
     }
+    final flowchartItems = items
+        .where(
+          (item) =>
+              item.sourceType == EvidenceSourceType.flowchartNode ||
+              item.sourceType == EvidenceSourceType.flowchartEdge,
+        )
+        .toList(growable: false);
+    if (flowchartItems.length == items.length) {
+      return _FlowchartHierarchyList(items: flowchartItems);
+    }
     return ListView.separated(
       physics: const BouncingScrollPhysics(
         parent: AlwaysScrollableScrollPhysics(),
@@ -169,6 +181,193 @@ class _ExtractedKnowledgeList extends StatelessWidget {
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) =>
           _ExtractedKnowledgeTile(item: items[index]),
+    );
+  }
+}
+
+class _ChunkComparisonList extends StatelessWidget {
+  const _ChunkComparisonList({required this.comparison});
+
+  final ChunkComparison comparison;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = comparison.rows;
+    if (rows.isEmpty) {
+      return const Center(
+        child: Text(
+          'Nincs összehasonlítható chunk',
+          style: TextStyle(color: Color(0xFF6B7280)),
+        ),
+      );
+    }
+    return ListView.separated(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      itemCount: rows.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (context, index) => _ChunkComparisonTile(row: rows[index]),
+    );
+  }
+}
+
+class _ChunkComparisonTile extends StatelessWidget {
+  const _ChunkComparisonTile({required this.row});
+
+  final ChunkComparisonRow row;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _statusColor(row.status);
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: color.withValues(alpha: 0.38)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(_statusIcon(row.status), color: color, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _statusLabel(row.status),
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Text(
+                  row.pageNumber == null ? '' : '${row.pageNumber}. oldal',
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            if (row.sectionTitle.trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                row.sectionTitle,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _ComparisonSide(
+                    title: 'AI',
+                    item: row.aiChunk,
+                    emptyLabel: 'Nincs AI chunk',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _ComparisonSide(
+                    title: 'Lokális',
+                    item: row.localChunk,
+                    emptyLabel: 'Nincs lokális chunk',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Color _statusColor(ChunkComparisonStatus status) {
+    return switch (status) {
+      ChunkComparisonStatus.matched => const Color(0xFF047857),
+      ChunkComparisonStatus.aiOnly => const Color(0xFFB45309),
+      ChunkComparisonStatus.localOnly => const Color(0xFF7C3AED),
+    };
+  }
+
+  static IconData _statusIcon(ChunkComparisonStatus status) {
+    return switch (status) {
+      ChunkComparisonStatus.matched => Icons.link,
+      ChunkComparisonStatus.aiOnly => Icons.cloud_outlined,
+      ChunkComparisonStatus.localOnly => Icons.phone_android_outlined,
+    };
+  }
+
+  static String _statusLabel(ChunkComparisonStatus status) {
+    return switch (status) {
+      ChunkComparisonStatus.matched => 'Egyező oldal/szekció',
+      ChunkComparisonStatus.aiOnly => 'Csak AI chunk',
+      ChunkComparisonStatus.localOnly => 'Csak lokális chunk',
+    };
+  }
+}
+
+class _ComparisonSide extends StatelessWidget {
+  const _ComparisonSide({
+    required this.title,
+    required this.item,
+    required this.emptyLabel,
+  });
+
+  final String title;
+  final ChunkComparisonItem? item;
+  final String emptyLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = item;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 96),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: resolved == null
+          ? Text(
+              emptyLabel,
+              style: const TextStyle(color: Color(0xFF9CA3AF)),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$title - ${resolved.typeLabel}',
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                SelectableText(
+                  resolved.text,
+                  style: const TextStyle(fontSize: 12, height: 1.25),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${resolved.pipelineLabel} - ${resolved.auditState.label}',
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -780,6 +979,8 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
     final parts = <String>[
       'id: ${item.id}',
       'típus: ${item.sourceType.wireName}',
+      'pipeline: ${item.pipeline.wireName}',
+      'audit: ${item.auditState.wireName}',
     ];
     final model = item.embeddingModel;
     if (model != null && model.isNotEmpty) {

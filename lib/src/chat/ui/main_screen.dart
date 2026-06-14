@@ -10,6 +10,7 @@ import '../../flowchart/ui/flowchart_hub_screen.dart';
 import '../../flowchart/ui/flowchart_validation_screen.dart';
 import '../../knowledge/data/document_processing_service.dart';
 import '../../knowledge/data/knowledge_document_repository.dart';
+import '../../knowledge/data/local_document_processing_service.dart';
 import '../../knowledge/data/pdf_import_service.dart';
 import '../../knowledge/models/knowledge_document.dart';
 import '../../knowledge/ui/knowledge_base_screen.dart';
@@ -37,6 +38,7 @@ class MainScreen extends StatefulWidget {
     required this.caseRepository,
     this.testApiKeyForProvider,
     this.processingService,
+    this.localProcessingService,
     this.flowchartValidationRepository,
   });
 
@@ -53,6 +55,7 @@ class MainScreen extends StatefulWidget {
   final Future<bool> Function(AiProvider provider, String model)?
   testApiKeyForProvider;
   final DocumentProcessingService? processingService;
+  final LocalDocumentProcessingService? localProcessingService;
   final FlowchartValidationRepository? flowchartValidationRepository;
 
   @override
@@ -111,6 +114,7 @@ class _MainScreenState extends State<MainScreen> {
           repository: widget.knowledgeRepository,
           importService: widget.pdfImportService,
           processingService: widget.processingService,
+          localProcessingService: widget.localProcessingService,
         ),
       ),
     );
@@ -317,7 +321,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.account_tree),
-              title: const Text('Flowchart validáció'),
+              title: const Text('Kinyert tartalom audit'),
               enabled: widget.flowchartValidationRepository != null,
               onTap: widget.flowchartValidationRepository == null
                   ? null
@@ -352,6 +356,7 @@ class _MainScreenState extends State<MainScreen> {
         repository: widget.knowledgeRepository,
         importService: widget.pdfImportService,
         processingService: widget.processingService,
+        localProcessingService: widget.localProcessingService,
       ),
       AppDestinationId.chat => _buildChatListBody(),
       AppDestinationId.flow => _buildFlowDestination(),
@@ -418,7 +423,7 @@ class _MainScreenState extends State<MainScreen> {
       AppDestinationId.cases => 'Esetek',
       AppDestinationId.knowledge => 'Tudástár',
       AppDestinationId.chat => 'Djinn',
-      AppDestinationId.flow => 'Flow',
+      AppDestinationId.flow => 'Audit',
       AppDestinationId.settings => 'Beállítások',
     };
   }
