@@ -181,6 +181,7 @@ class _InteractiveFlowchartEditorScreenState
         ),
       ),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 250));
     labelController.dispose();
     return result;
   }
@@ -258,6 +259,7 @@ class _InteractiveFlowchartEditorScreenState
         ),
       ),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 250));
     labelController.dispose();
     if (edge == null || _flowchart == null) {
       return;

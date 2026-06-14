@@ -74,69 +74,83 @@ class _ChunkValidationCardState extends State<ChunkValidationCard> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.76,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.82,
           ),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD1D5DB),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD1D5DB),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        widget.title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SegmentedButton<ChunkValidationChoice>(
+                        key: const ValueKey(
+                          'chunk-validation-status-selector',
+                        ),
+                        segments: [
+                          for (final choice in ChunkValidationChoice.values)
+                            ButtonSegment(
+                              value: choice,
+                              label: Text(choice.label),
+                            ),
+                        ],
+                        selected: {_choice},
+                        onSelectionChanged: (selection) {
+                          setState(() => _choice = selection.single);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        key: const ValueKey('chunk-validation-text-field'),
+                        controller: _textController,
+                        minLines: 7,
+                        maxLines: 14,
+                        decoration: const InputDecoration(
+                          labelText: 'Kinyert tartalom',
+                          alignLabelWithHint: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        key: const ValueKey('chunk-validation-reason-field'),
+                        controller: _reasonController,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: 'Indoklás / megjegyzés',
+                          alignLabelWithHint: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  widget.title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SegmentedButton<ChunkValidationChoice>(
-                  key: const ValueKey('chunk-validation-status-selector'),
-                  segments: [
-                    for (final choice in ChunkValidationChoice.values)
-                      ButtonSegment(value: choice, label: Text(choice.label)),
-                  ],
-                  selected: {_choice},
-                  onSelectionChanged: (selection) {
-                    setState(() => _choice = selection.single);
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const ValueKey('chunk-validation-text-field'),
-                  controller: _textController,
-                  minLines: 7,
-                  maxLines: 14,
-                  decoration: const InputDecoration(
-                    labelText: 'Kinyert tartalom',
-                    alignLabelWithHint: true,
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const ValueKey('chunk-validation-reason-field'),
-                  controller: _reasonController,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Indoklás / megjegyzés',
-                    alignLabelWithHint: true,
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Row(
                   children: [
                     Expanded(
                       child: OutlinedButton(
@@ -155,8 +169,8 @@ class _ChunkValidationCardState extends State<ChunkValidationCard> {
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
