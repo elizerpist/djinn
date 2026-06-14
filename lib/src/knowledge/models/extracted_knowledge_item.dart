@@ -26,11 +26,15 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
     this.sourcePageImagePath,
   });
 
+  @override
   final String id;
   final String documentId;
   final EvidenceSourceType sourceType;
+  @override
   final String text;
+  @override
   final int? pageNumber;
+  @override
   final String? sectionTitle;
   final String? embeddingModel;
   final String? flowchartId;
@@ -43,6 +47,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
   final String? sourceRectJson;
   final LocalExtractionPipeline pipeline;
   final LocalChunkKind chunkKind;
+  @override
   final LocalAuditState auditState;
   final int? endPageNumber;
   final double? confidence;
@@ -80,6 +85,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
 
   bool get isLocal => pipeline.isLocal;
 
+  @override
   String get typeLabel {
     return switch (sourceType) {
       EvidenceSourceType.textChunk => 'Szöveg',
@@ -102,6 +108,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
     return '$typeLabel - $page. oldal';
   }
 
+  @override
   String get pipelineLabel {
     return switch (pipeline) {
       LocalExtractionPipeline.ai => 'AI chunk',

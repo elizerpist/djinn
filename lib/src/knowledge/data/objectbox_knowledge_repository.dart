@@ -541,7 +541,7 @@ class ObjectBoxKnowledgeRepository
             KnowledgeEdgeEntity(
               publicId: '$previousNodeId:continues:$nodeId',
               documentPublicId: documentPublicId,
-              fromNodePublicId: previousNodeId!,
+              fromNodePublicId: previousNodeId,
               toNodePublicId: nodeId,
               relationType: 'continues',
               sourceId: sourceId,
@@ -727,6 +727,39 @@ class ObjectBoxKnowledgeRepository
   KnowledgeDocumentEntity? _findDocument(String publicId) {
     final query = _documentBox
         .query(KnowledgeDocumentEntity_.publicId.equals(publicId))
+        .build();
+    try {
+      return query.findFirst();
+    } finally {
+      query.close();
+    }
+  }
+
+  DocumentChunkEntity? _findChunk(String publicId) {
+    final query = _chunkBox
+        .query(DocumentChunkEntity_.publicId.equals(publicId))
+        .build();
+    try {
+      return query.findFirst();
+    } finally {
+      query.close();
+    }
+  }
+
+  FlowchartNodeEntity? _findNode(String publicId) {
+    final query = _flowchartNodeBox
+        .query(FlowchartNodeEntity_.publicId.equals(publicId))
+        .build();
+    try {
+      return query.findFirst();
+    } finally {
+      query.close();
+    }
+  }
+
+  FlowchartEdgeEntity? _findEdge(String publicId) {
+    final query = _flowchartEdgeBox
+        .query(FlowchartEdgeEntity_.publicId.equals(publicId))
         .build();
     try {
       return query.findFirst();
