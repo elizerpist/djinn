@@ -186,7 +186,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Újrapróbálás'));
+    await tester.tap(find.text('AI újrapróbálás'));
     await _pumpUntilFound(tester, find.text('Kész'));
 
     expect(
@@ -526,10 +526,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Kinyert tartalom'));
+    await tester.tap(find.text('Kinyert chunkok'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Kinyert tartalom'), findsOneWidget);
+    expect(find.text('Kinyert chunkok'), findsOneWidget);
     expect(find.text('Táblázat'), findsWidgets);
     expect(find.text('Score'), findsWidgets);
     expect(find.textContaining('Arcbénulás'), findsOneWidget);
@@ -562,7 +562,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Rendezés'), findsOneWidget);
-      expect(find.text('Chunk csomag export'), findsNothing);
+      expect(find.text('Chunk+PDF csomag export'), findsNothing);
 
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
@@ -574,7 +574,7 @@ void main() {
 
       expect(find.text('Rendezés'), findsNothing);
       expect(find.text('Megosztás'), findsNothing);
-      expect(find.text('Chunk csomag export'), findsOneWidget);
+      expect(find.text('Chunk+PDF csomag export'), findsOneWidget);
     },
   );
 
@@ -637,7 +637,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Chunk csomag export'));
+    await tester.tap(find.text('Chunk+PDF csomag export'));
     await _pumpUntil(tester, () => exportedDocumentId != null);
 
     expect(exportedDocumentId, document.sha256, reason: DebugConsole.allText);
