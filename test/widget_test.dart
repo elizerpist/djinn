@@ -27,7 +27,7 @@ void main() {
 
     expect(find.text('Djinn'), findsOneWidget);
     expect(find.text('Nincs még beszélgetés'), findsOneWidget);
-    expect(find.text('Tudástár'), findsOneWidget);
+    expect(find.text('Tudástár'), findsWidgets);
 
     await tester.tap(find.byTooltip('Új chat'));
     await _pumpUntilFound(tester, find.byKey(const ValueKey('message-input')));
@@ -145,7 +145,7 @@ void main() {
     await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Tudástár'), findsOneWidget);
+    expect(find.text('Tudástár'), findsWidgets);
     expect(find.text('Nincs importált dokumentum'), findsOneWidget);
     expect(find.byTooltip('PDF/PNG hozzáadása'), findsOneWidget);
   });

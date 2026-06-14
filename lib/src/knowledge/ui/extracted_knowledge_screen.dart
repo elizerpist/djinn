@@ -64,7 +64,9 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
   }
 
   void _reloadData() {
-    setState(() => _dataFuture = _loadData());
+    setState(() {
+      _dataFuture = _loadData();
+    });
   }
 
   Future<void> _openValidationCard(ExtractedKnowledgeItem item) async {
