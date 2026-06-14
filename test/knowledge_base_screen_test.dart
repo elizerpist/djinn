@@ -1378,13 +1378,9 @@ class _FakePdfImportService extends PdfImportService {
 }
 
 class _RecordingLocalProcessingService extends LocalDocumentProcessingService {
-  _RecordingLocalProcessingService({
-    required KnowledgeDocumentRepository repository,
-  })
-    : _repository = repository,
-      super(repository: repository, pageExtractor: _NoopLocalPageExtractor());
+  _RecordingLocalProcessingService({required super.repository})
+    : super(pageExtractor: _NoopLocalPageExtractor());
 
-  final KnowledgeDocumentRepository _repository;
   final processedIds = <String>[];
   final forceReprocessFlags = <bool>[];
 
@@ -1396,7 +1392,7 @@ class _RecordingLocalProcessingService extends LocalDocumentProcessingService {
   }) async {
     processedIds.add(documentPublicId);
     forceReprocessFlags.add(forceReprocess);
-    await _repository.updateStatus(
+    await repository.updateStatus(
       documentPublicId,
       KnowledgeDocumentStatus.needsReview,
     );
@@ -1415,16 +1411,13 @@ class _NoopLocalPageExtractor implements LocalPageExtractor {
 }
 
 class _RecordingProcessingService extends DocumentProcessingService {
-  _RecordingProcessingService({required KnowledgeDocumentRepository repository})
-    : _repository = repository,
-      super(
+  _RecordingProcessingService({required super.repository})
+    : super(
         openAiClient: FakeOpenAiClient(),
         loadSettings: (() async => AppSettings.defaults()),
         hasApiKey: (() async => true),
-        repository: repository,
       );
 
-  final KnowledgeDocumentRepository _repository;
   final processedIds = <String>[];
   final forceReprocessFlags = <bool>[];
 
@@ -1436,7 +1429,7 @@ class _RecordingProcessingService extends DocumentProcessingService {
   }) async {
     processedIds.add(documentPublicId);
     forceReprocessFlags.add(forceReprocess);
-    await _repository.updateStatus(
+    await repository.updateStatus(
       documentPublicId,
       KnowledgeDocumentStatus.ready,
     );
