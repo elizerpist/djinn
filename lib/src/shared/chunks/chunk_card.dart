@@ -82,7 +82,7 @@ class ChunkCard extends StatelessWidget {
           ),
           childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           children: [
-            if (expandedChild != null) expandedChild!,
+            ?expandedChild,
             if (metadata != null && metadata!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Align(

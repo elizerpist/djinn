@@ -176,9 +176,8 @@ class MemoryNoteRepository implements NoteRepository {
 }
 
 class FileNoteRepository extends MemoryNoteRepository {
-  FileNoteRepository({required File file, Uuid? uuid, DateTime Function()? clock})
-      : _file = file,
-        super(uuid: uuid, clock: clock);
+  FileNoteRepository({required File file, super.uuid, super.clock})
+      : _file = file;
 
   final File _file;
 
