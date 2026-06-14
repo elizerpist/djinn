@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:uuid/uuid.dart';
 
 import '../../knowledge/models/local_extraction.dart';
+import '../models/note_document.dart';
 import '../models/note_folder.dart';
 import '../models/note_item.dart';
 
@@ -13,12 +14,24 @@ abstract class NoteRepository {
   Future<NoteFolder> createFolder(String title);
   Future<void> deleteFolder(String folderId);
   Future<List<NoteItem>> listNotes({String? folderId, NoteItemType? type});
+  Future<NoteItem> createDocumentNote({
+    required String title,
+    required NoteDocument document,
+    String? folderId,
+  });
   Future<NoteItem> createNote({
     required NoteItemType type,
     required String title,
     required String plainText,
     required String payloadJson,
     String? folderId,
+  });
+  Future<NoteItem> updateNoteDocument(
+    String noteId, {
+    required String title,
+    required NoteDocument document,
+    LocalAuditState? auditState,
+    String? reason,
   });
   Future<NoteItem> updateNoteValidation(
     String noteId, {
@@ -100,6 +113,36 @@ class MemoryNoteRepository implements NoteRepository {
   }
 
   @override
+  Future<NoteItem> createDocumentNote({
+    required String title,
+    required NoteDocument document,
+    String? folderId,
+  }) async {
+    final trimmedTitle = title.trim();
+    final plainText = document.plainText.trim();
+    if (trimmedTitle.isEmpty) {
+      throw ArgumentError('note title must not be blank');
+    }
+    if (plainText.isEmpty) {
+      throw ArgumentError('note text must not be blank');
+    }
+    final now = _clock();
+    final note = NoteItem(
+      id: _uuid.v4(),
+      folderId: folderId,
+      type: NoteItemType.document,
+      title: trimmedTitle,
+      plainText: plainText,
+      payloadJson: document.toPayloadJson(),
+      auditState: LocalAuditState.unreviewed,
+      createdAt: now,
+      updatedAt: now,
+    );
+    _notes.insert(0, note);
+    return note;
+  }
+
+  @override
   Future<NoteItem> createNote({
     required NoteItemType type,
     required String title,
@@ -107,28 +150,46 @@ class MemoryNoteRepository implements NoteRepository {
     required String payloadJson,
     String? folderId,
   }) async {
+    final document = NoteDocument.fromPayload(
+      payloadJson.trim().isEmpty ? '{}' : payloadJson,
+      legacyType: type.wireName,
+      legacyText: plainText,
+      title: title,
+    );
+    return createDocumentNote(
+      title: title,
+      document: document,
+      folderId: folderId,
+    );
+  }
+
+  @override
+  Future<NoteItem> updateNoteDocument(
+    String noteId, {
+    required String title,
+    required NoteDocument document,
+    LocalAuditState? auditState,
+    String? reason,
+  }) async {
+    final index = _notes.indexWhere((note) => note.id == noteId);
+    if (index == -1) {
+      throw StateError('note not found: $noteId');
+    }
     final trimmedTitle = title.trim();
-    final trimmedText = plainText.trim();
     if (trimmedTitle.isEmpty) {
       throw ArgumentError('note title must not be blank');
     }
-    if (trimmedText.isEmpty) {
-      throw ArgumentError('note text must not be blank');
-    }
-    final now = _clock();
-    final note = NoteItem(
-      id: _uuid.v4(),
-      folderId: folderId,
-      type: type,
+    final trimmedReason = reason?.trim();
+    final updated = _notes[index].copyWithDocument(
       title: trimmedTitle,
-      plainText: trimmedText,
-      payloadJson: payloadJson.trim().isEmpty ? '{}' : payloadJson,
-      auditState: LocalAuditState.unreviewed,
-      createdAt: now,
-      updatedAt: now,
+      document: document,
+      auditState: auditState,
+      reason: trimmedReason == null || trimmedReason.isEmpty ? null : trimmedReason,
+      clearReason: trimmedReason == null || trimmedReason.isEmpty,
+      updatedAt: _clock(),
     );
-    _notes.insert(0, note);
-    return note;
+    _notes[index] = updated;
+    return updated;
   }
 
   @override
@@ -143,17 +204,28 @@ class MemoryNoteRepository implements NoteRepository {
     if (index == -1) {
       throw StateError('note not found: $noteId');
     }
-    final trimmedReason = reason?.trim();
-    final updated = _notes[index].copyWith(
+    final existing = _notes[index];
+    final document = payloadJson == null && plainText != null
+        ? NoteDocument(blocks: [
+            NoteBlock(
+              id: 'block-1',
+              type: NoteBlockType.paragraph,
+              text: plainText.trim(),
+            ),
+          ])
+        : NoteDocument.fromPayload(
+            payloadJson ?? existing.payloadJson,
+            legacyType: existing.type.wireName,
+            legacyText: plainText ?? existing.plainText,
+            title: existing.title,
+          );
+    return updateNoteDocument(
+      noteId,
+      title: existing.title,
+      document: document,
       auditState: auditState,
-      plainText: plainText?.trim(),
-      payloadJson: payloadJson,
-      reason: trimmedReason == null || trimmedReason.isEmpty ? null : trimmedReason,
-      clearReason: trimmedReason == null || trimmedReason.isEmpty,
-      updatedAt: _clock(),
+      reason: reason,
     );
-    _notes[index] = updated;
-    return updated;
   }
 
   @override
@@ -212,6 +284,21 @@ class FileNoteRepository extends MemoryNoteRepository {
   }
 
   @override
+  Future<NoteItem> createDocumentNote({
+    required String title,
+    required NoteDocument document,
+    String? folderId,
+  }) async {
+    final note = await super.createDocumentNote(
+      title: title,
+      document: document,
+      folderId: folderId,
+    );
+    await _persist();
+    return note;
+  }
+
+  @override
   Future<NoteItem> createNote({
     required NoteItemType type,
     required String title,
@@ -219,12 +306,33 @@ class FileNoteRepository extends MemoryNoteRepository {
     required String payloadJson,
     String? folderId,
   }) async {
-    final note = await super.createNote(
-      type: type,
+    final document = NoteDocument.fromPayload(
+      payloadJson.trim().isEmpty ? '{}' : payloadJson,
+      legacyType: type.wireName,
+      legacyText: plainText,
       title: title,
-      plainText: plainText,
-      payloadJson: payloadJson,
+    );
+    return createDocumentNote(
+      title: title,
+      document: document,
       folderId: folderId,
+    );
+  }
+
+  @override
+  Future<NoteItem> updateNoteDocument(
+    String noteId, {
+    required String title,
+    required NoteDocument document,
+    LocalAuditState? auditState,
+    String? reason,
+  }) async {
+    final note = await super.updateNoteDocument(
+      noteId,
+      title: title,
+      document: document,
+      auditState: auditState,
+      reason: reason,
     );
     await _persist();
     return note;

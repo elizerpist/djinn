@@ -1,6 +1,8 @@
 import '../../knowledge/models/local_extraction.dart';
+import 'note_document.dart';
 
 enum NoteItemType {
+  document('document'),
   text('text'),
   table('table'),
   flowchart('flowchart');
@@ -18,6 +20,7 @@ enum NoteItemType {
 
   String get label {
     return switch (this) {
+      NoteItemType.document => 'Jegyzet',
       NoteItemType.text => 'Szöveg',
       NoteItemType.table => 'Táblázat',
       NoteItemType.flowchart => 'Flowchart',
@@ -50,6 +53,15 @@ class NoteItem {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  NoteDocument get document => NoteDocument.fromPayload(
+        payloadJson,
+        legacyType: type.wireName,
+        legacyText: plainText,
+        title: title,
+      );
+
+  String get preview => document.preview.isEmpty ? plainText : document.preview;
+
   bool get ragEligible =>
       auditState == LocalAuditState.accepted ||
       auditState == LocalAuditState.edited;
@@ -79,6 +91,26 @@ class NoteItem {
       reason: clearReason ? null : reason ?? this.reason,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  NoteItem copyWithDocument({
+    required NoteDocument document,
+    String? title,
+    LocalAuditState? auditState,
+    String? reason,
+    bool clearReason = false,
+    DateTime? updatedAt,
+  }) {
+    return copyWith(
+      type: NoteItemType.document,
+      title: title,
+      plainText: document.plainText,
+      payloadJson: document.toPayloadJson(),
+      auditState: auditState,
+      reason: reason,
+      clearReason: clearReason,
+      updatedAt: updatedAt,
     );
   }
 

@@ -13,7 +13,6 @@ import '../../knowledge/models/knowledge_document.dart';
 import '../../knowledge/ui/knowledge_base_screen.dart';
 import '../../notes/data/note_repository.dart';
 import '../../notes/ui/notes_screen.dart';
-import '../../search/ui/search_screen.dart';
 import '../../settings/data/api_key_store.dart';
 import '../../settings/models/app_settings.dart';
 import '../../settings/ui/settings_screen.dart';
@@ -179,10 +178,6 @@ class _MainScreenState extends State<MainScreen> {
           localProcessingService: widget.localProcessingService,
         ),
       AppDestinationId.chat => _buildChatListBody(),
-      AppDestinationId.search => SearchScreen(
-          knowledgeRepository: widget.knowledgeRepository,
-          noteRepository: widget.noteRepository,
-        ),
       AppDestinationId.settings => SettingsScreen(
           apiKeyStore: widget.apiKeyStore,
           loadSettings: widget.loadSettings,
@@ -229,7 +224,6 @@ class _MainScreenState extends State<MainScreen> {
     return switch (destination) {
       AppDestinationId.notes ||
       AppDestinationId.knowledge ||
-      AppDestinationId.search ||
       AppDestinationId.settings => true,
       AppDestinationId.chat => false,
     };
@@ -240,7 +234,6 @@ class _MainScreenState extends State<MainScreen> {
       AppDestinationId.notes => 'Jegyzetek',
       AppDestinationId.knowledge => 'Tudástár',
       AppDestinationId.chat => 'Djinn',
-      AppDestinationId.search => 'Keresés',
       AppDestinationId.settings => 'Beállítások',
     };
   }

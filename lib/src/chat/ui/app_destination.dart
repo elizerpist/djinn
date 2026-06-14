@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum AppDestinationId { notes, knowledge, chat, search, settings }
+enum AppDestinationId { notes, knowledge, chat, settings }
 
 class AppDestination {
   const AppDestination({
@@ -34,12 +34,6 @@ const appDestinations = [
     label: 'Chat',
     compactLabel: 'Chat',
     icon: Icons.chat_bubble_outline,
-  ),
-  AppDestination(
-    id: AppDestinationId.search,
-    label: 'Keresés',
-    compactLabel: 'Keresés',
-    icon: Icons.search,
   ),
   AppDestination(
     id: AppDestinationId.settings,

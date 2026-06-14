@@ -28,13 +28,13 @@ void main() {
         .widgetList<NavigationDestination>(find.byType(NavigationDestination))
         .map((destination) => destination.label)
         .toList();
-    expect(labels, ['Jegyzetek', 'Tudástár', 'Chat', 'Keresés', 'Beáll.']);
+    expect(labels, ['Jegyzetek', 'Tudástár', 'Chat', 'Beáll.']);
     expect(find.text('Audit'), findsNothing);
     expect(find.text('Validálás'), findsNothing);
     expect(find.text('Flow'), findsNothing);
   });
 
-  testWidgets('bottom navigation opens notes, knowledge, chat, search, settings', (
+  testWidgets('bottom navigation opens notes, knowledge, chat and settings', (
     tester,
   ) async {
     await tester.pumpWidget(_mainScreenApp(AppSettings.defaults()));
@@ -53,10 +53,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Nincs még beszélgetés'), findsOneWidget);
     expect(find.byTooltip('Új chat'), findsOneWidget);
-
-    await tester.tap(find.text('Keresés'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('search-query-field')), findsOneWidget);
 
     await tester.tap(find.text('Beáll.'));
     await tester.pumpAndSettle();

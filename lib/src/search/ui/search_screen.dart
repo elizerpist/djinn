@@ -95,6 +95,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   IconData _iconForNoteType(NoteItemType type) {
     return switch (type) {
+      NoteItemType.document => Icons.note_alt_outlined,
       NoteItemType.text => Icons.notes_outlined,
       NoteItemType.table => Icons.table_chart_outlined,
       NoteItemType.flowchart => Icons.account_tree_outlined,

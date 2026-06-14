@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../shared/chunks/chunk_card.dart';
 import '../../shared/chunks/chunk_validation_card.dart';
 import '../../shared/ui/draggable_bottom_card.dart';
+import '../data/note_chunk_builder.dart';
 import '../data/note_repository.dart';
 import '../models/note_folder.dart';
 import '../models/note_item.dart';
@@ -23,7 +23,8 @@ class _NotesScreenState extends State<NotesScreen> {
   List<NoteFolder> _folders = const [];
   List<NoteItem> _notes = const [];
   String? _activeFolderId;
-  bool _showFolderBar = false;
+  bool _showFolderBar = true;
+  bool _hasAnyNotes = false;
   _NoteSortMode _sortMode = _NoteSortMode.newestFirst;
 
   @override
@@ -35,6 +36,7 @@ class _NotesScreenState extends State<NotesScreen> {
   Future<void> _load() async {
     await widget.repository.load();
     final folders = await widget.repository.listFolders();
+    final allNotes = await widget.repository.listNotes();
     final notes = await widget.repository.listNotes(folderId: _activeFolderId);
     if (!mounted) {
       return;
@@ -42,6 +44,7 @@ class _NotesScreenState extends State<NotesScreen> {
     setState(() {
       _folders = folders;
       _notes = _sort(notes);
+      _hasAnyNotes = allNotes.isNotEmpty;
       if (_activeFolderId != null && !folders.any((f) => f.id == _activeFolderId)) {
         _activeFolderId = null;
       }
@@ -89,6 +92,7 @@ class _NotesScreenState extends State<NotesScreen> {
         ],
       ),
     );
+    controller.dispose();
     final trimmed = title?.trim();
     if (trimmed == null || trimmed.isEmpty) {
       return;
@@ -117,7 +121,6 @@ class _NotesScreenState extends State<NotesScreen> {
               note.id,
               auditState: result.auditState,
               plainText: result.text,
-              payloadJson: note.payloadJson,
               reason: result.reason,
             );
             if (context.mounted) {
@@ -130,8 +133,8 @@ class _NotesScreenState extends State<NotesScreen> {
     );
   }
 
-  Future<void> _openCreateSheet() async {
-    final created = await showModalBottomSheet<bool>(
+  Future<void> _openCreateSheet({NoteItem? note}) async {
+    final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       showDragHandle: false,
@@ -139,9 +142,10 @@ class _NotesScreenState extends State<NotesScreen> {
         repository: widget.repository,
         folders: _folders,
         activeFolderId: _activeFolderId,
+        initialNote: note,
       ),
     );
-    if (created == true) {
+    if (saved == true) {
       await _load();
     }
   }
@@ -188,6 +192,7 @@ class _NotesScreenState extends State<NotesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final showFolderBar = _showFolderBar && (_folders.isNotEmpty || _hasAnyNotes);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Jegyzetek'),
@@ -204,22 +209,24 @@ class _NotesScreenState extends State<NotesScreen> {
       ),
       body: Column(
         children: [
-          if (_showFolderBar) _FolderBar(
-            folders: _folders,
-            activeFolderId: _activeFolderId,
-            onSelected: (folderId) async {
-              setState(() => _activeFolderId = folderId);
-              await _load();
-            },
-          ),
+          if (showFolderBar)
+            _FolderBar(
+              folders: _folders,
+              activeFolderId: _activeFolderId,
+              showAll: _hasAnyNotes,
+              onSelected: (folderId) async {
+                setState(() => _activeFolderId = folderId);
+                await _load();
+              },
+            ),
           Expanded(child: _buildList()),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         key: const ValueKey('notes-create-fab'),
-        onPressed: _openCreateSheet,
-        icon: const Icon(Icons.add),
-        label: const Text('Új jegyzet'),
+        tooltip: 'Új jegyzet',
+        onPressed: () => _openCreateSheet(),
+        child: const Icon(Icons.note_add_outlined),
       ),
     );
   }
@@ -238,8 +245,9 @@ class _NotesScreenState extends State<NotesScreen> {
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
       itemCount: _notes.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) => _NoteCard(
+      itemBuilder: (context, index) => _NoteBox(
         note: _notes[index],
+        onOpen: () => _openCreateSheet(note: _notes[index]),
         onValidate: () => _openValidationCard(_notes[index]),
       ),
     );
@@ -250,73 +258,165 @@ class _FolderBar extends StatelessWidget {
   const _FolderBar({
     required this.folders,
     required this.activeFolderId,
+    required this.showAll,
     required this.onSelected,
   });
 
   final List<NoteFolder> folders;
   final String? activeFolderId;
+  final bool showAll;
   final ValueChanged<String?> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    return SizedBox(
       key: const ValueKey('notes-folder-bar'),
-      color: Colors.white,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        child: Row(
-          children: [
-            ChoiceChip(
-              label: const Text('Összes'),
-              selected: activeFolderId == null,
-              onSelected: (_) => onSelected(null),
-            ),
-            for (final folder in folders) ...[
-              const SizedBox(width: 8),
-              ChoiceChip(
-                label: Text(folder.title),
-                selected: activeFolderId == folder.id,
-                onSelected: (_) => onSelected(folder.id),
-              ),
+      width: double.infinity,
+      height: 54,
+      child: Material(
+        color: Colors.white,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              if (showAll)
+                ChoiceChip(
+                  key: const ValueKey('notes-folder-pill-all'),
+                  label: const Text('Összes'),
+                  selected: activeFolderId == null,
+                  showCheckmark: false,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (_) => onSelected(null),
+                ),
+              for (final folder in folders) ...[
+                if (showAll || folder != folders.first) const SizedBox(width: 8),
+                ChoiceChip(
+                  key: ValueKey('notes-folder-pill-${folder.id}'),
+                  avatar: const Icon(Icons.folder_outlined, size: 18),
+                  label: Text(
+                    folder.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  selected: activeFolderId == folder.id,
+                  showCheckmark: false,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (_) => onSelected(folder.id),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _NoteCard extends StatelessWidget {
-  const _NoteCard({required this.note, required this.onValidate});
+class _NoteBox extends StatelessWidget {
+  const _NoteBox({
+    required this.note,
+    required this.onOpen,
+    required this.onValidate,
+  });
 
   final NoteItem note;
+  final VoidCallback onOpen;
   final VoidCallback onValidate;
 
   @override
   Widget build(BuildContext context) {
-    return ChunkCard(
-      viewModel: ChunkCardViewModel(
-        id: 'note-${note.id}',
-        title: note.title,
-        preview: note.plainText,
-        kind: _kindForType(note.type),
-        auditState: note.auditState,
-        sourceLabel: 'Jegyzet',
-        pipelineLabel: 'Manuális',
+    final chunks = const NoteChunkBuilder().build(
+      noteId: note.id,
+      noteTitle: note.title,
+      document: note.document,
+    );
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: Color(0xFFE5E7EB)),
       ),
-      onLongPress: onValidate,
-      metadata:
-          '${note.type.label} - ${note.updatedAt.year}.${note.updatedAt.month.toString().padLeft(2, '0')}.${note.updatedAt.day.toString().padLeft(2, '0')}',
-      expandedChild: SelectableText(note.plainText),
+      child: InkWell(
+        key: ValueKey('note-box-${note.id}'),
+        borderRadius: BorderRadius.circular(8),
+        onTap: onOpen,
+        onLongPress: onValidate,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Color(0xFFEAF1FF),
+                    foregroundColor: Color(0xFF155EEF),
+                    child: Icon(Icons.note_alt_outlined, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      note.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _StatusChip(label: note.auditState.label),
+                  _StatusChip(label: '${chunks.length} chunk'),
+                  const _StatusChip(label: 'Saját jegyzet'),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                note.preview,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Color(0xFF334155)),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${note.updatedAt.year}.${note.updatedAt.month.toString().padLeft(2, '0')}.${note.updatedAt.day.toString().padLeft(2, '0')}',
+                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
+}
 
-  ChunkCardKind _kindForType(NoteItemType type) {
-    return switch (type) {
-      NoteItemType.text => ChunkCardKind.text,
-      NoteItemType.table => ChunkCardKind.table,
-      NoteItemType.flowchart => ChunkCardKind.flowchart,
-    };
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+        ),
+      ),
+    );
   }
 }

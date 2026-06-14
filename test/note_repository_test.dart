@@ -2,9 +2,64 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/notes/data/note_repository.dart';
+import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/models/note_item.dart';
 
 void main() {
+
+  test('creates and updates mixed document notes', () async {
+    final repository = MemoryNoteRepository();
+    final document = NoteDocument(blocks: [
+      const NoteBlock(
+        id: 'p1',
+        type: NoteBlockType.paragraph,
+        text: 'Szabad szöveg.',
+      ),
+      const NoteBlock(
+        id: 'l1',
+        type: NoteBlockType.listItem,
+        text: 'Listaelem',
+        level: 1,
+      ),
+      const NoteBlock(
+        id: 't1',
+        type: NoteBlockType.table,
+        rows: [
+          ['Elem', 'Érték'],
+          ['SpO2', '88-92%'],
+        ],
+      ),
+    ]);
+
+    final note = await repository.createDocumentNote(
+      title: 'Vegyes jegyzet',
+      document: document,
+    );
+
+    expect(note.type, NoteItemType.document);
+    expect(note.plainText, contains('Szabad szöveg.'));
+    expect(note.plainText, contains('SpO2 | 88-92%'));
+
+    final updated = await repository.updateNoteDocument(
+      note.id,
+      title: 'Frissített jegyzet',
+      document: document.copyWith(blocks: [
+        ...document.blocks,
+        const NoteBlock(
+          id: 'p2',
+          type: NoteBlockType.paragraph,
+          text: 'Új bekezdés.',
+        ),
+      ]),
+      auditState: LocalAuditState.edited,
+    );
+
+    expect(updated.title, 'Frissített jegyzet');
+    expect(updated.auditState, LocalAuditState.edited);
+    expect(updated.document.blocks, hasLength(4));
+    expect(updated.plainText, contains('Új bekezdés.'));
+  });
+
   test('notes repository creates folders and filters note items by folder', () async {
     final repository = MemoryNoteRepository();
     final stroke = await repository.createFolder('Stroke');
