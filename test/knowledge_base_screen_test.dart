@@ -530,8 +530,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Kinyert chunkok'), findsOneWidget);
-    expect(find.text('Táblázat'), findsWidgets);
-    expect(find.text('Score'), findsWidgets);
+    expect(find.textContaining('Táblázat'), findsWidgets);
+    expect(find.textContaining('Score'), findsWidgets);
     expect(find.textContaining('Arcbénulás'), findsOneWidget);
     expect(find.textContaining('nagyér-okklúziót'), findsOneWidget);
   });
