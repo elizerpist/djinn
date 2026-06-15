@@ -188,4 +188,54 @@ void main() {
     expect(latest, isNull);
     expect(find.byKey(const ValueKey('note-flowchart-source-scale-node-2')), findsNothing);
   });
+
+  testWidgets('palette long press drag shows ghost and drops a node on canvas', (
+    tester,
+  ) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: const NoteBlock(
+            id: 'flow-1',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'node-1',
+                label: 'Kezdés',
+                shape: AiFlowchartNodeShape.startEnd,
+                order: 1,
+                x: 120,
+                y: 120,
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    final palette = find.byKey(const ValueKey('note-flowchart-palette-process'));
+    final canvas = find.byKey(const ValueKey('note-flowchart-grid'));
+    final start = tester.getCenter(palette);
+    final drop = tester.getTopLeft(canvas) + const Offset(260, 260);
+
+    final gesture = await tester.startGesture(start);
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 80));
+    await gesture.moveTo(drop);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('note-flowchart-palette-ghost-process')),
+      findsOneWidget,
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.nodes, hasLength(2));
+    expect(latest!.nodes.last.shape, AiFlowchartNodeShape.process);
+    expect(find.byKey(const ValueKey('note-flowchart-palette-ghost-process')), findsNothing);
+  });
 }

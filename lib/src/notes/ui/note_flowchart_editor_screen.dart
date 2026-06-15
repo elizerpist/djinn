@@ -26,8 +26,13 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
   static const double _gridStep = 32;
 
   final GlobalKey _canvasKey = GlobalKey();
+  final GlobalKey _bodyStackKey = GlobalKey();
   late NoteBlock _block;
   _LinkEndpoint? _linkSource;
+  AiFlowchartNodeShape? _paletteDragShape;
+  Offset? _paletteDragGlobalPosition;
+  Stopwatch? _paletteDragWatch;
+  int _paletteDragMoveCount = 0;
   final TextEditingController _inlineNodeController = TextEditingController();
   String? _editingNodeId;
   final Map<String, Stopwatch> _dragWatches = <String, Stopwatch>{};
@@ -145,6 +150,123 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
       'local=${local.dx.toStringAsFixed(1)},${local.dy.toStringAsFixed(1)}',
     );
     _addNode(shape, centered);
+  }
+
+  String _formatOffset(Offset offset) {
+    return '${offset.dx.toStringAsFixed(1)},${offset.dy.toStringAsFixed(1)}';
+  }
+
+  RenderBox? _canvasBox() {
+    final context = _canvasKey.currentContext;
+    if (context == null) {
+      return null;
+    }
+    return context.findRenderObject() as RenderBox?;
+  }
+
+  Offset? _canvasLocalFromGlobal(Offset globalPosition) {
+    final box = _canvasBox();
+    return box?.globalToLocal(globalPosition);
+  }
+
+  bool _isInCanvas(Offset localPosition) {
+    return localPosition.dx >= 0 &&
+        localPosition.dy >= 0 &&
+        localPosition.dx <= _canvasSize.width &&
+        localPosition.dy <= _canvasSize.height;
+  }
+
+  Offset? _paletteGhostBodyPosition() {
+    final globalPosition = _paletteDragGlobalPosition;
+    if (globalPosition == null) {
+      return null;
+    }
+    final context = _bodyStackKey.currentContext;
+    final box = context?.findRenderObject() as RenderBox?;
+    final local = box?.globalToLocal(globalPosition) ?? globalPosition;
+    return local - const Offset(28, 28);
+  }
+
+  void _startPaletteDrag(AiFlowchartNodeShape shape, Offset globalPosition) {
+    HapticFeedback.selectionClick();
+    final canvasLocal = _canvasLocalFromGlobal(globalPosition);
+    _paletteDragWatch = Stopwatch()..start();
+    _paletteDragMoveCount = 0;
+    setState(() {
+      _paletteDragShape = shape;
+      _paletteDragGlobalPosition = globalPosition;
+    });
+    _log(
+      'palette long_press_start shape=${shape.wireName} '
+      'global=${_formatOffset(globalPosition)} canvasReady=${_canvasKey.currentContext != null} '
+      'canvasLocal=${canvasLocal == null ? 'null' : _formatOffset(canvasLocal)}',
+    );
+  }
+
+  void _updatePaletteDrag(AiFlowchartNodeShape shape, Offset globalPosition) {
+    if (_paletteDragShape != shape) {
+      _log(
+        'palette drag update ignored shape=${shape.wireName} '
+        'active=${_paletteDragShape?.wireName ?? 'none'} reason=stale_shape',
+      );
+      return;
+    }
+    _paletteDragMoveCount += 1;
+    final canvasLocal = _canvasLocalFromGlobal(globalPosition);
+    final overCanvas = canvasLocal != null && _isInCanvas(canvasLocal);
+    setState(() => _paletteDragGlobalPosition = globalPosition);
+    if (_paletteDragMoveCount == 1 || _paletteDragMoveCount % 8 == 0) {
+      _log(
+        'palette drag_move shape=${shape.wireName} moves=$_paletteDragMoveCount '
+        'global=${_formatOffset(globalPosition)} overCanvas=$overCanvas '
+        'canvasLocal=${canvasLocal == null ? 'null' : _formatOffset(canvasLocal)}',
+      );
+    }
+  }
+
+  void _endPaletteDrag(AiFlowchartNodeShape shape, Offset globalPosition) {
+    final watch = _paletteDragWatch;
+    watch?.stop();
+    final activeShape = _paletteDragShape;
+    final canvasLocal = _canvasLocalFromGlobal(globalPosition);
+    final accepted = activeShape == shape && canvasLocal != null && _isInCanvas(canvasLocal);
+    _log(
+      'palette drag_end shape=${shape.wireName} active=${activeShape?.wireName ?? 'none'} '
+      'moves=$_paletteDragMoveCount elapsedMs=${watch?.elapsedMilliseconds ?? 0} '
+      'global=${_formatOffset(globalPosition)} accepted=$accepted '
+      'canvasLocal=${canvasLocal == null ? 'null' : _formatOffset(canvasLocal)}',
+    );
+    setState(() {
+      _paletteDragShape = null;
+      _paletteDragGlobalPosition = null;
+      _paletteDragWatch = null;
+      _paletteDragMoveCount = 0;
+    });
+    if (accepted) {
+      _addDroppedNode(shape, globalPosition);
+    } else {
+      final reason = activeShape != shape
+          ? 'stale_shape'
+          : canvasLocal == null
+              ? 'no_canvas_context'
+              : 'outside_canvas';
+      _log('palette drop rejected shape=${shape.wireName} reason=$reason');
+    }
+  }
+
+  void _cancelPaletteDrag(AiFlowchartNodeShape shape) {
+    final watch = _paletteDragWatch;
+    watch?.stop();
+    _log(
+      'palette drag_cancel shape=${shape.wireName} active=${_paletteDragShape?.wireName ?? 'none'} '
+      'moves=$_paletteDragMoveCount elapsedMs=${watch?.elapsedMilliseconds ?? 0}',
+    );
+    setState(() {
+      _paletteDragShape = null;
+      _paletteDragGlobalPosition = null;
+      _paletteDragWatch = null;
+      _paletteDragMoveCount = 0;
+    });
   }
 
   void _beginMove(NoteFlowchartNode node) {
@@ -319,6 +441,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
         ],
       ),
       body: Stack(
+        key: _bodyStackKey,
         children: [
           InteractiveViewer(
             constrained: false,
@@ -392,9 +515,22 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
             right: 12,
             top: 12,
             child: _FlowchartPalette(
-              onDragLog: _log,
+              activeShape: _paletteDragShape,
+              onTapIgnored: (shape) => _log('palette tap ignored shape=${shape.wireName} reason=drag_only'),
+              onDragStart: _startPaletteDrag,
+              onDragUpdate: _updatePaletteDrag,
+              onDragEnd: _endPaletteDrag,
+              onDragCancel: _cancelPaletteDrag,
             ),
           ),
+          if (_paletteDragShape != null && _paletteGhostBodyPosition() != null)
+            Positioned(
+              left: _paletteGhostBodyPosition()!.dx,
+              top: _paletteGhostBodyPosition()!.dy,
+              child: IgnorePointer(
+                child: _PaletteGhost(shape: _paletteDragShape!),
+              ),
+            ),
         ],
       ),
     );
@@ -645,9 +781,21 @@ class _ConnectorButton extends StatelessWidget {
 }
 
 class _FlowchartPalette extends StatelessWidget {
-  const _FlowchartPalette({required this.onDragLog});
+  const _FlowchartPalette({
+    required this.activeShape,
+    required this.onTapIgnored,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
+    required this.onDragCancel,
+  });
 
-  final ValueChanged<String> onDragLog;
+  final AiFlowchartNodeShape? activeShape;
+  final ValueChanged<AiFlowchartNodeShape> onTapIgnored;
+  final void Function(AiFlowchartNodeShape shape, Offset globalPosition) onDragStart;
+  final void Function(AiFlowchartNodeShape shape, Offset globalPosition) onDragUpdate;
+  final void Function(AiFlowchartNodeShape shape, Offset globalPosition) onDragEnd;
+  final ValueChanged<AiFlowchartNodeShape> onDragCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -673,36 +821,17 @@ class _FlowchartPalette extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             for (final shape in shapes) ...[
-              LongPressDraggable<AiFlowchartNodeShape>(
-                data: shape,
-                dragAnchorStrategy: pointerDragAnchorStrategy,
-                maxSimultaneousDrags: 1,
-                feedbackOffset: const Offset(28, 28),
-                onDragStarted: () {
-                  HapticFeedback.selectionClick();
-                  onDragLog('palette drag start shape=${shape.wireName}');
-                },
-                onDragUpdate: (details) {
-                  if (details.globalPosition.dx.round() % 64 == 0) {
-                    onDragLog(
-                      'palette drag update shape=${shape.wireName} '
-                      'global=${details.globalPosition.dx.toStringAsFixed(1)},${details.globalPosition.dy.toStringAsFixed(1)}',
-                    );
-                  }
-                },
-                onDragEnd: (details) => onDragLog(
-                  'palette drag end shape=${shape.wireName} accepted=${details.wasAccepted} '
-                  'offset=${details.offset.dx.toStringAsFixed(1)},${details.offset.dy.toStringAsFixed(1)}',
-                ),
-                feedback: Material(
-                  color: Colors.transparent,
-                  child: _PaletteGhost(shape: shape),
-                ),
-                childWhenDragging: Opacity(
-                  opacity: 0.35,
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onTapIgnored(shape),
+                onLongPressStart: (details) => onDragStart(shape, details.globalPosition),
+                onLongPressMoveUpdate: (details) => onDragUpdate(shape, details.globalPosition),
+                onLongPressEnd: (details) => onDragEnd(shape, details.globalPosition),
+                onLongPressCancel: () => onDragCancel(shape),
+                child: Opacity(
+                  opacity: activeShape == shape ? 0.35 : 1,
                   child: _PaletteButton(shape: shape),
                 ),
-                child: _PaletteButton(shape: shape),
               ),
               if (shape != shapes.last) const SizedBox(height: 4),
             ],
@@ -720,8 +849,9 @@ class _PaletteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: _shapeLabel(shape),
+    return Semantics(
+      label: _shapeLabel(shape),
+      button: true,
       child: DecoratedBox(
         key: ValueKey('note-flowchart-palette-${shape.wireName}'),
         decoration: BoxDecoration(
@@ -746,6 +876,7 @@ class _PaletteGhost extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
+      key: ValueKey('note-flowchart-palette-ghost-${shape.wireName}'),
       decoration: BoxDecoration(
         color: const Color(0xFF7C3AED),
         borderRadius: BorderRadius.circular(14),
