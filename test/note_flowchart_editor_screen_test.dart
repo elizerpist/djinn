@@ -443,7 +443,10 @@ void main() {
     expect(find.byKey(const ValueKey('note-flowchart-node-popup-port-delete-yes')), findsNothing);
     expect(find.byKey(const ValueKey('note-flowchart-node-popup-port-delete-no')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('note-flowchart-node-popup-port-side-yes-left')));
+    final yesLeft = find.byKey(const ValueKey('note-flowchart-node-popup-port-side-yes-left'));
+    await tester.ensureVisible(yesLeft);
+    await tester.pumpAndSettle();
+    await tester.tap(yesLeft);
     await tester.pumpAndSettle();
 
     expect(latest, isNotNull);
@@ -485,7 +488,10 @@ void main() {
       find.byKey(const ValueKey('note-flowchart-node-popup-port-label-branch-1')),
       '90-95%',
     );
-    await tester.tap(find.byKey(const ValueKey('note-flowchart-node-popup-port-side-branch-1-left')));
+    final branchLeft = find.byKey(const ValueKey('note-flowchart-node-popup-port-side-branch-1-left'));
+    await tester.ensureVisible(branchLeft);
+    await tester.pumpAndSettle();
+    await tester.tap(branchLeft);
     await tester.pumpAndSettle();
 
     expect(latest, isNotNull);

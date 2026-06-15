@@ -1484,7 +1484,7 @@ class _NodeConfigSection extends StatelessWidget {
   }
 }
 
-class _PortEditorRow extends StatelessWidget {
+class _PortEditorRow extends StatefulWidget {
   const _PortEditorRow({
     super.key,
     required this.port,
@@ -1501,8 +1501,41 @@ class _PortEditorRow extends StatelessWidget {
   final VoidCallback? onDelete;
 
   @override
+  State<_PortEditorRow> createState() => _PortEditorRowState();
+}
+
+class _PortEditorRowState extends State<_PortEditorRow> {
+  late final TextEditingController _labelController;
+
+  @override
+  void initState() {
+    super.initState();
+    _labelController = TextEditingController(text: _displayLabel(widget.port));
+  }
+
+  @override
+  void didUpdateWidget(covariant _PortEditorRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = _displayLabel(widget.port);
+    if (oldWidget.port.id != widget.port.id || oldWidget.port.label != widget.port.label) {
+      if (_labelController.text != next) {
+        _labelController.text = next;
+        _labelController.selection = TextSelection.collapsed(offset: _labelController.text.length);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _labelController.dispose();
+    super.dispose();
+  }
+
+  String _displayLabel(NoteFlowchartPort port) => port.label.trim().isEmpty ? port.id : port.label.trim();
+
+  @override
   Widget build(BuildContext context) {
-    final labelController = TextEditingController(text: port.label.trim().isEmpty ? port.id : port.label.trim());
+    final port = widget.port;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DecoratedBox(
@@ -1523,23 +1556,23 @@ class _PortEditorRow extends StatelessWidget {
                   Expanded(
                     child: TextField(
                       key: ValueKey('note-flowchart-node-popup-port-label-${port.id}'),
-                      controller: labelController,
-                      enabled: !locked,
+                      controller: _labelController,
+                      enabled: !widget.locked,
                       decoration: InputDecoration(
                         isDense: true,
-                        labelText: locked ? 'Kötelező ág' : 'Ág neve',
+                        labelText: widget.locked ? 'Kötelező ág' : 'Ág neve',
                         border: const OutlineInputBorder(),
                       ),
-                      onChanged: onLabelChanged,
-                      onSubmitted: onLabelChanged,
-                      onTapOutside: (_) => onLabelChanged(labelController.text),
+                      onChanged: widget.onLabelChanged,
+                      onSubmitted: widget.onLabelChanged,
+                      onTapOutside: (_) => widget.onLabelChanged(_labelController.text),
                     ),
                   ),
-                  if (onDelete != null)
+                  if (widget.onDelete != null)
                     IconButton(
                       key: ValueKey('note-flowchart-node-popup-port-delete-${port.id}'),
                       tooltip: 'Port törlése',
-                      onPressed: onDelete,
+                      onPressed: widget.onDelete,
                       icon: const Icon(Icons.delete_outline),
                     ),
                 ],
@@ -1555,7 +1588,7 @@ class _PortEditorRow extends StatelessWidget {
                       avatar: Icon(_sideIcon(side), size: 15),
                       selected: port.side == side,
                       label: Text(_sideLabel(side)),
-                      onSelected: (_) => onSideChanged(side),
+                      onSelected: (_) => widget.onSideChanged(side),
                     ),
                 ],
               ),

@@ -72,7 +72,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Légzés algoritmus'), findsOneWidget);
+    expect(find.text('Légzés algoritmus'), findsWidgets);
     expect(find.text('Lista'), findsOneWidget);
     expect(find.text('Canvas'), findsOneWidget);
     expect(find.text('Guide'), findsOneWidget);

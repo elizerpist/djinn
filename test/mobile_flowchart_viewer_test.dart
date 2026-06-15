@@ -47,16 +47,16 @@ void main() {
   testWidgets('closing root yes branch hides its descendants but keeps no branch visible', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(body: MobileFlowchartViewer(data: data))));
 
-    expect(find.textContaining('Célzott O2-terápia'), findsOneWidget);
-    expect(find.text('Shock jelek?'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-process-oxygen')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-process-shock')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('mobile-flowchart-branch-root-igen')));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Célzott O2-terápia'), findsNothing);
-    expect(find.text('Shock jelek?'), findsNothing);
+    expect(find.byKey(const ValueKey('mobile-flowchart-process-oxygen')), findsNothing);
+    expect(find.byKey(const ValueKey('mobile-flowchart-process-shock')), findsNothing);
     expect(find.byKey(const ValueKey('mobile-flowchart-branch-root-nem')), findsOneWidget);
-    expect(find.text('További vizsgálat és monitorozás'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-process-monitor')), findsOneWidget);
   });
 
   testWidgets('canvas view is selectable read-only and exposes zoom controls', (tester) async {

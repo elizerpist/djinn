@@ -100,56 +100,67 @@ class _MobileFlowchartViewerState extends State<MobileFlowchartViewer> {
       ),
       child: Padding(
         padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final content = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.account_tree_outlined, color: Color(0xFF7C3AED), size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    widget.data.title.trim().isEmpty ? 'Flowchart' : widget.data.title.trim(),
-                    style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF111827)),
-                  ),
+                Row(
+                  children: [
+                    const Icon(Icons.account_tree_outlined, color: Color(0xFF7C3AED), size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.data.title.trim().isEmpty ? 'Flowchart' : widget.data.title.trim(),
+                        style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF111827)),
+                      ),
+                    ),
+                    if (widget.data.sourceSummary?.trim().isNotEmpty == true)
+                      Text(
+                        widget.data.sourceSummary!.trim(),
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280)),
+                      ),
+                  ],
                 ),
-                if (widget.data.sourceSummary?.trim().isNotEmpty == true)
-                  Text(
-                    widget.data.sourceSummary!.trim(),
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280)),
-                  ),
+                const SizedBox(height: 10),
+                _ModeSelector(
+                  selected: _mode,
+                  onSelected: (mode) => setState(() => _mode = mode),
+                ),
+                const SizedBox(height: 10),
+                switch (_mode) {
+                  MobileFlowchartViewMode.list => _FlowchartListView(
+                      key: ValueKey('mobile-flowchart-view-list-${widget.data.id}'),
+                      data: widget.data,
+                      closedBranches: _closedBranches,
+                      onToggleBranch: _toggleBranch,
+                    ),
+                  MobileFlowchartViewMode.canvas => _FlowchartCanvasView(
+                      key: ValueKey('mobile-flowchart-view-canvas-${widget.data.id}'),
+                      data: widget.data,
+                      controller: _canvasController,
+                      onZoom: _zoomCanvas,
+                    ),
+                  MobileFlowchartViewMode.guide => _FlowchartGuideView(
+                      key: ValueKey('mobile-flowchart-view-guide-${widget.data.id}'),
+                      data: widget.data,
+                      step: _guideStep,
+                      canGoBack: _guideBackStack.isNotEmpty,
+                      onAnswer: _chooseGuideAnswer,
+                      onNext: _advanceGuide,
+                      onBack: _goGuideBack,
+                    ),
+                },
               ],
-            ),
-            const SizedBox(height: 10),
-            _ModeSelector(
-              selected: _mode,
-              onSelected: (mode) => setState(() => _mode = mode),
-            ),
-            const SizedBox(height: 10),
-            switch (_mode) {
-              MobileFlowchartViewMode.list => _FlowchartListView(
-                  key: ValueKey('mobile-flowchart-view-list-${widget.data.id}'),
-                  data: widget.data,
-                  closedBranches: _closedBranches,
-                  onToggleBranch: _toggleBranch,
-                ),
-              MobileFlowchartViewMode.canvas => _FlowchartCanvasView(
-                  key: ValueKey('mobile-flowchart-view-canvas-${widget.data.id}'),
-                  data: widget.data,
-                  controller: _canvasController,
-                  onZoom: _zoomCanvas,
-                ),
-              MobileFlowchartViewMode.guide => _FlowchartGuideView(
-                  key: ValueKey('mobile-flowchart-view-guide-${widget.data.id}'),
-                  data: widget.data,
-                  step: _guideStep,
-                  canGoBack: _guideBackStack.isNotEmpty,
-                  onAnswer: _chooseGuideAnswer,
-                  onNext: _advanceGuide,
-                  onBack: _goGuideBack,
-                ),
-            },
-          ],
+            );
+            if (!constraints.hasBoundedHeight) {
+              return content;
+            }
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: content,
+            );
+          },
         ),
       ),
     );
