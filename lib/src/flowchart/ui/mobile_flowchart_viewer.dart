@@ -176,7 +176,7 @@ class _MobileFlowchartViewerState extends State<MobileFlowchartViewer> {
 
   void _zoomCanvas(double factor) {
     final current = _canvasController.value.clone();
-    current.scale(factor);
+    current.multiply(Matrix4.diagonal3Values(factor, factor, 1));
     setState(() => _canvasController.value = current);
   }
 
