@@ -213,7 +213,10 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
             block: current,
             onChanged: _replaceBlock,
           ),
-        NoteBlockType.flowchart => NoteFlowchartEditorScreen(block: current),
+        NoteBlockType.flowchart => NoteFlowchartEditorScreen(
+            block: current,
+            onChanged: _replaceBlock,
+          ),
       };
     }
 
