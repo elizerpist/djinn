@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../ai/ai_client.dart';
 import '../data/note_repository.dart';
 import '../models/note_document.dart';
 import '../models/note_item.dart';
+import 'note_chunk_card.dart';
+import 'note_chunk_fab.dart';
 
 class NoteEditorRoute extends StatefulWidget {
   const NoteEditorRoute({
@@ -22,7 +25,9 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
   late NoteItem _note;
   late NoteDocument _document;
   late final TextEditingController _titleController;
+  final Set<String> _expandedBlockIds = <String>{};
   bool _persisting = false;
+  bool _persistAgain = false;
 
   @override
   void initState() {
@@ -40,19 +45,23 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
 
   Future<void> _persist() async {
     if (_persisting) {
+      _persistAgain = true;
       return;
     }
     _persisting = true;
     try {
-      final updated = await widget.repository.updateNoteDocument(
-        _note.id,
-        title: _normalizedTitle,
-        document: _document,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() => _note = updated);
+      do {
+        _persistAgain = false;
+        final updated = await widget.repository.updateNoteDocument(
+          _note.id,
+          title: _normalizedTitle,
+          document: _document,
+        );
+        if (!mounted) {
+          return;
+        }
+        setState(() => _note = updated);
+      } while (_persistAgain);
     } finally {
       _persisting = false;
     }
@@ -61,6 +70,132 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
   String get _normalizedTitle {
     final trimmed = _titleController.text.trim();
     return trimmed.isEmpty ? 'Névtelen jegyzet' : trimmed;
+  }
+
+  void _setDocument(NoteDocument document) {
+    setState(() => _document = document);
+    unawaited(_persist());
+  }
+
+  void _replaceBlock(NoteBlock block) {
+    _setDocument(_document.copyWith(
+      blocks: [
+        for (final existing in _document.blocks)
+          if (existing.id == block.id) block else existing,
+      ],
+    ));
+  }
+
+  void _addBlock(NoteBlockType type) {
+    final block = _newBlock(type);
+    _setDocument(_document.copyWith(blocks: [..._document.blocks, block]));
+    setState(() => _expandedBlockIds.add(block.id));
+  }
+
+  NoteBlock _newBlock(NoteBlockType type) {
+    final id = 'block-${DateTime.now().microsecondsSinceEpoch}';
+    return switch (type) {
+      NoteBlockType.heading => NoteBlock(id: id, type: type, text: ''),
+      NoteBlockType.paragraph => NoteBlock(id: id, type: type, text: ''),
+      NoteBlockType.listItem => NoteBlock(
+          id: id,
+          type: type,
+          listItems: const [NoteListItem(id: 'item-1', text: '')],
+        ),
+      NoteBlockType.table => NoteBlock(
+          id: id,
+          type: type,
+          rows: const [
+            ['', ''],
+          ],
+        ),
+      NoteBlockType.flowchart => NoteBlock(
+          id: id,
+          type: type,
+          title: 'Flowchart',
+          nodes: const [
+            NoteFlowchartNode(
+              id: 'node-1',
+              label: 'Kezdés',
+              shape: AiFlowchartNodeShape.startEnd,
+              order: 1,
+            ),
+          ],
+        ),
+    };
+  }
+
+  void _deleteBlock(NoteBlock block) {
+    final index = _document.blocks.indexWhere((candidate) => candidate.id == block.id);
+    if (index == -1) {
+      return;
+    }
+    final nextBlocks = [..._document.blocks]..removeAt(index);
+    setState(() {
+      _document = _document.copyWith(blocks: nextBlocks);
+      _expandedBlockIds.remove(block.id);
+    });
+    unawaited(_persist());
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Chunk törölve'),
+        action: SnackBarAction(
+          label: 'Visszavonás',
+          onPressed: () => _restoreDeletedBlock(block, index),
+        ),
+      ),
+    );
+  }
+
+  void _restoreDeletedBlock(NoteBlock block, int index) {
+    final nextBlocks = [..._document.blocks];
+    final targetIndex = index.clamp(0, nextBlocks.length).toInt();
+    nextBlocks.insert(targetIndex, block);
+    setState(() => _document = _document.copyWith(blocks: nextBlocks));
+    unawaited(_persist());
+  }
+
+  void _reorderBlocks(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) {
+      newIndex -= 1;
+    }
+    final nextBlocks = [..._document.blocks];
+    final moved = nextBlocks.removeAt(oldIndex);
+    nextBlocks.insert(newIndex, moved);
+    _setDocument(_document.copyWith(blocks: nextBlocks));
+  }
+
+  Future<void> _handleMenu(String value) async {
+    if (value == 'index') {
+      final ids = _document.blocks.where((block) => block.hasContent).map((block) => block.id).toList();
+      if (ids.isEmpty) {
+        return;
+      }
+      final updated = await widget.repository.markNoteBlocksIndexed(_note.id, ids);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _note = updated;
+        _document = updated.document;
+      });
+      return;
+    }
+    if (value == 'chunks') {
+      setState(() => _expandedBlockIds.addAll(_document.blocks.map((block) => block.id)));
+      return;
+    }
+    if (value == 'delete') {
+      await widget.repository.deleteNotes([_note.id]);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    }
+  }
+
+  void _openBlockEditor(NoteBlock block) {
+    _replaceBlock(block);
   }
 
   @override
@@ -73,60 +208,74 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
           PopupMenuButton<String>(
             key: const ValueKey('note-editor-menu'),
             tooltip: 'Jegyzet menü',
+            onSelected: _handleMenu,
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'index', child: Text('Indexelés / újraindexelés')),
-              PopupMenuItem(value: 'chunks', child: Text('Chunkok megtekintése')),
+              PopupMenuItem(value: 'chunks', child: Text('Chunkok kinyitása')),
               PopupMenuItem(value: 'delete', child: Text('Törlés')),
             ],
           ),
         ],
       ),
-      body: ListView(
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+      body: Column(
         children: [
-          TextField(
-            key: const ValueKey('note-editor-title-field'),
-            controller: _titleController,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-            decoration: const InputDecoration(
-              hintText: 'Írható inline cím',
-              border: InputBorder.none,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: TextField(
+              key: const ValueKey('note-editor-title-field'),
+              controller: _titleController,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+              decoration: const InputDecoration(
+                hintText: 'Írható inline cím',
+                border: InputBorder.none,
+              ),
+              onChanged: (_) => unawaited(_persist()),
             ),
-            onChanged: (_) => _persist(),
           ),
-          const SizedBox(height: 16),
-          for (final block in _document.blocks)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _TemporaryBlockPreview(block: block),
+          Expanded(
+            child: ReorderableListView.builder(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 108),
+              itemCount: _document.blocks.length,
+              onReorder: _reorderBlocks,
+              itemBuilder: (context, index) {
+                final block = _document.blocks[index];
+                return Padding(
+                  key: ValueKey('note-chunk-row-${block.id}'),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: NoteChunkCard(
+                    block: block,
+                    expanded: _expandedBlockIds.contains(block.id),
+                    dragHandle: ReorderableDragStartListener(
+                      index: index,
+                      child: const Icon(Icons.drag_indicator, color: Color(0xFF9CA3AF)),
+                    ),
+                    onToggleExpanded: () {
+                      setState(() {
+                        if (!_expandedBlockIds.add(block.id)) {
+                          _expandedBlockIds.remove(block.id);
+                        }
+                      });
+                    },
+                    onOpenEditor: () => _openBlockEditor(block),
+                    onDelete: () => _deleteBlock(block),
+                  ),
+                );
+              },
             ),
+          ),
         ],
       ),
-    );
-  }
-}
-
-class _TemporaryBlockPreview extends StatelessWidget {
-  const _TemporaryBlockPreview({required this.block});
-
-  final NoteBlock block;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = block.plainText.trim();
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Text(text.isEmpty ? 'Üres chunk' : text),
+      floatingActionButton: NoteChunkFab(
+        onAddText: () => _addBlock(NoteBlockType.paragraph),
+        onAddList: () => _addBlock(NoteBlockType.listItem),
+        onAddTable: () => _addBlock(NoteBlockType.table),
+        onAddFlowchart: () => _addBlock(NoteBlockType.flowchart),
       ),
     );
   }
 }
+
+void unawaited(Future<void> future) {}
