@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/services.dart';
 
 import 'package:djinn/src/ai/ai_client.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
