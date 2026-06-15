@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/notes/data/note_repository.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/models/note_item.dart';
@@ -71,7 +70,7 @@ void main() {
     expect(find.byKey(const ValueKey('note-editor-title-field')), findsOneWidget);
   });
 
-  testWidgets('long pressing a note opens shared validation editor', (tester) async {
+  testWidgets('long pressing a note enters note selection mode with note actions', (tester) async {
     final repository = MemoryNoteRepository();
     final note = await repository.createDocumentNote(
       title: 'COPD kiváltó okok',
@@ -88,19 +87,22 @@ void main() {
 
     await tester.longPress(find.byKey(ValueKey('note-box-${note.id}')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('chunk-validation-card')), findsOneWidget);
 
-    await tester.enterText(
-      find.byKey(const ValueKey('chunk-validation-text-field')),
-      'Fertőzés, levegőszennyezés és terápiahűség romlása.',
-    );
-    await tester.tap(find.text('Elfogad'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('chunk-validation-save')));
-    await tester.pumpAndSettle();
+    expect(find.text('1 kijelölve'), findsOneWidget);
+    expect(find.byKey(ValueKey('note-checkbox-${note.id}')), findsOneWidget);
+    expect(find.byKey(const ValueKey('notes-share-selected')), findsOneWidget);
+    expect(find.byKey(const ValueKey('notes-delete-selected')), findsOneWidget);
 
-    final saved = (await repository.listNotes()).single;
-    expect(saved.plainText, 'Fertőzés, levegőszennyezés és terápiahűség romlása.');
-    expect(saved.auditState, LocalAuditState.accepted);
+    await tester.tap(find.byKey(const ValueKey('notes-selection-menu')));
+    await tester.pumpAndSettle();
+    expect(find.text('Szerkesztés'), findsOneWidget);
+    expect(find.text('Chunkok megtekintése'), findsOneWidget);
+    expect(find.text('Kinyert tartalom audit'), findsOneWidget);
+    expect(find.text('Másolat'), findsNothing);
+
+    await tester.tap(find.byTooltip('Kijelölés megszüntetése'));
+    await tester.pumpAndSettle();
+    expect(find.text('Jegyzetek'), findsOneWidget);
   });
+
 }

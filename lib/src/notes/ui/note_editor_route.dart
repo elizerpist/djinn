@@ -249,7 +249,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
           PopupMenuButton<String>(
             key: const ValueKey('note-editor-menu'),
             tooltip: 'Jegyzet menü',
-            onSelected: _handleMenu,
+            onSelected: (value) => unawaited(_handleMenu(value)),
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'index', child: Text('Indexelés / újraindexelés')),
               PopupMenuItem(value: 'chunks', child: Text('Chunkok kinyitása')),
