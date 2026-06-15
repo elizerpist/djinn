@@ -91,6 +91,7 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
         itemCount: _items.length + 1,
+        // ignore: deprecated_member_use
         onReorder: (oldIndex, newIndex) {
           if (oldIndex >= _items.length || newIndex > _items.length) {
             return;

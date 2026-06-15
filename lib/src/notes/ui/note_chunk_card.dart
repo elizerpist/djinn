@@ -56,6 +56,7 @@ class NoteChunkCard extends StatelessWidget {
                       width: 34,
                       height: 34,
                       decoration: BoxDecoration(
+                        // ignore: deprecated_member_use
                         color: accent.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -177,6 +178,7 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
+        // ignore: deprecated_member_use
         color: color.withOpacity(0.11),
         borderRadius: BorderRadius.circular(999),
       ),

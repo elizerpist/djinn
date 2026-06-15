@@ -160,11 +160,11 @@ class _NotesScreenState extends State<NotesScreen> {
     }
     await Navigator.of(context).push<void>(
       PageRouteBuilder(
-        pageBuilder: (_, animation, __) => NoteEditorRoute(
+        pageBuilder: (context, animation, secondaryAnimation) => NoteEditorRoute(
           repository: widget.repository,
           initialNote: target,
         ),
-        transitionsBuilder: (_, animation, __, child) {
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
             position: Tween<Offset>(
               begin: const Offset(1, 0),

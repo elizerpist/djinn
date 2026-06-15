@@ -222,8 +222,8 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
 
     final result = await Navigator.of(context).push<NoteBlock>(
       PageRouteBuilder(
-        pageBuilder: (_, animation, __) => editorFor(block),
-        transitionsBuilder: (_, animation, __, child) {
+        pageBuilder: (context, animation, secondaryAnimation) => editorFor(block),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
             position: Tween<Offset>(
               begin: const Offset(1, 0),
@@ -280,6 +280,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 108),
               itemCount: _document.blocks.length,
+              // ignore: deprecated_member_use
               onReorder: _reorderBlocks,
               itemBuilder: (context, index) {
                 final block = _document.blocks[index];
