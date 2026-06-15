@@ -73,4 +73,27 @@ void main() {
     expect(saved.document.blocks.map((block) => block.id), ['a', 'b']);
   });
 
+  testWidgets('tapping a text chunk opens full-screen editor and autosaves edits', (tester) async {
+    final repository = MemoryNoteRepository();
+    final note = await repository.createDocumentNote(
+      title: 'N',
+      document: const NoteDocument(blocks: [
+        NoteBlock(id: 'a', type: NoteBlockType.paragraph, text: 'Régi'),
+      ]),
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: NoteEditorRoute(repository: repository, initialNote: note)),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-chunk-card-a')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-text-chunk-editor')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const ValueKey('note-text-chunk-field')), 'Új szöveg');
+    await tester.pump();
+
+    final saved = (await repository.listNotes()).single;
+    expect(saved.document.blocks.single.text, 'Új szöveg');
+  });
+
 }

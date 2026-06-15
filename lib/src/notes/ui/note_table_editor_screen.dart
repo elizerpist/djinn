@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import '../models/note_document.dart';
 
 class NoteTableEditorScreen extends StatefulWidget {
-  const NoteTableEditorScreen({super.key, required this.block});
+  const NoteTableEditorScreen({
+    super.key,
+    required this.block,
+    this.onChanged,
+  });
 
   final NoteBlock block;
+  final ValueChanged<NoteBlock>? onChanged;
 
   @override
   State<NoteTableEditorScreen> createState() => _NoteTableEditorScreenState();
@@ -28,6 +33,21 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
 
   void _updateCell(int row, int column, String value) {
     _rows[row][column] = value;
+    _emitChange();
+  }
+
+  NoteBlock _currentBlock() {
+    return widget.block.copyWith(
+      rows: [
+        for (final row in _rows)
+          row.map((cell) => cell.trim()).toList(growable: false),
+      ],
+      clearIndex: true,
+    );
+  }
+
+  void _emitChange() {
+    widget.onChanged?.call(_currentBlock());
   }
 
   void _addRow() {
@@ -35,6 +55,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       final width = _rows.isEmpty ? 2 : _rows.first.length;
       _rows.add(List.filled(width, ''));
     });
+    _emitChange();
   }
 
   void _addColumn() {
@@ -47,6 +68,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
         row.add('');
       }
     });
+    _emitChange();
   }
 
   void _deleteRow(int index) {
@@ -54,6 +76,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       return;
     }
     setState(() => _rows.removeAt(index));
+    _emitChange();
   }
 
   void _deleteColumn(int index) {
@@ -65,17 +88,11 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
         row.removeAt(index);
       }
     });
+    _emitChange();
   }
 
   void _save() {
-    Navigator.of(context).pop(
-      widget.block.copyWith(
-        rows: [
-          for (final row in _rows)
-            row.map((cell) => cell.trim()).toList(growable: false),
-        ],
-      ),
-    );
+    Navigator.of(context).pop(_currentBlock());
   }
 
   @override
@@ -85,12 +102,13 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       appBar: AppBar(
         title: const Text('Táblázat szerkesztő'),
         actions: [
-          TextButton.icon(
-            key: const ValueKey('note-table-save'),
-            onPressed: _save,
-            icon: const Icon(Icons.save_outlined),
-            label: const Text('Mentés'),
-          ),
+          if (widget.onChanged == null)
+            TextButton.icon(
+              key: const ValueKey('note-table-save'),
+              onPressed: _save,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Mentés'),
+            ),
         ],
       ),
       body: SingleChildScrollView(

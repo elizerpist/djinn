@@ -6,6 +6,10 @@ import '../models/note_document.dart';
 import '../models/note_item.dart';
 import 'note_chunk_card.dart';
 import 'note_chunk_fab.dart';
+import 'note_flowchart_editor_screen.dart';
+import 'note_list_chunk_editor_screen.dart';
+import 'note_table_editor_screen.dart';
+import 'note_text_chunk_editor_screen.dart';
 
 class NoteEditorRoute extends StatefulWidget {
   const NoteEditorRoute({
@@ -194,8 +198,42 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     }
   }
 
-  void _openBlockEditor(NoteBlock block) {
-    _replaceBlock(block);
+  Future<void> _openBlockEditor(NoteBlock block) async {
+    Widget editorFor(NoteBlock current) {
+      return switch (current.type) {
+        NoteBlockType.heading || NoteBlockType.paragraph => NoteTextChunkEditorScreen(
+            block: current,
+            onChanged: _replaceBlock,
+          ),
+        NoteBlockType.listItem => NoteListChunkEditorScreen(
+            block: current,
+            onChanged: _replaceBlock,
+          ),
+        NoteBlockType.table => NoteTableEditorScreen(
+            block: current,
+            onChanged: _replaceBlock,
+          ),
+        NoteBlockType.flowchart => NoteFlowchartEditorScreen(block: current),
+      };
+    }
+
+    final result = await Navigator.of(context).push<NoteBlock>(
+      PageRouteBuilder(
+        pageBuilder: (_, animation, __) => editorFor(block),
+        transitionsBuilder: (_, animation, __, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(1, 0),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          );
+        },
+      ),
+    );
+    if (result != null && mounted) {
+      _replaceBlock(result);
+    }
   }
 
   @override
@@ -259,7 +297,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
                         }
                       });
                     },
-                    onOpenEditor: () => _openBlockEditor(block),
+                    onOpenEditor: () => unawaited(_openBlockEditor(block)),
                     onDelete: () => _deleteBlock(block),
                   ),
                 );
