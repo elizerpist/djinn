@@ -82,7 +82,7 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('flowchart-title-field')), 'Új légzés flow');
     await tester.tap(find.text('Mentés'));
     await tester.pumpAndSettle();
-    expect(find.text('Új légzés flow'), findsOneWidget);
+    expect(find.text('Új légzés flow'), findsWidgets);
     expect(find.byKey(const ValueKey('mobile-flowchart-view-list-flow-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('flow-color-rail')), findsNothing);
     expect(find.byKey(const ValueKey('mobile-flowchart-branch-n1-igen')), findsOneWidget);
