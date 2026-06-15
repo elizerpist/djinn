@@ -183,7 +183,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('note-flowchart-palette-process')));
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-palette-universal')));
     await tester.pumpAndSettle();
 
     expect(latest, isNull);
@@ -216,7 +216,7 @@ void main() {
       ),
     );
 
-    final palette = find.byKey(const ValueKey('note-flowchart-palette-process'));
+    final palette = find.byKey(const ValueKey('note-flowchart-palette-universal'));
     final canvas = find.byKey(const ValueKey('note-flowchart-grid'));
     final start = tester.getCenter(palette);
     final drop = tester.getTopLeft(canvas) + const Offset(260, 260);
@@ -227,7 +227,7 @@ void main() {
     await tester.pump();
 
     expect(
-      find.byKey(const ValueKey('note-flowchart-palette-ghost-process')),
+      find.byKey(const ValueKey('note-flowchart-palette-ghost-universal')),
       findsOneWidget,
     );
 
@@ -237,6 +237,148 @@ void main() {
     expect(latest, isNotNull);
     expect(latest!.nodes, hasLength(2));
     expect(latest!.nodes.last.shape, AiFlowchartNodeShape.process);
-    expect(find.byKey(const ValueKey('note-flowchart-palette-ghost-process')), findsNothing);
+    expect(find.byKey(const ValueKey('note-flowchart-palette-ghost-universal')), findsNothing);
   });
+
+  testWidgets('flowchart palette exposes simplified logical elements only', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: NoteBlock(
+            id: 'flow-1',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(id: 'node-1', label: 'Kezdés', x: 120, y: 120),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('note-flowchart-palette-universal')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-palette-binary-decision')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-palette-multi-decision')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-palette-subprocess')), findsNothing);
+    expect(find.byKey(const ValueKey('note-flowchart-palette-dataStore')), findsNothing);
+  });
+
+  testWidgets('node body opens popup while label tap keeps inline editing', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: NoteBlock(
+            id: 'flow-1',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(id: 'node-1', label: 'Kezdés', x: 120, y: 120),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-node-label-node-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-flowchart-node-inline-field-node-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-node-popup')), findsNothing);
+
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-node-body-node-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('note-flowchart-node-popup')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-node-popup-type-universal')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-node-popup-add-port-right')), findsOneWidget);
+  });
+
+  testWidgets('ports connect in tapped direction and store endpoint ids', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: const NoteBlock(
+            id: 'flow-1',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'a',
+                label: 'Alsó lépés',
+                x: 120,
+                y: 320,
+                ports: [
+                  NoteFlowchartPort(id: 'right-1', side: NoteFlowchartPortSide.right, label: 'ki'),
+                ],
+              ),
+              NoteFlowchartNode(
+                id: 'b',
+                label: 'Felső lépés',
+                x: 120,
+                y: 120,
+                ports: [
+                  NoteFlowchartPort(id: 'left-1', side: NoteFlowchartPortSide.left, label: 'be'),
+                ],
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-connector-a-right-1')));
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-connector-b-left-1')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.edges.single.fromNodeId, 'a');
+    expect(latest!.edges.single.fromPortId, 'right-1');
+    expect(latest!.edges.single.toNodeId, 'b');
+    expect(latest!.edges.single.toPortId, 'left-1');
+  });
+
+  testWidgets('all edge labels can delete non decision edges', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: const NoteBlock(
+            id: 'flow-1',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(id: 'a', label: 'A', x: 120, y: 120),
+              NoteFlowchartNode(id: 'b', label: 'B', x: 120, y: 280),
+            ],
+            edges: [
+              NoteFlowchartEdge(id: 'edge-1', fromNodeId: 'a', toNodeId: 'b', label: 'következő'),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-edge-delete-edge-1')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.edges, isEmpty);
+  });
+
+  test('back edge routes sideways before returning upward', () {
+    const from = NoteFlowchartNode(id: 'lower', label: 'Alsó', x: 120, y: 420);
+    const to = NoteFlowchartNode(id: 'upper', label: 'Felső', x: 120, y: 120);
+    const edge = NoteFlowchartEdge(id: 'edge-1', fromNodeId: 'lower', toNodeId: 'upper', label: 'vissza');
+    final route = debugFlowchartRouteForTest(edge, from, to, {
+      from.id: const Size(220, 90),
+      to.id: const Size(220, 90),
+    });
+
+    expect(route.kind, 'backEdge');
+    expect(route.points.length, greaterThanOrEqualTo(5));
+    expect(route.points[1].dx, isNot(route.points.first.dx));
+    expect(route.points[2].dy, lessThan(route.points.first.dy));
+  });
+
 }

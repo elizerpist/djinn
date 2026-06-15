@@ -142,4 +142,67 @@ void main() {
     expect(parsed.y, 80);
   });
 
+
+  test('flowchart node serializes logical kind role visual shape and ports', () {
+    const node = NoteFlowchartNode(
+      id: 'decision-1',
+      label: 'Szaturáció?',
+      kind: NoteFlowchartNodeKind.multiDecision,
+      role: NoteFlowchartNodeRole.normal,
+      visualShape: NoteFlowchartVisualShape.diamond,
+      ports: [
+        NoteFlowchartPort(
+          id: 'p1',
+          side: NoteFlowchartPortSide.right,
+          label: '95 felett',
+          semantic: NoteFlowchartPortSemantic.custom,
+        ),
+      ],
+    );
+
+    final parsed = NoteFlowchartNode.fromJson(node.toJson());
+
+    expect(parsed.kind, NoteFlowchartNodeKind.multiDecision);
+    expect(parsed.role, NoteFlowchartNodeRole.normal);
+    expect(parsed.visualShape, NoteFlowchartVisualShape.diamond);
+    expect(parsed.ports.single.id, 'p1');
+    expect(parsed.ports.single.side, NoteFlowchartPortSide.right);
+    expect(parsed.ports.single.label, '95 felett');
+    expect(parsed.ports.single.semantic, NoteFlowchartPortSemantic.custom);
+  });
+
+  test('legacy decision node derives default yes no ports', () {
+    final node = NoteFlowchartNode.fromJson({
+      'id': 'decision',
+      'label': 'Javult?',
+      'shape': 'decision',
+    });
+
+    expect(node.kind, NoteFlowchartNodeKind.binaryDecision);
+    expect(node.visualShape, NoteFlowchartVisualShape.diamond);
+    expect(node.ports.map((port) => port.semantic), containsAll([NoteFlowchartPortSemantic.yes, NoteFlowchartPortSemantic.no]));
+    expect(node.ports.map((port) => port.label), containsAll(['Igen', 'Nem']));
+  });
+
+  test('flowchart edge serializes port endpoints and routing mode', () {
+    const edge = NoteFlowchartEdge(
+      id: 'edge-1',
+      fromNodeId: 'a',
+      fromPortId: 'right-1',
+      toNodeId: 'b',
+      toPortId: 'left-1',
+      label: 'vissza',
+      routingMode: NoteFlowchartRoutingMode.manual,
+      manualWaypoints: [NoteFlowchartWaypoint(10, 20)],
+    );
+
+    final parsed = NoteFlowchartEdge.fromJson(edge.toJson());
+
+    expect(parsed.fromPortId, 'right-1');
+    expect(parsed.toPortId, 'left-1');
+    expect(parsed.routingMode, NoteFlowchartRoutingMode.manual);
+    expect(parsed.manualWaypoints.single.x, 10);
+    expect(parsed.manualWaypoints.single.y, 20);
+  });
+
 }

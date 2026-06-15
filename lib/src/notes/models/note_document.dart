@@ -447,11 +447,195 @@ class NoteBlock {
   }
 }
 
+enum NoteFlowchartNodeKind {
+  universal('universal'),
+  binaryDecision('binary_decision'),
+  multiDecision('multi_decision');
+
+  const NoteFlowchartNodeKind(this.wireName);
+
+  final String wireName;
+
+  static NoteFlowchartNodeKind? maybeFromWireName(String? value) {
+    for (final item in values) {
+      if (item.wireName == value) {
+        return item;
+      }
+    }
+    return null;
+  }
+}
+
+enum NoteFlowchartNodeRole {
+  normal('normal'),
+  start('start'),
+  end('end');
+
+  const NoteFlowchartNodeRole(this.wireName);
+
+  final String wireName;
+
+  static NoteFlowchartNodeRole? maybeFromWireName(String? value) {
+    for (final item in values) {
+      if (item.wireName == value) {
+        return item;
+      }
+    }
+    return null;
+  }
+}
+
+enum NoteFlowchartVisualShape {
+  rectangle('rectangle'),
+  oval('oval'),
+  diamond('diamond');
+
+  const NoteFlowchartVisualShape(this.wireName);
+
+  final String wireName;
+
+  static NoteFlowchartVisualShape? maybeFromWireName(String? value) {
+    for (final item in values) {
+      if (item.wireName == value) {
+        return item;
+      }
+    }
+    return null;
+  }
+}
+
+enum NoteFlowchartPortSide {
+  top('top'),
+  right('right'),
+  bottom('bottom'),
+  left('left');
+
+  const NoteFlowchartPortSide(this.wireName);
+
+  final String wireName;
+
+  static NoteFlowchartPortSide fromWireName(String? value) {
+    for (final item in values) {
+      if (item.wireName == value) {
+        return item;
+      }
+    }
+    return NoteFlowchartPortSide.bottom;
+  }
+}
+
+enum NoteFlowchartPortSemantic {
+  normal('normal'),
+  yes('yes'),
+  no('no'),
+  custom('custom');
+
+  const NoteFlowchartPortSemantic(this.wireName);
+
+  final String wireName;
+
+  static NoteFlowchartPortSemantic fromWireName(String? value) {
+    for (final item in values) {
+      if (item.wireName == value) {
+        return item;
+      }
+    }
+    return NoteFlowchartPortSemantic.normal;
+  }
+}
+
+enum NoteFlowchartRoutingMode {
+  auto('auto'),
+  manual('manual');
+
+  const NoteFlowchartRoutingMode(this.wireName);
+
+  final String wireName;
+
+  static NoteFlowchartRoutingMode fromWireName(String? value) {
+    for (final item in values) {
+      if (item.wireName == value) {
+        return item;
+      }
+    }
+    return NoteFlowchartRoutingMode.auto;
+  }
+}
+
+class NoteFlowchartPort {
+  const NoteFlowchartPort({
+    required this.id,
+    required this.side,
+    this.label = '',
+    this.semantic = NoteFlowchartPortSemantic.normal,
+  });
+
+  final String id;
+  final NoteFlowchartPortSide side;
+  final String label;
+  final NoteFlowchartPortSemantic semantic;
+
+  factory NoteFlowchartPort.fromJson(Map<String, Object?> json) {
+    return NoteFlowchartPort(
+      id: json['id']?.toString() ?? 'port-1',
+      side: NoteFlowchartPortSide.fromWireName(json['side']?.toString()),
+      label: json['label']?.toString() ?? '',
+      semantic: NoteFlowchartPortSemantic.fromWireName(json['semantic']?.toString()),
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'side': side.wireName,
+      if (label.trim().isNotEmpty) 'label': label,
+      if (semantic != NoteFlowchartPortSemantic.normal) 'semantic': semantic.wireName,
+    };
+  }
+
+  NoteFlowchartPort copyWith({
+    String? id,
+    NoteFlowchartPortSide? side,
+    String? label,
+    NoteFlowchartPortSemantic? semantic,
+  }) {
+    return NoteFlowchartPort(
+      id: id ?? this.id,
+      side: side ?? this.side,
+      label: label ?? this.label,
+      semantic: semantic ?? this.semantic,
+    );
+  }
+}
+
+class NoteFlowchartWaypoint {
+  const NoteFlowchartWaypoint(this.x, this.y);
+
+  final double x;
+  final double y;
+
+  factory NoteFlowchartWaypoint.fromJson(Object? value) {
+    if (value is List && value.length >= 2) {
+      return NoteFlowchartWaypoint(_doubleFromAny(value[0]), _doubleFromAny(value[1]));
+    }
+    if (value is Map) {
+      return NoteFlowchartWaypoint(_doubleFromAny(value['x']), _doubleFromAny(value['y']));
+    }
+    return const NoteFlowchartWaypoint(0, 0);
+  }
+
+  Object toJson() => [x, y];
+}
+
 class NoteFlowchartNode {
   const NoteFlowchartNode({
     required this.id,
     required this.label,
     this.shape = AiFlowchartNodeShape.process,
+    this.kind = NoteFlowchartNodeKind.universal,
+    this.role = NoteFlowchartNodeRole.normal,
+    this.visualShape = NoteFlowchartVisualShape.rectangle,
+    this.ports = const [],
     this.order = 0,
     this.x = 0,
     this.y = 0,
@@ -460,18 +644,32 @@ class NoteFlowchartNode {
   final String id;
   final String label;
   final AiFlowchartNodeShape shape;
+  final NoteFlowchartNodeKind kind;
+  final NoteFlowchartNodeRole role;
+  final NoteFlowchartVisualShape visualShape;
+  final List<NoteFlowchartPort> ports;
   final int order;
   final double x;
   final double y;
 
   factory NoteFlowchartNode.fromJson(Map<String, Object?> json) {
+    final shape = AiFlowchartNodeShape.fromWireName(json['shape']?.toString());
+    final label = json['label']?.toString() ?? '';
+    final kind = NoteFlowchartNodeKind.maybeFromWireName(json['kind']?.toString()) ?? _legacyKindForShape(shape);
+    final role = NoteFlowchartNodeRole.maybeFromWireName(json['role']?.toString()) ?? _legacyRoleForShape(shape, label);
+    final visualShape = NoteFlowchartVisualShape.maybeFromWireName(json['visualShape']?.toString()) ?? _legacyVisualShapeForShape(shape);
+    final ports = _portsFromJson(json['ports']);
     return NoteFlowchartNode(
       id: json['id']?.toString() ?? 'node-1',
-      label: json['label']?.toString() ?? '',
-      shape: AiFlowchartNodeShape.fromWireName(json['shape']?.toString()),
+      label: label,
+      shape: shape,
+      kind: kind,
+      role: role,
+      visualShape: visualShape,
+      ports: ports.isEmpty ? _defaultPortsFor(kind: kind, role: role, shape: shape) : ports,
       order: json['order'] is int ? json['order'] as int : 0,
-      x: _doubleFromJson(json['x']),
-      y: _doubleFromJson(json['y']),
+      x: _doubleFromAny(json['x']),
+      y: _doubleFromAny(json['y']),
     );
   }
 
@@ -480,6 +678,10 @@ class NoteFlowchartNode {
       'id': id,
       'label': label,
       'shape': shape.wireName,
+      if (kind != NoteFlowchartNodeKind.universal) 'kind': kind.wireName,
+      if (role != NoteFlowchartNodeRole.normal) 'role': role.wireName,
+      if (visualShape != NoteFlowchartVisualShape.rectangle) 'visualShape': visualShape.wireName,
+      if (ports.isNotEmpty) 'ports': ports.map((port) => port.toJson()).toList(),
       'order': order,
       if (x != 0) 'x': x,
       if (y != 0) 'y': y,
@@ -490,6 +692,10 @@ class NoteFlowchartNode {
     String? id,
     String? label,
     AiFlowchartNodeShape? shape,
+    NoteFlowchartNodeKind? kind,
+    NoteFlowchartNodeRole? role,
+    NoteFlowchartVisualShape? visualShape,
+    List<NoteFlowchartPort>? ports,
     int? order,
     double? x,
     double? y,
@@ -498,17 +704,78 @@ class NoteFlowchartNode {
       id: id ?? this.id,
       label: label ?? this.label,
       shape: shape ?? this.shape,
+      kind: kind ?? this.kind,
+      role: role ?? this.role,
+      visualShape: visualShape ?? this.visualShape,
+      ports: ports ?? this.ports,
       order: order ?? this.order,
       x: x ?? this.x,
       y: y ?? this.y,
     );
   }
 
-  static double _doubleFromJson(Object? value) {
-    if (value is num) {
-      return value.toDouble();
+  static List<NoteFlowchartPort> _portsFromJson(Object? value) {
+    if (value is! List) {
+      return const [];
     }
-    return double.tryParse(value?.toString() ?? '') ?? 0;
+    return value
+        .whereType<Map>()
+        .map((item) => NoteFlowchartPort.fromJson(Map<String, Object?>.from(item)))
+        .toList(growable: false);
+  }
+
+  static NoteFlowchartNodeKind _legacyKindForShape(AiFlowchartNodeShape shape) {
+    return shape == AiFlowchartNodeShape.decision ? NoteFlowchartNodeKind.binaryDecision : NoteFlowchartNodeKind.universal;
+  }
+
+  static NoteFlowchartNodeRole _legacyRoleForShape(AiFlowchartNodeShape shape, String label) {
+    if (shape != AiFlowchartNodeShape.startEnd) {
+      return NoteFlowchartNodeRole.normal;
+    }
+    final normalized = label.trim().toLowerCase();
+    if (normalized.contains('vég') || normalized == 'end') {
+      return NoteFlowchartNodeRole.end;
+    }
+    return NoteFlowchartNodeRole.start;
+  }
+
+  static NoteFlowchartVisualShape _legacyVisualShapeForShape(AiFlowchartNodeShape shape) {
+    return switch (shape) {
+      AiFlowchartNodeShape.startEnd => NoteFlowchartVisualShape.oval,
+      AiFlowchartNodeShape.decision => NoteFlowchartVisualShape.diamond,
+      _ => NoteFlowchartVisualShape.rectangle,
+    };
+  }
+
+  static List<NoteFlowchartPort> _defaultPortsFor({
+    required NoteFlowchartNodeKind kind,
+    required NoteFlowchartNodeRole role,
+    required AiFlowchartNodeShape shape,
+  }) {
+    if (kind == NoteFlowchartNodeKind.binaryDecision || shape == AiFlowchartNodeShape.decision) {
+      return const [
+        NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet'),
+        NoteFlowchartPort(id: 'yes', side: NoteFlowchartPortSide.bottom, label: 'Igen', semantic: NoteFlowchartPortSemantic.yes),
+        NoteFlowchartPort(id: 'no', side: NoteFlowchartPortSide.bottom, label: 'Nem', semantic: NoteFlowchartPortSemantic.no),
+      ];
+    }
+    if (kind == NoteFlowchartNodeKind.multiDecision) {
+      return const [
+        NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet'),
+        NoteFlowchartPort(id: 'branch-1', side: NoteFlowchartPortSide.right, label: 'Ág 1', semantic: NoteFlowchartPortSemantic.custom),
+        NoteFlowchartPort(id: 'branch-2', side: NoteFlowchartPortSide.bottom, label: 'Ág 2', semantic: NoteFlowchartPortSemantic.custom),
+      ];
+    }
+    if (role == NoteFlowchartNodeRole.start) {
+      return const [NoteFlowchartPort(id: 'out', side: NoteFlowchartPortSide.bottom, label: 'Kimenet')];
+    }
+    if (role == NoteFlowchartNodeRole.end) {
+      return const [NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet')];
+    }
+    return const [
+      NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet'),
+      NoteFlowchartPort(id: 'out', side: NoteFlowchartPortSide.bottom, label: 'Kimenet'),
+    ];
   }
 }
 
@@ -518,6 +785,10 @@ class NoteFlowchartEdge {
     required this.fromNodeId,
     required this.toNodeId,
     required this.label,
+    this.fromPortId,
+    this.toPortId,
+    this.routingMode = NoteFlowchartRoutingMode.auto,
+    this.manualWaypoints = const [],
     this.order = 0,
   });
 
@@ -525,6 +796,10 @@ class NoteFlowchartEdge {
   final String fromNodeId;
   final String toNodeId;
   final String label;
+  final String? fromPortId;
+  final String? toPortId;
+  final NoteFlowchartRoutingMode routingMode;
+  final List<NoteFlowchartWaypoint> manualWaypoints;
   final int order;
 
   factory NoteFlowchartEdge.fromJson(Map<String, Object?> json) {
@@ -533,6 +808,10 @@ class NoteFlowchartEdge {
       fromNodeId: json['fromNodeId']?.toString() ?? '',
       toNodeId: json['toNodeId']?.toString() ?? '',
       label: json['label']?.toString() ?? '',
+      fromPortId: json['fromPortId']?.toString(),
+      toPortId: json['toPortId']?.toString(),
+      routingMode: NoteFlowchartRoutingMode.fromWireName(json['routingMode']?.toString()),
+      manualWaypoints: _waypointsFromJson(json['manualWaypoints']),
       order: json['order'] is int ? json['order'] as int : 0,
     );
   }
@@ -543,6 +822,10 @@ class NoteFlowchartEdge {
       'fromNodeId': fromNodeId,
       'toNodeId': toNodeId,
       'label': label,
+      if (fromPortId != null) 'fromPortId': fromPortId,
+      if (toPortId != null) 'toPortId': toPortId,
+      if (routingMode != NoteFlowchartRoutingMode.auto) 'routingMode': routingMode.wireName,
+      if (manualWaypoints.isNotEmpty) 'manualWaypoints': manualWaypoints.map((point) => point.toJson()).toList(),
       'order': order,
     };
   }
@@ -552,6 +835,10 @@ class NoteFlowchartEdge {
     String? fromNodeId,
     String? toNodeId,
     String? label,
+    String? fromPortId,
+    String? toPortId,
+    NoteFlowchartRoutingMode? routingMode,
+    List<NoteFlowchartWaypoint>? manualWaypoints,
     int? order,
   }) {
     return NoteFlowchartEdge(
@@ -559,7 +846,25 @@ class NoteFlowchartEdge {
       fromNodeId: fromNodeId ?? this.fromNodeId,
       toNodeId: toNodeId ?? this.toNodeId,
       label: label ?? this.label,
+      fromPortId: fromPortId ?? this.fromPortId,
+      toPortId: toPortId ?? this.toPortId,
+      routingMode: routingMode ?? this.routingMode,
+      manualWaypoints: manualWaypoints ?? this.manualWaypoints,
       order: order ?? this.order,
     );
   }
+
+  static List<NoteFlowchartWaypoint> _waypointsFromJson(Object? value) {
+    if (value is! List) {
+      return const [];
+    }
+    return value.map(NoteFlowchartWaypoint.fromJson).toList(growable: false);
+  }
+}
+
+double _doubleFromAny(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '') ?? 0;
 }
