@@ -29,7 +29,9 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
   late NoteItem _note;
   late NoteDocument _document;
   late final TextEditingController _titleController;
+  late final FocusNode _titleFocusNode;
   final Set<String> _expandedBlockIds = <String>{};
+  bool _editingTitle = false;
   bool _persisting = false;
   bool _persistAgain = false;
 
@@ -39,11 +41,13 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     _note = widget.initialNote;
     _document = _note.document;
     _titleController = TextEditingController(text: _note.title);
+    _titleFocusNode = FocusNode();
   }
 
   @override
   void dispose() {
     _titleController.dispose();
+    _titleFocusNode.dispose();
     super.dispose();
   }
 
@@ -198,6 +202,62 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     }
   }
 
+  void _startTitleEdit() {
+    setState(() => _editingTitle = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _titleFocusNode.requestFocus();
+      _titleController.selection = TextSelection.collapsed(offset: _titleController.text.length);
+    });
+  }
+
+  void _finishTitleEdit() {
+    if (!_editingTitle) {
+      return;
+    }
+    setState(() => _editingTitle = false);
+    unawaited(_persist());
+  }
+
+  Widget _buildHeaderTitle(BuildContext context) {
+    if (_editingTitle) {
+      return TextField(
+        key: const ValueKey('note-editor-title-field'),
+        controller: _titleController,
+        focusNode: _titleFocusNode,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
+        decoration: const InputDecoration(
+          isDense: true,
+          border: InputBorder.none,
+          hintText: 'Jegyzet címe',
+        ),
+        onChanged: (_) => unawaited(_persist()),
+        onSubmitted: (_) => _finishTitleEdit(),
+        onTapOutside: (_) => _finishTitleEdit(),
+      );
+    }
+    return InkWell(
+      key: const ValueKey('note-editor-title-display'),
+      borderRadius: BorderRadius.circular(6),
+      onTap: _startTitleEdit,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+        child: Text(
+          _normalizedTitle,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openBlockEditor(NoteBlock block) async {
     Widget editorFor(NoteBlock current) {
       return switch (current.type) {
@@ -244,7 +304,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     return Scaffold(
       key: const ValueKey('note-editor-route'),
       appBar: AppBar(
-        title: Text(_note.title.trim().isEmpty ? 'Jegyzet' : _note.title),
+        title: _buildHeaderTitle(context),
         actions: [
           PopupMenuButton<String>(
             key: const ValueKey('note-editor-menu'),
@@ -260,21 +320,6 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: TextField(
-              key: const ValueKey('note-editor-title-field'),
-              controller: _titleController,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-              decoration: const InputDecoration(
-                hintText: 'Írható inline cím',
-                border: InputBorder.none,
-              ),
-              onChanged: (_) => unawaited(_persist()),
-            ),
-          ),
           Expanded(
             child: ReorderableListView.builder(
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),

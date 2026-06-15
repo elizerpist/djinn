@@ -49,4 +49,35 @@ void main() {
     expect(result!.rows.first, ['Elem', '88-92%', 'Cél']);
     expect(result!.rows.last.first, 'SpO2');
   });
+
+  testWidgets('table editor normalizes ragged rows and supports inserting columns', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['A', 'B', 'C'],
+              ['D', 'E'],
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('note-table-cell-1-2')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('note-table-insert-column-0')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('note-table-cell-0-3')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-cell-1-3')), findsOneWidget);
+    expect(latest, isNotNull);
+    expect(latest!.rows, everyElement(hasLength(4)));
+  });
+
 }

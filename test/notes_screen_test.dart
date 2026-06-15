@@ -67,7 +67,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('note-editor-route')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-editor-title-field')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-editor-title-display')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-editor-title-field')), findsNothing);
   });
 
   testWidgets('long pressing a note enters note selection mode with note actions', (tester) async {

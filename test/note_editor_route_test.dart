@@ -20,6 +20,9 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('note-editor-route')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-editor-title-field')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('note-editor-title-display')));
+    await tester.pump();
     await tester.enterText(find.byKey(const ValueKey('note-editor-title-field')), 'Új cím');
     await tester.pump();
 

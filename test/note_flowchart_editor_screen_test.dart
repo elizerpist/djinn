@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 
 import 'package:djinn/src/ai/ai_client.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
@@ -73,7 +74,7 @@ void main() {
     expect(result!.plainText, contains('Légzési elégtelenség? -> Megfigyelés [Nem]'));
   });
 
-  testWidgets('flowchart canvas shows grid, per-node connectors, and tap edits node text', (
+  testWidgets('flowchart canvas connects with highlighted connector mode and inline text editing', (
     tester,
   ) async {
     NoteBlock? latest;
@@ -114,17 +115,78 @@ void main() {
     expect(find.byKey(const ValueKey('note-flowchart-connector-oxygen-in')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-flowchart-connector-oxygen-out')), findsOneWidget);
     expect(find.byIcon(Icons.link), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('note-flowchart-connector-decision-yes')),
+        matching: find.byIcon(Icons.add),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('note-flowchart-connector-decision-no')),
+        matching: find.byIcon(Icons.remove),
+      ),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('Légzési elégtelenség?'));
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-connector-decision-yes')));
+    await tester.pump(const Duration(milliseconds: 120));
+    final sourceScale = tester.widget<AnimatedScale>(
+      find.byKey(const ValueKey('note-flowchart-source-scale-decision')),
+    );
+    expect(sourceScale.scale, greaterThan(1));
+    final cardOpacity = tester.widget<AnimatedOpacity>(
+      find.byKey(const ValueKey('note-flowchart-card-opacity-decision')),
+    );
+    expect(cardOpacity.opacity, lessThan(1));
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-connector-oxygen-in')));
     await tester.pumpAndSettle();
+    expect(latest, isNotNull);
+    expect(latest!.edges.single.label, 'Igen');
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-node-label-decision')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-flowchart-node-shape-field')), findsNothing);
     await tester.enterText(
-      find.byKey(const ValueKey('note-flowchart-node-label-field')),
+      find.byKey(const ValueKey('note-flowchart-node-inline-field-decision')),
       'Súlyos légzési elégtelenség?',
     );
-    await tester.tap(find.text('Mentés'));
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    expect(latest, isNotNull);
     expect(latest!.nodes.first.label, 'Súlyos légzési elégtelenség?');
+  });
+
+  testWidgets('palette single tap does not add flowchart nodes', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: const NoteBlock(
+            id: 'flow-1',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'node-1',
+                label: 'Kezdés',
+                shape: AiFlowchartNodeShape.startEnd,
+                order: 1,
+                x: 120,
+                y: 120,
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-palette-process')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNull);
+    expect(find.byKey(const ValueKey('note-flowchart-source-scale-node-2')), findsNothing);
   });
 }

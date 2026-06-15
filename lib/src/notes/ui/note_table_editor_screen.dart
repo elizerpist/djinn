@@ -18,6 +18,7 @@ class NoteTableEditorScreen extends StatefulWidget {
 
 class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   late List<List<String>> _rows;
+  final Map<String, TextEditingController> _cellControllers = <String, TextEditingController>{};
 
   @override
   void initState() {
@@ -29,14 +30,82 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
         : [
             for (final row in widget.block.rows) [...row],
           ];
+    _normalizeRows();
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _cellControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  int get _columnCount {
+    var width = 0;
+    for (final row in _rows) {
+      if (row.length > width) {
+        width = row.length;
+      }
+    }
+    return width == 0 ? 2 : width;
+  }
+
+  void _normalizeRows() {
+    if (_rows.isEmpty) {
+      _rows.add(['', '']);
+      return;
+    }
+    final width = _columnCount;
+    for (final row in _rows) {
+      while (row.length < width) {
+        row.add('');
+      }
+      if (row.isEmpty) {
+        row.add('');
+      }
+    }
+  }
+
+  void _ensureCell(int row, int column) {
+    while (_rows.length <= row) {
+      _rows.add(List.filled(_columnCount, ''));
+    }
+    while (_rows[row].length <= column) {
+      _rows[row].add('');
+    }
+  }
+
+  String _cellControllerKey(int row, int column) => '$row:$column';
+
+  TextEditingController _controllerFor(int row, int column) {
+    final key = _cellControllerKey(row, column);
+    final value = _rows[row][column];
+    final controller = _cellControllers.putIfAbsent(key, () => TextEditingController(text: value));
+    if (controller.text != value && !controller.selection.isValid) {
+      controller.text = value;
+    }
+    return controller;
+  }
+
+  void _resetCellControllers() {
+    final staleControllers = _cellControllers.values.toList(growable: false);
+    _cellControllers.clear();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final controller in staleControllers) {
+        controller.dispose();
+      }
+    });
   }
 
   void _updateCell(int row, int column, String value) {
+    _ensureCell(row, column);
     _rows[row][column] = value;
     _emitChange();
   }
 
   NoteBlock _currentBlock() {
+    _normalizeRows();
     return widget.block.copyWith(
       rows: [
         for (final row in _rows)
@@ -52,21 +121,25 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
 
   void _addRow() {
     setState(() {
-      final width = _rows.isEmpty ? 2 : _rows.first.length;
-      _rows.add(List.filled(width, ''));
+      _normalizeRows();
+      _rows.add(List.filled(_columnCount, ''));
+      _resetCellControllers();
     });
     _emitChange();
   }
 
   void _addColumn() {
+    _insertColumn(_columnCount);
+  }
+
+  void _insertColumn(int index) {
     setState(() {
-      if (_rows.isEmpty) {
-        _rows.add(['']);
-        return;
-      }
+      _normalizeRows();
+      final target = index.clamp(0, _columnCount).toInt();
       for (final row in _rows) {
-        row.add('');
+        row.insert(target, '');
       }
+      _resetCellControllers();
     });
     _emitChange();
   }
@@ -75,18 +148,23 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     if (_rows.length == 1) {
       return;
     }
-    setState(() => _rows.removeAt(index));
+    setState(() {
+      _rows.removeAt(index);
+      _resetCellControllers();
+    });
     _emitChange();
   }
 
   void _deleteColumn(int index) {
-    if (_rows.isEmpty || _rows.first.length == 1) {
+    _normalizeRows();
+    if (_rows.isEmpty || _columnCount == 1 || index < 0 || index >= _columnCount) {
       return;
     }
     setState(() {
       for (final row in _rows) {
         row.removeAt(index);
       }
+      _resetCellControllers();
     });
     _emitChange();
   }
@@ -97,11 +175,24 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final columnCount = _rows.isEmpty ? 0 : _rows.first.length;
+    _normalizeRows();
+    final columnCount = _columnCount;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Táblázat szerkesztő'),
         actions: [
+          IconButton(
+            key: const ValueKey('note-table-appbar-add-column'),
+            tooltip: 'Oszlop hozzáadása',
+            onPressed: _addColumn,
+            icon: const Icon(Icons.view_column_outlined),
+          ),
+          IconButton(
+            key: const ValueKey('note-table-appbar-add-row'),
+            tooltip: 'Sor hozzáadása',
+            onPressed: _addRow,
+            icon: const Icon(Icons.table_rows_outlined),
+          ),
           if (widget.onChanged == null)
             TextButton.icon(
               key: const ValueKey('note-table-save'),
@@ -125,6 +216,13 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
                     children: [
                       Text('Oszlop ${column + 1}'),
                       IconButton(
+                        key: ValueKey('note-table-insert-column-$column'),
+                        tooltip: 'Oszlop beszúrása jobbra',
+                        onPressed: () => _insertColumn(column + 1),
+                        icon: const Icon(Icons.add, size: 16),
+                      ),
+                      IconButton(
+                        key: ValueKey('note-table-delete-column-$column'),
                         tooltip: 'Oszlop törlése',
                         onPressed: () => _deleteColumn(column),
                         icon: const Icon(Icons.close, size: 16),
@@ -144,7 +242,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
                           width: 140,
                           child: TextFormField(
                             key: ValueKey('note-table-cell-$row-$column'),
-                            initialValue: _rows[row][column],
+                            controller: _controllerFor(row, column),
                             decoration: const InputDecoration(border: InputBorder.none),
                             onChanged: (value) => _updateCell(row, column, value),
                           ),

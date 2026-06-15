@@ -28,6 +28,8 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
   final GlobalKey _canvasKey = GlobalKey();
   late NoteBlock _block;
   _LinkEndpoint? _linkSource;
+  final TextEditingController _inlineNodeController = TextEditingController();
+  String? _editingNodeId;
   final Map<String, Stopwatch> _dragWatches = <String, Stopwatch>{};
   final Map<String, int> _dragMoveCounts = <String, int>{};
 
@@ -50,6 +52,12 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
           )
         : widget.block.copyWith(type: NoteBlockType.flowchart);
     _log('editor init nodes=${_block.nodes.length} edges=${_block.edges.length}');
+  }
+
+  @override
+  void dispose() {
+    _inlineNodeController.dispose();
+    super.dispose();
   }
 
   void _log(String message) {
@@ -121,16 +129,11 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     _emit(_block.copyWith(nodes: [..._positionedNodes, node]));
   }
 
-  void _addPaletteNode(AiFlowchartNodeShape shape) {
-    final offset = Offset(140 + (_block.nodes.length % 3) * 270, 120 + _block.nodes.length * 38);
-    _addNode(shape, offset);
-  }
-
   void _addDroppedNode(AiFlowchartNodeShape shape, Offset globalOffset) {
     final context = _canvasKey.currentContext;
     if (context == null) {
       _log('drop fallback shape=${shape.wireName} reason=no_canvas_context');
-      _addPaletteNode(shape);
+      _addNode(shape, const Offset(120, 120));
       return;
     }
     final box = context.findRenderObject() as RenderBox?;
@@ -188,6 +191,10 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
       'drag end node=${node.id} moves=$moves elapsedMs=${watch?.elapsedMilliseconds ?? 0} '
       'x=${current.x.toStringAsFixed(1)} y=${current.y.toStringAsFixed(1)}',
     );
+    if (moves == 0) {
+      _log('drag end ignored node=${node.id} reason=no_movement');
+      return;
+    }
     _commitCurrent(reason: 'drag_end', clearIndex: false);
   }
 
@@ -201,93 +208,42 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     ));
   }
 
-  Future<void> _editNode(NoteFlowchartNode node) async {
-    _log('node edit open id=${node.id} chars=${node.label.length}');
-    final edited = await _showNodeDialog(existing: node);
-    if (edited == null || !mounted) {
-      _log('node edit cancelled id=${node.id}');
+  void _editNode(NoteFlowchartNode node) {
+    _log('node inline edit start id=${node.id} chars=${node.label.length}');
+    setState(() {
+      _editingNodeId = node.id;
+      _inlineNodeController.text = node.label;
+      _inlineNodeController.selection = TextSelection.collapsed(offset: _inlineNodeController.text.length);
+    });
+  }
+
+  void _commitNodeEdit(NoteFlowchartNode node) {
+    if (_editingNodeId != node.id) {
       return;
     }
-    _log('node edit saved id=${node.id} chars=${edited.label.length} shape=${edited.shape.wireName}');
+    final label = _inlineNodeController.text.trim();
+    setState(() => _editingNodeId = null);
+    if (label.isEmpty || label == node.label) {
+      _log('node inline edit closed id=${node.id} changed=false chars=${node.label.length}');
+      return;
+    }
+    final positioned = _positionedNodes;
+    final edited = node.copyWith(label: label);
+    _log('node inline edit saved id=${node.id} chars=${label.length} shape=${edited.shape.wireName}');
     _emit(_block.copyWith(
       nodes: [
-        for (final current in _positionedNodes)
+        for (final current in positioned)
           if (current.id == node.id) edited else current,
       ],
     ));
   }
 
-  Future<NoteFlowchartNode?> _showNodeDialog({NoteFlowchartNode? existing}) async {
-    final labelController = TextEditingController(text: existing?.label ?? '');
-    var shape = existing?.shape ?? AiFlowchartNodeShape.process;
-    final result = await showDialog<NoteFlowchartNode>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(existing == null ? 'Új flowchart elem' : 'Elem szerkesztése'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                key: const ValueKey('note-flowchart-node-label-field'),
-                controller: labelController,
-                autofocus: true,
-                minLines: 1,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  labelText: 'Felirat',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<AiFlowchartNodeShape>(
-                key: const ValueKey('note-flowchart-node-shape-field'),
-                initialValue: shape,
-                decoration: const InputDecoration(
-                  labelText: 'Típus',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  for (final option in AiFlowchartNodeShape.values)
-                    if (option != AiFlowchartNodeShape.unknown)
-                      DropdownMenuItem(value: option, child: Text(_shapeLabel(option))),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setDialogState(() => shape = value);
-                  }
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Mégse')),
-            FilledButton(
-              onPressed: () {
-                final label = labelController.text.trim();
-                if (label.isEmpty) {
-                  return;
-                }
-                Navigator.of(context).pop(
-                  NoteFlowchartNode(
-                    id: existing?.id ?? _nextNodeId(),
-                    label: label,
-                    shape: shape,
-                    order: existing?.order ?? _block.nodes.length + 1,
-                    x: existing?.x ?? 120,
-                    y: existing?.y ?? 120,
-                  ),
-                );
-              },
-              child: const Text('Mentés'),
-            ),
-          ],
-        ),
-      ),
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    labelController.dispose();
-    return result;
+  void _cancelNodeEdit(NoteFlowchartNode node) {
+    if (_editingNodeId != node.id) {
+      return;
+    }
+    _log('node inline edit cancelled id=${node.id}');
+    setState(() => _editingNodeId = null);
   }
 
   void _handleConnectorTap(NoteFlowchartNode node, _ConnectorSpec connector) {
@@ -416,6 +372,11 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                               onMove: (delta) => _moveNode(node, delta),
                               onMoveEnd: () => _endMove(node),
                               onEdit: () => _editNode(node),
+                              onCommitEdit: () => _commitNodeEdit(node),
+                              onCancelEdit: () => _cancelNodeEdit(node),
+                              inlineController: _editingNodeId == node.id ? _inlineNodeController : null,
+                              editing: _editingNodeId == node.id,
+                              connectModeActive: _linkSource != null,
                               onDelete: () => _deleteNode(node),
                               onConnectorTap: (connector) => _handleConnectorTap(node, connector),
                             ),
@@ -431,7 +392,6 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
             right: 12,
             top: 12,
             child: _FlowchartPalette(
-              onAdd: _addPaletteNode,
               onDragLog: _log,
             ),
           ),
@@ -451,6 +411,11 @@ class _CanvasNodeCard extends StatelessWidget {
     required this.onMove,
     required this.onMoveEnd,
     required this.onEdit,
+    required this.onCommitEdit,
+    required this.onCancelEdit,
+    required this.inlineController,
+    required this.editing,
+    required this.connectModeActive,
     required this.onDelete,
     required this.onConnectorTap,
   });
@@ -463,91 +428,141 @@ class _CanvasNodeCard extends StatelessWidget {
   final ValueChanged<Offset> onMove;
   final VoidCallback onMoveEnd;
   final VoidCallback onEdit;
+  final VoidCallback onCommitEdit;
+  final VoidCallback onCancelEdit;
+  final TextEditingController? inlineController;
+  final bool editing;
+  final bool connectModeActive;
   final VoidCallback onDelete;
   final ValueChanged<_ConnectorSpec> onConnectorTap;
 
   @override
   Widget build(BuildContext context) {
     final selectedForLink = linkSource?.nodeId == node.id;
-    return GestureDetector(
-      onTap: onEdit,
-      onPanStart: (_) => onMoveStart(),
-      onPanUpdate: (details) => onMove(details.delta),
-      onPanEnd: (_) => onMoveEnd(),
-      onPanCancel: onMoveEnd,
-      child: SizedBox(
-        width: size.width,
-        height: size.height,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: selectedForLink ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
-                    width: selectedForLink ? 2 : 1,
-                  ),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x1A111827), blurRadius: 10, offset: Offset(0, 3)),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Icon(_shapeIcon(node.shape), color: const Color(0xFF7C3AED)),
+    return AnimatedScale(
+      key: ValueKey('note-flowchart-source-scale-${node.id}'),
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOutCubic,
+      scale: selectedForLink ? 1.06 : 1.0,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onPanStart: (_) => onMoveStart(),
+        onPanUpdate: (details) => onMove(details.delta),
+        onPanEnd: (_) => onMoveEnd(),
+        onPanCancel: onMoveEnd,
+        child: SizedBox(
+          width: size.width,
+          height: size.height,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: AnimatedOpacity(
+                  key: ValueKey('note-flowchart-card-opacity-${node.id}'),
+                  duration: const Duration(milliseconds: 120),
+                  opacity: connectModeActive ? 0.42 : 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: selectedForLink ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+                        width: selectedForLink ? 2 : 1,
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _shapeLabel(node.shape),
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFF6B7280),
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.topLeft,
-                                child: Text(
-                                  node.label,
-                                  overflow: TextOverflow.fade,
-                                  style: const TextStyle(fontWeight: FontWeight.w800, height: 1.18),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x1A111827), blurRadius: 10, offset: Offset(0, 3)),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Icon(_shapeIcon(node.shape), color: const Color(0xFF7C3AED)),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _shapeLabel(node.shape),
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xFF6B7280),
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(height: 2),
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.topLeft,
+                                    child: editing
+                                        ? TextField(
+                                            key: ValueKey('note-flowchart-node-inline-field-${node.id}'),
+                                            controller: inlineController,
+                                            autofocus: true,
+                                            minLines: 1,
+                                            maxLines: 4,
+                                            textInputAction: TextInputAction.done,
+                                            style: const TextStyle(fontWeight: FontWeight.w800, height: 1.18),
+                                            decoration: const InputDecoration(
+                                              isDense: true,
+                                              contentPadding: EdgeInsets.zero,
+                                              border: InputBorder.none,
+                                            ),
+                                            onSubmitted: (_) => onCommitEdit(),
+                                            onTapOutside: (_) => onCommitEdit(),
+                                          )
+                                        : GestureDetector(
+                                            key: ValueKey('note-flowchart-node-label-${node.id}'),
+                                            behavior: HitTestBehavior.opaque,
+                                            onTap: onEdit,
+                                            onLongPress: onEdit,
+                                            child: Text(
+                                              node.label,
+                                              overflow: TextOverflow.fade,
+                                              style: const TextStyle(fontWeight: FontWeight.w800, height: 1.18),
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                          IconButton(
+                            tooltip: 'Törlés',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: onDelete,
+                            icon: const Icon(Icons.close, size: 18),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        tooltip: 'Törlés',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: onDelete,
-                        icon: const Icon(Icons.close, size: 18),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            for (final connector in connectors)
-              _ConnectorButton(
-                connector: connector,
-                selected: linkSource?.nodeId == node.id && linkSource?.connectorId == connector.id,
-                onPressed: () => onConnectorTap(connector),
-              ),
-          ],
+              if (editing)
+                Positioned(
+                  right: 2,
+                  bottom: 2,
+                  child: IconButton(
+                    tooltip: 'Szerkesztés bezárása',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onCancelEdit,
+                    icon: const Icon(Icons.keyboard_hide_outlined, size: 18),
+                  ),
+                ),
+              for (final connector in connectors)
+                _ConnectorButton(
+                  connector: connector,
+                  selected: linkSource?.nodeId == node.id && linkSource?.connectorId == connector.id,
+                  onPressed: () => onConnectorTap(connector),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -572,25 +587,48 @@ class _ConnectorButton extends StatelessWidget {
         : connector.type == _ConnectorType.output
             ? const Color(0xFF7C3AED)
             : const Color(0xFF059669);
+    final icon = switch (connector.id) {
+      'yes' => Icons.add,
+      'no' => Icons.remove,
+      _ => connector.type == _ConnectorType.output ? Icons.arrow_outward : Icons.radio_button_checked,
+    };
     return Positioned(
-      left: connector.unitOffset.dx * connector.nodeSize.width - 11,
-      top: connector.unitOffset.dy * connector.nodeSize.height - 11,
+      left: connector.unitOffset.dx * connector.nodeSize.width - 22,
+      top: connector.unitOffset.dy * connector.nodeSize.height - 22,
       child: Tooltip(
         message: connector.tooltip,
-        child: Material(
-          color: Colors.white,
-          elevation: selected ? 5 : 2,
-          shape: CircleBorder(side: BorderSide(color: color, width: selected ? 2 : 1.4)),
-          child: InkWell(
-            key: ValueKey('note-flowchart-connector-${connector.nodeId}-${connector.id}'),
-            customBorder: const CircleBorder(),
-            onTap: onPressed,
-            child: SizedBox.square(
-              dimension: 22,
-              child: Icon(
-                connector.type == _ConnectorType.output ? Icons.arrow_outward : Icons.radio_button_checked,
-                size: 12,
-                color: color,
+        child: SizedBox.square(
+          dimension: 44,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey('note-flowchart-connector-${connector.nodeId}-${connector.id}'),
+              customBorder: const CircleBorder(),
+              onTap: onPressed,
+              child: Center(
+                child: AnimatedScale(
+                  duration: const Duration(milliseconds: 140),
+                  curve: Curves.easeOutBack,
+                  scale: selected ? 1.28 : 1,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    width: selected ? 30 : 24,
+                    height: selected ? 30 : 24,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: color, width: selected ? 2.4 : 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: color.withValues(alpha: selected ? 0.34 : 0.18),
+                          blurRadius: selected ? 12 : 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(icon, size: connector.id == 'yes' || connector.id == 'no' ? 15 : 12, color: color),
+                  ),
+                ),
               ),
             ),
           ),
@@ -601,9 +639,8 @@ class _ConnectorButton extends StatelessWidget {
 }
 
 class _FlowchartPalette extends StatelessWidget {
-  const _FlowchartPalette({required this.onAdd, required this.onDragLog});
+  const _FlowchartPalette({required this.onDragLog});
 
-  final ValueChanged<AiFlowchartNodeShape> onAdd;
   final ValueChanged<String> onDragLog;
 
   @override
@@ -633,9 +670,19 @@ class _FlowchartPalette extends StatelessWidget {
               LongPressDraggable<AiFlowchartNodeShape>(
                 data: shape,
                 dragAnchorStrategy: pointerDragAnchorStrategy,
+                maxSimultaneousDrags: 1,
+                feedbackOffset: const Offset(28, 28),
                 onDragStarted: () {
                   HapticFeedback.selectionClick();
                   onDragLog('palette drag start shape=${shape.wireName}');
+                },
+                onDragUpdate: (details) {
+                  if (details.globalPosition.dx.round() % 64 == 0) {
+                    onDragLog(
+                      'palette drag update shape=${shape.wireName} '
+                      'global=${details.globalPosition.dx.toStringAsFixed(1)},${details.globalPosition.dy.toStringAsFixed(1)}',
+                    );
+                  }
                 },
                 onDragEnd: (details) => onDragLog(
                   'palette drag end shape=${shape.wireName} accepted=${details.wasAccepted} '
@@ -647,9 +694,9 @@ class _FlowchartPalette extends StatelessWidget {
                 ),
                 childWhenDragging: Opacity(
                   opacity: 0.35,
-                  child: _PaletteButton(shape: shape, onAdd: onAdd),
+                  child: _PaletteButton(shape: shape),
                 ),
-                child: _PaletteButton(shape: shape, onAdd: onAdd),
+                child: _PaletteButton(shape: shape),
               ),
               if (shape != shapes.last) const SizedBox(height: 4),
             ],
@@ -661,17 +708,26 @@ class _FlowchartPalette extends StatelessWidget {
 }
 
 class _PaletteButton extends StatelessWidget {
-  const _PaletteButton({required this.shape, required this.onAdd});
+  const _PaletteButton({required this.shape});
 
   final AiFlowchartNodeShape shape;
-  final ValueChanged<AiFlowchartNodeShape> onAdd;
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: _shapeLabel(shape),
-      onPressed: () => onAdd(shape),
-      icon: Icon(_shapeIcon(shape)),
+    return Tooltip(
+      message: _shapeLabel(shape),
+      child: DecoratedBox(
+        key: ValueKey('note-flowchart-palette-${shape.wireName}'),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: SizedBox.square(
+          dimension: 48,
+          child: Icon(_shapeIcon(shape), color: const Color(0xFF374151)),
+        ),
+      ),
     );
   }
 }
