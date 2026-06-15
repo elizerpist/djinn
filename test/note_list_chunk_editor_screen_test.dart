@@ -28,4 +28,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(latest!.listItems, hasLength(2));
   });
+
+  testWidgets('list editor autosaves editable list title', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteListChunkEditorScreen(
+          block: const NoteBlock(
+            id: 'list-1',
+            type: NoteBlockType.listItem,
+            title: 'Régi lista',
+            listItems: [NoteListItem(id: 'item-1', text: 'Első')],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byKey(const ValueKey('note-list-title-field')), 'Felszerelés lista');
+    await tester.pump();
+
+    expect(latest, isNotNull);
+    expect(latest!.title, 'Felszerelés lista');
+    expect(latest!.plainText, startsWith('Felszerelés lista'));
+  });
 }

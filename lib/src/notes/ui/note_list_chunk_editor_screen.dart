@@ -19,11 +19,13 @@ class NoteListChunkEditorScreen extends StatefulWidget {
 class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
   late NoteBlock _block;
   late List<NoteListItem> _items;
+  late final TextEditingController _titleController;
 
   @override
   void initState() {
     super.initState();
     _block = widget.block;
+    _titleController = TextEditingController(text: widget.block.title ?? '');
     _items = widget.block.listItems.isEmpty
         ? [NoteListItem(id: _nextItemId(), text: widget.block.text)]
         : widget.block.listItems.toList();
@@ -33,10 +35,17 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
     return 'item-${DateTime.now().microsecondsSinceEpoch}';
   }
 
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
   void _emit() {
     _block = _block.copyWith(
       type: NoteBlockType.listItem,
       text: '',
+      title: _titleController.text.trim(),
       listItems: _items,
       clearIndex: true,
     );
@@ -87,44 +96,63 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
     return Scaffold(
       key: const ValueKey('note-list-chunk-editor'),
       appBar: AppBar(title: const Text('Lista szerkesztése')),
-      body: ReorderableListView.builder(
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-        itemCount: _items.length + 1,
-        // ignore: deprecated_member_use
-        onReorder: (oldIndex, newIndex) {
-          if (oldIndex >= _items.length || newIndex > _items.length) {
-            return;
-          }
-          _reorder(oldIndex, newIndex);
-        },
-        itemBuilder: (context, index) {
-          if (index == _items.length) {
-            return Padding(
-              key: const ValueKey('note-list-add-row'),
-              padding: const EdgeInsets.only(left: 44, top: 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton.filledTonal(
-                  key: const ValueKey('note-list-add-item'),
-                  tooltip: 'Új listaelem',
-                  onPressed: _addItem,
-                  icon: const Icon(Icons.add),
-                ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              key: const ValueKey('note-list-title-field'),
+              controller: _titleController,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                labelText: 'Lista neve',
+                border: OutlineInputBorder(),
               ),
-            );
-          }
-          final item = _items[index];
-          return _ListItemRow(
-            key: ValueKey('note-list-row-${item.id}'),
-            index: index,
-            item: item,
-            onChanged: _replaceItem,
-            onDelete: () => _deleteItem(item),
-            onIndent: () => _changeIndent(item, 1),
-            onOutdent: () => _changeIndent(item, -1),
-          );
-        },
+              onChanged: (_) => _emit(),
+            ),
+          ),
+          Expanded(
+            child: ReorderableListView.builder(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
+              itemCount: _items.length + 1,
+              // ignore: deprecated_member_use
+              onReorder: (oldIndex, newIndex) {
+                if (oldIndex >= _items.length || newIndex > _items.length) {
+                  return;
+                }
+                _reorder(oldIndex, newIndex);
+              },
+              itemBuilder: (context, index) {
+                if (index == _items.length) {
+                  return Padding(
+                    key: const ValueKey('note-list-add-row'),
+                    padding: const EdgeInsets.only(left: 44, top: 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton.filledTonal(
+                        key: const ValueKey('note-list-add-item'),
+                        tooltip: 'Új listaelem',
+                        onPressed: _addItem,
+                        icon: const Icon(Icons.add),
+                      ),
+                    ),
+                  );
+                }
+                final item = _items[index];
+                return _ListItemRow(
+                  key: ValueKey('note-list-row-${item.id}'),
+                  index: index,
+                  item: item,
+                  onChanged: _replaceItem,
+                  onDelete: () => _deleteItem(item),
+                  onIndent: () => _changeIndent(item, 1),
+                  onOutdent: () => _changeIndent(item, -1),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -321,18 +321,23 @@ class NoteBlock {
   bool get needsReindex => hasContent && indexedContentHash != null && !isIndexFresh;
 
   String get _listText {
+    final lines = <String>[];
+    if (title?.trim().isNotEmpty == true) {
+      lines.add(title!.trim());
+    }
     if (listItems.isEmpty) {
       final trimmed = text.trim();
-      if (trimmed.isEmpty) {
-        return '';
+      if (trimmed.isNotEmpty) {
+        lines.add('${_indent(level)}$trimmed');
       }
-      return '${_indent(level)}$trimmed';
+      return lines.join('\n').trimRight();
     }
-    return listItems
-        .map((item) => '${_indent(item.level)}${item.text.trim()}')
-        .where((line) => line.trim().isNotEmpty)
-        .join('\n')
-        .trimRight();
+    lines.addAll(
+      listItems
+          .map((item) => '${_indent(item.level)}${item.text.trim()}')
+          .where((line) => line.trim().isNotEmpty),
+    );
+    return lines.join('\n').trimRight();
   }
 
   String _indent(int level) => List.filled(level.clamp(0, 8).toInt(), '  ').join();
