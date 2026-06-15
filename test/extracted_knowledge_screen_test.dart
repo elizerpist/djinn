@@ -73,10 +73,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Légzés algoritmus'), findsOneWidget);
-    expect(find.text('Törzs + ágkártyák'), findsOneWidget);
-    expect(find.text('Térkép + olvasólista'), findsOneWidget);
-    expect(find.text('Swimlane ágak'), findsOneWidget);
-    expect(find.text('Kinyitható döntéskártya'), findsOneWidget);
+    expect(find.text('Lista'), findsOneWidget);
+    expect(find.text('Canvas'), findsOneWidget);
+    expect(find.text('Guide'), findsOneWidget);
     expect(find.byKey(const ValueKey('flowchart-group-flow-1')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('flowchart-rename-flow-1')));
     await tester.pumpAndSettle();
@@ -84,27 +83,21 @@ void main() {
     await tester.tap(find.text('Mentés'));
     await tester.pumpAndSettle();
     expect(find.text('Új légzés flow'), findsOneWidget);
-    expect(find.byKey(const ValueKey('flowchart-trunk-view-flow-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-view-list-flow-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('flow-color-rail')), findsNothing);
-    expect(find.text('IGEN'), findsOneWidget);
-    expect(find.text('NEM'), findsOneWidget);
-    expect(find.byIcon(Icons.change_history), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-branch-n1-igen')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-branch-n1-nem')), findsOneWidget);
+    expect(find.text('Igen'), findsOneWidget);
+    expect(find.text('Nem'), findsOneWidget);
 
-    await tester.tap(find.text('Térkép + olvasólista'));
+    await tester.tap(find.byKey(const ValueKey('mobile-flowchart-selector-canvas')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('flowchart-map-view-flow-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-view-canvas-flow-1')), findsOneWidget);
 
-    await tester.tap(find.text('Swimlane ágak'));
+    await tester.tap(find.byKey(const ValueKey('mobile-flowchart-selector-guide')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('flowchart-swimlane-view-flow-1')), findsOneWidget);
-
-    await tester.ensureVisible(find.text('Kinyitható döntéskártya'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Kinyitható döntéskártya'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('flowchart-decision-view-flow-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-view-guide-flow-1')), findsOneWidget);
   });
-
   testWidgets('pipeline menu and type chips filter extracted chunks', (
     tester,
   ) async {

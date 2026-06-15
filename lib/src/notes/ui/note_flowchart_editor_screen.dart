@@ -22,11 +22,13 @@ class NoteFlowchartEditorScreen extends StatefulWidget {
 }
 
 class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
-  static const Size _canvasSize = Size(1800, 1300);
+  static const Size _minCanvasSize = Size(2400, 1800);
+  static const double _canvasMargin = 900;
   static const double _gridStep = 32;
 
   final GlobalKey _canvasKey = GlobalKey();
   final GlobalKey _bodyStackKey = GlobalKey();
+  final TransformationController _canvasController = TransformationController();
   late NoteBlock _block;
   _LinkEndpoint? _linkSource;
   NoteFlowchartNodeKind? _paletteDragKind;
@@ -37,6 +39,8 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
   String? _editingNodeId;
   final Map<String, Stopwatch> _dragWatches = <String, Stopwatch>{};
   final Map<String, int> _dragMoveCounts = <String, int>{};
+  Size _viewportSize = const Size(430, 720);
+  int _viewportLogTick = 0;
 
   @override
   void initState() {
@@ -56,11 +60,14 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
             ],
           )
         : widget.block.copyWith(type: NoteBlockType.flowchart);
+    _canvasController.addListener(_onCanvasTransformChanged);
     _log('editor init nodes=${_block.nodes.length} edges=${_block.edges.length}');
   }
 
   @override
   void dispose() {
+    _canvasController.removeListener(_onCanvasTransformChanged);
+    _canvasController.dispose();
     _inlineNodeController.dispose();
     super.dispose();
   }
@@ -116,13 +123,131 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     return {for (final node in nodes) node.id: _nodeSizeFor(node)};
   }
 
+  void _onCanvasTransformChanged() {
+    _viewportLogTick += 1;
+    if (_viewportLogTick == 1 || _viewportLogTick % 24 == 0) {
+      final visible = _visibleCanvasRect(_canvasGeometryFor(_positionedNodes).size);
+      _log(
+        'viewport transform tick=$_viewportLogTick scale=${_canvasController.value.getMaxScaleOnAxis().toStringAsFixed(2)} '
+        'visible=${visible.left.toStringAsFixed(0)},${visible.top.toStringAsFixed(0)},${visible.width.toStringAsFixed(0)}x${visible.height.toStringAsFixed(0)}',
+      );
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  _CanvasGeometry _canvasGeometryFor(List<NoteFlowchartNode> nodes) {
+    if (nodes.isEmpty) {
+      return const _CanvasGeometry(bounds: Rect.fromLTWH(0, 0, 2400, 1800));
+    }
+    final sizes = _nodeSizesFor(nodes);
+    var left = 0.0;
+    var top = 0.0;
+    var right = _minCanvasSize.width;
+    var bottom = _minCanvasSize.height;
+    for (final node in nodes) {
+      final size = sizes[node.id] ?? _nodeSizeFor(node);
+      left = math.min(left, node.x);
+      top = math.min(top, node.y);
+      right = math.max(right, node.x + size.width + _canvasMargin);
+      bottom = math.max(bottom, node.y + size.height + _canvasMargin);
+    }
+    if (left < 0) {
+      left -= _canvasMargin;
+    }
+    if (top < 0) {
+      top -= _canvasMargin;
+    }
+    return _CanvasGeometry(bounds: Rect.fromLTRB(left, top, right, bottom));
+  }
+
+  NoteFlowchartNode _toCanvasNode(NoteFlowchartNode node, _CanvasGeometry geometry) {
+    return node.copyWith(
+      x: node.x - geometry.bounds.left,
+      y: node.y - geometry.bounds.top,
+    );
+  }
+
+  Offset _canvasLocalToData(Offset local) {
+    final geometry = _canvasGeometryFor(_positionedNodes);
+    return Offset(local.dx + geometry.bounds.left, local.dy + geometry.bounds.top);
+  }
+
+  Rect _visibleCanvasRect(Size canvasSize) {
+    final viewport = Size(
+      _viewportSize.width <= 0 ? 430 : _viewportSize.width,
+      _viewportSize.height <= 0 ? 720 : _viewportSize.height,
+    );
+    final inverse = Matrix4.inverted(_canvasController.value);
+    final a = MatrixUtils.transformPoint(inverse, Offset.zero);
+    final b = MatrixUtils.transformPoint(inverse, Offset(viewport.width, viewport.height));
+    return Rect.fromPoints(a, b).intersect(Offset.zero & canvasSize).inflate(520);
+  }
+
+  List<NoteFlowchartNode> _visibleNodes(
+    List<NoteFlowchartNode> canvasNodes,
+    Map<String, Size> nodeSizes,
+    Rect visibleRect,
+  ) {
+    return [
+      for (final node in canvasNodes)
+        if (Rect.fromLTWH(
+          node.x - _CanvasNodeCard.connectorPadding,
+          node.y - _CanvasNodeCard.connectorPadding,
+          (nodeSizes[node.id]?.width ?? _nodeSizeFor(node).width) + _CanvasNodeCard.connectorPadding * 2,
+          (nodeSizes[node.id]?.height ?? _nodeSizeFor(node).height) + _CanvasNodeCard.connectorPadding * 2,
+        ).overlaps(visibleRect))
+          node,
+    ];
+  }
+
+  List<NoteFlowchartEdge> _visibleEdges(
+    List<NoteFlowchartEdge> edges,
+    Map<String, NoteFlowchartNode> canvasNodesById,
+    Map<String, Size> nodeSizes,
+    Rect visibleRect,
+  ) {
+    return [
+      for (final edge in edges)
+        if (_edgeBounds(edge, canvasNodesById, nodeSizes)?.overlaps(visibleRect) == true)
+          edge,
+    ];
+  }
+
+  Rect? _edgeBounds(
+    NoteFlowchartEdge edge,
+    Map<String, NoteFlowchartNode> canvasNodesById,
+    Map<String, Size> nodeSizes,
+  ) {
+    final from = canvasNodesById[edge.fromNodeId];
+    final to = canvasNodesById[edge.toNodeId];
+    if (from == null || to == null) {
+      return null;
+    }
+    final route = _routeEdge(edge, from, to, nodeSizes);
+    if (route.points.isEmpty) {
+      return null;
+    }
+    var left = route.points.first.dx;
+    var right = route.points.first.dx;
+    var top = route.points.first.dy;
+    var bottom = route.points.first.dy;
+    for (final point in route.points.skip(1)) {
+      left = math.min(left, point.dx);
+      right = math.max(right, point.dx);
+      top = math.min(top, point.dy);
+      bottom = math.max(bottom, point.dy);
+    }
+    return Rect.fromLTRB(left, top, right, bottom).inflate(120);
+  }
+
   void _addNode(NoteFlowchartNodeKind kind, Offset position) {
     final id = _nextNodeId();
     final draft = _nodeDraftForKind(id: id, kind: kind, order: _block.nodes.length + 1);
-    final nodeSize = _nodeSizeFor(draft);
     final node = draft.copyWith(
-      x: position.dx.clamp(24, _canvasSize.width - nodeSize.width - 24).toDouble(),
-      y: position.dy.clamp(24, _canvasSize.height - nodeSize.height - 24).toDouble(),
+      x: position.dx.toDouble(),
+      y: position.dy.toDouble(),
     );
     _log('node add id=$id kind=${kind.wireName} shape=${node.shape.wireName} x=${node.x.toStringAsFixed(1)} y=${node.y.toStringAsFixed(1)}');
     _emit(_block.copyWith(nodes: [..._positionedNodes, node]));
@@ -185,7 +310,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     final box = context.findRenderObject() as RenderBox?;
     final local = box?.globalToLocal(globalOffset) ?? const Offset(120, 120);
     final draftSize = _nodeSizeFor(_nodeDraftForKind(id: 'draft', kind: kind, order: 0));
-    final centered = local - Offset(draftSize.width / 2, draftSize.height / 2);
+    final centered = _canvasLocalToData(local - Offset(draftSize.width / 2, draftSize.height / 2));
     _log(
       'drop kind=${kind.wireName} global=${globalOffset.dx.toStringAsFixed(1)},${globalOffset.dy.toStringAsFixed(1)} '
       'local=${local.dx.toStringAsFixed(1)},${local.dy.toStringAsFixed(1)}',
@@ -211,10 +336,11 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
   }
 
   bool _isInCanvas(Offset localPosition) {
+    final size = _canvasGeometryFor(_positionedNodes).size;
     return localPosition.dx >= 0 &&
         localPosition.dy >= 0 &&
-        localPosition.dx <= _canvasSize.width &&
-        localPosition.dy <= _canvasSize.height;
+        localPosition.dx <= size.width &&
+        localPosition.dy <= size.height;
   }
 
   Offset? _paletteGhostBodyPosition() {
@@ -318,8 +444,6 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
 
   void _moveNode(NoteFlowchartNode node, Offset delta) {
     final positioned = _positionedNodes;
-    final sizes = _nodeSizesFor(positioned);
-    final size = sizes[node.id] ?? _nodeSizeFor(node);
     final moveCount = (_dragMoveCounts[node.id] ?? 0) + 1;
     _dragMoveCounts[node.id] = moveCount;
     if (moveCount % 16 == 0) {
@@ -332,8 +456,8 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
           for (final current in positioned)
             if (current.id == node.id)
               current.copyWith(
-                x: (current.x + delta.dx).clamp(0, _canvasSize.width - size.width).toDouble(),
-                y: (current.y + delta.dy).clamp(0, _canvasSize.height - size.height).toDouble(),
+                x: (current.x + delta.dx).toDouble(),
+                y: (current.y + delta.dy).toDouble(),
               )
             else
               current,
@@ -470,21 +594,50 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                       _NodeConfigSection(
                         title: 'Portok',
                         children: [
-                          for (final side in NoteFlowchartPortSide.values)
-                            _PortSideRow(
-                              side: side,
-                              ports: _portsForNode(draft).where((port) => port.side == side).toList(growable: false),
-                              onAdd: () => update(_addPortToNode(draft, side), 'port_add_${side.wireName}'),
-                              onDelete: (port) => update(
-                                draft.copyWith(ports: _portsForNode(draft).where((item) => item.id != port.id).toList(growable: false)),
-                                'port_delete_${port.id}',
+                          for (final port in _portsForNode(draft))
+                            _PortEditorRow(
+                              key: ValueKey('note-flowchart-node-popup-port-${port.id}'),
+                              port: port,
+                              locked: _isMandatoryPort(draft, port),
+                              onLabelChanged: (label) => update(
+                                _replacePortOnNode(draft, port.copyWith(label: label)),
+                                'port_label_${port.id}',
                               ),
+                              onSideChanged: (side) => update(
+                                _replacePortOnNode(draft, port.copyWith(side: side)),
+                                'port_side_${port.id}_${side.wireName}',
+                              ),
+                              onDelete: _isMandatoryPort(draft, port)
+                                  ? null
+                                  : () => update(_removePortFromNode(draft, port.id), 'port_delete_${port.id}'),
                             ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final side in NoteFlowchartPortSide.values)
+                                IconButton.filledTonal(
+                                  key: ValueKey('note-flowchart-node-popup-add-port-${side.wireName}'),
+                                  tooltip: 'Port hozzáadása: ${_sideLabel(side)}',
+                                  onPressed: () => update(_addPortToNode(draft, side), 'port_add_${side.wireName}'),
+                                  icon: Icon(_sideIcon(side), size: 18),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
                       _NodeConfigSection(
                         title: 'Előnézet',
-                        children: [_NodePortPreview(node: draft)],
+                        children: [
+                          _NodePortPreview(
+                            node: draft,
+                            onPortSideChanged: (port, side) => update(
+                              _replacePortOnNode(draft, port.copyWith(side: side)),
+                              'port_preview_drag_${port.id}_${side.wireName}',
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -508,6 +661,29 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     );
   }
 
+  NoteFlowchartNode _replacePortOnNode(NoteFlowchartNode node, NoteFlowchartPort replacement) {
+    final ports = [
+      for (final port in _portsForNode(node))
+        if (port.id == replacement.id) replacement else port,
+    ];
+    _log('port update node=${node.id} port=${replacement.id} label=${replacement.label} side=${replacement.side.wireName}');
+    return node.copyWith(ports: ports);
+  }
+
+  NoteFlowchartNode _removePortFromNode(NoteFlowchartNode node, String portId) {
+    _log('port delete node=${node.id} port=$portId');
+    return node.copyWith(
+      ports: _portsForNode(node).where((port) => port.id != portId).toList(growable: false),
+    );
+  }
+
+  bool _isMandatoryPort(NoteFlowchartNode node, NoteFlowchartPort port) {
+    if (node.kind == NoteFlowchartNodeKind.binaryDecision) {
+      return port.semantic == NoteFlowchartPortSemantic.yes || port.semantic == NoteFlowchartPortSemantic.no;
+    }
+    return false;
+  }
+
   NoteFlowchartNode _addPortToNode(NoteFlowchartNode node, NoteFlowchartPortSide side) {
     final ports = _portsForNode(node);
     final countOnSide = ports.where((port) => port.side == side).length + 1;
@@ -518,7 +694,9 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
       id = '$idBase-$suffix';
       suffix += 1;
     }
-    final port = NoteFlowchartPort(id: id, side: side, label: _sideLabel(side));
+    final semantic = node.kind == NoteFlowchartNodeKind.multiDecision ? NoteFlowchartPortSemantic.custom : NoteFlowchartPortSemantic.normal;
+    final label = node.kind == NoteFlowchartNodeKind.multiDecision ? 'Ág ${ports.length + 1}' : _sideLabel(side);
+    final port = NoteFlowchartPort(id: id, side: side, label: label, semantic: semantic);
     _log('port add node=${node.id} port=${port.id} side=${side.wireName}');
     return node.copyWith(ports: [...ports, port]);
   }
@@ -617,8 +795,21 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final nodes = _positionedNodes;
-    final nodeSizes = _nodeSizesFor(nodes);
+    final dataNodes = _positionedNodes;
+    final geometry = _canvasGeometryFor(dataNodes);
+    final canvasNodes = [for (final node in dataNodes) _toCanvasNode(node, geometry)];
+    final dataNodesById = {for (final node in dataNodes) node.id: node};
+    final canvasNodesById = {for (final node in canvasNodes) node.id: node};
+    final nodeSizes = _nodeSizesFor(dataNodes);
+    final visibleRect = _visibleCanvasRect(geometry.size);
+    final visibleNodes = _visibleNodes(canvasNodes, nodeSizes, visibleRect);
+    final visibleEdges = _visibleEdges(_block.edges, canvasNodesById, nodeSizes, visibleRect.inflate(240));
+    if (_viewportLogTick == 0) {
+      _log(
+        'canvas build size=${geometry.size.width.toStringAsFixed(0)}x${geometry.size.height.toStringAsFixed(0)} '
+        'nodes=${dataNodes.length} visibleNodes=${visibleNodes.length} edges=${_block.edges.length} visibleEdges=${visibleEdges.length}',
+      );
+    }
     return Scaffold(
       key: const ValueKey('note-flowchart-canvas-editor'),
       appBar: AppBar(
@@ -633,102 +824,129 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
             ),
         ],
       ),
-      body: Stack(
-        key: _bodyStackKey,
-        children: [
-          InteractiveViewer(
-            constrained: false,
-            boundaryMargin: const EdgeInsets.all(800),
-            minScale: 0.35,
-            maxScale: 2.5,
-            child: DragTarget<NoteFlowchartNodeKind>(
-              onAcceptWithDetails: (details) => _addDroppedNode(details.data, details.offset),
-              builder: (context, candidate, rejected) {
-                return SizedBox(
-                  key: _canvasKey,
-                  width: _canvasSize.width,
-                  height: _canvasSize.height,
-                  child: RepaintBoundary(
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: CustomPaint(
-                            key: const ValueKey('note-flowchart-grid'),
-                            painter: const _FlowchartGridPainter(step: _gridStep),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final nextViewport = Size(constraints.maxWidth, constraints.maxHeight);
+          if (_viewportSize != nextViewport) {
+            _viewportSize = nextViewport;
+          }
+          return Stack(
+            key: _bodyStackKey,
+            children: [
+              InteractiveViewer(
+                transformationController: _canvasController,
+                constrained: false,
+                boundaryMargin: const EdgeInsets.all(2400),
+                minScale: 0.22,
+                maxScale: 3.0,
+                child: DragTarget<NoteFlowchartNodeKind>(
+                  onAcceptWithDetails: (details) => _addDroppedNode(details.data, details.offset),
+                  builder: (context, candidate, rejected) {
+                    return SizedBox(
+                      key: const ValueKey('note-flowchart-canvas-surface'),
+                      width: geometry.size.width,
+                      height: geometry.size.height,
+                      child: RepaintBoundary(
+                        key: _canvasKey,
+                        child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: CustomPaint(
+                                  key: const ValueKey('note-flowchart-grid'),
+                                  painter: const _FlowchartGridPainter(step: _gridStep),
+                                ),
+                              ),
+                              Positioned.fill(
+                                child: CustomPaint(
+                                  painter: _FlowchartEdgePainter(
+                                    nodes: canvasNodes,
+                                    edges: visibleEdges,
+                                    nodeSizes: nodeSizes,
+                                  ),
+                                ),
+                              ),
+                              for (final edge in visibleEdges)
+                                _EdgeLabel(
+                                  edge: edge,
+                                  nodes: canvasNodes,
+                                  nodeSizes: nodeSizes,
+                                  onDelete: () => _deleteEdge(edge),
+                                ),
+                              for (final canvasNode in visibleNodes)
+                                if (dataNodesById[canvasNode.id] != null)
+                                  Positioned(
+                                    left: canvasNode.x - _CanvasNodeCard.connectorPadding,
+                                    top: canvasNode.y - _CanvasNodeCard.connectorPadding,
+                                    width: (nodeSizes[canvasNode.id]?.width ?? _nodeSizeFor(canvasNode).width) +
+                                        _CanvasNodeCard.connectorPadding * 2,
+                                    height: (nodeSizes[canvasNode.id]?.height ?? _nodeSizeFor(canvasNode).height) +
+                                        _CanvasNodeCard.connectorPadding * 2,
+                                    child: KeyedSubtree(
+                                      key: ValueKey('note-flowchart-node-${canvasNode.id}'),
+                                      child: _CanvasNodeCard(
+                                        node: dataNodesById[canvasNode.id]!,
+                                        size: nodeSizes[canvasNode.id] ?? _nodeSizeFor(canvasNode),
+                                        connectors: _connectorsForNode(dataNodesById[canvasNode.id]!),
+                                        linkSource: _linkSource,
+                                        onMoveStart: () => _beginMove(dataNodesById[canvasNode.id]!),
+                                        onMove: (delta) => _moveNode(
+                                          dataNodesById[canvasNode.id]!,
+                                          delta / _canvasController.value.getMaxScaleOnAxis(),
+                                        ),
+                                        onMoveEnd: () => _endMove(dataNodesById[canvasNode.id]!),
+                                        onEdit: () => _editNode(dataNodesById[canvasNode.id]!),
+                                        onOpenConfig: () => _openNodeConfig(dataNodesById[canvasNode.id]!),
+                                        onCommitEdit: () => _commitNodeEdit(dataNodesById[canvasNode.id]!),
+                                        onCancelEdit: () => _cancelNodeEdit(dataNodesById[canvasNode.id]!),
+                                        inlineController: _editingNodeId == canvasNode.id ? _inlineNodeController : null,
+                                        editing: _editingNodeId == canvasNode.id,
+                                        connectModeActive: _linkSource != null,
+                                        onDelete: () => _deleteNode(dataNodesById[canvasNode.id]!),
+                                        onConnectorTap: (connector) => _handleConnectorTap(dataNodesById[canvasNode.id]!, connector),
+                                      ),
+                                    ),
+                                  ),
+                            ],
                           ),
                         ),
-                        Positioned.fill(
-                          child: CustomPaint(
-                            painter: _FlowchartEdgePainter(
-                              nodes: nodes,
-                              edges: _block.edges,
-                              nodeSizes: nodeSizes,
-                            ),
-                          ),
-                        ),
-                        for (final edge in _block.edges)
-                          _EdgeLabel(
-                            edge: edge,
-                            nodes: nodes,
-                            nodeSizes: nodeSizes,
-                            onDelete: () => _deleteEdge(edge),
-                          ),
-                        for (final node in nodes)
-                          Positioned(
-                            left: node.x - _CanvasNodeCard.connectorPadding,
-                            top: node.y - _CanvasNodeCard.connectorPadding,
-                            width: (nodeSizes[node.id]?.width ?? _nodeSizeFor(node).width) + _CanvasNodeCard.connectorPadding * 2,
-                            height: (nodeSizes[node.id]?.height ?? _nodeSizeFor(node).height) + _CanvasNodeCard.connectorPadding * 2,
-                            child: _CanvasNodeCard(
-                              node: node,
-                              size: nodeSizes[node.id] ?? _nodeSizeFor(node),
-                              connectors: _connectorsForNode(node),
-                              linkSource: _linkSource,
-                              onMoveStart: () => _beginMove(node),
-                              onMove: (delta) => _moveNode(node, delta),
-                              onMoveEnd: () => _endMove(node),
-                              onEdit: () => _editNode(node),
-                              onOpenConfig: () => _openNodeConfig(node),
-                              onCommitEdit: () => _commitNodeEdit(node),
-                              onCancelEdit: () => _cancelNodeEdit(node),
-                              inlineController: _editingNodeId == node.id ? _inlineNodeController : null,
-                              editing: _editingNodeId == node.id,
-                              connectModeActive: _linkSource != null,
-                              onDelete: () => _deleteNode(node),
-                              onConnectorTap: (connector) => _handleConnectorTap(node, connector),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            right: 12,
-            top: 12,
-            child: _FlowchartPalette(
-              activeKind: _paletteDragKind,
-              onTapIgnored: (kind) => _log('palette tap ignored kind=${kind.wireName} reason=drag_only'),
-              onDragStart: _startPaletteDrag,
-              onDragUpdate: _updatePaletteDrag,
-              onDragEnd: _endPaletteDrag,
-              onDragCancel: _cancelPaletteDrag,
-            ),
-          ),
-          if (_paletteDragKind != null && _paletteGhostBodyPosition() != null)
-            Positioned(
-              left: _paletteGhostBodyPosition()!.dx,
-              top: _paletteGhostBodyPosition()!.dy,
-              child: IgnorePointer(
-                child: _PaletteGhost(kind: _paletteDragKind!),
+                      );
+                  },
+                ),
               ),
-            ),
-        ],
+              Positioned(
+                right: 12,
+                top: 12,
+                child: _FlowchartPalette(
+                  activeKind: _paletteDragKind,
+                  onTapIgnored: (kind) => _log('palette tap ignored kind=${kind.wireName} reason=drag_only'),
+                  onDragStart: _startPaletteDrag,
+                  onDragUpdate: _updatePaletteDrag,
+                  onDragEnd: _endPaletteDrag,
+                  onDragCancel: _cancelPaletteDrag,
+                ),
+              ),
+              if (_paletteDragKind != null && _paletteGhostBodyPosition() != null)
+                Positioned(
+                  left: _paletteGhostBodyPosition()!.dx,
+                  top: _paletteGhostBodyPosition()!.dy,
+                  child: IgnorePointer(
+                    child: _PaletteGhost(kind: _paletteDragKind!),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
+}
+
+class _CanvasGeometry {
+  const _CanvasGeometry({required this.bounds});
+
+  final Rect bounds;
+
+  Size get size => bounds.size;
 }
 
 class _CanvasNodeCard extends StatelessWidget {
@@ -1266,67 +1484,101 @@ class _NodeConfigSection extends StatelessWidget {
   }
 }
 
-class _PortSideRow extends StatelessWidget {
-  const _PortSideRow({
-    required this.side,
-    required this.ports,
-    required this.onAdd,
+class _PortEditorRow extends StatelessWidget {
+  const _PortEditorRow({
+    super.key,
+    required this.port,
+    required this.locked,
+    required this.onLabelChanged,
+    required this.onSideChanged,
     required this.onDelete,
   });
 
-  final NoteFlowchartPortSide side;
-  final List<NoteFlowchartPort> ports;
-  final VoidCallback onAdd;
-  final ValueChanged<NoteFlowchartPort> onDelete;
+  final NoteFlowchartPort port;
+  final bool locked;
+  final ValueChanged<String> onLabelChanged;
+  final ValueChanged<NoteFlowchartPortSide> onSideChanged;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
+    final labelController = TextEditingController(text: port.label.trim().isEmpty ? port.id : port.label.trim());
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 58,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(_sideLabel(side), style: const TextStyle(fontWeight: FontWeight.w700)),
-            ),
-          ),
-          Expanded(
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final port in ports)
-                  InputChip(
-                    label: Text(port.label.trim().isEmpty ? port.id : port.label.trim()),
-                    onDeleted: () => onDelete(port),
-                    visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(_portSemanticIcon(port), size: 18, color: const Color(0xFF7C3AED)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      key: ValueKey('note-flowchart-node-popup-port-label-${port.id}'),
+                      controller: labelController,
+                      enabled: !locked,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        labelText: locked ? 'Kötelező ág' : 'Ág neve',
+                        border: const OutlineInputBorder(),
+                      ),
+                      onChanged: onLabelChanged,
+                      onSubmitted: onLabelChanged,
+                      onTapOutside: (_) => onLabelChanged(labelController.text),
+                    ),
                   ),
-                IconButton.filledTonal(
-                  key: ValueKey('note-flowchart-node-popup-add-port-${side.wireName}'),
-                  tooltip: 'Port hozzáadása: ${_sideLabel(side)}',
-                  onPressed: onAdd,
-                  icon: const Icon(Icons.add, size: 18),
-                ),
-              ],
-            ),
+                  if (onDelete != null)
+                    IconButton(
+                      key: ValueKey('note-flowchart-node-popup-port-delete-${port.id}'),
+                      tooltip: 'Port törlése',
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final side in NoteFlowchartPortSide.values)
+                    ChoiceChip(
+                      key: ValueKey('note-flowchart-node-popup-port-side-${port.id}-${side.wireName}'),
+                      avatar: Icon(_sideIcon(side), size: 15),
+                      selected: port.side == side,
+                      label: Text(_sideLabel(side)),
+                      onSelected: (_) => onSideChanged(side),
+                    ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
 class _NodePortPreview extends StatelessWidget {
-  const _NodePortPreview({required this.node});
+  const _NodePortPreview({required this.node, required this.onPortSideChanged});
 
   final NoteFlowchartNode node;
+  final void Function(NoteFlowchartPort port, NoteFlowchartPortSide side) onPortSideChanged;
 
   @override
   Widget build(BuildContext context) {
     final ports = _portsForNode(node);
+    final grouped = <NoteFlowchartPortSide, List<NoteFlowchartPort>>{
+      for (final side in NoteFlowchartPortSide.values) side: ports.where((port) => port.side == side).toList(growable: false),
+    };
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
@@ -1334,33 +1586,85 @@ class _NodePortPreview extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: SizedBox(
-        height: 116,
-        child: Stack(
-          children: [
-            Center(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(node.visualShape == NoteFlowchartVisualShape.oval ? 999 : 8),
-                  border: Border.all(color: const Color(0xFF7C3AED)),
-                ),
-                child: SizedBox(
-                  width: 150,
-                  height: 58,
-                  child: Center(
-                    child: Text(
-                      _nodeTypeLabel(node),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+        height: 124,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final shapeWidth = math.min(170.0, math.max(130.0, constraints.maxWidth - 90));
+            const shapeHeight = 58.0;
+            final rect = Rect.fromLTWH(
+              (constraints.maxWidth - shapeWidth) / 2,
+              32,
+              shapeWidth,
+              shapeHeight,
+            );
+            return Stack(
+              children: [
+                for (final side in NoteFlowchartPortSide.values)
+                  _PreviewSideDropZone(
+                    rect: rect,
+                    side: side,
+                    onAccept: (port) => onPortSideChanged(port, side),
+                  ),
+                Positioned.fromRect(
+                  rect: rect,
+                  child: DecoratedBox(
+                    key: const ValueKey('note-flowchart-preview-shape'),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(node.visualShape == NoteFlowchartVisualShape.oval ? 999 : 8),
+                      border: Border.all(color: const Color(0xFF7C3AED)),
+                    ),
+                    child: Center(
+                      child: Text(
+                        _nodeTypeLabel(node),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-            for (final side in NoteFlowchartPortSide.values)
-              for (var i = 0; i < ports.where((port) => port.side == side).length; i += 1)
-                _PreviewPortDot(side: side, index: i, count: ports.where((port) => port.side == side).length),
-          ],
+                for (final side in NoteFlowchartPortSide.values)
+                  for (var i = 0; i < grouped[side]!.length; i += 1)
+                    _PreviewPortDot(
+                      key: ValueKey('note-flowchart-preview-port-${grouped[side]![i].id}'),
+                      port: grouped[side]![i],
+                      rect: rect,
+                      unitOffset: _portUnitOffset(side, i, grouped[side]!.length),
+                    ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewSideDropZone extends StatelessWidget {
+  const _PreviewSideDropZone({required this.rect, required this.side, required this.onAccept});
+
+  final Rect rect;
+  final NoteFlowchartPortSide side;
+  final ValueChanged<NoteFlowchartPort> onAccept;
+
+  @override
+  Widget build(BuildContext context) {
+    final zone = switch (side) {
+      NoteFlowchartPortSide.top => Rect.fromLTWH(rect.left, rect.top - 22, rect.width, 44),
+      NoteFlowchartPortSide.right => Rect.fromLTWH(rect.right - 22, rect.top, 44, rect.height),
+      NoteFlowchartPortSide.bottom => Rect.fromLTWH(rect.left, rect.bottom - 22, rect.width, 44),
+      NoteFlowchartPortSide.left => Rect.fromLTWH(rect.left - 22, rect.top, 44, rect.height),
+    };
+    return Positioned.fromRect(
+      rect: zone,
+      child: DragTarget<NoteFlowchartPort>(
+        onAcceptWithDetails: (details) => onAccept(details.data),
+        builder: (context, candidate, rejected) => AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          decoration: BoxDecoration(
+            color: candidate.isEmpty ? Colors.transparent : const Color(0x1A7C3AED),
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ),
     );
@@ -1368,33 +1672,37 @@ class _NodePortPreview extends StatelessWidget {
 }
 
 class _PreviewPortDot extends StatelessWidget {
-  const _PreviewPortDot({required this.side, required this.index, required this.count});
+  const _PreviewPortDot({super.key, required this.port, required this.rect, required this.unitOffset});
 
-  final NoteFlowchartPortSide side;
-  final int index;
-  final int count;
+  final NoteFlowchartPort port;
+  final Rect rect;
+  final Offset unitOffset;
 
   @override
   Widget build(BuildContext context) {
-    final fraction = (index + 1) / (count + 1);
-    final left = switch (side) {
-      NoteFlowchartPortSide.left => 54.0,
-      NoteFlowchartPortSide.right => 222.0,
-      NoteFlowchartPortSide.top => 74 + 132 * fraction,
-      NoteFlowchartPortSide.bottom => 74 + 132 * fraction,
-    };
-    final top = switch (side) {
-      NoteFlowchartPortSide.top => 26.0,
-      NoteFlowchartPortSide.bottom => 86.0,
-      NoteFlowchartPortSide.left => 34 + 44 * fraction,
-      NoteFlowchartPortSide.right => 34 + 44 * fraction,
-    };
+    final color = port.semantic == NoteFlowchartPortSemantic.normal ? const Color(0xFF059669) : const Color(0xFF7C3AED);
+    final dot = DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 2),
+      ),
+      child: SizedBox.square(
+        dimension: 14,
+        child: Icon(_semanticMiniIcon(port.semantic), size: 9, color: color),
+      ),
+    );
     return Positioned(
-      left: left,
-      top: top,
-      child: const DecoratedBox(
-        decoration: BoxDecoration(color: Color(0xFF7C3AED), shape: BoxShape.circle),
-        child: SizedBox.square(dimension: 10),
+      left: rect.left + rect.width * unitOffset.dx - 7,
+      top: rect.top + rect.height * unitOffset.dy - 7,
+      child: Draggable<NoteFlowchartPort>(
+        data: port,
+        feedback: Material(
+          color: Colors.transparent,
+          child: Transform.scale(scale: 1.45, child: dot),
+        ),
+        childWhenDragging: Opacity(opacity: 0.35, child: dot),
+        child: dot,
       ),
     );
   }
@@ -1744,5 +2052,33 @@ String _sideLabel(NoteFlowchartPortSide side) {
     NoteFlowchartPortSide.right => 'Jobb',
     NoteFlowchartPortSide.bottom => 'Lent',
     NoteFlowchartPortSide.left => 'Bal',
+  };
+}
+
+
+IconData _sideIcon(NoteFlowchartPortSide side) {
+  return switch (side) {
+    NoteFlowchartPortSide.top => Icons.keyboard_arrow_up,
+    NoteFlowchartPortSide.right => Icons.keyboard_arrow_right,
+    NoteFlowchartPortSide.bottom => Icons.keyboard_arrow_down,
+    NoteFlowchartPortSide.left => Icons.keyboard_arrow_left,
+  };
+}
+
+IconData _portSemanticIcon(NoteFlowchartPort port) {
+  return switch (port.semantic) {
+    NoteFlowchartPortSemantic.yes => Icons.add_circle_outline,
+    NoteFlowchartPortSemantic.no => Icons.remove_circle_outline,
+    NoteFlowchartPortSemantic.custom => Icons.call_split,
+    NoteFlowchartPortSemantic.normal => Icons.radio_button_checked,
+  };
+}
+
+IconData _semanticMiniIcon(NoteFlowchartPortSemantic semantic) {
+  return switch (semantic) {
+    NoteFlowchartPortSemantic.yes => Icons.add,
+    NoteFlowchartPortSemantic.no => Icons.remove,
+    NoteFlowchartPortSemantic.custom => Icons.call_split,
+    NoteFlowchartPortSemantic.normal => Icons.circle,
   };
 }

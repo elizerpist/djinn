@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../ai/ai_client.dart';
+import '../../flowchart/ui/mobile_flowchart_viewer.dart';
 import '../models/note_document.dart';
 
 class NoteChunkCard extends StatelessWidget {
@@ -348,82 +348,36 @@ class _FlowchartBody extends StatelessWidget {
     if (block.nodes.isEmpty) {
       return SelectableText(block.text.trim());
     }
-    final ordered = [...block.nodes]..sort((a, b) => a.order.compareTo(b.order));
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAF5FF),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE9D5FF)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (var i = 0; i < ordered.length; i += 1) ...[
-              _FlowNode(node: ordered[i]),
-              if (i < ordered.length - 1)
-                const Padding(
-                  padding: EdgeInsets.only(left: 17, top: 3, bottom: 3),
-                  child: Icon(Icons.arrow_downward, size: 15, color: Color(0xFF7E22CE)),
-                ),
-            ],
-            if (block.edges.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final edge in block.edges)
-                    if (edge.label.trim().isNotEmpty)
-                      _StatusChip(label: edge.label.trim(), color: const Color(0xFF7E22CE)),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
+    return MobileFlowchartViewer(data: _mobileFlowchartDataFromBlock(block));
   }
 }
 
-class _FlowNode extends StatelessWidget {
-  const _FlowNode({required this.node});
-
-  final NoteFlowchartNode node;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(_shapeIcon(node.shape), size: 18, color: const Color(0xFF7E22CE)),
-        const SizedBox(width: 8),
-        Expanded(
-          child: SelectableText(
-            node.label.trim().isEmpty ? 'Névtelen lépés' : node.label.trim(),
-            style: const TextStyle(
-              color: Color(0xFF3B0764),
-              fontWeight: FontWeight.w700,
-              height: 1.25,
-            ),
-          ),
+MobileFlowchartData _mobileFlowchartDataFromBlock(NoteBlock block) {
+  final nodes = [...block.nodes]..sort((a, b) => a.order.compareTo(b.order));
+  final edges = [...block.edges]..sort((a, b) => a.order.compareTo(b.order));
+  return MobileFlowchartData(
+    id: block.id,
+    title: block.title?.trim().isNotEmpty == true ? block.title!.trim() : 'Flowchart',
+    nodes: [
+      for (final node in nodes)
+        MobileFlowchartNode(
+          id: node.id,
+          label: node.label,
+          shape: node.shape.wireName,
+          x: node.x,
+          y: node.y,
         ),
-      ],
-    );
-  }
-
-  IconData _shapeIcon(AiFlowchartNodeShape shape) {
-    return switch (shape) {
-      AiFlowchartNodeShape.startEnd => Icons.trip_origin,
-      AiFlowchartNodeShape.decision => Icons.change_history,
-      AiFlowchartNodeShape.inputOutput => Icons.input,
-      AiFlowchartNodeShape.subprocess => Icons.integration_instructions_outlined,
-      AiFlowchartNodeShape.dataStore => Icons.storage,
-      AiFlowchartNodeShape.connector => Icons.radio_button_unchecked,
-      AiFlowchartNodeShape.process || AiFlowchartNodeShape.unknown => Icons.crop_square,
-    };
-  }
+    ],
+    edges: [
+      for (final edge in edges)
+        MobileFlowchartEdge(
+          id: edge.id,
+          fromNodeId: edge.fromNodeId,
+          toNodeId: edge.toNodeId,
+          label: edge.label,
+        ),
+    ],
+  );
 }
 
 class _EmptyBody extends StatelessWidget {

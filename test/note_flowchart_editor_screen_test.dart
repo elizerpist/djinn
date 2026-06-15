@@ -381,4 +381,152 @@ void main() {
     expect(route.points[2].dy, lessThan(route.points.first.dy));
   });
 
+
+  testWidgets('editor expands virtual canvas and lazily skips far offscreen nodes', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: NoteBlock(
+            id: 'flow-virtual',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(id: 'near', label: 'Közeli lépés', x: 120, y: 120),
+              NoteFlowchartNode(id: 'far', label: 'Távoli lépés', x: 5200, y: 4200),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final surface = tester.widget<SizedBox>(
+      find.byKey(const ValueKey('note-flowchart-canvas-surface')),
+    );
+    expect(surface.width, greaterThan(6000));
+    expect(surface.height, greaterThan(5000));
+    expect(find.byKey(const ValueKey('note-flowchart-node-near')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-node-far')), findsNothing);
+  });
+
+  testWidgets('binary decision yes and no ports cannot be deleted but can move sides', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: const NoteBlock(
+            id: 'flow-ports',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'decision',
+                label: 'Légzési elégtelenség?',
+                kind: NoteFlowchartNodeKind.binaryDecision,
+                shape: AiFlowchartNodeShape.decision,
+                visualShape: NoteFlowchartVisualShape.diamond,
+                x: 120,
+                y: 120,
+                ports: [
+                  NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet'),
+                  NoteFlowchartPort(id: 'yes', side: NoteFlowchartPortSide.bottom, label: 'Igen', semantic: NoteFlowchartPortSemantic.yes),
+                  NoteFlowchartPort(id: 'no', side: NoteFlowchartPortSide.bottom, label: 'Nem', semantic: NoteFlowchartPortSemantic.no),
+                ],
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-node-body-decision')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('note-flowchart-node-popup-port-delete-yes')), findsNothing);
+    expect(find.byKey(const ValueKey('note-flowchart-node-popup-port-delete-no')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-node-popup-port-side-yes-left')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    final yes = latest!.nodes.single.ports.singleWhere((port) => port.id == 'yes');
+    expect(yes.side, NoteFlowchartPortSide.left);
+  });
+
+  testWidgets('multi decision branch ports can be renamed and moved to any side', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: const NoteBlock(
+            id: 'flow-multi',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'sat',
+                label: 'Szaturáció?',
+                kind: NoteFlowchartNodeKind.multiDecision,
+                shape: AiFlowchartNodeShape.decision,
+                visualShape: NoteFlowchartVisualShape.diamond,
+                x: 120,
+                y: 120,
+                ports: [
+                  NoteFlowchartPort(id: 'branch-1', side: NoteFlowchartPortSide.right, label: 'Ág 1', semantic: NoteFlowchartPortSemantic.custom),
+                ],
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-node-body-sat')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('note-flowchart-node-popup-port-label-branch-1')),
+      '90-95%',
+    );
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-node-popup-port-side-branch-1-left')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    final branch = latest!.nodes.single.ports.singleWhere((port) => port.id == 'branch-1');
+    expect(branch.label, '90-95%');
+    expect(branch.side, NoteFlowchartPortSide.left);
+  });
+
+  testWidgets('popup preview aligns port dots to the preview shape edges', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: NoteBlock(
+            id: 'flow-preview',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'decision',
+                label: 'Döntés?',
+                kind: NoteFlowchartNodeKind.binaryDecision,
+                shape: AiFlowchartNodeShape.decision,
+                visualShape: NoteFlowchartVisualShape.diamond,
+                x: 120,
+                y: 120,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-node-body-decision')));
+    await tester.pumpAndSettle();
+
+    final shape = tester.getRect(find.byKey(const ValueKey('note-flowchart-preview-shape')));
+    final yes = tester.getCenter(find.byKey(const ValueKey('note-flowchart-preview-port-yes')));
+    final no = tester.getCenter(find.byKey(const ValueKey('note-flowchart-preview-port-no')));
+    expect(yes.dy, closeTo(shape.bottom, 2));
+    expect(no.dy, closeTo(shape.bottom, 2));
+    expect(yes.dx, greaterThan(shape.left));
+    expect(no.dx, lessThan(shape.right));
+  });
+
 }
