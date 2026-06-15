@@ -62,7 +62,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('note-chunk-card-a')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('note-chunk-delete-a')));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 750));
 
     expect(find.byKey(const ValueKey('note-chunk-card-a')), findsNothing);
     await tester.tap(find.text('Visszavonás'));

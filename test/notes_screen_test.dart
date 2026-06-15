@@ -100,6 +100,8 @@ void main() {
     expect(find.text('Kinyert tartalom audit'), findsOneWidget);
     expect(find.text('Másolat'), findsNothing);
 
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Kijelölés megszüntetése'));
     await tester.pumpAndSettle();
     expect(find.text('Jegyzetek'), findsOneWidget);
