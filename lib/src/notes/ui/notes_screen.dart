@@ -4,9 +4,10 @@ import '../../shared/chunks/chunk_validation_card.dart';
 import '../../shared/ui/draggable_bottom_card.dart';
 import '../data/note_chunk_builder.dart';
 import '../data/note_repository.dart';
+import '../models/note_document.dart';
 import '../models/note_folder.dart';
 import '../models/note_item.dart';
-import 'note_creation_sheet.dart';
+import 'note_editor_route.dart';
 
 enum _NoteSortMode { newestFirst, oldestFirst, titleAsc, titleDesc }
 
@@ -133,21 +134,34 @@ class _NotesScreenState extends State<NotesScreen> {
     );
   }
 
-  Future<void> _openCreateSheet({NoteItem? note}) async {
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: false,
-      builder: (context) => NoteCreationSheet(
-        repository: widget.repository,
-        folders: _folders,
-        activeFolderId: _activeFolderId,
-        initialNote: note,
+  Future<void> _openEditor({NoteItem? note}) async {
+    final target = note ??
+        await widget.repository.createDocumentNote(
+          title: 'Névtelen jegyzet',
+          document: NoteDocument.empty(),
+          folderId: _activeFolderId,
+        );
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder(
+        pageBuilder: (_, animation, __) => NoteEditorRoute(
+          repository: widget.repository,
+          initialNote: target,
+        ),
+        transitionsBuilder: (_, animation, __, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(1, 0),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          );
+        },
       ),
     );
-    if (saved == true) {
-      await _load();
-    }
+    await _load();
   }
 
   void _setSort(_NoteSortMode mode) {
@@ -225,7 +239,7 @@ class _NotesScreenState extends State<NotesScreen> {
       floatingActionButton: FloatingActionButton(
         key: const ValueKey('notes-create-fab'),
         tooltip: 'Új jegyzet',
-        onPressed: () => _openCreateSheet(),
+        onPressed: () => _openEditor(),
         child: const Icon(Icons.note_add_outlined),
       ),
     );
@@ -247,7 +261,7 @@ class _NotesScreenState extends State<NotesScreen> {
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) => _NoteBox(
         note: _notes[index],
-        onOpen: () => _openCreateSheet(note: _notes[index]),
+        onOpen: () => _openEditor(note: _notes[index]),
         onValidate: () => _openValidationCard(_notes[index]),
       ),
     );

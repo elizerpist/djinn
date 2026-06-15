@@ -37,7 +37,7 @@ void main() {
     expect(find.text('Üres mappa'), findsOneWidget);
   });
 
-  testWidgets('notes FAB opens document slide-up with preview and full editor action', (tester) async {
+  testWidgets('notes FAB opens full-screen note editor route', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(MaterialApp(home: NotesScreen(repository: repository)));
     await tester.pumpAndSettle();
@@ -48,30 +48,27 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('notes-create-fab')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('note-create-preview-box')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-create-open-editor')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-create-type-dropdown')), findsNothing);
+    expect(find.byKey(const ValueKey('note-editor-route')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-create-preview-box')), findsNothing);
+    expect((await repository.listNotes()).single.type, NoteItemType.document);
   });
 
-  testWidgets('notes creation sheet saves a mixed document note', (tester) async {
+  testWidgets('tapping a note opens full-screen note editor route', (tester) async {
     final repository = MemoryNoteRepository();
+    final note = await repository.createDocumentNote(
+      title: 'Oxigén cél',
+      document: const NoteDocument(blocks: [
+        NoteBlock(id: 'block-1', type: NoteBlockType.paragraph, text: 'SpO2 cél 88-92%'),
+      ]),
+    );
     await tester.pumpWidget(MaterialApp(home: NotesScreen(repository: repository)));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('notes-create-fab')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('note-create-title-field')), 'Oxigén cél');
-    await tester.tap(find.byKey(const ValueKey('note-create-open-editor')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('note-document-block-block-1')), 'SpO2 cél 88-92%');
-    await tester.tap(find.byKey(const ValueKey('note-document-save')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('note-create-save')));
+    await tester.tap(find.byKey(ValueKey('note-box-${note.id}')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Oxigén cél'), findsOneWidget);
-    expect((await repository.listNotes()).single.type, NoteItemType.document);
-    expect((await repository.listNotes()).single.plainText, 'SpO2 cél 88-92%');
+    expect(find.byKey(const ValueKey('note-editor-route')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-editor-title-field')), findsOneWidget);
   });
 
   testWidgets('long pressing a note opens shared validation editor', (tester) async {
