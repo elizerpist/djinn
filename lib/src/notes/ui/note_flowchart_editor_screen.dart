@@ -359,10 +359,10 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                           ),
                         for (final node in nodes)
                           Positioned(
-                            left: node.x,
-                            top: node.y,
-                            width: nodeSizes[node.id]?.width ?? _nodeSizeFor(node).width,
-                            height: nodeSizes[node.id]?.height ?? _nodeSizeFor(node).height,
+                            left: node.x - _CanvasNodeCard.connectorPadding,
+                            top: node.y - _CanvasNodeCard.connectorPadding,
+                            width: (nodeSizes[node.id]?.width ?? _nodeSizeFor(node).width) + _CanvasNodeCard.connectorPadding * 2,
+                            height: (nodeSizes[node.id]?.height ?? _nodeSizeFor(node).height) + _CanvasNodeCard.connectorPadding * 2,
                             child: _CanvasNodeCard(
                               node: node,
                               size: nodeSizes[node.id] ?? _nodeSizeFor(node),
@@ -402,6 +402,8 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
 }
 
 class _CanvasNodeCard extends StatelessWidget {
+  static const double connectorPadding = 22;
+
   const _CanvasNodeCard({
     required this.node,
     required this.size,
@@ -451,12 +453,16 @@ class _CanvasNodeCard extends StatelessWidget {
         onPanEnd: (_) => onMoveEnd(),
         onPanCancel: onMoveEnd,
         child: SizedBox(
-          width: size.width,
-          height: size.height,
+          width: size.width + connectorPadding * 2,
+          height: size.height + connectorPadding * 2,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              Positioned.fill(
+              Positioned(
+                left: connectorPadding,
+                top: connectorPadding,
+                width: size.width,
+                height: size.height,
                 child: AnimatedOpacity(
                   key: ValueKey('note-flowchart-card-opacity-${node.id}'),
                   duration: const Duration(milliseconds: 120),
@@ -546,8 +552,8 @@ class _CanvasNodeCard extends StatelessWidget {
               ),
               if (editing)
                 Positioned(
-                  right: 2,
-                  bottom: 2,
+                  right: connectorPadding + 2,
+                  bottom: connectorPadding + 2,
                   child: IconButton(
                     tooltip: 'Szerkesztés bezárása',
                     visualDensity: VisualDensity.compact,
@@ -593,8 +599,8 @@ class _ConnectorButton extends StatelessWidget {
       _ => connector.type == _ConnectorType.output ? Icons.arrow_outward : Icons.radio_button_checked,
     };
     return Positioned(
-      left: connector.unitOffset.dx * connector.nodeSize.width - 22,
-      top: connector.unitOffset.dy * connector.nodeSize.height - 22,
+      left: connector.unitOffset.dx * connector.nodeSize.width,
+      top: connector.unitOffset.dy * connector.nodeSize.height,
       child: Tooltip(
         message: connector.tooltip,
         child: SizedBox.square(
