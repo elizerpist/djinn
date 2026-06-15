@@ -21,6 +21,17 @@ enum NoteBlockType {
   }
 }
 
+String stableNoteContentHash(String value) {
+  const offset = 0x811c9dc5;
+  const prime = 0x01000193;
+  var hash = offset;
+  for (final byte in utf8.encode(value.trim())) {
+    hash ^= byte;
+    hash = (hash * prime) & 0xffffffff;
+  }
+  return hash.toRadixString(16).padLeft(8, '0');
+}
+
 class NoteDocument {
   const NoteDocument({required this.blocks, this.schemaVersion = 1});
 
@@ -185,6 +196,47 @@ class NoteDocument {
   }
 }
 
+class NoteListItem {
+  const NoteListItem({
+    required this.id,
+    required this.text,
+    this.level = 0,
+    this.checked = false,
+  });
+
+  final String id;
+  final String text;
+  final int level;
+  final bool checked;
+
+  factory NoteListItem.fromJson(Map<String, Object?> json) {
+    return NoteListItem(
+      id: json['id']?.toString() ?? 'item-1',
+      text: json['text']?.toString() ?? '',
+      level: json['level'] is int ? json['level'] as int : 0,
+      checked: json['checked'] == true,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'text': text,
+      if (level != 0) 'level': level,
+      if (checked) 'checked': true,
+    };
+  }
+
+  NoteListItem copyWith({String? id, String? text, int? level, bool? checked}) {
+    return NoteListItem(
+      id: id ?? this.id,
+      text: text ?? this.text,
+      level: level ?? this.level,
+      checked: checked ?? this.checked,
+    );
+  }
+}
+
 class NoteBlock {
   const NoteBlock({
     required this.id,
@@ -195,6 +247,9 @@ class NoteBlock {
     this.rows = const [],
     this.nodes = const [],
     this.edges = const [],
+    this.listItems = const [],
+    this.indexedContentHash,
+    this.indexedAt,
   });
 
   final String id;
@@ -205,6 +260,9 @@ class NoteBlock {
   final List<List<String>> rows;
   final List<NoteFlowchartNode> nodes;
   final List<NoteFlowchartEdge> edges;
+  final List<NoteListItem> listItems;
+  final String? indexedContentHash;
+  final DateTime? indexedAt;
 
   factory NoteBlock.fromJson(Map<String, Object?> json) {
     return NoteBlock(
@@ -216,6 +274,9 @@ class NoteBlock {
       rows: _rowsFromJson(json['rows']),
       nodes: _nodesFromJson(json['nodes']),
       edges: _edgesFromJson(json['edges']),
+      listItems: _listItemsFromJson(json['listItems']),
+      indexedContentHash: json['indexedContentHash']?.toString(),
+      indexedAt: DateTime.tryParse(json['indexedAt']?.toString() ?? ''),
     );
   }
 
@@ -229,6 +290,9 @@ class NoteBlock {
       if (rows.isNotEmpty) 'rows': rows,
       if (nodes.isNotEmpty) 'nodes': nodes.map((node) => node.toJson()).toList(),
       if (edges.isNotEmpty) 'edges': edges.map((edge) => edge.toJson()).toList(),
+      if (listItems.isNotEmpty) 'listItems': listItems.map((item) => item.toJson()).toList(),
+      if (indexedContentHash != null) 'indexedContentHash': indexedContentHash,
+      if (indexedAt != null) 'indexedAt': indexedAt!.toIso8601String(),
     };
   }
 
@@ -236,11 +300,42 @@ class NoteBlock {
     return switch (type) {
       NoteBlockType.table => _tableText,
       NoteBlockType.flowchart => _flowchartText,
-      NoteBlockType.heading ||
-      NoteBlockType.paragraph ||
-      NoteBlockType.listItem => text.trim(),
+      NoteBlockType.listItem => _listText,
+      NoteBlockType.heading || NoteBlockType.paragraph => text.trim(),
     };
   }
+
+  String get plainTextForIndexing {
+    return switch (type) {
+      NoteBlockType.listItem => _listText,
+      _ => plainText,
+    };
+  }
+
+  bool get hasContent => plainTextForIndexing.trim().isNotEmpty;
+
+  String get contentHash => stableNoteContentHash(plainTextForIndexing);
+
+  bool get isIndexFresh => indexedContentHash != null && indexedContentHash == contentHash;
+
+  bool get needsReindex => hasContent && indexedContentHash != null && !isIndexFresh;
+
+  String get _listText {
+    if (listItems.isEmpty) {
+      final trimmed = text.trim();
+      if (trimmed.isEmpty) {
+        return '';
+      }
+      return '${_indent(level)}$trimmed';
+    }
+    return listItems
+        .map((item) => '${_indent(item.level)}${item.text.trim()}')
+        .where((line) => line.trim().isNotEmpty)
+        .join('\n')
+        .trimRight();
+  }
+
+  String _indent(int level) => List.filled(level.clamp(0, 8).toInt(), '  ').join();
 
   String get _tableText {
     final lines = <String>[];
@@ -286,6 +381,10 @@ class NoteBlock {
     List<List<String>>? rows,
     List<NoteFlowchartNode>? nodes,
     List<NoteFlowchartEdge>? edges,
+    List<NoteListItem>? listItems,
+    String? indexedContentHash,
+    DateTime? indexedAt,
+    bool clearIndex = false,
   }) {
     return NoteBlock(
       id: id ?? this.id,
@@ -296,6 +395,9 @@ class NoteBlock {
       rows: rows ?? this.rows,
       nodes: nodes ?? this.nodes,
       edges: edges ?? this.edges,
+      listItems: listItems ?? this.listItems,
+      indexedContentHash: clearIndex ? null : indexedContentHash ?? this.indexedContentHash,
+      indexedAt: clearIndex ? null : indexedAt ?? this.indexedAt,
     );
   }
 
@@ -328,6 +430,16 @@ class NoteBlock {
         .map((item) => NoteFlowchartEdge.fromJson(Map<String, Object?>.from(item)))
         .toList(growable: false);
   }
+
+  static List<NoteListItem> _listItemsFromJson(Object? value) {
+    if (value is! List) {
+      return const [];
+    }
+    return value
+        .whereType<Map>()
+        .map((item) => NoteListItem.fromJson(Map<String, Object?>.from(item)))
+        .toList(growable: false);
+  }
 }
 
 class NoteFlowchartNode {
@@ -336,12 +448,16 @@ class NoteFlowchartNode {
     required this.label,
     this.shape = AiFlowchartNodeShape.process,
     this.order = 0,
+    this.x = 0,
+    this.y = 0,
   });
 
   final String id;
   final String label;
   final AiFlowchartNodeShape shape;
   final int order;
+  final double x;
+  final double y;
 
   factory NoteFlowchartNode.fromJson(Map<String, Object?> json) {
     return NoteFlowchartNode(
@@ -349,6 +465,8 @@ class NoteFlowchartNode {
       label: json['label']?.toString() ?? '',
       shape: AiFlowchartNodeShape.fromWireName(json['shape']?.toString()),
       order: json['order'] is int ? json['order'] as int : 0,
+      x: _doubleFromJson(json['x']),
+      y: _doubleFromJson(json['y']),
     );
   }
 
@@ -358,7 +476,34 @@ class NoteFlowchartNode {
       'label': label,
       'shape': shape.wireName,
       'order': order,
+      if (x != 0) 'x': x,
+      if (y != 0) 'y': y,
     };
+  }
+
+  NoteFlowchartNode copyWith({
+    String? id,
+    String? label,
+    AiFlowchartNodeShape? shape,
+    int? order,
+    double? x,
+    double? y,
+  }) {
+    return NoteFlowchartNode(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      shape: shape ?? this.shape,
+      order: order ?? this.order,
+      x: x ?? this.x,
+      y: y ?? this.y,
+    );
+  }
+
+  static double _doubleFromJson(Object? value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 }
 
@@ -395,5 +540,21 @@ class NoteFlowchartEdge {
       'label': label,
       'order': order,
     };
+  }
+
+  NoteFlowchartEdge copyWith({
+    String? id,
+    String? fromNodeId,
+    String? toNodeId,
+    String? label,
+    int? order,
+  }) {
+    return NoteFlowchartEdge(
+      id: id ?? this.id,
+      fromNodeId: fromNodeId ?? this.fromNodeId,
+      toNodeId: toNodeId ?? this.toNodeId,
+      label: label ?? this.label,
+      order: order ?? this.order,
+    );
   }
 }

@@ -40,6 +40,8 @@ abstract class NoteRepository {
     String? payloadJson,
     String? reason,
   });
+  Future<NoteItem> markNoteBlocksIndexed(String noteId, List<String> blockIds);
+  Future<NoteItem> moveNoteToFolder(String noteId, String? folderId);
   Future<void> deleteNotes(List<String> noteIds);
 }
 
@@ -122,9 +124,6 @@ class MemoryNoteRepository implements NoteRepository {
     final plainText = document.plainText.trim();
     if (trimmedTitle.isEmpty) {
       throw ArgumentError('note title must not be blank');
-    }
-    if (plainText.isEmpty) {
-      throw ArgumentError('note text must not be blank');
     }
     final now = _clock();
     final note = NoteItem(
@@ -226,6 +225,53 @@ class MemoryNoteRepository implements NoteRepository {
       auditState: auditState,
       reason: reason,
     );
+  }
+
+
+
+  @override
+  Future<NoteItem> markNoteBlocksIndexed(String noteId, List<String> blockIds) async {
+    final index = _notes.indexWhere((note) => note.id == noteId);
+    if (index == -1) {
+      throw StateError('note not found: $noteId');
+    }
+    final existing = _notes[index];
+    final ids = blockIds.toSet();
+    final now = _clock();
+    final document = existing.document.copyWith(
+      blocks: [
+        for (final block in existing.document.blocks)
+          if (ids.contains(block.id))
+            block.copyWith(
+              indexedContentHash: block.contentHash,
+              indexedAt: now,
+            )
+          else
+            block,
+      ],
+    );
+    return updateNoteDocument(
+      noteId,
+      title: existing.title,
+      document: document,
+      auditState: existing.auditState,
+      reason: existing.reason,
+    );
+  }
+
+  @override
+  Future<NoteItem> moveNoteToFolder(String noteId, String? folderId) async {
+    final index = _notes.indexWhere((note) => note.id == noteId);
+    if (index == -1) {
+      throw StateError('note not found: $noteId');
+    }
+    final updated = _notes[index].copyWith(
+      folderId: folderId,
+      clearFolderId: folderId == null,
+      updatedAt: _clock(),
+    );
+    _notes[index] = updated;
+    return updated;
   }
 
   @override
@@ -353,6 +399,22 @@ class FileNoteRepository extends MemoryNoteRepository {
       payloadJson: payloadJson,
       reason: reason,
     );
+    await _persist();
+    return note;
+  }
+
+
+
+  @override
+  Future<NoteItem> markNoteBlocksIndexed(String noteId, List<String> blockIds) async {
+    final note = await super.markNoteBlocksIndexed(noteId, blockIds);
+    await _persist();
+    return note;
+  }
+
+  @override
+  Future<NoteItem> moveNoteToFolder(String noteId, String? folderId) async {
+    final note = await super.moveNoteToFolder(noteId, folderId);
     await _persist();
     return note;
   }

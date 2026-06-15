@@ -16,10 +16,16 @@ void main() {
           text: 'Első bekezdés.',
         ),
         NoteBlock(
+          id: 'p2',
+          type: NoteBlockType.paragraph,
+          text: 'Második bekezdés.',
+        ),
+        NoteBlock(
           id: 'l1',
           type: NoteBlockType.listItem,
-          text: 'Listaelem',
-          level: 1,
+          listItems: [
+            NoteListItem(id: 'i1', text: 'Listaelem', level: 1),
+          ],
         ),
         NoteBlock(
           id: 't1',
@@ -52,15 +58,21 @@ void main() {
       ]),
     );
 
+    expect(chunks.map((chunk) => chunk.blockId), ['p1', 'p2', 'l1', 't1', 'f1']);
     expect(chunks.map((chunk) => chunk.kind), [
+      NoteChunkKind.text,
       NoteChunkKind.text,
       NoteChunkKind.list,
       NoteChunkKind.table,
       NoteChunkKind.flowchart,
     ]);
     expect(chunks[0].text, contains('Első bekezdés'));
-    expect(chunks[2].text, contains('SpO2 | 88-92%'));
-    expect(chunks[3].text, contains('Döntés? -> Oxigén [Igen]'));
+    expect(chunks[1].text, contains('Második bekezdés'));
+    expect(chunks[2].text, contains('  Listaelem'));
+    expect(chunks[3].text, contains('SpO2 | 88-92%'));
+    expect(chunks[4].text, contains('Döntés? -> Oxigén [Igen]'));
+    expect(chunks.every((chunk) => chunk.isIndexFresh), isFalse);
+    expect(chunks.every((chunk) => chunk.needsReindex), isFalse);
     expect(chunks.every((chunk) => chunk.groupId == 'note-1'), isTrue);
   });
 }

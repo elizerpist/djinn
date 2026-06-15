@@ -90,4 +90,56 @@ void main() {
     expect(document.blocks.single.type, NoteBlockType.paragraph);
     expect(document.plainText, 'SpO2 cél 88-92%');
   });
+
+  test('serializes note block indexing metadata and detects stale index', () {
+    final block = NoteBlock(
+      id: 'block-1',
+      type: NoteBlockType.paragraph,
+      text: 'COPD kivaltok',
+      indexedContentHash: 'old-hash',
+      indexedAt: DateTime.utc(2026, 6, 15),
+    );
+
+    final parsed = NoteBlock.fromJson(block.toJson());
+
+    expect(parsed.indexedContentHash, 'old-hash');
+    expect(parsed.indexedAt, DateTime.utc(2026, 6, 15));
+    expect(parsed.contentHash, isNotEmpty);
+    expect(parsed.isIndexFresh, isFalse);
+    expect(parsed.needsReindex, isTrue);
+  });
+
+  test('list block preserves ordered list items and hierarchy', () {
+    const block = NoteBlock(
+      id: 'list-1',
+      type: NoteBlockType.listItem,
+      listItems: [
+        NoteListItem(id: 'i1', text: 'Elso', level: 0, checked: false),
+        NoteListItem(id: 'i2', text: 'Alpont', level: 1, checked: true),
+      ],
+    );
+
+    final parsed = NoteBlock.fromJson(block.toJson());
+
+    expect(parsed.listItems.map((item) => item.text), ['Elso', 'Alpont']);
+    expect(parsed.listItems[1].level, 1);
+    expect(parsed.listItems[1].checked, isTrue);
+    expect(parsed.plainTextForIndexing, contains('  Alpont'));
+  });
+
+  test('flowchart node stores canvas coordinates', () {
+    const node = NoteFlowchartNode(
+      id: 'n1',
+      label: 'Start',
+      shape: AiFlowchartNodeShape.startEnd,
+      x: 120,
+      y: 80,
+    );
+
+    final parsed = NoteFlowchartNode.fromJson(node.toJson());
+
+    expect(parsed.x, 120);
+    expect(parsed.y, 80);
+  });
+
 }

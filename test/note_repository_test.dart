@@ -110,4 +110,50 @@ void main() {
     expect(rejected.ragEligible, isFalse);
     expect(rejected.reason, 'hibás forrás');
   });
+
+  test('repository allows empty draft notes and marks note blocks indexed', () async {
+    final repository = MemoryNoteRepository();
+    final draft = await repository.createDocumentNote(
+      title: 'Draft',
+      document: const NoteDocument(blocks: [
+        NoteBlock(id: 'block-1', type: NoteBlockType.paragraph, text: ''),
+      ]),
+    );
+
+    expect(draft.plainText, isEmpty);
+
+    final updated = await repository.updateNoteDocument(
+      draft.id,
+      title: 'Draft renamed',
+      document: const NoteDocument(blocks: [
+        NoteBlock(id: 'block-1', type: NoteBlockType.paragraph, text: 'abc'),
+      ]),
+    );
+
+    expect(updated.title, 'Draft renamed');
+    expect(updated.document.blocks.single.isIndexFresh, isFalse);
+
+    final indexed = await repository.markNoteBlocksIndexed(updated.id, ['block-1']);
+
+    expect(indexed.document.blocks.single.isIndexFresh, isTrue);
+    expect(indexed.document.blocks.single.needsReindex, isFalse);
+  });
+
+  test('repository moves notes between folders', () async {
+    final repository = MemoryNoteRepository();
+    final folder = await repository.createFolder('Eljárásrendek');
+    final note = await repository.createDocumentNote(
+      title: 'Mozgatás',
+      document: const NoteDocument(blocks: [
+        NoteBlock(id: 'block-1', type: NoteBlockType.paragraph, text: 'abc'),
+      ]),
+    );
+
+    final moved = await repository.moveNoteToFolder(note.id, folder.id);
+    expect(moved.folderId, folder.id);
+
+    final cleared = await repository.moveNoteToFolder(note.id, null);
+    expect(cleared.folderId, isNull);
+  });
+
 }
