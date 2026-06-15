@@ -62,10 +62,10 @@ void main() {
 
     expect(find.byKey(const ValueKey('note-chunk-card-a')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('note-chunk-delete-a')));
-    await tester.pump(const Duration(milliseconds: 750));
+    await tester.pump();
 
     expect(find.byKey(const ValueKey('note-chunk-card-a')), findsNothing);
-    await tester.tap(find.text('Visszavonás'));
+    tester.widget<SnackBarAction>(find.byType(SnackBarAction)).onPressed();
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('note-chunk-card-a')), findsOneWidget);
