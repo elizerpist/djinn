@@ -434,7 +434,7 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   Future<List<NoteItem>?> _pickNotesImportFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       dialogTitle: 'Jegyzet import',
       type: FileType.custom,
       allowedExtensions: const ['json'],
