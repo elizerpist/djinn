@@ -497,8 +497,11 @@ class LocalKnowledgeGraphExpander {
   }
 
   bool _hasAffirmedCondition(String candidateNormalized, _BranchSignal branch) {
+    final hasNegatedValue = branch.valueTerms
+        .any((term) => _hasNegatedTerm(candidateNormalized, term));
     if (_containsNormalizedPhrase(candidateNormalized, branch.key) &&
-        !_containsNegatedPhrase(candidateNormalized, branch.key)) {
+        !_containsNegatedPhrase(candidateNormalized, branch.key) &&
+        !hasNegatedValue) {
       return true;
     }
     for (final term in branch.valueTerms) {
