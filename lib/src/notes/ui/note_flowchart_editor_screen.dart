@@ -135,7 +135,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     final geometry = _canvasGeometryFor(_positionedNodes);
     final first = _positionedNodes.first;
     final local = Offset(first.x - geometry.bounds.left, first.y - geometry.bounds.top);
-    _canvasController.value = Matrix4.identity()..translate(120.0 - local.dx, 120.0 - local.dy);
+    _canvasController.value = Matrix4.translationValues(120.0 - local.dx, 120.0 - local.dy, 0);
     _initialCanvasCentered = true;
     _log(
       'canvas initial center node=${first.id} bounds=${geometry.bounds.left.toStringAsFixed(0)},${geometry.bounds.top.toStringAsFixed(0)},'

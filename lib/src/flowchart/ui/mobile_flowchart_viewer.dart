@@ -254,7 +254,7 @@ class _MobileFlowchartViewerState extends State<MobileFlowchartViewer> {
 
   String _guidePathLabel() {
     final labels = <String>[];
-    for (final step in [..._guideBackStack, if (_guideStep != null) _guideStep!]) {
+    for (final step in [..._guideBackStack, ?_guideStep]) {
       final label = step.branch?.label.trim();
       if (label != null && label.isNotEmpty) {
         labels.add(label);
@@ -618,7 +618,7 @@ class _AnswerChip extends StatelessWidget {
 }
 
 class _ProcessCard extends StatelessWidget {
-  const _ProcessCard({super.key, required this.node, required this.terminal});
+  const _ProcessCard({required this.node, required this.terminal});
 
   final MobileFlowchartNode node;
   final bool terminal;
