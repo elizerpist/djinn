@@ -133,12 +133,14 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
       return;
     }
     final geometry = _canvasGeometryFor(_positionedNodes);
-    final first = _positionedNodes.first;
-    final local = Offset(first.x - geometry.bounds.left, first.y - geometry.bounds.top);
+    final nodes = _positionedNodes;
+    final contentLeft = nodes.map((node) => node.x).reduce(math.min);
+    final contentTop = nodes.map((node) => node.y).reduce(math.min);
+    final local = Offset(contentLeft - geometry.bounds.left, contentTop - geometry.bounds.top);
     _canvasController.value = Matrix4.translationValues(120.0 - local.dx, 120.0 - local.dy, 0);
     _initialCanvasCentered = true;
     _log(
-      'canvas initial center node=${first.id} bounds=${geometry.bounds.left.toStringAsFixed(0)},${geometry.bounds.top.toStringAsFixed(0)},'
+      'canvas initial center origin=${contentLeft.toStringAsFixed(1)},${contentTop.toStringAsFixed(1)} bounds=${geometry.bounds.left.toStringAsFixed(0)},${geometry.bounds.top.toStringAsFixed(0)},'
       '${geometry.bounds.width.toStringAsFixed(0)}x${geometry.bounds.height.toStringAsFixed(0)} '
       'translate=${(120.0 - local.dx).toStringAsFixed(1)},${(120.0 - local.dy).toStringAsFixed(1)}',
     );
