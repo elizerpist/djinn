@@ -341,7 +341,7 @@
     },
     {
       "id": "6:9012920818068651330",
-      "lastPropertyId": "7:6184607323443707496",
+      "lastPropertyId": "13:4895734823750777506",
       "name": "DocumentChunkEntity",
       "properties": [
         {
@@ -382,6 +382,36 @@
         {
           "id": "7:6184607323443707496",
           "name": "sourceRectJson",
+          "type": 9
+        },
+        {
+          "id": "8:260415155013015694",
+          "name": "pipeline",
+          "type": 9
+        },
+        {
+          "id": "9:5537504821889093045",
+          "name": "chunkKind",
+          "type": 9
+        },
+        {
+          "id": "10:9042423905567594545",
+          "name": "auditState",
+          "type": 9
+        },
+        {
+          "id": "11:4953371634906505277",
+          "name": "endPageNumber",
+          "type": 6
+        },
+        {
+          "id": "12:8662152663731677051",
+          "name": "confidence",
+          "type": 8
+        },
+        {
+          "id": "13:4895734823750777506",
+          "name": "sourcePageImagePath",
           "type": 9
         }
       ],
@@ -881,10 +911,403 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "16:3654357759583333854",
+      "lastPropertyId": "9:4435970556397964175",
+      "name": "DocumentPageEntity",
+      "properties": [
+        {
+          "id": "1:6523114831133414220",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5536141095116988277",
+          "name": "publicId",
+          "indexId": "38:4395028840080529884",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:1069154060935589396",
+          "name": "documentPublicId",
+          "indexId": "39:8748593315346845408",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:4584621596620795843",
+          "name": "pageNumber",
+          "type": 6
+        },
+        {
+          "id": "5:2424700628345641914",
+          "name": "pdfText",
+          "type": 9
+        },
+        {
+          "id": "6:39205089615541317",
+          "name": "ocrText",
+          "type": 9
+        },
+        {
+          "id": "7:4421192677668555564",
+          "name": "sourceImagePath",
+          "type": 9
+        },
+        {
+          "id": "8:2627713404304345934",
+          "name": "ocrBlocksJson",
+          "type": 9
+        },
+        {
+          "id": "9:4435970556397964175",
+          "name": "confidence",
+          "type": 8
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "17:8555590354157093934",
+      "lastPropertyId": "12:8935662399537079463",
+      "name": "ExtractionAuditItemEntity",
+      "properties": [
+        {
+          "id": "1:7090993984550257858",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5273077792448681079",
+          "name": "publicId",
+          "indexId": "40:5884191769370718094",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:5354606771960257195",
+          "name": "documentPublicId",
+          "indexId": "41:69595085084920233",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:6968838403035886661",
+          "name": "sourceId",
+          "indexId": "42:5893925042877635132",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "5:1906112096431625564",
+          "name": "itemKind",
+          "type": 9
+        },
+        {
+          "id": "6:2251291130882490881",
+          "name": "auditState",
+          "indexId": "43:4497266692270142161",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "7:3423752536205927353",
+          "name": "createdAtMillis",
+          "type": 6
+        },
+        {
+          "id": "8:5969107149574854924",
+          "name": "updatedAtMillis",
+          "type": 6
+        },
+        {
+          "id": "9:7978911087779273594",
+          "name": "pageNumber",
+          "type": 6
+        },
+        {
+          "id": "10:1194444548409532676",
+          "name": "title",
+          "type": 9
+        },
+        {
+          "id": "11:4358498471038670645",
+          "name": "previewText",
+          "type": 9
+        },
+        {
+          "id": "12:8935662399537079463",
+          "name": "reason",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "18:735635206513977887",
+      "lastPropertyId": "8:6699758859889641115",
+      "name": "KnowledgeEdgeEntity",
+      "properties": [
+        {
+          "id": "1:1782058772335909839",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5891978482389994028",
+          "name": "publicId",
+          "indexId": "44:6731850853749227733",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:8228719095465102092",
+          "name": "documentPublicId",
+          "indexId": "45:3597131991118137847",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:2013335340392559505",
+          "name": "fromNodePublicId",
+          "indexId": "46:5079415418822625416",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "5:173332918323237411",
+          "name": "toNodePublicId",
+          "indexId": "47:1828241906215055116",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "6:3564100980624144407",
+          "name": "relationType",
+          "type": 9
+        },
+        {
+          "id": "7:7503366254546944854",
+          "name": "sourceId",
+          "type": 9
+        },
+        {
+          "id": "8:6699758859889641115",
+          "name": "weight",
+          "type": 8
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "19:5131886372393230761",
+      "lastPropertyId": "8:5252942487361022254",
+      "name": "KnowledgeEvidenceEntity",
+      "properties": [
+        {
+          "id": "1:1604085941810202653",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8707434389628290258",
+          "name": "publicId",
+          "indexId": "48:1488589454322328618",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:2020083632218525539",
+          "name": "documentPublicId",
+          "indexId": "49:4311506849620809144",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:4526792581877571573",
+          "name": "nodePublicId",
+          "indexId": "50:4414296485271801808",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "5:766032554927310939",
+          "name": "sourceId",
+          "indexId": "51:5166750424081663364",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "6:4826587577872319802",
+          "name": "pipeline",
+          "type": 9
+        },
+        {
+          "id": "7:2942988143895132287",
+          "name": "pageNumber",
+          "type": 6
+        },
+        {
+          "id": "8:5252942487361022254",
+          "name": "quote",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "20:8608376590414888748",
+      "lastPropertyId": "7:3967403468429276116",
+      "name": "KnowledgeNodeEntity",
+      "properties": [
+        {
+          "id": "1:2313821302603826785",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4310127331581100597",
+          "name": "publicId",
+          "indexId": "52:8506302372775200162",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:432651012624640842",
+          "name": "documentPublicId",
+          "indexId": "53:2510649677025975341",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:6579929949765331993",
+          "name": "label",
+          "type": 9
+        },
+        {
+          "id": "5:2033963631753721014",
+          "name": "nodeType",
+          "type": 9
+        },
+        {
+          "id": "6:761590079858819613",
+          "name": "pageNumber",
+          "type": 6
+        },
+        {
+          "id": "7:3967403468429276116",
+          "name": "sourceId",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "21:8310078487347719254",
+      "lastPropertyId": "6:6765526081377724717",
+      "name": "VisualAttributeEntity",
+      "properties": [
+        {
+          "id": "1:3227356898693518271",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:436199477006887953",
+          "name": "publicId",
+          "indexId": "54:1965135697585886065",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:358724498593790905",
+          "name": "visualObjectPublicId",
+          "indexId": "55:175540828400483056",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:6096227169837746491",
+          "name": "name",
+          "type": 9
+        },
+        {
+          "id": "5:5323456373034880495",
+          "name": "value",
+          "type": 9
+        },
+        {
+          "id": "6:6765526081377724717",
+          "name": "confidence",
+          "type": 8
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "22:2610622360413787757",
+      "lastPropertyId": "8:7595583267468798293",
+      "name": "VisualObjectEntity",
+      "properties": [
+        {
+          "id": "1:3832988401427193539",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:1580759771411175485",
+          "name": "publicId",
+          "indexId": "56:6243970286928595272",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:6213925596614578170",
+          "name": "documentPublicId",
+          "indexId": "57:4476825770952347571",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:501375790879978743",
+          "name": "label",
+          "type": 9
+        },
+        {
+          "id": "5:2495164641199660888",
+          "name": "objectType",
+          "type": 9
+        },
+        {
+          "id": "6:613996480655522503",
+          "name": "pageNumber",
+          "type": 6
+        },
+        {
+          "id": "7:9178454185101702698",
+          "name": "sourceRectJson",
+          "type": 9
+        },
+        {
+          "id": "8:7595583267468798293",
+          "name": "confidence",
+          "type": 8
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "15:6991698022716353084",
-  "lastIndexId": "37:1787844394609503170",
+  "lastEntityId": "22:2610622360413787757",
+  "lastIndexId": "57:4476825770952347571",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

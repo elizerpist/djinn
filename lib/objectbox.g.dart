@@ -411,7 +411,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(6, 9012920818068651330),
     name: 'DocumentChunkEntity',
-    lastPropertyId: const obx_int.IdUid(7, 6184607323443707496),
+    lastPropertyId: const obx_int.IdUid(13, 4895734823750777506),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -455,6 +455,42 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(7, 6184607323443707496),
         name: 'sourceRectJson',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 260415155013015694),
+        name: 'pipeline',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 5537504821889093045),
+        name: 'chunkKind',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(10, 9042423905567594545),
+        name: 'auditState',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 4953371634906505277),
+        name: 'endPageNumber',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 8662152663731677051),
+        name: 'confidence',
+        type: 8,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(13, 4895734823750777506),
+        name: 'sourcePageImagePath',
         type: 9,
         flags: 0,
       ),
@@ -1011,6 +1047,444 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(16, 3654357759583333854),
+    name: 'DocumentPageEntity',
+    lastPropertyId: const obx_int.IdUid(9, 4435970556397964175),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 6523114831133414220),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 5536141095116988277),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(38, 4395028840080529884),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 1069154060935589396),
+        name: 'documentPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(39, 8748593315346845408),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 4584621596620795843),
+        name: 'pageNumber',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 2424700628345641914),
+        name: 'pdfText',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 39205089615541317),
+        name: 'ocrText',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 4421192677668555564),
+        name: 'sourceImagePath',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 2627713404304345934),
+        name: 'ocrBlocksJson',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 4435970556397964175),
+        name: 'confidence',
+        type: 8,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(17, 8555590354157093934),
+    name: 'ExtractionAuditItemEntity',
+    lastPropertyId: const obx_int.IdUid(12, 8935662399537079463),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 7090993984550257858),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 5273077792448681079),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(40, 5884191769370718094),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 5354606771960257195),
+        name: 'documentPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(41, 69595085084920233),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 6968838403035886661),
+        name: 'sourceId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(42, 5893925042877635132),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 1906112096431625564),
+        name: 'itemKind',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 2251291130882490881),
+        name: 'auditState',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(43, 4497266692270142161),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 3423752536205927353),
+        name: 'createdAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 5969107149574854924),
+        name: 'updatedAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 7978911087779273594),
+        name: 'pageNumber',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(10, 1194444548409532676),
+        name: 'title',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 4358498471038670645),
+        name: 'previewText',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 8935662399537079463),
+        name: 'reason',
+        type: 9,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(18, 735635206513977887),
+    name: 'KnowledgeEdgeEntity',
+    lastPropertyId: const obx_int.IdUid(8, 6699758859889641115),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 1782058772335909839),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 5891978482389994028),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(44, 6731850853749227733),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 8228719095465102092),
+        name: 'documentPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(45, 3597131991118137847),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 2013335340392559505),
+        name: 'fromNodePublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(46, 5079415418822625416),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 173332918323237411),
+        name: 'toNodePublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(47, 1828241906215055116),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 3564100980624144407),
+        name: 'relationType',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 7503366254546944854),
+        name: 'sourceId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 6699758859889641115),
+        name: 'weight',
+        type: 8,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(19, 5131886372393230761),
+    name: 'KnowledgeEvidenceEntity',
+    lastPropertyId: const obx_int.IdUid(8, 5252942487361022254),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 1604085941810202653),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 8707434389628290258),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(48, 1488589454322328618),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 2020083632218525539),
+        name: 'documentPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(49, 4311506849620809144),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 4526792581877571573),
+        name: 'nodePublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(50, 4414296485271801808),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 766032554927310939),
+        name: 'sourceId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(51, 5166750424081663364),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 4826587577872319802),
+        name: 'pipeline',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 2942988143895132287),
+        name: 'pageNumber',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 5252942487361022254),
+        name: 'quote',
+        type: 9,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(20, 8608376590414888748),
+    name: 'KnowledgeNodeEntity',
+    lastPropertyId: const obx_int.IdUid(7, 3967403468429276116),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 2313821302603826785),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 4310127331581100597),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(52, 8506302372775200162),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 432651012624640842),
+        name: 'documentPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(53, 2510649677025975341),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 6579929949765331993),
+        name: 'label',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 2033963631753721014),
+        name: 'nodeType',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 761590079858819613),
+        name: 'pageNumber',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 3967403468429276116),
+        name: 'sourceId',
+        type: 9,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(21, 8310078487347719254),
+    name: 'VisualAttributeEntity',
+    lastPropertyId: const obx_int.IdUid(6, 6765526081377724717),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 3227356898693518271),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 436199477006887953),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(54, 1965135697585886065),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 358724498593790905),
+        name: 'visualObjectPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(55, 175540828400483056),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 6096227169837746491),
+        name: 'name',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 5323456373034880495),
+        name: 'value',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 6765526081377724717),
+        name: 'confidence',
+        type: 8,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(22, 2610622360413787757),
+    name: 'VisualObjectEntity',
+    lastPropertyId: const obx_int.IdUid(8, 7595583267468798293),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 3832988401427193539),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 1580759771411175485),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(56, 6243970286928595272),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 6213925596614578170),
+        name: 'documentPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(57, 4476825770952347571),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 501375790879978743),
+        name: 'label',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 2495164641199660888),
+        name: 'objectType',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 613996480655522503),
+        name: 'pageNumber',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 9178454185101702698),
+        name: 'sourceRectJson',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 7595583267468798293),
+        name: 'confidence',
+        type: 8,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -1056,8 +1530,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(15, 6991698022716353084),
-    lastIndexId: const obx_int.IdUid(37, 1787844394609503170),
+    lastEntityId: const obx_int.IdUid(22, 2610622360413787757),
+    lastIndexId: const obx_int.IdUid(57, 4476825770952347571),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -1233,12 +1707,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final chunkingModeParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 48, '');
-        final navigationModeParam = const fb.StringReader(
-          asciiOptimization: true,
-        ).vTableGet(buffer, rootOffset, 50, '');
         final localIndexingModeParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 52, '');
+        final navigationModeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 50, '');
         final object = AppSettingsEntity(
           id: idParam,
           runtimeMode: runtimeModeParam,
@@ -1589,7 +2063,13 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final sourceRectJsonOffset = object.sourceRectJson == null
             ? null
             : fbb.writeString(object.sourceRectJson!);
-        fbb.startTable(8);
+        final pipelineOffset = fbb.writeString(object.pipeline);
+        final chunkKindOffset = fbb.writeString(object.chunkKind);
+        final auditStateOffset = fbb.writeString(object.auditState);
+        final sourcePageImagePathOffset = object.sourcePageImagePath == null
+            ? null
+            : fbb.writeString(object.sourcePageImagePath!);
+        fbb.startTable(14);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, publicIdOffset);
         fbb.addOffset(2, documentPublicIdOffset);
@@ -1597,6 +2077,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addInt64(4, object.pageNumber);
         fbb.addOffset(5, sectionTitleOffset);
         fbb.addOffset(6, sourceRectJsonOffset);
+        fbb.addOffset(7, pipelineOffset);
+        fbb.addOffset(8, chunkKindOffset);
+        fbb.addOffset(9, auditStateOffset);
+        fbb.addInt64(10, object.endPageNumber);
+        fbb.addFloat64(11, object.confidence);
+        fbb.addOffset(12, sourcePageImagePathOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1630,6 +2116,28 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final sourceRectJsonParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 16);
+        final pipelineParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 18, '');
+        final chunkKindParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 20, '');
+        final auditStateParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 22, '');
+        final endPageNumberParam = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          24,
+        );
+        final confidenceParam = const fb.Float64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          26,
+        );
+        final sourcePageImagePathParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 28);
         final object = DocumentChunkEntity(
           id: idParam,
           publicId: publicIdParam,
@@ -1638,6 +2146,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
           pageNumber: pageNumberParam,
           sectionTitle: sectionTitleParam,
           sourceRectJson: sourceRectJsonParam,
+          pipeline: pipelineParam,
+          chunkKind: chunkKindParam,
+          auditState: auditStateParam,
+          endPageNumber: endPageNumberParam,
+          confidence: confidenceParam,
+          sourcePageImagePath: sourcePageImagePathParam,
         );
 
         return object;
@@ -2354,6 +2868,559 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    DocumentPageEntity: obx_int.EntityDefinition<DocumentPageEntity>(
+      model: _entities[15],
+      toOneRelations: (DocumentPageEntity object) => [],
+      toManyRelations: (DocumentPageEntity object) => {},
+      getId: (DocumentPageEntity object) => object.id,
+      setId: (DocumentPageEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (DocumentPageEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final documentPublicIdOffset = fbb.writeString(object.documentPublicId);
+        final pdfTextOffset = object.pdfText == null
+            ? null
+            : fbb.writeString(object.pdfText!);
+        final ocrTextOffset = object.ocrText == null
+            ? null
+            : fbb.writeString(object.ocrText!);
+        final sourceImagePathOffset = object.sourceImagePath == null
+            ? null
+            : fbb.writeString(object.sourceImagePath!);
+        final ocrBlocksJsonOffset = object.ocrBlocksJson == null
+            ? null
+            : fbb.writeString(object.ocrBlocksJson!);
+        fbb.startTable(10);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, documentPublicIdOffset);
+        fbb.addInt64(3, object.pageNumber);
+        fbb.addOffset(4, pdfTextOffset);
+        fbb.addOffset(5, ocrTextOffset);
+        fbb.addOffset(6, sourceImagePathOffset);
+        fbb.addOffset(7, ocrBlocksJsonOffset);
+        fbb.addFloat64(8, object.confidence);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final documentPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final pageNumberParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          10,
+          0,
+        );
+        final pdfTextParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 12);
+        final ocrTextParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 14);
+        final sourceImagePathParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 16);
+        final ocrBlocksJsonParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 18);
+        final confidenceParam = const fb.Float64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          20,
+        );
+        final object = DocumentPageEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          documentPublicId: documentPublicIdParam,
+          pageNumber: pageNumberParam,
+          pdfText: pdfTextParam,
+          ocrText: ocrTextParam,
+          sourceImagePath: sourceImagePathParam,
+          ocrBlocksJson: ocrBlocksJsonParam,
+          confidence: confidenceParam,
+        );
+
+        return object;
+      },
+    ),
+    ExtractionAuditItemEntity:
+        obx_int.EntityDefinition<ExtractionAuditItemEntity>(
+          model: _entities[16],
+          toOneRelations: (ExtractionAuditItemEntity object) => [],
+          toManyRelations: (ExtractionAuditItemEntity object) => {},
+          getId: (ExtractionAuditItemEntity object) => object.id,
+          setId: (ExtractionAuditItemEntity object, int id) {
+            object.id = id;
+          },
+          objectToFB: (ExtractionAuditItemEntity object, fb.Builder fbb) {
+            final publicIdOffset = fbb.writeString(object.publicId);
+            final documentPublicIdOffset = fbb.writeString(
+              object.documentPublicId,
+            );
+            final sourceIdOffset = fbb.writeString(object.sourceId);
+            final itemKindOffset = fbb.writeString(object.itemKind);
+            final auditStateOffset = fbb.writeString(object.auditState);
+            final titleOffset = object.title == null
+                ? null
+                : fbb.writeString(object.title!);
+            final previewTextOffset = object.previewText == null
+                ? null
+                : fbb.writeString(object.previewText!);
+            final reasonOffset = object.reason == null
+                ? null
+                : fbb.writeString(object.reason!);
+            fbb.startTable(13);
+            fbb.addInt64(0, object.id);
+            fbb.addOffset(1, publicIdOffset);
+            fbb.addOffset(2, documentPublicIdOffset);
+            fbb.addOffset(3, sourceIdOffset);
+            fbb.addOffset(4, itemKindOffset);
+            fbb.addOffset(5, auditStateOffset);
+            fbb.addInt64(6, object.createdAtMillis);
+            fbb.addInt64(7, object.updatedAtMillis);
+            fbb.addInt64(8, object.pageNumber);
+            fbb.addOffset(9, titleOffset);
+            fbb.addOffset(10, previewTextOffset);
+            fbb.addOffset(11, reasonOffset);
+            fbb.finish(fbb.endTable());
+            return object.id;
+          },
+          objectFromFB: (obx.Store store, ByteData fbData) {
+            final buffer = fb.BufferContext(fbData);
+            final rootOffset = buffer.derefObject(0);
+            final idParam = const fb.Int64Reader().vTableGet(
+              buffer,
+              rootOffset,
+              4,
+              0,
+            );
+            final publicIdParam = const fb.StringReader(
+              asciiOptimization: true,
+            ).vTableGet(buffer, rootOffset, 6, '');
+            final documentPublicIdParam = const fb.StringReader(
+              asciiOptimization: true,
+            ).vTableGet(buffer, rootOffset, 8, '');
+            final sourceIdParam = const fb.StringReader(
+              asciiOptimization: true,
+            ).vTableGet(buffer, rootOffset, 10, '');
+            final itemKindParam = const fb.StringReader(
+              asciiOptimization: true,
+            ).vTableGet(buffer, rootOffset, 12, '');
+            final auditStateParam = const fb.StringReader(
+              asciiOptimization: true,
+            ).vTableGet(buffer, rootOffset, 14, '');
+            final createdAtMillisParam = const fb.Int64Reader().vTableGet(
+              buffer,
+              rootOffset,
+              16,
+              0,
+            );
+            final pageNumberParam = const fb.Int64Reader().vTableGetNullable(
+              buffer,
+              rootOffset,
+              20,
+            );
+            final titleParam = const fb.StringReader(
+              asciiOptimization: true,
+            ).vTableGetNullable(buffer, rootOffset, 22);
+            final previewTextParam = const fb.StringReader(
+              asciiOptimization: true,
+            ).vTableGetNullable(buffer, rootOffset, 24);
+            final reasonParam = const fb.StringReader(
+              asciiOptimization: true,
+            ).vTableGetNullable(buffer, rootOffset, 26);
+            final updatedAtMillisParam = const fb.Int64Reader()
+                .vTableGetNullable(buffer, rootOffset, 18);
+            final object = ExtractionAuditItemEntity(
+              id: idParam,
+              publicId: publicIdParam,
+              documentPublicId: documentPublicIdParam,
+              sourceId: sourceIdParam,
+              itemKind: itemKindParam,
+              auditState: auditStateParam,
+              createdAtMillis: createdAtMillisParam,
+              pageNumber: pageNumberParam,
+              title: titleParam,
+              previewText: previewTextParam,
+              reason: reasonParam,
+              updatedAtMillis: updatedAtMillisParam,
+            );
+
+            return object;
+          },
+        ),
+    KnowledgeEdgeEntity: obx_int.EntityDefinition<KnowledgeEdgeEntity>(
+      model: _entities[17],
+      toOneRelations: (KnowledgeEdgeEntity object) => [],
+      toManyRelations: (KnowledgeEdgeEntity object) => {},
+      getId: (KnowledgeEdgeEntity object) => object.id,
+      setId: (KnowledgeEdgeEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (KnowledgeEdgeEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final documentPublicIdOffset = fbb.writeString(object.documentPublicId);
+        final fromNodePublicIdOffset = fbb.writeString(object.fromNodePublicId);
+        final toNodePublicIdOffset = fbb.writeString(object.toNodePublicId);
+        final relationTypeOffset = fbb.writeString(object.relationType);
+        final sourceIdOffset = object.sourceId == null
+            ? null
+            : fbb.writeString(object.sourceId!);
+        fbb.startTable(9);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, documentPublicIdOffset);
+        fbb.addOffset(3, fromNodePublicIdOffset);
+        fbb.addOffset(4, toNodePublicIdOffset);
+        fbb.addOffset(5, relationTypeOffset);
+        fbb.addOffset(6, sourceIdOffset);
+        fbb.addFloat64(7, object.weight);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final documentPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final fromNodePublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final toNodePublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final relationTypeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 14, '');
+        final sourceIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 16);
+        final weightParam = const fb.Float64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          18,
+        );
+        final object = KnowledgeEdgeEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          documentPublicId: documentPublicIdParam,
+          fromNodePublicId: fromNodePublicIdParam,
+          toNodePublicId: toNodePublicIdParam,
+          relationType: relationTypeParam,
+          sourceId: sourceIdParam,
+          weight: weightParam,
+        );
+
+        return object;
+      },
+    ),
+    KnowledgeEvidenceEntity: obx_int.EntityDefinition<KnowledgeEvidenceEntity>(
+      model: _entities[18],
+      toOneRelations: (KnowledgeEvidenceEntity object) => [],
+      toManyRelations: (KnowledgeEvidenceEntity object) => {},
+      getId: (KnowledgeEvidenceEntity object) => object.id,
+      setId: (KnowledgeEvidenceEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (KnowledgeEvidenceEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final documentPublicIdOffset = fbb.writeString(object.documentPublicId);
+        final nodePublicIdOffset = fbb.writeString(object.nodePublicId);
+        final sourceIdOffset = fbb.writeString(object.sourceId);
+        final pipelineOffset = fbb.writeString(object.pipeline);
+        final quoteOffset = object.quote == null
+            ? null
+            : fbb.writeString(object.quote!);
+        fbb.startTable(9);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, documentPublicIdOffset);
+        fbb.addOffset(3, nodePublicIdOffset);
+        fbb.addOffset(4, sourceIdOffset);
+        fbb.addOffset(5, pipelineOffset);
+        fbb.addInt64(6, object.pageNumber);
+        fbb.addOffset(7, quoteOffset);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final documentPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final nodePublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final sourceIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final pipelineParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 14, '');
+        final pageNumberParam = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          16,
+        );
+        final quoteParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 18);
+        final object = KnowledgeEvidenceEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          documentPublicId: documentPublicIdParam,
+          nodePublicId: nodePublicIdParam,
+          sourceId: sourceIdParam,
+          pipeline: pipelineParam,
+          pageNumber: pageNumberParam,
+          quote: quoteParam,
+        );
+
+        return object;
+      },
+    ),
+    KnowledgeNodeEntity: obx_int.EntityDefinition<KnowledgeNodeEntity>(
+      model: _entities[19],
+      toOneRelations: (KnowledgeNodeEntity object) => [],
+      toManyRelations: (KnowledgeNodeEntity object) => {},
+      getId: (KnowledgeNodeEntity object) => object.id,
+      setId: (KnowledgeNodeEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (KnowledgeNodeEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final documentPublicIdOffset = fbb.writeString(object.documentPublicId);
+        final labelOffset = fbb.writeString(object.label);
+        final nodeTypeOffset = fbb.writeString(object.nodeType);
+        final sourceIdOffset = object.sourceId == null
+            ? null
+            : fbb.writeString(object.sourceId!);
+        fbb.startTable(8);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, documentPublicIdOffset);
+        fbb.addOffset(3, labelOffset);
+        fbb.addOffset(4, nodeTypeOffset);
+        fbb.addInt64(5, object.pageNumber);
+        fbb.addOffset(6, sourceIdOffset);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final documentPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final labelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final nodeTypeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final pageNumberParam = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          14,
+        );
+        final sourceIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 16);
+        final object = KnowledgeNodeEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          documentPublicId: documentPublicIdParam,
+          label: labelParam,
+          nodeType: nodeTypeParam,
+          pageNumber: pageNumberParam,
+          sourceId: sourceIdParam,
+        );
+
+        return object;
+      },
+    ),
+    VisualAttributeEntity: obx_int.EntityDefinition<VisualAttributeEntity>(
+      model: _entities[20],
+      toOneRelations: (VisualAttributeEntity object) => [],
+      toManyRelations: (VisualAttributeEntity object) => {},
+      getId: (VisualAttributeEntity object) => object.id,
+      setId: (VisualAttributeEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (VisualAttributeEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final visualObjectPublicIdOffset = fbb.writeString(
+          object.visualObjectPublicId,
+        );
+        final nameOffset = fbb.writeString(object.name);
+        final valueOffset = fbb.writeString(object.value);
+        fbb.startTable(7);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, visualObjectPublicIdOffset);
+        fbb.addOffset(3, nameOffset);
+        fbb.addOffset(4, valueOffset);
+        fbb.addFloat64(5, object.confidence);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final visualObjectPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final nameParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final valueParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final confidenceParam = const fb.Float64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          14,
+        );
+        final object = VisualAttributeEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          visualObjectPublicId: visualObjectPublicIdParam,
+          name: nameParam,
+          value: valueParam,
+          confidence: confidenceParam,
+        );
+
+        return object;
+      },
+    ),
+    VisualObjectEntity: obx_int.EntityDefinition<VisualObjectEntity>(
+      model: _entities[21],
+      toOneRelations: (VisualObjectEntity object) => [],
+      toManyRelations: (VisualObjectEntity object) => {},
+      getId: (VisualObjectEntity object) => object.id,
+      setId: (VisualObjectEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (VisualObjectEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final documentPublicIdOffset = fbb.writeString(object.documentPublicId);
+        final labelOffset = fbb.writeString(object.label);
+        final objectTypeOffset = fbb.writeString(object.objectType);
+        final sourceRectJsonOffset = object.sourceRectJson == null
+            ? null
+            : fbb.writeString(object.sourceRectJson!);
+        fbb.startTable(9);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, documentPublicIdOffset);
+        fbb.addOffset(3, labelOffset);
+        fbb.addOffset(4, objectTypeOffset);
+        fbb.addInt64(5, object.pageNumber);
+        fbb.addOffset(6, sourceRectJsonOffset);
+        fbb.addFloat64(7, object.confidence);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final documentPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final labelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final objectTypeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final pageNumberParam = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          14,
+        );
+        final sourceRectJsonParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 16);
+        final confidenceParam = const fb.Float64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          18,
+        );
+        final object = VisualObjectEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          documentPublicId: documentPublicIdParam,
+          label: labelParam,
+          objectType: objectTypeParam,
+          pageNumber: pageNumberParam,
+          sourceRectJson: sourceRectJsonParam,
+          confidence: confidenceParam,
+        );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -2675,6 +3742,35 @@ class DocumentChunkEntity_ {
   static final sourceRectJson = obx.QueryStringProperty<DocumentChunkEntity>(
     _entities[5].properties[6],
   );
+
+  /// See [DocumentChunkEntity.pipeline].
+  static final pipeline = obx.QueryStringProperty<DocumentChunkEntity>(
+    _entities[5].properties[7],
+  );
+
+  /// See [DocumentChunkEntity.chunkKind].
+  static final chunkKind = obx.QueryStringProperty<DocumentChunkEntity>(
+    _entities[5].properties[8],
+  );
+
+  /// See [DocumentChunkEntity.auditState].
+  static final auditState = obx.QueryStringProperty<DocumentChunkEntity>(
+    _entities[5].properties[9],
+  );
+
+  /// See [DocumentChunkEntity.endPageNumber].
+  static final endPageNumber = obx.QueryIntegerProperty<DocumentChunkEntity>(
+    _entities[5].properties[10],
+  );
+
+  /// See [DocumentChunkEntity.confidence].
+  static final confidence = obx.QueryDoubleProperty<DocumentChunkEntity>(
+    _entities[5].properties[11],
+  );
+
+  /// See [DocumentChunkEntity.sourcePageImagePath].
+  static final sourcePageImagePath =
+      obx.QueryStringProperty<DocumentChunkEntity>(_entities[5].properties[12]);
 }
 
 /// [FlowchartEdgeEntity] entity fields to define ObjectBox queries.
@@ -3068,5 +4164,321 @@ class CaseEntity_ {
   /// See [CaseEntity.archived].
   static final archived = obx.QueryBooleanProperty<CaseEntity>(
     _entities[14].properties[6],
+  );
+}
+
+/// [DocumentPageEntity] entity fields to define ObjectBox queries.
+class DocumentPageEntity_ {
+  /// See [DocumentPageEntity.id].
+  static final id = obx.QueryIntegerProperty<DocumentPageEntity>(
+    _entities[15].properties[0],
+  );
+
+  /// See [DocumentPageEntity.publicId].
+  static final publicId = obx.QueryStringProperty<DocumentPageEntity>(
+    _entities[15].properties[1],
+  );
+
+  /// See [DocumentPageEntity.documentPublicId].
+  static final documentPublicId = obx.QueryStringProperty<DocumentPageEntity>(
+    _entities[15].properties[2],
+  );
+
+  /// See [DocumentPageEntity.pageNumber].
+  static final pageNumber = obx.QueryIntegerProperty<DocumentPageEntity>(
+    _entities[15].properties[3],
+  );
+
+  /// See [DocumentPageEntity.pdfText].
+  static final pdfText = obx.QueryStringProperty<DocumentPageEntity>(
+    _entities[15].properties[4],
+  );
+
+  /// See [DocumentPageEntity.ocrText].
+  static final ocrText = obx.QueryStringProperty<DocumentPageEntity>(
+    _entities[15].properties[5],
+  );
+
+  /// See [DocumentPageEntity.sourceImagePath].
+  static final sourceImagePath = obx.QueryStringProperty<DocumentPageEntity>(
+    _entities[15].properties[6],
+  );
+
+  /// See [DocumentPageEntity.ocrBlocksJson].
+  static final ocrBlocksJson = obx.QueryStringProperty<DocumentPageEntity>(
+    _entities[15].properties[7],
+  );
+
+  /// See [DocumentPageEntity.confidence].
+  static final confidence = obx.QueryDoubleProperty<DocumentPageEntity>(
+    _entities[15].properties[8],
+  );
+}
+
+/// [ExtractionAuditItemEntity] entity fields to define ObjectBox queries.
+class ExtractionAuditItemEntity_ {
+  /// See [ExtractionAuditItemEntity.id].
+  static final id = obx.QueryIntegerProperty<ExtractionAuditItemEntity>(
+    _entities[16].properties[0],
+  );
+
+  /// See [ExtractionAuditItemEntity.publicId].
+  static final publicId = obx.QueryStringProperty<ExtractionAuditItemEntity>(
+    _entities[16].properties[1],
+  );
+
+  /// See [ExtractionAuditItemEntity.documentPublicId].
+  static final documentPublicId =
+      obx.QueryStringProperty<ExtractionAuditItemEntity>(
+        _entities[16].properties[2],
+      );
+
+  /// See [ExtractionAuditItemEntity.sourceId].
+  static final sourceId = obx.QueryStringProperty<ExtractionAuditItemEntity>(
+    _entities[16].properties[3],
+  );
+
+  /// See [ExtractionAuditItemEntity.itemKind].
+  static final itemKind = obx.QueryStringProperty<ExtractionAuditItemEntity>(
+    _entities[16].properties[4],
+  );
+
+  /// See [ExtractionAuditItemEntity.auditState].
+  static final auditState = obx.QueryStringProperty<ExtractionAuditItemEntity>(
+    _entities[16].properties[5],
+  );
+
+  /// See [ExtractionAuditItemEntity.createdAtMillis].
+  static final createdAtMillis =
+      obx.QueryIntegerProperty<ExtractionAuditItemEntity>(
+        _entities[16].properties[6],
+      );
+
+  /// See [ExtractionAuditItemEntity.updatedAtMillis].
+  static final updatedAtMillis =
+      obx.QueryIntegerProperty<ExtractionAuditItemEntity>(
+        _entities[16].properties[7],
+      );
+
+  /// See [ExtractionAuditItemEntity.pageNumber].
+  static final pageNumber = obx.QueryIntegerProperty<ExtractionAuditItemEntity>(
+    _entities[16].properties[8],
+  );
+
+  /// See [ExtractionAuditItemEntity.title].
+  static final title = obx.QueryStringProperty<ExtractionAuditItemEntity>(
+    _entities[16].properties[9],
+  );
+
+  /// See [ExtractionAuditItemEntity.previewText].
+  static final previewText = obx.QueryStringProperty<ExtractionAuditItemEntity>(
+    _entities[16].properties[10],
+  );
+
+  /// See [ExtractionAuditItemEntity.reason].
+  static final reason = obx.QueryStringProperty<ExtractionAuditItemEntity>(
+    _entities[16].properties[11],
+  );
+}
+
+/// [KnowledgeEdgeEntity] entity fields to define ObjectBox queries.
+class KnowledgeEdgeEntity_ {
+  /// See [KnowledgeEdgeEntity.id].
+  static final id = obx.QueryIntegerProperty<KnowledgeEdgeEntity>(
+    _entities[17].properties[0],
+  );
+
+  /// See [KnowledgeEdgeEntity.publicId].
+  static final publicId = obx.QueryStringProperty<KnowledgeEdgeEntity>(
+    _entities[17].properties[1],
+  );
+
+  /// See [KnowledgeEdgeEntity.documentPublicId].
+  static final documentPublicId = obx.QueryStringProperty<KnowledgeEdgeEntity>(
+    _entities[17].properties[2],
+  );
+
+  /// See [KnowledgeEdgeEntity.fromNodePublicId].
+  static final fromNodePublicId = obx.QueryStringProperty<KnowledgeEdgeEntity>(
+    _entities[17].properties[3],
+  );
+
+  /// See [KnowledgeEdgeEntity.toNodePublicId].
+  static final toNodePublicId = obx.QueryStringProperty<KnowledgeEdgeEntity>(
+    _entities[17].properties[4],
+  );
+
+  /// See [KnowledgeEdgeEntity.relationType].
+  static final relationType = obx.QueryStringProperty<KnowledgeEdgeEntity>(
+    _entities[17].properties[5],
+  );
+
+  /// See [KnowledgeEdgeEntity.sourceId].
+  static final sourceId = obx.QueryStringProperty<KnowledgeEdgeEntity>(
+    _entities[17].properties[6],
+  );
+
+  /// See [KnowledgeEdgeEntity.weight].
+  static final weight = obx.QueryDoubleProperty<KnowledgeEdgeEntity>(
+    _entities[17].properties[7],
+  );
+}
+
+/// [KnowledgeEvidenceEntity] entity fields to define ObjectBox queries.
+class KnowledgeEvidenceEntity_ {
+  /// See [KnowledgeEvidenceEntity.id].
+  static final id = obx.QueryIntegerProperty<KnowledgeEvidenceEntity>(
+    _entities[18].properties[0],
+  );
+
+  /// See [KnowledgeEvidenceEntity.publicId].
+  static final publicId = obx.QueryStringProperty<KnowledgeEvidenceEntity>(
+    _entities[18].properties[1],
+  );
+
+  /// See [KnowledgeEvidenceEntity.documentPublicId].
+  static final documentPublicId =
+      obx.QueryStringProperty<KnowledgeEvidenceEntity>(
+        _entities[18].properties[2],
+      );
+
+  /// See [KnowledgeEvidenceEntity.nodePublicId].
+  static final nodePublicId = obx.QueryStringProperty<KnowledgeEvidenceEntity>(
+    _entities[18].properties[3],
+  );
+
+  /// See [KnowledgeEvidenceEntity.sourceId].
+  static final sourceId = obx.QueryStringProperty<KnowledgeEvidenceEntity>(
+    _entities[18].properties[4],
+  );
+
+  /// See [KnowledgeEvidenceEntity.pipeline].
+  static final pipeline = obx.QueryStringProperty<KnowledgeEvidenceEntity>(
+    _entities[18].properties[5],
+  );
+
+  /// See [KnowledgeEvidenceEntity.pageNumber].
+  static final pageNumber = obx.QueryIntegerProperty<KnowledgeEvidenceEntity>(
+    _entities[18].properties[6],
+  );
+
+  /// See [KnowledgeEvidenceEntity.quote].
+  static final quote = obx.QueryStringProperty<KnowledgeEvidenceEntity>(
+    _entities[18].properties[7],
+  );
+}
+
+/// [KnowledgeNodeEntity] entity fields to define ObjectBox queries.
+class KnowledgeNodeEntity_ {
+  /// See [KnowledgeNodeEntity.id].
+  static final id = obx.QueryIntegerProperty<KnowledgeNodeEntity>(
+    _entities[19].properties[0],
+  );
+
+  /// See [KnowledgeNodeEntity.publicId].
+  static final publicId = obx.QueryStringProperty<KnowledgeNodeEntity>(
+    _entities[19].properties[1],
+  );
+
+  /// See [KnowledgeNodeEntity.documentPublicId].
+  static final documentPublicId = obx.QueryStringProperty<KnowledgeNodeEntity>(
+    _entities[19].properties[2],
+  );
+
+  /// See [KnowledgeNodeEntity.label].
+  static final label = obx.QueryStringProperty<KnowledgeNodeEntity>(
+    _entities[19].properties[3],
+  );
+
+  /// See [KnowledgeNodeEntity.nodeType].
+  static final nodeType = obx.QueryStringProperty<KnowledgeNodeEntity>(
+    _entities[19].properties[4],
+  );
+
+  /// See [KnowledgeNodeEntity.pageNumber].
+  static final pageNumber = obx.QueryIntegerProperty<KnowledgeNodeEntity>(
+    _entities[19].properties[5],
+  );
+
+  /// See [KnowledgeNodeEntity.sourceId].
+  static final sourceId = obx.QueryStringProperty<KnowledgeNodeEntity>(
+    _entities[19].properties[6],
+  );
+}
+
+/// [VisualAttributeEntity] entity fields to define ObjectBox queries.
+class VisualAttributeEntity_ {
+  /// See [VisualAttributeEntity.id].
+  static final id = obx.QueryIntegerProperty<VisualAttributeEntity>(
+    _entities[20].properties[0],
+  );
+
+  /// See [VisualAttributeEntity.publicId].
+  static final publicId = obx.QueryStringProperty<VisualAttributeEntity>(
+    _entities[20].properties[1],
+  );
+
+  /// See [VisualAttributeEntity.visualObjectPublicId].
+  static final visualObjectPublicId =
+      obx.QueryStringProperty<VisualAttributeEntity>(
+        _entities[20].properties[2],
+      );
+
+  /// See [VisualAttributeEntity.name].
+  static final name = obx.QueryStringProperty<VisualAttributeEntity>(
+    _entities[20].properties[3],
+  );
+
+  /// See [VisualAttributeEntity.value].
+  static final value = obx.QueryStringProperty<VisualAttributeEntity>(
+    _entities[20].properties[4],
+  );
+
+  /// See [VisualAttributeEntity.confidence].
+  static final confidence = obx.QueryDoubleProperty<VisualAttributeEntity>(
+    _entities[20].properties[5],
+  );
+}
+
+/// [VisualObjectEntity] entity fields to define ObjectBox queries.
+class VisualObjectEntity_ {
+  /// See [VisualObjectEntity.id].
+  static final id = obx.QueryIntegerProperty<VisualObjectEntity>(
+    _entities[21].properties[0],
+  );
+
+  /// See [VisualObjectEntity.publicId].
+  static final publicId = obx.QueryStringProperty<VisualObjectEntity>(
+    _entities[21].properties[1],
+  );
+
+  /// See [VisualObjectEntity.documentPublicId].
+  static final documentPublicId = obx.QueryStringProperty<VisualObjectEntity>(
+    _entities[21].properties[2],
+  );
+
+  /// See [VisualObjectEntity.label].
+  static final label = obx.QueryStringProperty<VisualObjectEntity>(
+    _entities[21].properties[3],
+  );
+
+  /// See [VisualObjectEntity.objectType].
+  static final objectType = obx.QueryStringProperty<VisualObjectEntity>(
+    _entities[21].properties[4],
+  );
+
+  /// See [VisualObjectEntity.pageNumber].
+  static final pageNumber = obx.QueryIntegerProperty<VisualObjectEntity>(
+    _entities[21].properties[5],
+  );
+
+  /// See [VisualObjectEntity.sourceRectJson].
+  static final sourceRectJson = obx.QueryStringProperty<VisualObjectEntity>(
+    _entities[21].properties[6],
+  );
+
+  /// See [VisualObjectEntity.confidence].
+  static final confidence = obx.QueryDoubleProperty<VisualObjectEntity>(
+    _entities[21].properties[7],
   );
 }

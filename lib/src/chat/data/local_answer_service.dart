@@ -89,11 +89,7 @@ class LocalAnswerService implements AnswerService {
           citations: [],
         );
       }
-      return _offlineAnswer(
-        question,
-        settings,
-        retrievalQuery: retrievalQuery,
-      );
+      return _offlineAnswer(question, settings, retrievalQuery: retrievalQuery);
     }
     if (!await _hasKey(provider)) {
       DebugConsole.log(
@@ -242,7 +238,9 @@ class LocalAnswerService implements AnswerService {
     final acronymExpansion = RegExp(
       r'\b([A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű]{1,10}\d{0,4})\s*\(([^()\n]{3,120})\)',
     );
-    final withoutParentheticals = answer.replaceAllMapped(acronymExpansion, (match) {
+    final withoutParentheticals = answer.replaceAllMapped(acronymExpansion, (
+      match,
+    ) {
       final symbol = match.group(1)!;
       final explanation = match.group(2)!.trim();
       if (!_looksLikeSymbol(symbol)) {
@@ -384,8 +382,13 @@ class LocalAnswerService implements AnswerService {
     String? retrievalQuery,
   }) async {
     DebugConsole.log('[Offline] index mode=${settings.localIndexingMode}');
-    final query = retrievalQuery ?? question;
-    final bool modelBacked = LocalIndexingModes.isModelBacked(settings.localIndexingMode);
+    final query = question;
+    if (retrievalQuery != null && retrievalQuery != question) {
+      DebugConsole.log('[Offline] conversation context ignored for retrieval');
+    }
+    final bool modelBacked = LocalIndexingModes.isModelBacked(
+      settings.localIndexingMode,
+    );
     final results = modelBacked
         ? await retriever.retrieveLocalVector(
             query: query,
@@ -435,7 +438,8 @@ class LocalAnswerService implements AnswerService {
         })
         .join('\n');
     return LocalAnswerResult(
-      text: '${modelBacked ? 'Offline vektoros graph találatokból épített válasz. ' : 'Offline keresési találatokból épített graph válasz. '}'
+      text:
+          '${modelBacked ? 'Offline vektoros graph találatokból épített válasz. ' : 'Offline keresési találatokból épített graph válasz. '}'
           'Ez nem AI által generált válasz.\n\n'
           '$graphAnswer\n\nForrások:\n$excerpts',
       status: 'offline_search',

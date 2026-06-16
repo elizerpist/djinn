@@ -13,13 +13,15 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     required LocalRetriever base,
     required NoteRepository noteRepository,
     OfflineSearchService offlineSearch = const OfflineSearchService(),
-    LocalVectorSearchService localVectorSearch = const LocalVectorSearchService(),
-    LocalKnowledgeGraphExpander graphExpander = const LocalKnowledgeGraphExpander(),
-  })  : _base = base,
-        _noteRepository = noteRepository,
-        _offlineSearch = offlineSearch,
-        _localVectorSearch = localVectorSearch,
-        _graphExpander = graphExpander;
+    LocalVectorSearchService localVectorSearch =
+        const LocalVectorSearchService(),
+    LocalKnowledgeGraphExpander graphExpander =
+        const LocalKnowledgeGraphExpander(),
+  }) : _base = base,
+       _noteRepository = noteRepository,
+       _offlineSearch = offlineSearch,
+       _localVectorSearch = localVectorSearch,
+       _graphExpander = graphExpander;
 
   final LocalRetriever _base;
   final NoteRepository _noteRepository;
@@ -109,7 +111,6 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     );
     return result;
   }
-
 
   @override
   Future<List<SourceEvidence>> retrieveLocalVector({
@@ -323,7 +324,9 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     final evidence = <SourceEvidence>[];
     for (final note in notes) {
       if (note.auditState.wireName == 'rejected') {
-        DebugConsole.log('[LocalIndex] note skipped id=${note.id} reason=rejected');
+        DebugConsole.log(
+          '[LocalIndex] note skipped id=${note.id} reason=rejected',
+        );
         continue;
       }
       final chunks = const NoteChunkBuilder().build(
@@ -362,10 +365,11 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         }
       }
     }
-    DebugConsole.log('[LocalIndex] note evidence loaded count=${evidence.length}');
+    DebugConsole.log(
+      '[LocalIndex] note evidence loaded count=${evidence.length}',
+    );
     return evidence;
   }
-
 
   List<SourceEvidence> _granularEvidenceForChunk(
     NoteDocument document,
@@ -381,8 +385,11 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     if (block == null) {
       return const [];
     }
-    final state = chunk.isIndexFresh ? ValidationState.validated : ValidationState.unreviewed;
-    final baseLabel = 'Jegyzet · ${chunk.noteTitle} · ${_kindLabel(chunk.kind)}';
+    final state = chunk.isIndexFresh
+        ? ValidationState.validated
+        : ValidationState.unreviewed;
+    final baseLabel =
+        'Jegyzet · ${chunk.noteTitle} · ${_kindLabel(chunk.kind)}';
     switch (block.type) {
       case NoteBlockType.table:
         return _tableRowEvidence(block, chunk, baseLabel, state);
@@ -414,8 +421,12 @@ class NoteAwareLocalRetriever implements LocalRetriever {
               ? 'note:${chunk.noteId}:${chunk.blockId}'
               : 'note:${chunk.noteId}:${chunk.blockId}:part-$i',
           sourceType: EvidenceSourceType.textChunk,
-          text: title == null || title.isEmpty ? units[i] : '$title: ${units[i]}',
-          label: units.length == 1 ? baseLabel : '$baseLabel · részlet ${i + 1}',
+          text: title == null || title.isEmpty
+              ? units[i]
+              : '$title: ${units[i]}',
+          label: units.length == 1
+              ? baseLabel
+              : '$baseLabel · részlet ${i + 1}',
           validationState: state,
           documentId: chunk.noteId,
         ),
@@ -451,27 +462,72 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       return const [];
     }
     final firstRow = rows.first;
-    final hasHeader = rows.length > 1 &&
+    final hasHeader =
+        rows.length > 1 &&
         firstRow.every((cell) => cell.trim().isNotEmpty) &&
         firstRow.join(' ').length < 80;
     final headers = hasHeader ? firstRow : const <String>[];
     final start = hasHeader ? 1 : 0;
     final title = block.title?.trim();
-    return [
-      for (var i = start; i < rows.length; i += 1)
-        SourceEvidence(
-          id: 'note:${chunk.noteId}:${chunk.blockId}:row-$i',
-          sourceType: EvidenceSourceType.tableChunk,
-          text: _tableRowText(
-            row: rows[i],
-            headers: headers,
-            title: title,
+    final results = <SourceEvidence>[];
+    for (var i = start; i < rows.length; i += 1) {
+      final row = rows[i];
+      if (_rowCellsAreIndependentDefinitions(row)) {
+        for (var cellIndex = 0; cellIndex < row.length; cellIndex += 1) {
+          final cell = row[cellIndex].trim();
+          if (cell.isEmpty) {
+            continue;
+          }
+          final header = cellIndex < headers.length
+              ? headers[cellIndex].trim()
+              : '';
+          results.add(
+            SourceEvidence(
+              id: 'note:${chunk.noteId}:${chunk.blockId}:row-$i-cell-$cellIndex',
+              sourceType: EvidenceSourceType.tableChunk,
+              text: _tableCellText(cell: cell, header: header, title: title),
+              label: '$baseLabel · sor ${i + 1} · cella ${cellIndex + 1}',
+              validationState: state,
+              documentId: chunk.noteId,
+            ),
+          );
+        }
+      } else {
+        results.add(
+          SourceEvidence(
+            id: 'note:${chunk.noteId}:${chunk.blockId}:row-$i',
+            sourceType: EvidenceSourceType.tableChunk,
+            text: _tableRowText(row: row, headers: headers, title: title),
+            label: '$baseLabel · sor ${i + 1}',
+            validationState: state,
+            documentId: chunk.noteId,
           ),
-          label: '$baseLabel · sor ${i + 1}',
-          validationState: state,
-          documentId: chunk.noteId,
-        ),
-    ];
+        );
+      }
+    }
+    return results;
+  }
+
+  bool _rowCellsAreIndependentDefinitions(List<String> row) {
+    final cells = row
+        .map((cell) => cell.trim())
+        .where((cell) => cell.isNotEmpty)
+        .toList(growable: false);
+    return cells.length > 1 && cells.every(_looksLikeInlineDefinition);
+  }
+
+  bool _looksLikeInlineDefinition(String value) {
+    return RegExp(r'^.{1,80}\s*[:=]\s*.{1,}$').hasMatch(value.trim());
+  }
+
+  String _tableCellText({
+    required String cell,
+    required String header,
+    required String? title,
+  }) {
+    final body = header.isEmpty ? cell.trim() : '$header: ${cell.trim()}';
+    final prefix = title == null || title.isEmpty ? '' : '$title | ';
+    return '$prefix$body'.trim();
   }
 
   String _tableRowText({
@@ -614,11 +670,8 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     final byId = {for (final item in evidence) item.id: item};
     final chunks = evidence
         .map(
-          (item) => OfflineChunk(
-            id: item.id,
-            label: item.label,
-            text: item.text,
-          ),
+          (item) =>
+              OfflineChunk(id: item.id, label: item.label, text: item.text),
         )
         .toList(growable: false);
     final matches = _offlineSearch.search(
@@ -687,13 +740,13 @@ class LocalKnowledgeGraphExpander {
       return const [];
     }
     final existingIds = existing.map((item) => item.id).toSet();
-    final results = <SourceEvidence>[];
     final queryTerms = _terms(query).toSet();
     DebugConsole.log(
       '[LocalGraph] expand start seeds=${seeds.length} '
       'candidates=${candidates.length} queryTerms=${queryTerms.length}',
     );
     var existingLinks = 0;
+    final pendingById = <String, _PendingGraphLink>{};
     for (final seed in seeds) {
       final seedTerms = {
         ...queryTerms,
@@ -727,24 +780,39 @@ class LocalKnowledgeGraphExpander {
           );
           continue;
         }
-        if (results.length + existing.length >= limit) {
-          DebugConsole.log(
-            '[LocalGraph] link skipped source=${seed.id} target=${candidate.id} '
-            'reason=limit type=${link.type}',
-          );
-          break;
-        }
-        existingIds.add(candidate.id);
-        results.add(candidate);
-        DebugConsole.log(
-          '[LocalGraph] link type=${link.type} source=${seed.id} '
-          'target=${candidate.id} reason=${link.reason}',
+        final pending = _PendingGraphLink(
+          seed: seed,
+          candidate: candidate,
+          link: link,
         );
+        final previous = pendingById[candidate.id];
+        if (previous == null || pending.comparePriority(previous) < 0) {
+          pendingById[candidate.id] = pending;
+        }
       }
+    }
+
+    final pending = pendingById.values.toList(growable: false)
+      ..sort((a, b) => a.comparePriority(b));
+    final results = <SourceEvidence>[];
+    for (final item in pending) {
+      if (results.length + existing.length >= limit) {
+        DebugConsole.log(
+          '[LocalGraph] link skipped source=${item.seed.id} '
+          'target=${item.candidate.id} reason=limit type=${item.link.type}',
+        );
+        continue;
+      }
+      existingIds.add(item.candidate.id);
+      results.add(item.candidate);
+      DebugConsole.log(
+        '[LocalGraph] link type=${item.link.type} source=${item.seed.id} '
+        'target=${item.candidate.id} reason=${item.link.reason}',
+      );
     }
     DebugConsole.log(
       '[LocalGraph] expand result count=${results.length} '
-      'existingLinks=$existingLinks',
+      'existingLinks=$existingLinks candidates=${pending.length}',
     );
     return results;
   }
@@ -804,7 +872,7 @@ class LocalKnowledgeGraphExpander {
     if (_looksLikeFlowchart(candidate.text)) {
       final flowTerms = _terms(candidate.text).toSet();
       final overlap = flowTerms.intersection(seedTerms).length;
-      if (overlap >= 1) {
+      if (overlap >= 2) {
         return _GraphLink('flowchart', 'term_overlap:$overlap');
       }
     }
@@ -845,7 +913,10 @@ class LocalKnowledgeGraphExpander {
       if (branch.contextTerms.isEmpty) {
         continue;
       }
-      final contextScore = _contextScore(candidateNormalized, branch.contextTerms);
+      final contextScore = _contextScore(
+        candidateNormalized,
+        branch.contextTerms,
+      );
       if (contextScore == 0) {
         continue;
       }
@@ -906,8 +977,14 @@ class LocalKnowledgeGraphExpander {
         if (!_branchValueMatches(branch, unit)) {
           continue;
         }
-        final queryScore = _contextScore(unit, seedTerms.toList(growable: false));
-        final branchQueryScore = _contextScore(branch.value, seedTerms.toList(growable: false));
+        final queryScore = _contextScore(
+          unit,
+          seedTerms.toList(growable: false),
+        );
+        final branchQueryScore = _contextScore(
+          branch.value,
+          seedTerms.toList(growable: false),
+        );
         final score = contextScore * 4 + queryScore + branchQueryScore * 3;
         final match = _BranchMatch(
           branch: branch,
@@ -937,7 +1014,7 @@ class LocalKnowledgeGraphExpander {
     return _GraphLink(
       'branch_value',
       'key=${branch.key} value=${branch.value} '
-      'polarity:${branch.polarity ?? 'custom'} context:${best.contextScore}',
+          'polarity:${branch.polarity ?? 'custom'} context:${best.contextScore}',
     );
   }
 
@@ -972,7 +1049,9 @@ class LocalKnowledgeGraphExpander {
       final valueTermSet = valueTerms.toSet();
       final contextTerms = polarity == null
           ? keyTerms
-          : keyTerms.where((term) => !valueTermSet.contains(term)).toList(growable: false);
+          : keyTerms
+                .where((term) => !valueTermSet.contains(term))
+                .toList(growable: false);
       signals.add(
         _BranchSignal(
           key: key,
@@ -1061,8 +1140,9 @@ class LocalKnowledgeGraphExpander {
   }
 
   bool _hasAffirmedCondition(String candidateNormalized, _BranchSignal branch) {
-    final hasNegatedValue = branch.valueTerms
-        .any((term) => _hasNegatedTerm(candidateNormalized, term));
+    final hasNegatedValue = branch.valueTerms.any(
+      (term) => _hasNegatedTerm(candidateNormalized, term),
+    );
     if (_containsNormalizedPhrase(candidateNormalized, branch.key) &&
         !_containsNegatedPhrase(candidateNormalized, branch.key) &&
         !hasNegatedValue) {
@@ -1116,7 +1196,9 @@ class LocalKnowledgeGraphExpander {
       return false;
     }
     final tokens = candidateNormalized.split(RegExp(r'\s+'));
-    return tokens.any((token) => token == term || (term.length >= 4 && token.contains(term)));
+    return tokens.any(
+      (token) => token == term || (term.length >= 4 && token.contains(term)),
+    );
   }
 
   Set<String> _definitionKeys(String text) {
@@ -1153,10 +1235,9 @@ class LocalKnowledgeGraphExpander {
   }
 
   Set<String> _acronyms(String value) {
-    return RegExp(r'\b[A-ZÁÉÍÓÖŐÚÜŰ]{2,}[0-9]*\b')
-        .allMatches(value)
-        .map((match) => match.group(0)!)
-        .toSet();
+    return RegExp(
+      r'\b[A-ZÁÉÍÓÖŐÚÜŰ]{2,}[0-9]*\b',
+    ).allMatches(value).map((match) => match.group(0)!).toSet();
   }
 
   String _normalize(String value) {
@@ -1206,9 +1287,56 @@ class _BranchMatch {
   final String unit;
 }
 
+class _PendingGraphLink {
+  const _PendingGraphLink({
+    required this.seed,
+    required this.candidate,
+    required this.link,
+  });
+
+  final SourceEvidence seed;
+  final SourceEvidence candidate;
+  final _GraphLink link;
+
+  int comparePriority(_PendingGraphLink other) {
+    final priority = link.priority.compareTo(other.link.priority);
+    if (priority != 0) {
+      return priority;
+    }
+    final sourceType = _sourceTypePriority(
+      candidate,
+    ).compareTo(_sourceTypePriority(other.candidate));
+    if (sourceType != 0) {
+      return sourceType;
+    }
+    return candidate.id.compareTo(other.candidate.id);
+  }
+
+  int _sourceTypePriority(SourceEvidence evidence) {
+    return switch (evidence.sourceType) {
+      EvidenceSourceType.textChunk => 0,
+      EvidenceSourceType.tableChunk => 1,
+      EvidenceSourceType.flowchartNode => 2,
+      EvidenceSourceType.flowchartEdge => 3,
+      EvidenceSourceType.scoreChunk => 4,
+    };
+  }
+}
+
 class _GraphLink {
   const _GraphLink(this.type, this.reason);
 
   final String type;
   final String reason;
+
+  int get priority {
+    return switch (type) {
+      'definition' => 0,
+      'branch_value' => 1,
+      'table_join' => 2,
+      'semantic_keyword' => 3,
+      'flowchart' => 4,
+      _ => 5,
+    };
+  }
 }

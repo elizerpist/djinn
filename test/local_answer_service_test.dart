@@ -71,93 +71,103 @@ void main() {
     expect(DebugConsole.allText, contains('[Chat/RAG] grounded citations=1'));
   });
 
-  test('removes unsupported acronym explanations from grounded answers', () async {
-    final service = LocalAnswerService(
-      openAiClient: FakeOpenAiClient(
-        answerText:
-            'Légzési elégtelenségről akkor beszélünk, amikor a DO2 '
-            '(oxigénszállítás) kisebb, mint a VO2 (oxigénfogyasztás).',
-      ),
-      retriever: MemoryLocalRetriever(const [
-        SourceEvidence(
-          id: 'chunk-1',
-          sourceType: EvidenceSourceType.textChunk,
-          text: 'Légzési elégtelenség, amikor DO2 < VO2.',
-          label: 'Jegyzet · Légzési elégtelenség · Szöveg',
-          validationState: ValidationState.validated,
-          score: 0.95,
+  test(
+    'removes unsupported acronym explanations from grounded answers',
+    () async {
+      final service = LocalAnswerService(
+        openAiClient: FakeOpenAiClient(
+          answerText:
+              'Légzési elégtelenségről akkor beszélünk, amikor a DO2 '
+              '(oxigénszállítás) kisebb, mint a VO2 (oxigénfogyasztás).',
         ),
-      ]),
-      citationVerifier: CitationVerifier(),
-      loadSettings: () async => AppSettings.defaults(),
-      hasApiKey: () async => true,
-      hasReadyDocuments: () async => true,
-    );
+        retriever: MemoryLocalRetriever(const [
+          SourceEvidence(
+            id: 'chunk-1',
+            sourceType: EvidenceSourceType.textChunk,
+            text: 'Légzési elégtelenség, amikor DO2 < VO2.',
+            label: 'Jegyzet · Légzési elégtelenség · Szöveg',
+            validationState: ValidationState.validated,
+            score: 0.95,
+          ),
+        ]),
+        citationVerifier: CitationVerifier(),
+        loadSettings: () async => AppSettings.defaults(),
+        hasApiKey: () async => true,
+        hasReadyDocuments: () async => true,
+      );
 
-    final result = await service.answer(
-      'Mikor beszélünk légzési elégtelenségről?',
-    );
+      final result = await service.answer(
+        'Mikor beszélünk légzési elégtelenségről?',
+      );
 
-    expect(result.status, 'grounded');
-    expect(result.text, contains('DO2 kisebb'));
-    expect(result.text, contains('VO2'));
-    expect(result.text, isNot(contains('oxigénszállítás')));
-    expect(result.text, isNot(contains('oxigénfogyasztás')));
-    expect(
-      DebugConsole.allText,
-      contains(
-        '[GroundingGuard] stripped unsupported acronym explanation symbol=DO2',
-      ),
-    );
-    expect(
-      DebugConsole.allText,
-      contains(
-        '[GroundingGuard] stripped unsupported acronym explanation symbol=VO2',
-      ),
-    );
-  });
-
-  test('removes unsupported symbol definitions from grounded answers', () async {
-    final service = LocalAnswerService(
-      openAiClient: FakeOpenAiClient(
-        answerText:
-            'Légzési elégtelenség: DO2 az oxigénkínálat, '
-            'VO2 az oxigénigény, és DO2 kisebb mint VO2.',
-      ),
-      retriever: MemoryLocalRetriever(const [
-        SourceEvidence(
-          id: 'chunk-1',
-          sourceType: EvidenceSourceType.textChunk,
-          text: 'Légzési elégtelenség, amikor DO2 < VO2.',
-          label: 'Jegyzet · Légzési elégtelenség · Szöveg',
-          validationState: ValidationState.validated,
-          score: 0.95,
+      expect(result.status, 'grounded');
+      expect(result.text, contains('DO2 kisebb'));
+      expect(result.text, contains('VO2'));
+      expect(result.text, isNot(contains('oxigénszállítás')));
+      expect(result.text, isNot(contains('oxigénfogyasztás')));
+      expect(
+        DebugConsole.allText,
+        contains(
+          '[GroundingGuard] stripped unsupported acronym explanation symbol=DO2',
         ),
-      ]),
-      citationVerifier: CitationVerifier(),
-      loadSettings: () async => AppSettings.defaults(),
-      hasApiKey: () async => true,
-      hasReadyDocuments: () async => true,
-    );
+      );
+      expect(
+        DebugConsole.allText,
+        contains(
+          '[GroundingGuard] stripped unsupported acronym explanation symbol=VO2',
+        ),
+      );
+    },
+  );
 
-    final result = await service.answer(
-      'Mikor beszélünk légzési elégtelenségről?',
-    );
+  test(
+    'removes unsupported symbol definitions from grounded answers',
+    () async {
+      final service = LocalAnswerService(
+        openAiClient: FakeOpenAiClient(
+          answerText:
+              'Légzési elégtelenség: DO2 az oxigénkínálat, '
+              'VO2 az oxigénigény, és DO2 kisebb mint VO2.',
+        ),
+        retriever: MemoryLocalRetriever(const [
+          SourceEvidence(
+            id: 'chunk-1',
+            sourceType: EvidenceSourceType.textChunk,
+            text: 'Légzési elégtelenség, amikor DO2 < VO2.',
+            label: 'Jegyzet · Légzési elégtelenség · Szöveg',
+            validationState: ValidationState.validated,
+            score: 0.95,
+          ),
+        ]),
+        citationVerifier: CitationVerifier(),
+        loadSettings: () async => AppSettings.defaults(),
+        hasApiKey: () async => true,
+        hasReadyDocuments: () async => true,
+      );
 
-    expect(result.status, 'grounded');
-    expect(result.text, contains('DO2 kisebb'));
-    expect(result.text, contains('VO2'));
-    expect(result.text, isNot(contains('oxigénkínálat')));
-    expect(result.text, isNot(contains('oxigénigény')));
-    expect(
-      DebugConsole.allText,
-      contains('[GroundingGuard] stripped unsupported symbol definition symbol=DO2'),
-    );
-    expect(
-      DebugConsole.allText,
-      contains('[GroundingGuard] stripped unsupported symbol definition symbol=VO2'),
-    );
-  });
+      final result = await service.answer(
+        'Mikor beszélünk légzési elégtelenségről?',
+      );
+
+      expect(result.status, 'grounded');
+      expect(result.text, contains('DO2 kisebb'));
+      expect(result.text, contains('VO2'));
+      expect(result.text, isNot(contains('oxigénkínálat')));
+      expect(result.text, isNot(contains('oxigénigény')));
+      expect(
+        DebugConsole.allText,
+        contains(
+          '[GroundingGuard] stripped unsupported symbol definition symbol=DO2',
+        ),
+      );
+      expect(
+        DebugConsole.allText,
+        contains(
+          '[GroundingGuard] stripped unsupported symbol definition symbol=VO2',
+        ),
+      );
+    },
+  );
 
   test('uses Gemini key and client when Gemini is active', () async {
     final usedProviders = <AiProvider>[];
@@ -335,77 +345,166 @@ void main() {
     expect(DebugConsole.allText, contains('[Offline] mode=forced'));
   });
 
+  test(
+    'forced offline mode composes graph answer sections from evidence',
+    () async {
+      final service = LocalAnswerService(
+        openAiClient: _ThrowingAiClient(),
+        retriever: MemoryLocalRetriever(const [
+          SourceEvidence(
+            id: 'definition-1',
+            sourceType: EvidenceSourceType.textChunk,
+            text: 'energia: munkavégző képesség',
+            label: 'Fizika definíció',
+            validationState: ValidationState.validated,
+            score: 0.9,
+          ),
+          SourceEvidence(
+            id: 'table-1',
+            sourceType: EvidenceSourceType.tableChunk,
+            text: 'Forma | Példa\nmozgási energia | mozgó test',
+            label: 'Fizika táblázat',
+            validationState: ValidationState.validated,
+            score: 0.85,
+          ),
+        ]),
+        citationVerifier: CitationVerifier(),
+        loadSettings: () async =>
+            AppSettings.defaults().copyWith(answerMode: AnswerModes.offline),
+        hasApiKey: () async =>
+            throw StateError('api key should not be checked'),
+        hasReadyDocuments: () async => true,
+      );
 
-  test('forced offline mode composes graph answer sections from evidence', () async {
-    final service = LocalAnswerService(
-      openAiClient: _ThrowingAiClient(),
-      retriever: MemoryLocalRetriever(const [
-        SourceEvidence(
-          id: 'definition-1',
-          sourceType: EvidenceSourceType.textChunk,
-          text: 'energia: munkavégző képesség',
-          label: 'Fizika definíció',
-          validationState: ValidationState.validated,
-          score: 0.9,
+      final result = await service.answer('mi az energia?');
+
+      expect(result.status, 'offline_search');
+      expect(result.text, contains('graph válasz'));
+      expect(result.text, contains('Definíciók: energia'));
+      expect(result.text, contains('Táblázatos szabályok'));
+      expect(DebugConsole.allText, contains('[LocalGraphAnswer] compose'));
+    },
+  );
+
+  test(
+    'model-backed offline embedding mode uses local vector graph without keyword fallback',
+    () async {
+      final service = LocalAnswerService(
+        openAiClient: _ThrowingAiClient(),
+        retriever: MemoryLocalRetriever(const [
+          SourceEvidence(
+            id: 'chunk-1',
+            sourceType: EvidenceSourceType.textChunk,
+            text: 'Thrombectomia indikaciok.',
+            label: '1. oldal',
+            validationState: ValidationState.validated,
+            score: 0.9,
+          ),
+        ]),
+        citationVerifier: CitationVerifier(),
+        loadSettings: () async => AppSettings.defaults().copyWith(
+          answerMode: AnswerModes.offline,
+          localIndexingMode: LocalIndexingModes.embeddingGemma,
         ),
-        SourceEvidence(
-          id: 'table-1',
-          sourceType: EvidenceSourceType.tableChunk,
-          text: 'Forma | Példa\nmozgási energia | mozgó test',
-          label: 'Fizika táblázat',
-          validationState: ValidationState.validated,
-          score: 0.85,
+        hasApiKey: () async =>
+            throw StateError('api key should not be checked'),
+        hasReadyDocuments: () async => true,
+      );
+
+      final result = await service.answer('thrombectomia');
+
+      expect(result.status, 'offline_search');
+      expect(result.citations.single.sourceId, 'chunk-1');
+      expect(result.text, contains('Offline vektoros graph'));
+      expect(DebugConsole.allText, contains('[LocalVector] memory search'));
+      expect(
+        DebugConsole.allText,
+        contains('[Chat/RAG] offline vector matches=1'),
+      );
+      expect(
+        DebugConsole.allText,
+        isNot(contains('[Offline] index unavailable')),
+      );
+      expect(DebugConsole.allText, isNot(contains('[Offline] index degraded')));
+      expect(DebugConsole.allText, isNot(contains('[Offline] search start')));
+    },
+  );
+
+  test(
+    'forced offline vector search uses current question without assistant history',
+    () async {
+      final retriever = _RecordingRetriever();
+      final service = LocalAnswerService(
+        openAiClient: _ThrowingAiClient(),
+        retriever: retriever,
+        citationVerifier: CitationVerifier(),
+        loadSettings: () async => AppSettings.defaults().copyWith(
+          answerMode: AnswerModes.offline,
+          localIndexingMode: LocalIndexingModes.embeddingGemma,
         ),
-      ]),
-      citationVerifier: CitationVerifier(),
-      loadSettings: () async =>
-          AppSettings.defaults().copyWith(answerMode: AnswerModes.offline),
-      hasApiKey: () async => throw StateError('api key should not be checked'),
-      hasReadyDocuments: () async => true,
-    );
+        hasApiKey: () async =>
+            throw StateError('api key should not be checked'),
+        hasReadyDocuments: () async => true,
+      );
 
-    final result = await service.answer('mi az energia?');
+      await service.answer(
+        'mi a rejtett adat?',
+        context: [
+          ChatMessage(
+            id: 'assistant-1',
+            conversationId: 'conversation-1',
+            sender: ChatSender.assistant,
+            text:
+                'Offline vektoros graph találatokból épített válasz. Folyamatkapcsolatok: Légzési elégtelen? -> Oxygén. Források: Jegyzet · Légzési elégtelenség.',
+            createdAt: DateTime(2026),
+          ),
+        ],
+      );
 
-    expect(result.status, 'offline_search');
-    expect(result.text, contains('graph válasz'));
-    expect(result.text, contains('Definíciók: energia'));
-    expect(result.text, contains('Táblázatos szabályok'));
-    expect(DebugConsole.allText, contains('[LocalGraphAnswer] compose'));
-  });
+      expect(retriever.localVectorQueries, ['mi a rejtett adat?']);
+    },
+  );
+}
 
-  test('model-backed offline embedding mode uses local vector graph without keyword fallback', () async {
-    final service = LocalAnswerService(
-      openAiClient: _ThrowingAiClient(),
-      retriever: MemoryLocalRetriever(const [
-        SourceEvidence(
-          id: 'chunk-1',
-          sourceType: EvidenceSourceType.textChunk,
-          text: 'Thrombectomia indikaciok.',
-          label: '1. oldal',
-          validationState: ValidationState.validated,
-          score: 0.9,
-        ),
-      ]),
-      citationVerifier: CitationVerifier(),
-      loadSettings: () async => AppSettings.defaults().copyWith(
-        answerMode: AnswerModes.offline,
-        localIndexingMode: LocalIndexingModes.embeddingGemma,
+class _RecordingRetriever implements LocalRetriever {
+  final localVectorQueries = <String>[];
+
+  @override
+  Future<List<SourceEvidence>> retrieve({
+    required List<double> queryVector,
+    required int limit,
+    required double minimumSimilarity,
+    String? query,
+    bool allowKeywordExpansion = false,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<List<SourceEvidence>> retrieveLocalVector({
+    required String query,
+    required int limit,
+    required String mode,
+  }) async {
+    localVectorQueries.add(query);
+    return const [
+      SourceEvidence(
+        id: 'recipe',
+        sourceType: EvidenceSourceType.textChunk,
+        text: 'Bolognai recept rejtett adat: bazsalikom.',
+        label: 'Jegyzet · Recept',
+        validationState: ValidationState.validated,
       ),
-      hasApiKey: () async => throw StateError('api key should not be checked'),
-      hasReadyDocuments: () async => true,
-    );
+    ];
+  }
 
-    final result = await service.answer('thrombectomia');
-
-    expect(result.status, 'offline_search');
-    expect(result.citations.single.sourceId, 'chunk-1');
-    expect(result.text, contains('Offline vektoros graph'));
-    expect(DebugConsole.allText, contains('[LocalVector] memory search'));
-    expect(DebugConsole.allText, contains('[Chat/RAG] offline vector matches=1'));
-    expect(DebugConsole.allText, isNot(contains('[Offline] index unavailable')));
-    expect(DebugConsole.allText, isNot(contains('[Offline] index degraded')));
-    expect(DebugConsole.allText, isNot(contains('[Offline] search start')));
-  });
+  @override
+  Future<List<SourceEvidence>> retrieveOffline({
+    required String query,
+    required int limit,
+  }) async {
+    return const [];
+  }
 }
 
 class _ThrowingAiClient extends FakeOpenAiClient {
