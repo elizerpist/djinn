@@ -201,7 +201,7 @@ class OpenAiHttpClient implements OpenAiClient {
               'type': 'input_text',
               'text': jsonEncode({
                 'instruction':
-                    'Return whether the answer is fully supported by the evidence. Do not use outside knowledge.',
+                    'Return whether the answer is fully supported by the evidence. Do not use outside knowledge. Mark grounded=false if the answer expands an abbreviation, acronym, symbol, or technical term using knowledge not explicitly present in the evidence.',
                 'answer': answer,
                 'evidence': evidence
                     .map((item) => {'id': item.id, 'text': item.text})
@@ -590,6 +590,8 @@ String _chunkingInstruction(String mode) {
 
 const _closedAnswerInstruction = '''
 You are Djinn. Answer only from the supplied local evidence. Do not browse, do not use web search, do not use file search, do not use code execution, and do not use outside knowledge. If evidence is incomplete, abstain. Return JSON only with cited source IDs copied exactly from the supplied evidence.
+
+Do not expand abbreviations, acronyms, symbols, or technical terms unless that exact explanation is present in the supplied evidence. Do not add parenthetical explanations from outside knowledge.
 
 If conversation_context is supplied, use it only to resolve follow-up references like "why" or "that treatment". Never cite or rely on conversation_context as evidence; the evidence array remains the only authoritative source.
 

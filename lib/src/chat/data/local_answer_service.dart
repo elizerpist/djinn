@@ -1,6 +1,5 @@
 import '../../ai/ai_client.dart';
 import '../../ai/ai_client_resolver.dart';
-import '../../ai/ai_error.dart';
 import '../../ai/ai_provider.dart';
 import '../../debug/debug_console.dart';
 import '../../openai/openai_client.dart';
@@ -97,16 +96,6 @@ class LocalAnswerService implements AnswerService {
       );
     }
     if (!await _hasKey(provider)) {
-      if (settings.offlineFallbackEnabled && await hasReadyDocuments()) {
-        DebugConsole.log(
-          '[Chat/RAG] fallback reason=missing_api_key provider=${provider.wireName}',
-        );
-        return _offlineAnswer(
-          question,
-          settings,
-          retrievalQuery: retrievalQuery,
-        );
-      }
       DebugConsole.log(
         '[Chat/RAG] refused reason=missing_api_key provider=${provider.wireName}',
       );
@@ -128,46 +117,21 @@ class LocalAnswerService implements AnswerService {
     }
 
     final client = _clientFor(provider);
-    final List<SourceEvidence> retrieved;
-    try {
-      DebugConsole.log(
-        '[Chat/RAG] query embedding model=${settings.embeddingModel}',
-      );
-      final queryVector = await client.createEmbedding(
-        input: retrievalQuery,
-        model: settings.embeddingModel,
-      );
-      retrieved = await retriever.retrieve(
-        queryVector: queryVector,
-        limit: settings.retrievalLimit,
-        minimumSimilarity: settings.minimumSimilarity,
-        query: retrievalQuery,
-      );
-    } on AiProviderException catch (error) {
-      if (settings.offlineFallbackEnabled) {
-        DebugConsole.log(
-          '[Chat/RAG] fallback reason=${error.failure.code.name} provider=${provider.wireName}',
-        );
-        return _offlineAnswer(
-          question,
-          settings,
-          retrievalQuery: retrievalQuery,
-        );
-      }
-      rethrow;
-    } on OpenAiException catch (error) {
-      if (settings.offlineFallbackEnabled) {
-        DebugConsole.log(
-          '[Chat/RAG] fallback reason=openai_error error=${error.message}',
-        );
-        return _offlineAnswer(
-          question,
-          settings,
-          retrievalQuery: retrievalQuery,
-        );
-      }
-      rethrow;
-    }
+    DebugConsole.log(
+      '[Chat/RAG] query embedding model=${settings.embeddingModel}',
+    );
+    final queryVector = await client.createEmbedding(
+      input: retrievalQuery,
+      model: settings.embeddingModel,
+    );
+    final retrieved = await retriever.retrieve(
+      queryVector: queryVector,
+      limit: settings.retrievalLimit,
+      minimumSimilarity: settings.minimumSimilarity,
+      query: retrievalQuery,
+      allowKeywordExpansion:
+          settings.localIndexingMode == LocalIndexingModes.keywordBm25,
+    );
     DebugConsole.log('[Chat/RAG] retrieved count=${retrieved.length}');
     if (retrieved.isEmpty) {
       DebugConsole.log('[Chat/RAG] refused reason=insufficient_evidence');
@@ -222,10 +186,15 @@ class LocalAnswerService implements AnswerService {
       );
     }
 
+    final guardedAnswer = _applyGroundingGuards(
+      answer: draft.answer,
+      evidence: verification.citations,
+    );
+
     if (settings.groundednessCheckEnabled) {
       final grounded = await client.verifyGroundedness(
         model: settings.groundednessModel,
-        answer: draft.answer,
+        answer: guardedAnswer,
         evidence: verification.citations
             .map(
               (item) => OpenAiEvidence(
@@ -252,12 +221,71 @@ class LocalAnswerService implements AnswerService {
       'warning=${verification.hasValidationWarning}',
     );
     return LocalAnswerResult(
-      text: draft.answer,
+      text: guardedAnswer,
       status: 'grounded',
       citations: verification.citations.map(_toChatCitation).toList(),
       hasValidationWarning: verification.hasValidationWarning,
       warningText: verification.warningText,
     );
+  }
+
+  String _applyGroundingGuards({
+    required String answer,
+    required List<SourceEvidence> evidence,
+  }) {
+    if (answer.trim().isEmpty || evidence.isEmpty) {
+      return answer;
+    }
+    final evidenceText = _normalizeEvidenceText(
+      evidence.map((item) => item.text).join('\n'),
+    );
+    final acronymExpansion = RegExp(
+      r'\b([A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű]{1,10}\d{0,4})\s*\(([^()\n]{3,120})\)',
+    );
+    return answer.replaceAllMapped(acronymExpansion, (match) {
+      final symbol = match.group(1)!;
+      final explanation = match.group(2)!.trim();
+      if (!_looksLikeSymbol(symbol)) {
+        return match.group(0)!;
+      }
+      if (_isExplanationSupported(
+        symbol: symbol,
+        explanation: explanation,
+        normalizedEvidence: evidenceText,
+      )) {
+        return match.group(0)!;
+      }
+      DebugConsole.log(
+        '[GroundingGuard] stripped unsupported acronym explanation '
+        'symbol=$symbol chars=${explanation.length}',
+      );
+      return symbol;
+    });
+  }
+
+  bool _looksLikeSymbol(String value) {
+    final hasDigit = RegExp(r'\d').hasMatch(value);
+    final uppercaseLetters = RegExp(r'[A-ZÁÉÍÓÖŐÚÜŰ]').allMatches(value).length;
+    return hasDigit || uppercaseLetters >= 2;
+  }
+
+  bool _isExplanationSupported({
+    required String symbol,
+    required String explanation,
+    required String normalizedEvidence,
+  }) {
+    final normalizedSymbol = _normalizeEvidenceText(symbol);
+    final normalizedExplanation = _normalizeEvidenceText(explanation);
+    if (normalizedExplanation.isEmpty) {
+      return true;
+    }
+    final exactParenthetical = '$normalizedSymbol ($normalizedExplanation)';
+    return normalizedEvidence.contains(exactParenthetical) ||
+        normalizedEvidence.contains(normalizedExplanation);
+  }
+
+  String _normalizeEvidenceText(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   ChatCitation _toChatCitation(SourceEvidence evidence) {
@@ -324,16 +352,25 @@ class LocalAnswerService implements AnswerService {
     DebugConsole.log('[Offline] index mode=${settings.localIndexingMode}');
     if (LocalIndexingModes.isModelBacked(settings.localIndexingMode)) {
       DebugConsole.log(
-        '[Offline] index degraded mode=${settings.localIndexingMode} '
-        'fallback=${LocalIndexingModes.keywordBm25}',
+        '[Offline] index unavailable mode=${settings.localIndexingMode} '
+        'reason=local_embedding_backend_not_ready fallback=disabled',
+      );
+      return LocalAnswerResult(
+        text: 'A kiválasztott offline embedding index jelenleg nem elérhető. '
+            'Automatikus kulcsszó/regex fallback nincs, mert félrevezető lenne. '
+            'Válaszd a Kulcsszó/BM25/regex módot, ha vektor nélküli keresést szeretnél.',
+        status: 'offline_index_unavailable',
+        refusalReason: 'offline_index_unavailable',
+        citations: const [],
       );
     }
+    DebugConsole.log('[Offline] keyword search selected');
     final results = await retriever.retrieveOffline(
       query: retrievalQuery ?? question,
       limit: settings.retrievalLimit,
     );
     if (results.isEmpty) {
-      DebugConsole.log('[Chat/RAG] offline fallback matches=0');
+      DebugConsole.log('[Chat/RAG] offline keyword matches=0');
       return const LocalAnswerResult(
         text:
             'Offline keresési találatok. Ez nem AI által generált válasz.\n\nNincs offline találat.',
@@ -342,7 +379,7 @@ class LocalAnswerService implements AnswerService {
         citations: [],
       );
     }
-    DebugConsole.log('[Chat/RAG] offline fallback matches=${results.length}');
+    DebugConsole.log('[Chat/RAG] offline keyword matches=${results.length}');
     final graphAnswer = _offlineGraphAnswer(
       question: question,
       evidence: results,

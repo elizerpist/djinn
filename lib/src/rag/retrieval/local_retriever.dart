@@ -10,6 +10,7 @@ abstract class LocalRetriever {
     required int limit,
     required double minimumSimilarity,
     String? query,
+    bool allowKeywordExpansion = false,
   });
 
   Future<List<SourceEvidence>> retrieveOffline({
@@ -29,6 +30,7 @@ class MemoryLocalRetriever implements LocalRetriever {
     required int limit,
     required double minimumSimilarity,
     String? query,
+    bool allowKeywordExpansion = false,
   }) async {
     DebugConsole.log(
       '[VectorGraph] memory retrieval start dim=${queryVector.length} '
@@ -95,6 +97,7 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     required int limit,
     required double minimumSimilarity,
     String? query,
+    bool allowKeywordExpansion = false,
   }) async {
     DebugConsole.log(
       '[VectorGraph] objectbox retrieval start dim=${queryVector.length} '
@@ -122,19 +125,37 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
           evidence.add(mapped);
         }
       }
-      final expanded = _expandWithLocalKeywordEvidence(
-        query: query,
+      final graphExpanded = _expandWithGraphEvidence(
+        seeds: evidence,
         existing: evidence,
         limit: limit,
       );
+      final graphAwareEvidence = [...evidence, ...graphExpanded];
+      final expanded = allowKeywordExpansion
+          ? _expandWithLocalKeywordEvidence(
+              query: query,
+              existing: graphAwareEvidence,
+              limit: limit,
+            )
+          : graphAwareEvidence;
+      if (!allowKeywordExpansion) {
+        DebugConsole.log(
+          '[VectorGraph] keyword expansion skipped reason=not_selected',
+        );
+      }
       final limited = expanded.take(limit).toList(growable: false);
       final vectorIds = evidence.map((item) => item.id).toSet();
+      final graphIds = graphExpanded.map((item) => item.id).toSet();
       final expandedCount = limited
-          .where((item) => !vectorIds.contains(item.id))
+          .where(
+            (item) =>
+                !vectorIds.contains(item.id) && !graphIds.contains(item.id),
+          )
           .length;
       DebugConsole.log(
         '[VectorGraph] objectbox retrieval matches=${limited.length} '
-        'vector=${evidence.length} expanded=$expandedCount',
+        'vector=${evidence.length} graph=${graphExpanded.length} '
+        'expanded=$expandedCount',
       );
       return limited;
     } finally {

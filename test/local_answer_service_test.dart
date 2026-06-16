@@ -71,6 +71,52 @@ void main() {
     expect(DebugConsole.allText, contains('[Chat/RAG] grounded citations=1'));
   });
 
+  test('removes unsupported acronym explanations from grounded answers', () async {
+    final service = LocalAnswerService(
+      openAiClient: FakeOpenAiClient(
+        answerText:
+            'Légzési elégtelenségről akkor beszélünk, amikor a DO2 '
+            '(oxigénszállítás) kisebb, mint a VO2 (oxigénfogyasztás).',
+      ),
+      retriever: MemoryLocalRetriever(const [
+        SourceEvidence(
+          id: 'chunk-1',
+          sourceType: EvidenceSourceType.textChunk,
+          text: 'Légzési elégtelenség, amikor DO2 < VO2.',
+          label: 'Jegyzet · Légzési elégtelenség · Szöveg',
+          validationState: ValidationState.validated,
+          score: 0.95,
+        ),
+      ]),
+      citationVerifier: CitationVerifier(),
+      loadSettings: () async => AppSettings.defaults(),
+      hasApiKey: () async => true,
+      hasReadyDocuments: () async => true,
+    );
+
+    final result = await service.answer(
+      'Mikor beszélünk légzési elégtelenségről?',
+    );
+
+    expect(result.status, 'grounded');
+    expect(result.text, contains('DO2 kisebb'));
+    expect(result.text, contains('VO2'));
+    expect(result.text, isNot(contains('oxigénszállítás')));
+    expect(result.text, isNot(contains('oxigénfogyasztás')));
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[GroundingGuard] stripped unsupported acronym explanation symbol=DO2',
+      ),
+    );
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[GroundingGuard] stripped unsupported acronym explanation symbol=VO2',
+      ),
+    );
+  });
+
   test('uses Gemini key and client when Gemini is active', () async {
     final usedProviders = <AiProvider>[];
     final service = LocalAnswerService(
@@ -189,7 +235,7 @@ void main() {
   });
 
   test(
-    'offline fallback returns source excerpts without generated answer text',
+    'missing API key does not fall back to offline keyword search',
     () async {
       final service = LocalAnswerService(
         openAiClient: FakeOpenAiClient(),
@@ -212,11 +258,10 @@ void main() {
 
       final result = await service.answer('thrombectomia');
 
-      expect(result.status, 'offline_search');
-      expect(result.text, contains('Offline keresési találatok'));
-      expect(result.text, contains('Ez nem AI által generált válasz.'));
-      expect(result.text, contains('Thrombectomia indikaciok.'));
-      expect(result.citations.single.sourceId, 'chunk-1');
+      expect(result.status, 'missing_api_key');
+      expect(result.citations, isEmpty);
+      expect(DebugConsole.allText, isNot(contains('[Offline] search start')));
+      expect(DebugConsole.allText, isNot(contains('[Chat/RAG] fallback')));
     },
   );
 
@@ -286,7 +331,7 @@ void main() {
     expect(DebugConsole.allText, contains('[LocalGraphAnswer] compose'));
   });
 
-  test('model-backed offline embedding mode degrades to keyword graph search', () async {
+  test('model-backed offline embedding mode does not fall back to keyword search', () async {
     final service = LocalAnswerService(
       openAiClient: _ThrowingAiClient(),
       retriever: MemoryLocalRetriever(const [
@@ -310,9 +355,12 @@ void main() {
 
     final result = await service.answer('thrombectomia');
 
-    expect(result.status, 'offline_search');
-    expect(result.citations.single.sourceId, 'chunk-1');
-    expect(DebugConsole.allText, contains('[Offline] index degraded'));
+    expect(result.status, 'offline_index_unavailable');
+    expect(result.citations, isEmpty);
+    expect(result.text, contains('Automatikus kulcsszó/regex fallback nincs'));
+    expect(DebugConsole.allText, contains('[Offline] index unavailable'));
+    expect(DebugConsole.allText, isNot(contains('[Offline] index degraded')));
+    expect(DebugConsole.allText, isNot(contains('[Offline] search start')));
   });
 }
 

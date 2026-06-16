@@ -467,11 +467,6 @@ class ChatModeChip extends StatelessWidget {
           Icons.cloud_off_outlined,
           const Color(0xFF166534),
         ),
-      AnswerModes.autoFallback => (
-          'Auto',
-          Icons.sync_alt,
-          const Color(0xFF92400E),
-        ),
       _ => (
           settings.activeProvider.label,
           Icons.cloud_done_outlined,

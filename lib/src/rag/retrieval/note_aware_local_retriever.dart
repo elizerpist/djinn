@@ -28,15 +28,23 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     required int limit,
     required double minimumSimilarity,
     String? query,
+    bool allowKeywordExpansion = false,
   }) async {
     final baseResults = await _base.retrieve(
       queryVector: queryVector,
       limit: limit,
       minimumSimilarity: minimumSimilarity,
       query: query,
+      allowKeywordExpansion: allowKeywordExpansion,
     );
     final trimmed = query?.trim() ?? '';
     if (trimmed.isEmpty || baseResults.length >= limit) {
+      return baseResults;
+    }
+    if (!allowKeywordExpansion) {
+      DebugConsole.log(
+        '[VectorGraph] note keyword expansion skipped reason=not_selected',
+      );
       return baseResults;
     }
     final noteEvidence = await _loadNoteEvidence(
@@ -229,6 +237,7 @@ class LocalKnowledgeGraphExpander {
       '[LocalGraph] expand start seeds=${seeds.length} '
       'candidates=${candidates.length} queryTerms=${queryTerms.length}',
     );
+    var existingLinks = 0;
     for (final seed in seeds) {
       final seedTerms = {
         ...queryTerms,
@@ -242,10 +251,7 @@ class LocalKnowledgeGraphExpander {
         'symbols=${seedAcronyms.take(8).join(',')}',
       );
       for (final candidate in candidates) {
-        if (results.length + existing.length >= limit) {
-          break;
-        }
-        if (existingIds.contains(candidate.id) || candidate.id == seed.id) {
+        if (candidate.id == seed.id) {
           continue;
         }
         final link = _linkReason(
@@ -257,6 +263,21 @@ class LocalKnowledgeGraphExpander {
         if (link == null) {
           continue;
         }
+        if (existingIds.contains(candidate.id)) {
+          existingLinks += 1;
+          DebugConsole.log(
+            '[LocalGraph] link existing type=${link.type} source=${seed.id} '
+            'target=${candidate.id} reason=${link.reason}',
+          );
+          continue;
+        }
+        if (results.length + existing.length >= limit) {
+          DebugConsole.log(
+            '[LocalGraph] link skipped source=${seed.id} target=${candidate.id} '
+            'reason=limit type=${link.type}',
+          );
+          break;
+        }
         existingIds.add(candidate.id);
         results.add(candidate);
         DebugConsole.log(
@@ -265,7 +286,10 @@ class LocalKnowledgeGraphExpander {
         );
       }
     }
-    DebugConsole.log('[LocalGraph] expand result count=${results.length}');
+    DebugConsole.log(
+      '[LocalGraph] expand result count=${results.length} '
+      'existingLinks=$existingLinks',
+    );
     return results;
   }
 

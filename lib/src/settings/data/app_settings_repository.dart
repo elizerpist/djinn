@@ -106,7 +106,9 @@ class AppSettingsRepository {
     );
 
     return AppSettings(
-      runtimeMode: _fallback(entity.runtimeMode, defaults.runtimeMode),
+      runtimeMode: _runtimeModeWithoutFallback(
+        _fallback(entity.runtimeMode, defaults.runtimeMode),
+      ),
       activeProvider: activeProvider,
       openAiAnswerModel: openAiAnswerModel,
       openAiExtractionModel: openAiExtractionModel,
@@ -118,7 +120,7 @@ class AppSettingsRepository {
       geminiEmbeddingModel: geminiEmbeddingModel,
       deleteOpenAiFilesAfterProcessing: entity.deleteOpenAiFilesAfterProcessing,
       groundednessCheckEnabled: entity.groundednessCheckEnabled,
-      offlineFallbackEnabled: entity.offlineFallbackEnabled,
+      offlineFallbackEnabled: false,
       retrievalLimit: entity.retrievalLimit,
       minimumSimilarity: entity.minimumSimilarity,
       voiceMode: VoiceMode.fromWireName(entity.voiceMode),
@@ -152,7 +154,7 @@ class AppSettingsRepository {
       deleteOpenAiFilesAfterProcessing:
           settings.deleteOpenAiFilesAfterProcessing,
       groundednessCheckEnabled: settings.groundednessCheckEnabled,
-      offlineFallbackEnabled: settings.offlineFallbackEnabled,
+      offlineFallbackEnabled: false,
       retrievalLimit: settings.retrievalLimit,
       minimumSimilarity: settings.minimumSimilarity,
       voiceMode: settings.voiceMode.wireName,
@@ -161,6 +163,10 @@ class AppSettingsRepository {
       localIndexingMode: settings.localIndexingMode,
       navigationMode: AppNavigationMode.bottomNav.wireName,
     );
+  }
+
+  String _runtimeModeWithoutFallback(String value) {
+    return value == AnswerModes.autoFallback ? AnswerModes.ai : value;
   }
 
   String _fallback(String value, String fallback) {

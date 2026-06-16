@@ -339,7 +339,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   key: const Key('settings-card-mode'),
                   icon: Icons.tune,
                   title: 'Működési mód',
-                  subtitle: 'AI válasz, offline keresés és fallback',
+                  subtitle: 'AI válasz és explicit offline keresés',
                   onTap: () => _openSection(
                     title: 'Működési mód',
                     icon: Icons.tune,
@@ -553,12 +553,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: AnswerModes.offline,
                 title: Text('Offline keresés'),
                 subtitle: Text('Nem hív AI API-t'),
-              ),
-              RadioListTile<String>(
-                contentPadding: EdgeInsets.zero,
-                value: AnswerModes.autoFallback,
-                title: Text('Automatikus fallback'),
-                subtitle: Text('AI hiba esetén offline találatok'),
               ),
             ],
           ),

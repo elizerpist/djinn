@@ -56,7 +56,7 @@ void main() {
     expect(DebugConsole.allText, contains('[LocalGraph] link type=definition'));
   });
 
-  test('adds note keyword evidence to vector retrieval path', () async {
+  test('skips note keyword evidence on vector path unless explicitly selected', () async {
     final notes = MemoryNoteRepository();
     await notes.createDocumentNote(
       title: 'Anyagismeret jegyzet',
@@ -100,6 +100,24 @@ void main() {
     expect(results.map((item) => item.id), contains('pdf-1'));
     expect(
       results.map((item) => item.text).join('\n'),
+      isNot(contains('térfogattartó')),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[VectorGraph] note keyword expansion skipped reason=not_selected'),
+    );
+
+    DebugConsole.clear();
+    final keywordResults = await retriever.retrieve(
+      queryVector: const [0, 1, 2],
+      limit: 8,
+      minimumSimilarity: 0.7,
+      query: 'folyadék jellemző',
+      allowKeywordExpansion: true,
+    );
+
+    expect(
+      keywordResults.map((item) => item.text).join('\n'),
       contains('térfogattartó'),
     );
     expect(DebugConsole.allText, contains('[LocalEmbedding] note chunk'));

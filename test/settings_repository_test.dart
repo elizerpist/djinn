@@ -66,11 +66,11 @@ void main() {
     );
     expect(
       settings.copyWith(offlineFallbackEnabled: true).offlineFallbackEnabled,
-      isTrue,
+      isFalse,
     );
     expect(
       settings.copyWith(offlineFallbackEnabled: true).answerMode,
-      AnswerModes.autoFallback,
+      AnswerModes.ai,
     );
     expect(
       settings.copyWith(answerMode: AnswerModes.offline).answerMode,
@@ -254,7 +254,7 @@ void main() {
     expect(loaded.openAiExtractionModel, 'gpt-4.1');
     expect(loaded.openAiEmbeddingModel, 'text-embedding-3-small');
     expect(loaded.geminiEmbeddingModel, 'gemini-embedding-001');
-    expect(loaded.offlineFallbackEnabled, isTrue);
+    expect(loaded.offlineFallbackEnabled, isFalse);
     expect(loaded.voiceMode, VoiceMode.nativeAndroidPtt);
     expect(loaded.voiceLocale, 'en-US');
     expect(loaded.chunkingMode, ChunkingModes.detailed);

@@ -229,7 +229,7 @@ void main() {
 
     expect(find.text('AI válasz'), findsOneWidget);
     expect(find.text('Offline keresés'), findsOneWidget);
-    expect(find.text('Automatikus fallback'), findsOneWidget);
+    expect(find.text('Automatikus fallback'), findsNothing);
 
     await tester.tap(find.text('Offline keresés'));
     await tester.pumpAndSettle();

@@ -198,6 +198,8 @@ void main() {
         httpClient: MockClient((request) async {
           expect(request.url.path, '/v1/responses');
           expect(request.body, contains('Answer language policy'));
+          expect(request.body, contains('Do not expand abbreviations'));
+          expect(request.body, contains('parenthetical explanations'));
           expect(request.body, contains('ambiguous'));
           expect(request.body, contains('Hungarian'));
           expect(request.body, contains('English'));

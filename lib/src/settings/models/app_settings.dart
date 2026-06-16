@@ -67,11 +67,11 @@ class LocalIndexingModes {
   static String description(String value) {
     return switch (normalize(value)) {
       mediapipeTextEmbedder =>
-        'Lokális szemantikus embedding, ha a Text Embedder modell asset telepítve van.',
+        'Lokális szemantikus embedding, ha a Text Embedder modell asset telepítve van. Ha nem elérhető, nincs automatikus kulcsszó/regex fallback.',
       onnxMultilingualE5 =>
-        'Multilingual lokális embedding ONNX Runtime-mal, külön modell assettel.',
+        'Multilingual lokális embedding ONNX Runtime-mal, külön modell assettel. Ha nem elérhető, nincs automatikus kulcsszó/regex fallback.',
       embeddingGemma =>
-        'Google EmbeddingGemma alapú lokális embedding LiteRT futtatóval.',
+        'Google EmbeddingGemma alapú lokális embedding LiteRT futtatóval. Ha nem elérhető, nincs automatikus kulcsszó/regex fallback.',
       keywordBm25 =>
         'Azonnal működő offline kulcsszó, BM25-szerű és regex keresés, vektor nélkül.',
       _ => 'Azonnal működő offline kulcsszó/BM25 keresés.',
@@ -156,8 +156,7 @@ class AppSettings {
   String get answerMode {
     return switch (runtimeMode) {
       AnswerModes.offline => AnswerModes.offline,
-      AnswerModes.autoFallback => AnswerModes.autoFallback,
-      _ => offlineFallbackEnabled ? AnswerModes.autoFallback : AnswerModes.ai,
+      _ => AnswerModes.ai,
     };
   }
 
@@ -211,14 +210,11 @@ class AppSettings {
     final effectiveProvider = activeProvider ?? this.activeProvider;
     final aliasesTargetOpenAi = effectiveProvider == AiProvider.openAi;
     final aliasesTargetGemini = effectiveProvider == AiProvider.gemini;
-    final effectiveRuntimeMode = runtimeMode ?? answerMode ?? this.runtimeMode;
-    final effectiveOfflineFallback =
-        offlineFallbackEnabled ??
-        switch (answerMode) {
-          AnswerModes.autoFallback => true,
-          AnswerModes.ai || AnswerModes.offline => false,
-          _ => this.offlineFallbackEnabled,
-        };
+    final requestedRuntimeMode = runtimeMode ?? answerMode ?? this.runtimeMode;
+    final effectiveRuntimeMode = requestedRuntimeMode == AnswerModes.autoFallback
+        ? AnswerModes.ai
+        : requestedRuntimeMode;
+    final effectiveOfflineFallback = false;
 
     return AppSettings(
       runtimeMode: effectiveRuntimeMode,

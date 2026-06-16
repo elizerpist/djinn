@@ -176,6 +176,8 @@ class GeminiHttpClient implements AiClient {
                       'Answer only from supplied evidence. Return JSON only. '
                       'Use conversation_context only to resolve follow-up references; '
                       'never treat it as evidence. '
+                      'Do not expand abbreviations, acronyms, symbols, or technical terms unless that exact explanation is present in the supplied evidence. '
+                      'Do not add parenthetical explanations from outside knowledge. '
                       '$_answerLanguagePolicy',
                   'question': question,
                   if (conversationContext != null &&
@@ -229,7 +231,7 @@ class GeminiHttpClient implements AiClient {
               {
                 'text': jsonEncode({
                   'instruction':
-                      'Return whether the answer is fully supported by the evidence.',
+                      'Return whether the answer is fully supported by the evidence. Mark grounded=false if the answer expands an abbreviation, acronym, symbol, or technical term using knowledge not explicitly present in the evidence.',
                   'answer': answer,
                   'evidence': evidence
                       .map((item) => {'id': item.id, 'text': item.text})
