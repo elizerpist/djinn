@@ -467,16 +467,11 @@ class LocalKnowledgeGraphExpander {
   }
 
   List<String> _candidateUnits(String text) {
-    final units = text
+    return text
         .split(RegExp(r'[\n;]+'))
         .map(_normalize)
         .where((unit) => unit.isNotEmpty)
-        .toList(growable: true);
-    final whole = _normalize(text);
-    if (whole.isNotEmpty) {
-      units.add(whole);
-    }
-    return units;
+        .toList(growable: false);
   }
 
   bool _branchValueMatches(_BranchSignal branch, String candidateNormalized) {
