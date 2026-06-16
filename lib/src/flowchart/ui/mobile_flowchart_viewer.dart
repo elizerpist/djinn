@@ -458,29 +458,45 @@ class _FlowchartListView extends StatelessWidget {
     }
     final branches = _branchesFor(data, root);
     if (branches.isEmpty) {
-      return _ProcessCard(node: root, terminal: true);
+      return _ProcessCard(key: ValueKey('mobile-flowchart-process-${root.id}'), node: root, terminal: true);
     }
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _branchWidgets(root, path: const [], visited: const {}));
+    final keyCounts = <String, int>{};
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: _branchWidgets(
+        root,
+        path: const [],
+        visited: const {},
+        keyCounts: keyCounts,
+      ),
+    );
   }
 
   List<Widget> _branchWidgets(
     MobileFlowchartNode node, {
     required List<String> path,
     required Set<String> visited,
+    required Map<String, int> keyCounts,
   }) {
     final branches = _branchesFor(data, node);
     final widgets = <Widget>[];
     for (var i = 0; i < branches.length; i += 1) {
       final branch = branches[i];
+      final branchKey = _nextWidgetKey(keyCounts, 'mobile-flowchart-branch-${node.id}-${branch.key}');
       if (i > 0) {
-        widgets.add(_SiblingDivider(key: ValueKey('mobile-flowchart-sibling-divider-${node.id}'), label: '${node.label} · másik ág'));
+        widgets.add(
+          _SiblingDivider(
+            key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-sibling-divider-${node.id}')),
+            label: '${node.label} · másik ág',
+          ),
+        );
       }
       final nextPath = [...path, branch.label];
       final branchId = _pathBranchId(nextPath);
       final closed = closedBranches.contains(branchId);
       widgets.add(
         _BranchCard(
-          key: ValueKey('mobile-flowchart-branch-${node.id}-${branch.key}'),
+          key: ValueKey(branchKey),
           node: node,
           answer: branch.label,
           pathLabel: _pathLabel(nextPath),
@@ -491,25 +507,38 @@ class _FlowchartListView extends StatelessWidget {
       if (closed) {
         continue;
       }
-      widgets.add(const _Arrow());
+      widgets.add(_Arrow(key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-arrow-${node.id}-${branch.key}-target'))));
       final target = branch.target;
       if (target == null) {
-        widgets.add(_LeafCard(key: ValueKey('mobile-flowchart-leaf-${node.id}-${branch.key}'), label: branch.label));
+        widgets.add(_LeafCard(key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-leaf-${node.id}-${branch.key}')), label: branch.label));
         continue;
       }
-      widgets.add(_ProcessCard(node: target, terminal: _branchesFor(data, target).isEmpty));
+      widgets.add(
+        _ProcessCard(
+          key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-process-${target.id}')),
+          node: target,
+          terminal: _branchesFor(data, target).isEmpty,
+        ),
+      );
       if (visited.contains(target.id)) {
-        widgets.add(const _LeafCard(label: 'Visszacsatolás'));
+        widgets.add(_LeafCard(key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-cycle-${node.id}-${branch.key}')), label: 'Visszacsatolás'));
         continue;
       }
       final childBranches = _branchesFor(data, target);
       if (childBranches.isNotEmpty) {
-        widgets.add(const _Arrow());
-        widgets.addAll(_branchWidgets(target, path: nextPath, visited: {...visited, node.id}));
+        widgets.add(_Arrow(key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-arrow-${node.id}-${target.id}-${branch.key}-children'))));
+        widgets.addAll(_branchWidgets(target, path: nextPath, visited: {...visited, node.id}, keyCounts: keyCounts));
       }
     }
     return widgets;
   }
+}
+
+
+String _nextWidgetKey(Map<String, int> counts, String base) {
+  final next = (counts[base] ?? 0) + 1;
+  counts[base] = next;
+  return next == 1 ? base : '$base-$next';
 }
 
 class _BranchCard extends StatelessWidget {
@@ -618,7 +647,7 @@ class _AnswerChip extends StatelessWidget {
 }
 
 class _ProcessCard extends StatelessWidget {
-  const _ProcessCard({required this.node, required this.terminal});
+  const _ProcessCard({super.key, required this.node, required this.terminal});
 
   final MobileFlowchartNode node;
   final bool terminal;
@@ -626,7 +655,6 @@ class _ProcessCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      key: ValueKey('mobile-flowchart-process-${node.id}'),
       padding: const EdgeInsets.only(bottom: 6),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -698,12 +726,11 @@ class _LeafCard extends StatelessWidget {
 }
 
 class _Arrow extends StatelessWidget {
-  const _Arrow();
+  const _Arrow({super.key});
 
   @override
   Widget build(BuildContext context) {
     return const Padding(
-      key: ValueKey('mobile-flowchart-arrow'),
       padding: EdgeInsets.only(bottom: 6),
       child: Center(child: Icon(Icons.arrow_downward, size: 16, color: Color(0xFF9CA3AF))),
     );
@@ -830,35 +857,20 @@ class _CanvasNodePreview extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF7C3AED), width: 1.4),
-                boxShadow: const [BoxShadow(color: Color(0x12111827), blurRadius: 8, offset: Offset(0, 2))],
-              ),
+            child: CustomPaint(
+              painter: _CanvasNodeShapePainter(shape: _visualShape(node)),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(_shapeIcon(node), size: 18, color: const Color(0xFF7C3AED)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_nodeTypeText(node), style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280), fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 2),
-                          Text(
-                            node.label.trim().isEmpty ? 'Névtelen' : node.label.trim(),
-                            overflow: TextOverflow.fade,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, height: 1.16),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                padding: _visualShape(node) == 'diamond'
+                    ? const EdgeInsets.symmetric(horizontal: 34, vertical: 20)
+                    : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Center(
+                  child: Text(
+                    node.label.trim().isEmpty ? 'Névtelen' : node.label.trim(),
+                    textAlign: TextAlign.center,
+                    maxLines: 5,
+                    overflow: TextOverflow.fade,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, height: 1.16, color: Color(0xFF263747)),
+                  ),
                 ),
               ),
             ),
@@ -874,6 +886,56 @@ class _CanvasNodePreview extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CanvasNodeShapePainter extends CustomPainter {
+  const _CanvasNodeShapePainter({required this.shape});
+
+  final String shape;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final fill = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    final stroke = Paint()
+      ..color = const Color(0xFF7C3AED)
+      ..strokeWidth = 1.6
+      ..style = PaintingStyle.stroke;
+    final shadow = Paint()
+      ..color = const Color(0x12111827)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+
+    if (shape == 'diamond') {
+      final path = Path()
+        ..moveTo(rect.center.dx, rect.top + 2)
+        ..lineTo(rect.right - 2, rect.center.dy)
+        ..lineTo(rect.center.dx, rect.bottom - 2)
+        ..lineTo(rect.left + 2, rect.center.dy)
+        ..close();
+      canvas.drawPath(path.shift(const Offset(0, 2)), shadow);
+      canvas.drawPath(path, fill);
+      canvas.drawPath(path, stroke);
+      return;
+    }
+
+    if (shape == 'oval') {
+      final oval = rect.deflate(2);
+      canvas.drawOval(oval.shift(const Offset(0, 2)), shadow);
+      canvas.drawOval(oval, fill);
+      canvas.drawOval(oval, stroke);
+      return;
+    }
+
+    final rrect = RRect.fromRectAndRadius(rect.deflate(2), const Radius.circular(10));
+    canvas.drawRRect(rrect.shift(const Offset(0, 2)), shadow);
+    canvas.drawRRect(rrect, fill);
+    canvas.drawRRect(rrect, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CanvasNodeShapePainter oldDelegate) => oldDelegate.shape != shape;
 }
 
 class _CanvasPortDot extends StatelessWidget {
@@ -1455,6 +1517,23 @@ String _nodeTypeText(MobileFlowchartNode node) {
   if (kind == 'multi_decision') return 'Többágú döntés';
   if (kind == 'binary_decision' || node.shape == 'decision') return 'Döntés';
   return 'Folyamat';
+}
+
+String _visualShape(MobileFlowchartNode node) {
+  final visual = node.visualShape.trim().toLowerCase();
+  if (visual == 'diamond' || visual == 'oval' || visual == 'rectangle') {
+    return visual;
+  }
+  final kind = node.kind.trim().toLowerCase();
+  final role = node.role.trim().toLowerCase();
+  final shape = node.shape.trim().toLowerCase();
+  if (kind == 'multi_decision' || kind == 'binary_decision' || shape == 'decision') {
+    return 'diamond';
+  }
+  if (role == 'start' || role == 'end' || shape == 'start_end') {
+    return 'oval';
+  }
+  return 'rectangle';
 }
 
 Map<String, Offset> _canvasLayout(MobileFlowchartData data) {

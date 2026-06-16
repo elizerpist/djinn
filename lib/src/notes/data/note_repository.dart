@@ -27,6 +27,10 @@ abstract class NoteRepository {
     required String payloadJson,
     String? folderId,
   });
+  Future<List<NoteItem>> importNotes(
+    List<NoteItem> notes, {
+    String? folderId,
+  });
   Future<NoteItem> updateNoteDocument(
     String noteId, {
     required String title,
@@ -161,6 +165,35 @@ class MemoryNoteRepository implements NoteRepository {
       document: document,
       folderId: folderId,
     );
+  }
+
+  @override
+  Future<List<NoteItem>> importNotes(
+    List<NoteItem> notes, {
+    String? folderId,
+  }) async {
+    final imported = <NoteItem>[];
+    for (final incoming in notes) {
+      final now = _clock();
+      final document = incoming.document;
+      final title = incoming.title.trim().isEmpty ? 'Importált jegyzet' : incoming.title.trim();
+      final note = NoteItem(
+        id: _uuid.v4(),
+        folderId: folderId,
+        type: NoteItemType.document,
+        title: title,
+        plainText: document.plainText,
+        payloadJson: document.toPayloadJson(),
+        auditState: incoming.auditState,
+        reason: incoming.reason,
+        createdAt: now,
+        updatedAt: now,
+      );
+      _notes.insert(0, note);
+      imported.add(note);
+      DebugConsole.log('[Notes] import note title=$title blocks=${document.blocks.length}');
+    }
+    return List.unmodifiable(imported);
   }
 
   @override
@@ -370,6 +403,16 @@ class FileNoteRepository extends MemoryNoteRepository {
       document: document,
       folderId: folderId,
     );
+  }
+
+  @override
+  Future<List<NoteItem>> importNotes(
+    List<NoteItem> notes, {
+    String? folderId,
+  }) async {
+    final imported = await super.importNotes(notes, folderId: folderId);
+    await _persist();
+    return imported;
   }
 
   @override

@@ -102,6 +102,44 @@ void main() {
     expect(find.byKey(const ValueKey('mobile-flowchart-canvas-edge-edge-sat-decision')), findsOneWidget);
     expect(find.byKey(const ValueKey('mobile-flowchart-canvas-label-edge-sat-decision')), findsOneWidget);
     expect(find.text('90-95%'), findsOneWidget);
+    expect(find.text('Többágú döntés'), findsNothing);
+    expect(find.text('Folyamat'), findsNothing);
+  });
+
+  testWidgets('switching between list and canvas does not reuse keyed list widgets', (tester) async {
+    const loopData = MobileFlowchartData(
+      id: 'flow-loop',
+      title: 'Loop chart',
+      nodes: [
+        MobileFlowchartNode(id: 'root', label: 'Légzési elégtelen?', shape: 'decision'),
+        MobileFlowchartNode(id: 'oxygen', label: 'Oxigén', shape: 'process'),
+        MobileFlowchartNode(id: 'monitor', label: 'Megfigyelés', shape: 'process'),
+        MobileFlowchartNode(id: 'improved', label: 'Javult?', shape: 'decision'),
+      ],
+      edges: [
+        MobileFlowchartEdge(id: 'e1', fromNodeId: 'root', toNodeId: 'oxygen', label: 'Igen'),
+        MobileFlowchartEdge(id: 'e2', fromNodeId: 'root', toNodeId: 'monitor', label: 'Nem'),
+        MobileFlowchartEdge(id: 'e3', fromNodeId: 'monitor', toNodeId: 'improved', label: ''),
+        MobileFlowchartEdge(id: 'e4', fromNodeId: 'improved', toNodeId: 'monitor', label: 'Igen'),
+        MobileFlowchartEdge(id: 'e5', fromNodeId: 'improved', toNodeId: 'oxygen', label: 'Nem'),
+      ],
+    );
+
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: MobileFlowchartViewer(data: loopData))));
+
+    expect(find.byKey(const ValueKey('mobile-flowchart-branch-root-igen')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-process-oxygen')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('mobile-flowchart-selector-canvas')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('mobile-flowchart-canvas-node-oxygen')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-process-oxygen')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('mobile-flowchart-selector-list')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('mobile-flowchart-process-oxygen')), findsOneWidget);
   });
 
   testWidgets('guide view renders stacked branch cards and disabled dangling branches', (tester) async {

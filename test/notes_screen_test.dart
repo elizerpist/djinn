@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/notes/data/note_repository.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/models/note_item.dart';
@@ -106,6 +107,45 @@ void main() {
     await tester.tap(find.byTooltip('Kijelölés megszüntetése'));
     await tester.pumpAndSettle();
     expect(find.text('Jegyzetek'), findsOneWidget);
+  });
+
+
+  testWidgets('header menu imports exported notes into the current library', (tester) async {
+    final repository = MemoryNoteRepository();
+    final importedAt = DateTime(2026, 6, 16, 12);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotesScreen(
+          repository: repository,
+          importNotesForTest: () async => [
+            NoteItem(
+              id: 'foreign-note',
+              type: NoteItemType.document,
+              title: 'Importált jegyzet',
+              plainText: 'Importált tartalom',
+              payloadJson: const NoteDocument(blocks: [
+                NoteBlock(id: 'p1', type: NoteBlockType.paragraph, text: 'Importált tartalom'),
+              ]).toPayloadJson(),
+              auditState: LocalAuditState.edited,
+              createdAt: importedAt,
+              updatedAt: importedAt,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('notes-header-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Import'));
+    await tester.pumpAndSettle();
+
+    final notes = await repository.listNotes();
+    expect(notes, hasLength(1));
+    expect(notes.single.id, isNot('foreign-note'));
+    expect(notes.single.title, 'Importált jegyzet');
+    expect(find.text('Importált jegyzet'), findsOneWidget);
   });
 
 }

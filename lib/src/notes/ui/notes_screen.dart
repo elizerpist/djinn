@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../debug/debug_console.dart';
 import '../../shared/chunks/chunk_validation_card.dart';
 import '../../shared/ui/draggable_bottom_card.dart';
 import '../data/note_chunk_builder.dart';
@@ -17,12 +18,19 @@ import '../models/note_folder.dart';
 import '../models/note_item.dart';
 import 'note_editor_route.dart';
 
+typedef ImportNotesForTest = Future<List<NoteItem>?> Function();
+
 enum _NoteSortMode { newestFirst, oldestFirst, titleAsc, titleDesc }
 
 class NotesScreen extends StatefulWidget {
-  const NotesScreen({super.key, required this.repository});
+  const NotesScreen({
+    super.key,
+    required this.repository,
+    this.importNotesForTest,
+  });
 
   final NoteRepository repository;
+  final ImportNotesForTest? importNotesForTest;
 
   @override
   State<NotesScreen> createState() => _NotesScreenState();
@@ -212,6 +220,7 @@ class _NotesScreenState extends State<NotesScreen> {
         child: Text(_showFolderBar ? 'Mappasáv elrejtése' : 'Mappasáv mutatása'),
       ),
       const PopupMenuItem<String>(value: 'new-folder', child: Text('Új mappa')),
+      const PopupMenuItem<String>(value: 'import', child: Text('Import')),
       if (_notes.isNotEmpty) const PopupMenuItem<String>(value: 'select-all', child: Text('Összes kijelölése')),
       const PopupMenuDivider(),
       const PopupMenuItem<_NoteSortMode>(
@@ -258,6 +267,10 @@ class _NotesScreenState extends State<NotesScreen> {
     }
     if (value == 'new-folder') {
       await _createFolder();
+      return;
+    }
+    if (value == 'import') {
+      await _importNotes();
       return;
     }
     if (value == 'select-all') {
@@ -385,6 +398,79 @@ class _NotesScreenState extends State<NotesScreen> {
     await widget.repository.deleteNotes(notes.map((note) => note.id).toList(growable: false));
     _exitSelection();
     await _load();
+  }
+
+  Future<void> _importNotes() async {
+    try {
+      final notes = widget.importNotesForTest != null
+          ? await widget.importNotesForTest!()
+          : await _pickNotesImportFile();
+      if (!mounted || notes == null) {
+        return;
+      }
+      if (notes.isEmpty) {
+        DebugConsole.log('[Notes] import skipped empty_file');
+        return;
+      }
+      final imported = await widget.repository.importNotes(notes, folderId: _activeFolderId);
+      final folderLabel = _activeFolderId ?? 'none';
+      DebugConsole.log('[Notes] import notes=${imported.length} folder=$folderLabel');
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${imported.length} jegyzet importálva')),
+      );
+    } catch (error) {
+      DebugConsole.log('[Notes] import failed error=$error');
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Jegyzet import sikertelen: $error')),
+      );
+    }
+  }
+
+  Future<List<NoteItem>?> _pickNotesImportFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Jegyzet import',
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return null;
+    }
+    final file = result.files.single;
+    final bytes = file.bytes ??
+        (file.path == null ? null : await File(file.path!).readAsBytes());
+    if (bytes == null) {
+      throw const FormatException('A kiválasztott jegyzetfájl nem olvasható.');
+    }
+    return _notesFromImportBytes(Uint8List.fromList(bytes));
+  }
+
+  List<NoteItem> _notesFromImportBytes(Uint8List bytes) {
+    final decoded = jsonDecode(utf8.decode(bytes));
+    if (decoded is! Map) {
+      throw const FormatException('A jegyzet import nem JSON objektum.');
+    }
+    final type = decoded['type'];
+    if (type != 'djinn_notes') {
+      throw const FormatException('Nem Djinn jegyzet export fájl.');
+    }
+    final rawNotes = decoded['notes'];
+    if (rawNotes is! List) {
+      throw const FormatException('A jegyzet export nem tartalmaz notes listát.');
+    }
+    return rawNotes.map((item) {
+      if (item is! Map) {
+        throw const FormatException('Érvénytelen jegyzet elem az import fájlban.');
+      }
+      return NoteItem.fromJson(Map<String, Object?>.from(item));
+    }).toList(growable: false);
   }
 
   Future<void> _exportNotes(List<NoteItem> notes) async {
