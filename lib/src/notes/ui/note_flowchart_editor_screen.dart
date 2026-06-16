@@ -63,8 +63,8 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
             ],
           )
         : widget.block.copyWith(type: NoteBlockType.flowchart);
+    _centerInitialCanvas();
     _canvasController.addListener(_onCanvasTransformChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _centerInitialCanvas());
     _log('editor init nodes=${_block.nodes.length} edges=${_block.edges.length}');
   }
 
