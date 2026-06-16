@@ -22,8 +22,8 @@ class NoteFlowchartEditorScreen extends StatefulWidget {
 }
 
 class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
-  static const Size _minCanvasSize = Size(2400, 1800);
-  static const double _canvasMargin = 900;
+  static const Size _minCanvasSize = Size(32000, 24000);
+  static const double _canvasMargin = 8000;
   static const double _gridStep = 32;
 
   final GlobalKey _canvasKey = GlobalKey();
@@ -36,11 +36,14 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
   Stopwatch? _paletteDragWatch;
   int _paletteDragMoveCount = 0;
   final TextEditingController _inlineNodeController = TextEditingController();
+  final TextEditingController _inlineEdgeController = TextEditingController();
   String? _editingNodeId;
+  String? _editingEdgeId;
   final Map<String, Stopwatch> _dragWatches = <String, Stopwatch>{};
   final Map<String, int> _dragMoveCounts = <String, int>{};
   Size _viewportSize = const Size(430, 720);
   int _viewportLogTick = 0;
+  bool _initialCanvasCentered = false;
 
   @override
   void initState() {
@@ -61,6 +64,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
           )
         : widget.block.copyWith(type: NoteBlockType.flowchart);
     _canvasController.addListener(_onCanvasTransformChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _centerInitialCanvas());
     _log('editor init nodes=${_block.nodes.length} edges=${_block.edges.length}');
   }
 
@@ -69,6 +73,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     _canvasController.removeListener(_onCanvasTransformChanged);
     _canvasController.dispose();
     _inlineNodeController.dispose();
+    _inlineEdgeController.dispose();
     super.dispose();
   }
 
@@ -123,6 +128,22 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     return {for (final node in nodes) node.id: _nodeSizeFor(node)};
   }
 
+  void _centerInitialCanvas() {
+    if (_initialCanvasCentered || !mounted || _positionedNodes.isEmpty) {
+      return;
+    }
+    final geometry = _canvasGeometryFor(_positionedNodes);
+    final first = _positionedNodes.first;
+    final local = Offset(first.x - geometry.bounds.left, first.y - geometry.bounds.top);
+    _canvasController.value = Matrix4.identity()..translate(120.0 - local.dx, 120.0 - local.dy);
+    _initialCanvasCentered = true;
+    _log(
+      'canvas initial center node=${first.id} bounds=${geometry.bounds.left.toStringAsFixed(0)},${geometry.bounds.top.toStringAsFixed(0)},'
+      '${geometry.bounds.width.toStringAsFixed(0)}x${geometry.bounds.height.toStringAsFixed(0)} '
+      'translate=${(120.0 - local.dx).toStringAsFixed(1)},${(120.0 - local.dy).toStringAsFixed(1)}',
+    );
+  }
+
   void _onCanvasTransformChanged() {
     _viewportLogTick += 1;
     if (_viewportLogTick == 1 || _viewportLogTick % 24 == 0) {
@@ -139,27 +160,25 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
 
   _CanvasGeometry _canvasGeometryFor(List<NoteFlowchartNode> nodes) {
     if (nodes.isEmpty) {
-      return const _CanvasGeometry(bounds: Rect.fromLTWH(0, 0, 2400, 1800));
+      return const _CanvasGeometry(bounds: Rect.fromLTWH(-8000, -6000, 32000, 24000));
     }
     final sizes = _nodeSizesFor(nodes);
-    var left = 0.0;
-    var top = 0.0;
-    var right = _minCanvasSize.width;
-    var bottom = _minCanvasSize.height;
+    var left = double.infinity;
+    var top = double.infinity;
+    var right = double.negativeInfinity;
+    var bottom = double.negativeInfinity;
     for (final node in nodes) {
       final size = sizes[node.id] ?? _nodeSizeFor(node);
       left = math.min(left, node.x);
       top = math.min(top, node.y);
-      right = math.max(right, node.x + size.width + _canvasMargin);
-      bottom = math.max(bottom, node.y + size.height + _canvasMargin);
+      right = math.max(right, node.x + size.width);
+      bottom = math.max(bottom, node.y + size.height);
     }
-    if (left < 0) {
-      left -= _canvasMargin;
-    }
-    if (top < 0) {
-      top -= _canvasMargin;
-    }
-    return _CanvasGeometry(bounds: Rect.fromLTRB(left, top, right, bottom));
+    final boundsLeft = math.min(left - _canvasMargin, -_canvasMargin);
+    final boundsTop = math.min(top - _canvasMargin, -_canvasMargin);
+    final boundsRight = math.max(right + _canvasMargin, boundsLeft + _minCanvasSize.width);
+    final boundsBottom = math.max(bottom + _canvasMargin, boundsTop + _minCanvasSize.height);
+    return _CanvasGeometry(bounds: Rect.fromLTRB(boundsLeft, boundsTop, boundsRight, boundsBottom));
   }
 
   NoteFlowchartNode _toCanvasNode(NoteFlowchartNode node, _CanvasGeometry geometry) {
@@ -788,6 +807,57 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     setState(() => _linkSource = null);
   }
 
+  void _editEdgeLabel(NoteFlowchartEdge edge) {
+    NoteFlowchartNode? from;
+    for (final node in _positionedNodes) {
+      if (node.id == edge.fromNodeId) {
+        from = node;
+        break;
+      }
+    }
+    if (from == null) {
+      return;
+    }
+    _inlineEdgeController.text = _edgeDisplayLabel(edge, from);
+    _inlineEdgeController.selection = TextSelection.collapsed(offset: _inlineEdgeController.text.length);
+    setState(() => _editingEdgeId = edge.id);
+    _log('edge label edit open id=${edge.id} chars=${_inlineEdgeController.text.length}');
+  }
+
+  void _commitEdgeLabel(NoteFlowchartEdge edge) {
+    final nextLabel = _inlineEdgeController.text.trim();
+    final updatedNodes = [
+      for (final node in _block.nodes)
+        if (node.id == edge.fromNodeId && edge.fromPortId != null)
+          node.copyWith(
+            ports: [
+              for (final port in _portsForNode(node))
+                if (port.id == edge.fromPortId)
+                  port.copyWith(label: nextLabel)
+                else
+                  port,
+            ],
+          )
+        else
+          node,
+    ];
+    final updatedEdges = [
+      for (final item in _block.edges)
+        if (item.id == edge.id)
+          item.copyWith(label: nextLabel)
+        else
+          item,
+    ];
+    _log('edge label edit saved id=${edge.id} chars=${nextLabel.length}');
+    setState(() => _editingEdgeId = null);
+    _emit(_block.copyWith(nodes: updatedNodes, edges: updatedEdges));
+  }
+
+  void _cancelEdgeLabelEdit(NoteFlowchartEdge edge) {
+    _log('edge label edit cancelled id=${edge.id}');
+    setState(() => _editingEdgeId = null);
+  }
+
   void _deleteEdge(NoteFlowchartEdge edge) {
     _log('edge delete id=${edge.id} from=${edge.fromNodeId} to=${edge.toNodeId}');
     _emit(_block.copyWith(edges: _block.edges.where((item) => item.id != edge.id).toList()));
@@ -836,7 +906,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
               InteractiveViewer(
                 transformationController: _canvasController,
                 constrained: false,
-                boundaryMargin: const EdgeInsets.all(2400),
+                boundaryMargin: const EdgeInsets.all(20000),
                 minScale: 0.22,
                 maxScale: 3.0,
                 child: DragTarget<NoteFlowchartNodeKind>(
@@ -870,6 +940,11 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                                   edge: edge,
                                   nodes: canvasNodes,
                                   nodeSizes: nodeSizes,
+                                  editing: _editingEdgeId == edge.id,
+                                  inlineController: _editingEdgeId == edge.id ? _inlineEdgeController : null,
+                                  onEdit: () => _editEdgeLabel(edge),
+                                  onCommitEdit: () => _commitEdgeLabel(edge),
+                                  onCancelEdit: () => _cancelEdgeLabelEdit(edge),
                                   onDelete: () => _deleteEdge(edge),
                                 ),
                               for (final canvasNode in visibleNodes)
@@ -1315,12 +1390,22 @@ class _EdgeLabel extends StatelessWidget {
     required this.edge,
     required this.nodes,
     required this.nodeSizes,
+    required this.editing,
+    required this.inlineController,
+    required this.onEdit,
+    required this.onCommitEdit,
+    required this.onCancelEdit,
     required this.onDelete,
   });
 
   final NoteFlowchartEdge edge;
   final List<NoteFlowchartNode> nodes;
   final Map<String, Size> nodeSizes;
+  final bool editing;
+  final TextEditingController? inlineController;
+  final VoidCallback onEdit;
+  final VoidCallback onCommitEdit;
+  final VoidCallback onCancelEdit;
   final VoidCallback onDelete;
 
   @override
@@ -1333,7 +1418,7 @@ class _EdgeLabel extends StatelessWidget {
     final route = _routeEdge(edge, from, to, nodeSizes);
     final points = route.points;
     final middle = points[points.length ~/ 2];
-    final display = edge.label.trim().isEmpty ? 'Kapcsolat' : edge.label.trim();
+    final display = _edgeDisplayLabel(edge, from);
     return Positioned(
       left: middle.dx - 44,
       top: middle.dy - 18,
@@ -1350,15 +1435,49 @@ class _EdgeLabel extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.only(left: 10, right: 2),
-              child: Text(display, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              child: editing
+                  ? SizedBox(
+                      width: 92,
+                      child: TextField(
+                        key: ValueKey('note-flowchart-edge-inline-field-${edge.id}'),
+                        controller: inlineController,
+                        autofocus: true,
+                        minLines: 1,
+                        maxLines: 1,
+                        textInputAction: TextInputAction.done,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                          border: InputBorder.none,
+                        ),
+                        onSubmitted: (_) => onCommitEdit(),
+                        onTapOutside: (_) => onCommitEdit(),
+                      ),
+                    )
+                  : GestureDetector(
+                      key: ValueKey('note-flowchart-edge-label-${edge.id}'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onEdit,
+                      child: Text(display, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
             ),
+            if (editing)
+              IconButton(
+                key: ValueKey('note-flowchart-edge-commit-${edge.id}'),
+                tooltip: 'Ágnév mentése',
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+                onPressed: onCommitEdit,
+                icon: const Icon(Icons.check, size: 15),
+              ),
             IconButton(
-              key: ValueKey('note-flowchart-edge-delete-${edge.id}'),
-              tooltip: 'Kapcsolat törlése',
+              key: ValueKey(editing ? 'note-flowchart-edge-cancel-${edge.id}' : 'note-flowchart-edge-delete-${edge.id}'),
+              tooltip: editing ? 'Mégse' : 'Kapcsolat törlése',
               visualDensity: VisualDensity.compact,
               constraints: const BoxConstraints.tightFor(width: 30, height: 30),
-              onPressed: onDelete,
-              icon: const Icon(Icons.close, size: 15),
+              onPressed: editing ? onCancelEdit : onDelete,
+              icon: Icon(editing ? Icons.close : Icons.delete_outline, size: 15),
             ),
           ],
         ),
@@ -1922,6 +2041,92 @@ Offset _edgeEnd(NoteFlowchartEdge edge, NoteFlowchartNode to, Map<String, Size> 
   return Offset(to.x + size.width * connector.unitOffset.dx, to.y + size.height * connector.unitOffset.dy);
 }
 
+
+_ConnectorSpec _edgeStartConnector(
+  NoteFlowchartEdge edge,
+  NoteFlowchartNode from,
+  Map<String, Size> nodeSizes,
+) {
+  final connectors = _connectorsForNode(from);
+  return connectors.firstWhere(
+    (candidate) {
+      if (edge.fromPortId != null) {
+        return candidate.id == edge.fromPortId;
+      }
+      final normalized = edge.label.trim().toLowerCase();
+      if (normalized == 'igen') {
+        return candidate.semantic == NoteFlowchartPortSemantic.yes;
+      }
+      if (normalized == 'nem') {
+        return candidate.semantic == NoteFlowchartPortSemantic.no;
+      }
+      return candidate.id == 'out' || candidate.side == NoteFlowchartPortSide.bottom || candidate.side == NoteFlowchartPortSide.right;
+    },
+    orElse: () => connectors.isEmpty
+        ? _ConnectorSpec(
+            id: 'center',
+            nodeId: from.id,
+            nodeSize: nodeSizes[from.id] ?? _nodeSizeFor(from),
+            unitOffset: const Offset(0.5, 0.5),
+            side: NoteFlowchartPortSide.bottom,
+            semantic: NoteFlowchartPortSemantic.normal,
+            tooltip: 'Kapcsolat',
+          )
+        : connectors.last,
+  );
+}
+
+_ConnectorSpec _edgeEndConnector(
+  NoteFlowchartEdge edge,
+  NoteFlowchartNode to,
+  Map<String, Size> nodeSizes,
+) {
+  final connectors = _connectorsForNode(to);
+  return connectors.firstWhere(
+    (candidate) {
+      if (edge.toPortId != null) {
+        return candidate.id == edge.toPortId;
+      }
+      return candidate.id == 'in' || candidate.side == NoteFlowchartPortSide.top || candidate.side == NoteFlowchartPortSide.left;
+    },
+    orElse: () => connectors.isEmpty
+        ? _ConnectorSpec(
+            id: 'center',
+            nodeId: to.id,
+            nodeSize: nodeSizes[to.id] ?? _nodeSizeFor(to),
+            unitOffset: const Offset(0.5, 0.5),
+            side: NoteFlowchartPortSide.top,
+            semantic: NoteFlowchartPortSemantic.normal,
+            tooltip: 'Kapcsolat',
+          )
+        : connectors.first,
+  );
+}
+
+String _edgeDisplayLabel(NoteFlowchartEdge edge, NoteFlowchartNode from) {
+  if (edge.fromPortId != null) {
+    for (final port in _portsForNode(from)) {
+      if (port.id == edge.fromPortId) {
+        final label = _edgeLabelForPort(port).trim();
+        if (label.isNotEmpty) {
+          return label;
+        }
+      }
+    }
+  }
+  final edgeLabel = edge.label.trim();
+  return edgeLabel.isEmpty ? 'Kapcsolat' : edgeLabel;
+}
+
+Offset _sideExit(Offset point, NoteFlowchartPortSide side, double distance) {
+  return switch (side) {
+    NoteFlowchartPortSide.top => point.translate(0, -distance),
+    NoteFlowchartPortSide.right => point.translate(distance, 0),
+    NoteFlowchartPortSide.left => point.translate(-distance, 0),
+    NoteFlowchartPortSide.bottom => point.translate(0, distance),
+  };
+}
+
 FlowchartRouteDebug debugFlowchartRouteForTest(
   NoteFlowchartEdge edge,
   NoteFlowchartNode from,
@@ -1944,37 +2149,43 @@ FlowchartRouteDebug _routeEdge(
   NoteFlowchartNode to,
   Map<String, Size> nodeSizes,
 ) {
+  final startConnector = _edgeStartConnector(edge, from, nodeSizes);
+  final endConnector = _edgeEndConnector(edge, to, nodeSizes);
   final start = _edgeStart(edge, from, nodeSizes);
   final end = _edgeEnd(edge, to, nodeSizes);
+  final startExit = _sideExit(start, startConnector.side, 30);
+  final endEntry = _sideExit(end, endConnector.side, 24);
   final fromSize = nodeSizes[from.id] ?? _nodeSizeFor(from);
   final toSize = nodeSizes[to.id] ?? _nodeSizeFor(to);
   final fromRect = Rect.fromLTWH(from.x, from.y, fromSize.width, fromSize.height).inflate(18);
   final toRect = Rect.fromLTWH(to.x, to.y, toSize.width, toSize.height).inflate(18);
   final isBackEdge = toRect.center.dy < fromRect.center.dy - 8;
   if (isBackEdge) {
-    final leftLane = (math.min(fromRect.left, toRect.left) - 42).toDouble();
-    final rightLane = (math.max(fromRect.right, toRect.right) + 42).toDouble();
-    final useLeft = (start.dx - leftLane).abs() <= (rightLane - start.dx).abs();
+    final leftLane = (math.min(fromRect.left, toRect.left) - 56).toDouble();
+    final rightLane = (math.max(fromRect.right, toRect.right) + 56).toDouble();
+    final useLeft = (startExit.dx - leftLane).abs() <= (rightLane - startExit.dx).abs();
     final laneX = useLeft ? leftLane : rightLane;
-    final entryX = end.dx + (useLeft ? -24 : 24);
     return FlowchartRouteDebug(
       kind: 'backEdge',
       points: [
         start,
-        Offset(laneX, start.dy),
-        Offset(laneX, end.dy),
-        Offset(entryX, end.dy),
+        startExit,
+        Offset(laneX, startExit.dy),
+        Offset(laneX, endEntry.dy),
+        endEntry,
         end,
       ],
     );
   }
-  final midY = (start.dy + end.dy) / 2;
+  final midY = (startExit.dy + endEntry.dy) / 2;
   return FlowchartRouteDebug(
     kind: 'orthogonal',
     points: [
       start,
-      Offset(start.dx, midY),
-      Offset(end.dx, midY),
+      startExit,
+      Offset(startExit.dx, midY),
+      Offset(endEntry.dx, midY),
+      endEntry,
       end,
     ],
   );

@@ -376,9 +376,11 @@ void main() {
     });
 
     expect(route.kind, 'backEdge');
-    expect(route.points.length, greaterThanOrEqualTo(5));
-    expect(route.points[1].dx, isNot(route.points.first.dx));
-    expect(route.points[2].dy, lessThan(route.points.first.dy));
+    expect(route.points.length, greaterThanOrEqualTo(6));
+    expect(route.points[1].dx, route.points.first.dx);
+    expect(route.points[1].dy, greaterThan(route.points.first.dy));
+    expect(route.points[2].dx, isNot(route.points.first.dx));
+    expect(route.points[3].dy, lessThan(route.points.first.dy));
   });
 
 
@@ -533,6 +535,88 @@ void main() {
     expect(no.dy, closeTo(shape.bottom, 2));
     expect(yes.dx, greaterThan(shape.left));
     expect(no.dx, lessThan(shape.right));
+  });
+
+
+  test('back edge from a bottom port leaves the source before routing upward', () {
+    const from = NoteFlowchartNode(
+      id: 'lower',
+      label: 'Alsó',
+      x: 120,
+      y: 420,
+      ports: [NoteFlowchartPort(id: 'out', side: NoteFlowchartPortSide.bottom, label: 'Kimenet')],
+    );
+    const to = NoteFlowchartNode(
+      id: 'upper',
+      label: 'Felső',
+      x: 120,
+      y: 120,
+      ports: [NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet')],
+    );
+    const edge = NoteFlowchartEdge(
+      id: 'edge-1',
+      fromNodeId: 'lower',
+      fromPortId: 'out',
+      toNodeId: 'upper',
+      toPortId: 'in',
+      label: 'vissza',
+    );
+    final route = debugFlowchartRouteForTest(edge, from, to, {
+      from.id: const Size(220, 90),
+      to.id: const Size(220, 90),
+    });
+
+    expect(route.kind, 'backEdge');
+    expect(route.points.length, greaterThanOrEqualTo(6));
+    expect(route.points[1].dx, route.points.first.dx);
+    expect(route.points[1].dy, greaterThan(route.points.first.dy));
+    expect(route.points[2].dx, isNot(route.points.first.dx));
+  });
+
+  testWidgets('edge chip display name follows renamed source port label', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: NoteBlock(
+            id: 'flow-labels',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'sat',
+                label: 'Szaturáció?',
+                kind: NoteFlowchartNodeKind.multiDecision,
+                x: 120,
+                y: 120,
+                ports: [
+                  NoteFlowchartPort(id: 'branch-1', side: NoteFlowchartPortSide.right, label: '90-95%', semantic: NoteFlowchartPortSemantic.custom),
+                ],
+              ),
+              NoteFlowchartNode(
+                id: 'target',
+                label: 'Megfigyelés',
+                x: 480,
+                y: 120,
+                ports: [NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.left, label: 'Bemenet')],
+              ),
+            ],
+            edges: [
+              NoteFlowchartEdge(
+                id: 'edge-branch',
+                fromNodeId: 'sat',
+                fromPortId: 'branch-1',
+                toNodeId: 'target',
+                toPortId: 'in',
+                label: 'Ág 1',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('note-flowchart-edge-edge-branch')), findsOneWidget);
+    expect(find.text('90-95%'), findsOneWidget);
+    expect(find.text('Ág 1'), findsNothing);
   });
 
 }

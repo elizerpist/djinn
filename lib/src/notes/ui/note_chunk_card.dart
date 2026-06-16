@@ -101,7 +101,10 @@ class NoteChunkCard extends StatelessWidget {
                 AnimatedCrossFade(
                   firstChild: const SizedBox.shrink(),
                   secondChild: Padding(
-                    padding: const EdgeInsets.fromLTRB(46, 10, 8, 2),
+                    key: ValueKey('note-chunk-expanded-body-${block.type.wireName}'),
+                    padding: block.type == NoteBlockType.flowchart
+                        ? const EdgeInsets.fromLTRB(8, 10, 8, 2)
+                        : const EdgeInsets.fromLTRB(46, 10, 8, 2),
                     child: _ChunkBody(block: block),
                   ),
                   crossFadeState: expanded
@@ -364,8 +367,21 @@ MobileFlowchartData _mobileFlowchartDataFromBlock(NoteBlock block) {
           id: node.id,
           label: node.label,
           shape: node.shape.wireName,
+          kind: node.kind.wireName,
+          role: node.role.wireName,
+          visualShape: node.visualShape.wireName,
+          order: node.order,
           x: node.x,
           y: node.y,
+          ports: [
+            for (final port in node.ports)
+              MobileFlowchartPort(
+                id: port.id,
+                side: port.side.wireName,
+                label: port.label,
+                semantic: port.semantic.wireName,
+              ),
+          ],
         ),
     ],
     edges: [
@@ -375,6 +391,14 @@ MobileFlowchartData _mobileFlowchartDataFromBlock(NoteBlock block) {
           fromNodeId: edge.fromNodeId,
           toNodeId: edge.toNodeId,
           label: edge.label,
+          fromPortId: edge.fromPortId,
+          toPortId: edge.toPortId,
+          routingMode: edge.routingMode.wireName,
+          manualWaypoints: [
+            for (final point in edge.manualWaypoints)
+              MobileFlowchartWaypoint(point.x, point.y),
+          ],
+          order: edge.order,
         ),
     ],
   );
