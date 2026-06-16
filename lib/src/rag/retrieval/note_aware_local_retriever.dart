@@ -275,6 +275,15 @@ class LocalKnowledgeGraphExpander {
     required Set<String> seedTerms,
     required Set<String> seedAcronyms,
   }) {
+    final branchLink = _branchValueLink(
+      seed: seed,
+      candidate: candidate,
+      seedTerms: seedTerms,
+    );
+    if (branchLink != null) {
+      return branchLink;
+    }
+
     final definitionKeys = _definitionKeys(candidate.text);
     final definitionOverlap = definitionKeys.intersection(seedTerms);
     if (definitionOverlap.isNotEmpty) {
@@ -320,6 +329,232 @@ class LocalKnowledgeGraphExpander {
       return _GraphLink('semantic_keyword', 'term_overlap:$overlap');
     }
     return null;
+  }
+
+  _GraphLink? _branchValueLink({
+    required SourceEvidence seed,
+    required SourceEvidence candidate,
+    required Set<String> seedTerms,
+  }) {
+    final branches = _branchSignals(seed.text);
+    if (branches.isEmpty) {
+      return null;
+    }
+    final candidateNormalized = _normalize(candidate.text);
+    final candidateUnits = _candidateUnits(candidate.text);
+    _BranchMatch? best;
+    for (final branch in branches) {
+      DebugConsole.log(
+        '[LocalGraph] branch signal source=${seed.id} key=${branch.key} '
+        'value=${branch.value} polarity=${branch.polarity ?? 'custom'} '
+        'context=${branch.contextTerms.join(',')}',
+      );
+      final wholeContextScore = _contextScore(candidateNormalized, branch.contextTerms);
+      for (final unit in candidateUnits) {
+        final unitContextScore = _contextScore(unit, branch.contextTerms);
+        final contextScore = unitContextScore > wholeContextScore ? unitContextScore : wholeContextScore;
+        if (branch.contextTerms.isNotEmpty && contextScore == 0) {
+          continue;
+        }
+        if (!_branchValueMatches(branch, unit)) {
+          continue;
+        }
+        final queryScore = _contextScore(unit, seedTerms.toList(growable: false));
+        final branchQueryScore = _contextScore(branch.value, seedTerms.toList(growable: false));
+        final score = contextScore * 4 + queryScore + branchQueryScore * 3;
+        final match = _BranchMatch(
+          branch: branch,
+          score: score,
+          contextScore: contextScore,
+          unit: unit,
+        );
+        if (best == null || match.score > best.score) {
+          best = match;
+        }
+      }
+    }
+    if (best == null) {
+      DebugConsole.log(
+        '[LocalGraph] branch candidate skipped source=${seed.id} '
+        'target=${candidate.id} reason=no_branch_value_match',
+      );
+      return null;
+    }
+    final branch = best.branch;
+    DebugConsole.log(
+      '[LocalGraph] branch candidate matched source=${seed.id} '
+      'target=${candidate.id} key=${branch.key} value=${branch.value} '
+      'polarity=${branch.polarity ?? 'custom'} context=${best.contextScore} '
+      'score=${best.score} unit=${best.unit}',
+    );
+    return _GraphLink(
+      'branch_value',
+      'key=${branch.key} value=${branch.value} '
+      'polarity:${branch.polarity ?? 'custom'} context:${best.contextScore}',
+    );
+  }
+
+  List<_BranchSignal> _branchSignals(String text) {
+    final signals = <_BranchSignal>[];
+    final edgePattern = RegExp(r'^(.+?)\s*->\s*(.+?)(?:\s*\[(.+?)\])?\s*$');
+    for (final rawLine in text.split(RegExp(r'\n+'))) {
+      final line = rawLine.trim();
+      if (line.isEmpty) {
+        continue;
+      }
+      final match = edgePattern.firstMatch(line);
+      if (match == null) {
+        continue;
+      }
+      final source = match.group(1)!.trim();
+      final label = (match.group(3) ?? '').trim();
+      if (!source.contains('?') || label.isEmpty) {
+        continue;
+      }
+      final keyText = source.replaceAll('?', ' ').trim();
+      final key = _normalize(keyText);
+      final value = _normalize(label);
+      if (key.isEmpty || value.isEmpty) {
+        continue;
+      }
+      final polarity = _polarityFor(value);
+      final keyTerms = _terms(keyText);
+      final valueTerms = polarity == null
+          ? _terms(label)
+          : _conditionValueTerms(keyTerms);
+      final valueTermSet = valueTerms.toSet();
+      final contextTerms = polarity == null
+          ? keyTerms
+          : keyTerms.where((term) => !valueTermSet.contains(term)).toList(growable: false);
+      signals.add(
+        _BranchSignal(
+          key: key,
+          value: value,
+          polarity: polarity,
+          valueTerms: valueTerms,
+          contextTerms: contextTerms,
+        ),
+      );
+    }
+    return signals;
+  }
+
+  String? _polarityFor(String normalizedValue) {
+    if (normalizedValue == 'igen' || normalizedValue == 'yes') {
+      return 'positive';
+    }
+    if (normalizedValue == 'nem' || normalizedValue == 'no') {
+      return 'negative';
+    }
+    return null;
+  }
+
+  List<String> _conditionValueTerms(List<String> keyTerms) {
+    if (keyTerms.isEmpty) {
+      return const [];
+    }
+    return [keyTerms.last];
+  }
+
+  int _contextScore(String candidateNormalized, List<String> contextTerms) {
+    var score = 0;
+    for (final term in contextTerms) {
+      if (_containsTermFuzzy(candidateNormalized, term)) {
+        score += 1;
+      }
+    }
+    return score;
+  }
+
+  List<String> _candidateUnits(String text) {
+    final units = text
+        .split(RegExp(r'[\n;]+'))
+        .map(_normalize)
+        .where((unit) => unit.isNotEmpty)
+        .toList(growable: true);
+    final whole = _normalize(text);
+    if (whole.isNotEmpty) {
+      units.add(whole);
+    }
+    return units;
+  }
+
+  bool _branchValueMatches(_BranchSignal branch, String candidateNormalized) {
+    if (branch.polarity == 'negative') {
+      return _hasNegatedCondition(candidateNormalized, branch);
+    }
+    if (branch.polarity == 'positive') {
+      return _hasAffirmedCondition(candidateNormalized, branch);
+    }
+    return _containsNormalizedPhrase(candidateNormalized, branch.value);
+  }
+
+  bool _hasNegatedCondition(String candidateNormalized, _BranchSignal branch) {
+    if (_containsNegatedPhrase(candidateNormalized, branch.key)) {
+      return true;
+    }
+    for (final term in branch.valueTerms) {
+      if (_hasNegatedTerm(candidateNormalized, term)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _hasAffirmedCondition(String candidateNormalized, _BranchSignal branch) {
+    if (_containsNormalizedPhrase(candidateNormalized, branch.key) &&
+        !_containsNegatedPhrase(candidateNormalized, branch.key)) {
+      return true;
+    }
+    for (final term in branch.valueTerms) {
+      if (_containsTermFuzzy(candidateNormalized, term) &&
+          !_hasNegatedTerm(candidateNormalized, term)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _containsNegatedPhrase(String candidateNormalized, String phrase) {
+    final compactCandidate = candidateNormalized.replaceAll(' ', '');
+    final compactPhrase = phrase.replaceAll(' ', '');
+    return candidateNormalized.contains('nem $phrase') ||
+        compactCandidate.contains('nem$compactPhrase');
+  }
+
+  bool _hasNegatedTerm(String candidateNormalized, String term) {
+    final compactCandidate = candidateNormalized.replaceAll(' ', '');
+    if (compactCandidate.contains('nem$term')) {
+      return true;
+    }
+    final tokens = candidateNormalized.split(RegExp(r'\s+'));
+    for (var i = 0; i < tokens.length - 1; i += 1) {
+      if (tokens[i] == 'nem' &&
+          (tokens[i + 1] == term ||
+              (term.length >= 4 && tokens[i + 1].contains(term)))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _containsNormalizedPhrase(String candidateNormalized, String phrase) {
+    if (phrase.isEmpty) {
+      return false;
+    }
+    if (candidateNormalized.contains(phrase)) {
+      return true;
+    }
+    final terms = phrase.split(RegExp(r'\s+')).where((term) => term.isNotEmpty);
+    return terms.every((term) => _containsTermFuzzy(candidateNormalized, term));
+  }
+
+  bool _containsTermFuzzy(String candidateNormalized, String term) {
+    if (term.isEmpty) {
+      return false;
+    }
+    final tokens = candidateNormalized.split(RegExp(r'\s+'));
+    return tokens.any((token) => token == term || (term.length >= 4 && token.contains(term)));
   }
 
   Set<String> _definitionKeys(String text) {
@@ -382,6 +617,36 @@ class LocalKnowledgeGraphExpander {
         .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
         .trim();
   }
+}
+
+class _BranchSignal {
+  const _BranchSignal({
+    required this.key,
+    required this.value,
+    required this.polarity,
+    required this.valueTerms,
+    required this.contextTerms,
+  });
+
+  final String key;
+  final String value;
+  final String? polarity;
+  final List<String> valueTerms;
+  final List<String> contextTerms;
+}
+
+class _BranchMatch {
+  const _BranchMatch({
+    required this.branch,
+    required this.score,
+    required this.contextScore,
+    required this.unit,
+  });
+
+  final _BranchSignal branch;
+  final int score;
+  final int contextScore;
+  final String unit;
 }
 
 class _GraphLink {
