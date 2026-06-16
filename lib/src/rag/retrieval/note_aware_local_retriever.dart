@@ -2,6 +2,8 @@ import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
 import '../../notes/data/note_chunk_builder.dart';
 import '../../notes/data/note_repository.dart';
+import '../../notes/models/note_document.dart';
+import '../../offline/local_vector_search_service.dart';
 import '../../offline/offline_search_service.dart';
 import '../models/source_evidence.dart';
 import 'local_retriever.dart';
@@ -11,15 +13,18 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     required LocalRetriever base,
     required NoteRepository noteRepository,
     OfflineSearchService offlineSearch = const OfflineSearchService(),
+    LocalVectorSearchService localVectorSearch = const LocalVectorSearchService(),
     LocalKnowledgeGraphExpander graphExpander = const LocalKnowledgeGraphExpander(),
   })  : _base = base,
         _noteRepository = noteRepository,
         _offlineSearch = offlineSearch,
+        _localVectorSearch = localVectorSearch,
         _graphExpander = graphExpander;
 
   final LocalRetriever _base;
   final NoteRepository _noteRepository;
   final OfflineSearchService _offlineSearch;
+  final LocalVectorSearchService _localVectorSearch;
   final LocalKnowledgeGraphExpander _graphExpander;
 
   @override
@@ -41,20 +46,50 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     if (trimmed.isEmpty || baseResults.length >= limit) {
       return baseResults;
     }
-    if (!allowKeywordExpansion) {
-      DebugConsole.log(
-        '[VectorGraph] note keyword expansion skipped reason=not_selected',
-      );
-      return baseResults;
-    }
     final noteEvidence = await _loadNoteEvidence(
-      logEmbeddingFallback: true,
+      logEmbeddingFallback: allowKeywordExpansion,
+      granular: !allowKeywordExpansion,
     );
-    final noteMatches = _keywordMatches(
-      query: trimmed,
-      evidence: noteEvidence,
-      limit: limit - baseResults.length,
-    );
+    final List<SourceEvidence> noteMatches;
+    if (allowKeywordExpansion) {
+      noteMatches = _keywordMatches(
+        query: trimmed,
+        evidence: noteEvidence,
+        limit: limit - baseResults.length,
+      );
+    } else {
+      final noteById = {for (final item in noteEvidence) item.id: item};
+      final vectorMatches = _localVectorSearch.search(
+        query: trimmed,
+        mode: 'note_vector',
+        limit: limit - baseResults.length,
+        chunks: [
+          for (final item in noteEvidence)
+            LocalVectorChunk(id: item.id, label: item.label, text: item.text),
+        ],
+      );
+      noteMatches = _pruneCompetingEvidence(
+        query: trimmed,
+        seeds: [
+          for (final match in vectorMatches)
+            if (noteById[match.id] != null)
+              SourceEvidence(
+                id: noteById[match.id]!.id,
+                sourceType: noteById[match.id]!.sourceType,
+                text: noteById[match.id]!.text,
+                label: noteById[match.id]!.label,
+                validationState: noteById[match.id]!.validationState,
+                documentId: noteById[match.id]!.documentId,
+                pageNumber: noteById[match.id]!.pageNumber,
+                score: match.score,
+              ),
+        ],
+      );
+      DebugConsole.log(
+        '[VectorGraph] note local vector expansion mode=note_vector '
+        'candidates=${noteEvidence.length} matches=${noteMatches.length}',
+      );
+    }
     final combined = _dedupe([...baseResults, ...noteMatches]);
     final expanded = _graphExpander.expand(
       query: trimmed,
@@ -63,13 +98,189 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       existing: combined,
       limit: limit,
     );
-    final result = _dedupe([...combined, ...expanded]).take(limit).toList();
+    final result = _pruneCompetingEvidence(
+      query: trimmed,
+      seeds: _dedupe([...combined, ...expanded]),
+    ).take(limit).toList();
     DebugConsole.log(
       '[VectorGraph] note-aware retrieval base=${baseResults.length} '
       'noteMatches=${noteMatches.length} graph=${expanded.length} '
       'total=${result.length}',
     );
     return result;
+  }
+
+
+  @override
+  Future<List<SourceEvidence>> retrieveLocalVector({
+    required String query,
+    required int limit,
+    required String mode,
+  }) async {
+    final baseResults = await _base.retrieveLocalVector(
+      query: query,
+      limit: limit,
+      mode: mode,
+    );
+    final noteEvidence = await _loadNoteEvidence(granular: true);
+    final noteById = {for (final item in noteEvidence) item.id: item};
+    final noteMatches = _localVectorSearch.search(
+      query: query,
+      mode: mode,
+      limit: limit,
+      chunks: [
+        for (final item in noteEvidence)
+          LocalVectorChunk(id: item.id, label: item.label, text: item.text),
+      ],
+    );
+    final noteSeeds = _pruneCompetingEvidence(
+      query: query,
+      seeds: [
+        for (final match in noteMatches)
+          if (noteById[match.id] != null)
+            SourceEvidence(
+              id: noteById[match.id]!.id,
+              sourceType: noteById[match.id]!.sourceType,
+              text: noteById[match.id]!.text,
+              label: noteById[match.id]!.label,
+              validationState: noteById[match.id]!.validationState,
+              documentId: noteById[match.id]!.documentId,
+              pageNumber: noteById[match.id]!.pageNumber,
+              score: match.score,
+            ),
+      ],
+    );
+    final combined = _dedupe([...baseResults, ...noteSeeds]);
+    final expanded = _graphExpander.expand(
+      query: query,
+      seeds: combined,
+      candidates: noteEvidence,
+      existing: combined,
+      limit: limit,
+    );
+    final result = _pruneCompetingEvidence(
+      query: query,
+      seeds: _dedupe([...combined, ...expanded]),
+    ).take(limit).toList();
+    DebugConsole.log(
+      '[LocalVector] note search mode=$mode base=${baseResults.length} '
+      'candidates=${noteEvidence.length} matches=${noteSeeds.length} '
+      'graph=${expanded.length} total=${result.length}',
+    );
+    return result;
+  }
+
+  List<SourceEvidence> _pruneCompetingEvidence({
+    required String query,
+    required List<SourceEvidence> seeds,
+  }) {
+    if (seeds.length < 2) {
+      return seeds;
+    }
+    final queryTerms = _simpleTerms(query);
+    if (queryTerms.isEmpty) {
+      return seeds;
+    }
+    final groups = <String, List<SourceEvidence>>{};
+    for (final seed in seeds) {
+      final group = _competingGroupId(seed.id);
+      if (group != null) {
+        groups.putIfAbsent(group, () => []).add(seed);
+      }
+    }
+    if (groups.isEmpty) {
+      return seeds;
+    }
+    final removedIds = <String>{};
+    for (final entry in groups.entries) {
+      if (entry.value.length < 2) {
+        continue;
+      }
+      final scores = <String, int>{};
+      var best = 0;
+      for (final seed in entry.value) {
+        final normalized = _simpleNormalize(seed.text);
+        final coverage = queryTerms
+            .where((term) => _simpleContainsTerm(normalized, term))
+            .length;
+        scores[seed.id] = coverage;
+        if (coverage > best) {
+          best = coverage;
+        }
+      }
+      if (best <= 0) {
+        continue;
+      }
+      for (final seed in entry.value) {
+        final coverage = scores[seed.id] ?? 0;
+        if (coverage < best) {
+          removedIds.add(seed.id);
+          DebugConsole.log(
+            '[LocalIndex] competing evidence pruned id=${seed.id} '
+            'group=${entry.key} reason=lower_query_term_coverage '
+            'coverage=$coverage best=$best',
+          );
+        }
+      }
+    }
+    if (removedIds.isEmpty) {
+      return seeds;
+    }
+    return seeds
+        .where((seed) => !removedIds.contains(seed.id))
+        .toList(growable: false);
+  }
+
+  String? _competingGroupId(String id) {
+    for (final marker in const [':row-', ':part-']) {
+      final index = id.lastIndexOf(marker);
+      if (index > 0) {
+        return id.substring(0, index);
+      }
+    }
+    return null;
+  }
+
+  Set<String> _simpleTerms(String value) {
+    const stopWords = {
+      'akkor',
+      'eseten',
+      'soran',
+      'teendo',
+      'tortenik',
+      'mikor',
+      'hogyan',
+      'amely',
+      'amikor',
+      'szerint',
+    };
+    return _simpleNormalize(value)
+        .split(RegExp(r'\s+'))
+        .where((term) => term.length > 2 && !stopWords.contains(term))
+        .toSet();
+  }
+
+  bool _simpleContainsTerm(String normalized, String term) {
+    final tokens = normalized.split(RegExp(r'\s+'));
+    return tokens.any(
+      (token) => token == term || (term.length >= 4 && token.contains(term)),
+    );
+  }
+
+  String _simpleNormalize(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ö', 'o')
+        .replaceAll('ő', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ü', 'u')
+        .replaceAll('ű', 'u')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
   }
 
   @override
@@ -92,7 +303,10 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       existing: combined,
       limit: limit,
     );
-    final result = _dedupe([...combined, ...expanded]).take(limit).toList();
+    final result = _pruneCompetingEvidence(
+      query: query,
+      seeds: _dedupe([...combined, ...expanded]),
+    ).take(limit).toList();
     DebugConsole.log(
       '[Offline] note-aware retrieval base=${baseResults.length} '
       'noteMatches=${noteMatches.length} graph=${expanded.length} '
@@ -103,6 +317,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
 
   Future<List<SourceEvidence>> _loadNoteEvidence({
     bool logEmbeddingFallback = false,
+    bool granular = false,
   }) async {
     final notes = await _noteRepository.listNotes();
     final evidence = <SourceEvidence>[];
@@ -125,26 +340,267 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         );
         if (logEmbeddingFallback) {
           DebugConsole.log(
-            '[LocalEmbedding] note chunk id=${chunk.id} state=keyword_only '
-            'reason=no_note_vector_embedding indexFresh=${chunk.isIndexFresh}',
+            '[LocalEmbedding] note chunk id=${chunk.id} state=keyword_selected '
+            'reason=explicit_keyword_mode indexFresh=${chunk.isIndexFresh}',
           );
         }
-        evidence.add(
-          SourceEvidence(
-            id: 'note:${chunk.noteId}:${chunk.blockId}',
-            sourceType: _sourceTypeFor(chunk.kind),
-            text: chunk.text,
-            label: 'Jegyzet · ${chunk.noteTitle} · ${_kindLabel(chunk.kind)}',
-            validationState: chunk.isIndexFresh
-                ? ValidationState.validated
-                : ValidationState.unreviewed,
-            documentId: chunk.noteId,
-          ),
-        );
+        if (granular) {
+          evidence.addAll(_granularEvidenceForChunk(note.document, chunk));
+        } else {
+          evidence.add(
+            SourceEvidence(
+              id: 'note:${chunk.noteId}:${chunk.blockId}',
+              sourceType: _sourceTypeFor(chunk.kind),
+              text: chunk.text,
+              label: 'Jegyzet · ${chunk.noteTitle} · ${_kindLabel(chunk.kind)}',
+              validationState: chunk.isIndexFresh
+                  ? ValidationState.validated
+                  : ValidationState.unreviewed,
+              documentId: chunk.noteId,
+            ),
+          );
+        }
       }
     }
     DebugConsole.log('[LocalIndex] note evidence loaded count=${evidence.length}');
     return evidence;
+  }
+
+
+  List<SourceEvidence> _granularEvidenceForChunk(
+    NoteDocument document,
+    NoteChunkViewModel chunk,
+  ) {
+    NoteBlock? block;
+    for (final candidate in document.blocks) {
+      if (candidate.id == chunk.blockId) {
+        block = candidate;
+        break;
+      }
+    }
+    if (block == null) {
+      return const [];
+    }
+    final state = chunk.isIndexFresh ? ValidationState.validated : ValidationState.unreviewed;
+    final baseLabel = 'Jegyzet · ${chunk.noteTitle} · ${_kindLabel(chunk.kind)}';
+    switch (block.type) {
+      case NoteBlockType.table:
+        return _tableRowEvidence(block, chunk, baseLabel, state);
+      case NoteBlockType.listItem:
+        return _listItemEvidence(block, chunk, baseLabel, state);
+      case NoteBlockType.flowchart:
+        return _flowchartUnitEvidence(block, chunk, baseLabel, state);
+      case NoteBlockType.heading:
+      case NoteBlockType.paragraph:
+        return _textUnitEvidence(block, chunk, baseLabel, state);
+    }
+  }
+
+  List<SourceEvidence> _textUnitEvidence(
+    NoteBlock block,
+    NoteChunkViewModel chunk,
+    String baseLabel,
+    ValidationState state,
+  ) {
+    final units = _textUnits(block.text);
+    if (units.isEmpty) {
+      return const [];
+    }
+    final title = block.title?.trim();
+    return [
+      for (var i = 0; i < units.length; i += 1)
+        SourceEvidence(
+          id: units.length == 1
+              ? 'note:${chunk.noteId}:${chunk.blockId}'
+              : 'note:${chunk.noteId}:${chunk.blockId}:part-$i',
+          sourceType: EvidenceSourceType.textChunk,
+          text: title == null || title.isEmpty ? units[i] : '$title: ${units[i]}',
+          label: units.length == 1 ? baseLabel : '$baseLabel · részlet ${i + 1}',
+          validationState: state,
+          documentId: chunk.noteId,
+        ),
+    ];
+  }
+
+  List<String> _textUnits(String text) {
+    final normalized = text.trim();
+    if (normalized.isEmpty) {
+      return const [];
+    }
+    final parts = normalized
+        .split(RegExp(r'(?:[.!?]+\s+|;\s*)'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.length <= 1) {
+      return [normalized];
+    }
+    return parts;
+  }
+
+  List<SourceEvidence> _tableRowEvidence(
+    NoteBlock block,
+    NoteChunkViewModel chunk,
+    String baseLabel,
+    ValidationState state,
+  ) {
+    final rows = block.rows
+        .where((row) => row.any((cell) => cell.trim().isNotEmpty))
+        .toList(growable: false);
+    if (rows.isEmpty) {
+      return const [];
+    }
+    final firstRow = rows.first;
+    final hasHeader = rows.length > 1 &&
+        firstRow.every((cell) => cell.trim().isNotEmpty) &&
+        firstRow.join(' ').length < 80;
+    final headers = hasHeader ? firstRow : const <String>[];
+    final start = hasHeader ? 1 : 0;
+    final title = block.title?.trim();
+    return [
+      for (var i = start; i < rows.length; i += 1)
+        SourceEvidence(
+          id: 'note:${chunk.noteId}:${chunk.blockId}:row-$i',
+          sourceType: EvidenceSourceType.tableChunk,
+          text: _tableRowText(
+            row: rows[i],
+            headers: headers,
+            title: title,
+          ),
+          label: '$baseLabel · sor ${i + 1}',
+          validationState: state,
+          documentId: chunk.noteId,
+        ),
+    ];
+  }
+
+  String _tableRowText({
+    required List<String> row,
+    required List<String> headers,
+    required String? title,
+  }) {
+    final cells = <String>[];
+    for (var i = 0; i < row.length; i += 1) {
+      final cell = row[i].trim();
+      if (cell.isEmpty) {
+        continue;
+      }
+      final header = i < headers.length ? headers[i].trim() : '';
+      cells.add(header.isEmpty ? cell : '$header: $cell');
+    }
+    final prefix = title == null || title.isEmpty ? '' : '$title | ';
+    return '$prefix${cells.join(' | ')}'.trim();
+  }
+
+  List<SourceEvidence> _listItemEvidence(
+    NoteBlock block,
+    NoteChunkViewModel chunk,
+    String baseLabel,
+    ValidationState state,
+  ) {
+    if (block.listItems.isEmpty) {
+      final text = block.text.trim();
+      if (text.isEmpty) {
+        return const [];
+      }
+      final title = block.title?.trim();
+      return [
+        SourceEvidence(
+          id: 'note:${chunk.noteId}:${chunk.blockId}:item-0',
+          sourceType: EvidenceSourceType.textChunk,
+          text: title == null || title.isEmpty ? text : '$title: $text',
+          label: '$baseLabel · listaelem 1',
+          validationState: state,
+          documentId: chunk.noteId,
+        ),
+      ];
+    }
+    final title = block.title?.trim();
+    return [
+      for (var i = 0; i < block.listItems.length; i += 1)
+        if (block.listItems[i].text.trim().isNotEmpty)
+          SourceEvidence(
+            id: 'note:${chunk.noteId}:${chunk.blockId}:item-$i',
+            sourceType: EvidenceSourceType.textChunk,
+            text: title == null || title.isEmpty
+                ? block.listItems[i].text.trim()
+                : '$title: ${block.listItems[i].text.trim()}',
+            label: '$baseLabel · listaelem ${i + 1}',
+            validationState: state,
+            documentId: chunk.noteId,
+          ),
+    ];
+  }
+
+  List<SourceEvidence> _flowchartUnitEvidence(
+    NoteBlock block,
+    NoteChunkViewModel chunk,
+    String baseLabel,
+    ValidationState state,
+  ) {
+    final nodesById = {for (final node in block.nodes) node.id: node};
+    final results = <SourceEvidence>[];
+    for (final node in block.nodes) {
+      if (node.label.trim().isEmpty) {
+        continue;
+      }
+      results.add(
+        SourceEvidence(
+          id: 'note:${chunk.noteId}:${chunk.blockId}:node-${node.id}',
+          sourceType: EvidenceSourceType.flowchartNode,
+          text: node.label.trim(),
+          label: '$baseLabel · node',
+          validationState: state,
+          documentId: chunk.noteId,
+        ),
+      );
+    }
+    for (final edge in block.edges) {
+      final from = nodesById[edge.fromNodeId];
+      final to = nodesById[edge.toNodeId];
+      if (from == null || to == null) {
+        continue;
+      }
+      final label = _edgeLabelFromPort(edge, from);
+      final relation = label.trim().isEmpty
+          ? '${from.label.trim()} -> ${to.label.trim()}'
+          : '${from.label.trim()} -> ${to.label.trim()} [$label]';
+      results.add(
+        SourceEvidence(
+          id: 'note:${chunk.noteId}:${chunk.blockId}:edge-${edge.id}',
+          sourceType: EvidenceSourceType.flowchartEdge,
+          text: relation,
+          label: '$baseLabel · kapcsolat',
+          validationState: state,
+          documentId: chunk.noteId,
+        ),
+      );
+    }
+    if (results.isEmpty && chunk.text.trim().isNotEmpty) {
+      results.add(
+        SourceEvidence(
+          id: 'note:${chunk.noteId}:${chunk.blockId}',
+          sourceType: EvidenceSourceType.flowchartNode,
+          text: chunk.text,
+          label: baseLabel,
+          validationState: state,
+          documentId: chunk.noteId,
+        ),
+      );
+    }
+    return results;
+  }
+
+  String _edgeLabelFromPort(NoteFlowchartEdge edge, NoteFlowchartNode from) {
+    final portId = edge.fromPortId;
+    if (portId != null) {
+      for (final port in from.ports) {
+        if (port.id == portId && port.label.trim().isNotEmpty) {
+          return port.label.trim();
+        }
+      }
+    }
+    return edge.label.trim();
   }
 
   List<SourceEvidence> _keywordMatches({
@@ -307,6 +763,17 @@ class LocalKnowledgeGraphExpander {
     if (branchLink != null) {
       return branchLink;
     }
+    final reverseBranchLink = _branchValueLink(
+      seed: candidate,
+      candidate: seed,
+      seedTerms: seedTerms,
+    );
+    if (reverseBranchLink != null) {
+      return _GraphLink(
+        reverseBranchLink.type,
+        'reverse:${reverseBranchLink.reason}',
+      );
+    }
 
     final definitionKeys = _definitionKeys(candidate.text);
     final definitionOverlap = definitionKeys.intersection(seedTerms);
@@ -327,6 +794,13 @@ class LocalKnowledgeGraphExpander {
         return _GraphLink('definition', 'symbol:$acronym');
       }
     }
+    if (_hasUnmatchedBranchContext(seed: seed, candidate: candidate)) {
+      DebugConsole.log(
+        '[LocalGraph] link skipped source=${seed.id} target=${candidate.id} '
+        'reason=branch_context_without_value',
+      );
+      return null;
+    }
     if (_looksLikeFlowchart(candidate.text)) {
       final flowTerms = _terms(candidate.text).toSet();
       final overlap = flowTerms.intersection(seedTerms).length;
@@ -335,17 +809,18 @@ class LocalKnowledgeGraphExpander {
       }
     }
     if (candidate.sourceType == EvidenceSourceType.tableChunk) {
+      if (_sameTableRowGroup(seed.id, candidate.id)) {
+        DebugConsole.log(
+          '[LocalGraph] link skipped source=${seed.id} target=${candidate.id} '
+          'reason=competing_table_row',
+        );
+        return null;
+      }
       final tableTerms = _terms(candidate.text).toSet();
       final overlap = tableTerms.intersection(seedTerms).length;
       if (overlap >= 2 || definitionKeys.intersection(seedTerms).isNotEmpty) {
         return _GraphLink('table_join', 'term_overlap:$overlap');
       }
-    }
-    final sameNote = seed.id.startsWith('note:') &&
-        candidate.id.startsWith('note:') &&
-        _noteId(seed.id) == _noteId(candidate.id);
-    if (sameNote) {
-      return const _GraphLink('same_note', 'azonos_jegyzet');
     }
     final candidateTerms = _terms(candidate.text).toSet();
     final overlap = candidateTerms.intersection(seedTerms).length;
@@ -353,6 +828,49 @@ class LocalKnowledgeGraphExpander {
       return _GraphLink('semantic_keyword', 'term_overlap:$overlap');
     }
     return null;
+  }
+
+  bool _hasUnmatchedBranchContext({
+    required SourceEvidence seed,
+    required SourceEvidence candidate,
+  }) {
+    final branches = _branchSignals(seed.text);
+    if (branches.isEmpty) {
+      return false;
+    }
+    final candidateNormalized = _normalize(candidate.text);
+    final candidateUnits = _candidateUnits(candidate.text);
+    var hasContext = false;
+    for (final branch in branches) {
+      if (branch.contextTerms.isEmpty) {
+        continue;
+      }
+      final contextScore = _contextScore(candidateNormalized, branch.contextTerms);
+      if (contextScore == 0) {
+        continue;
+      }
+      hasContext = true;
+      for (final unit in candidateUnits) {
+        if (_branchValueMatches(branch, unit)) {
+          return false;
+        }
+      }
+    }
+    return hasContext;
+  }
+
+  bool _sameTableRowGroup(String a, String b) {
+    final first = _rowGroupId(a);
+    final second = _rowGroupId(b);
+    return first != null && first == second;
+  }
+
+  String? _rowGroupId(String id) {
+    final index = id.lastIndexOf(':row-');
+    if (index <= 0) {
+      return null;
+    }
+    return id.substring(0, index);
   }
 
   _GraphLink? _branchValueLink({
@@ -373,10 +891,15 @@ class LocalKnowledgeGraphExpander {
         'value=${branch.value} polarity=${branch.polarity ?? 'custom'} '
         'context=${branch.contextTerms.join(',')}',
       );
-      final wholeContextScore = _contextScore(candidateNormalized, branch.contextTerms);
+      final wholeContextScore = _contextScore(
+        candidateNormalized,
+        branch.contextTerms,
+      );
       for (final unit in candidateUnits) {
         final unitContextScore = _contextScore(unit, branch.contextTerms);
-        final contextScore = unitContextScore > wholeContextScore ? unitContextScore : wholeContextScore;
+        final contextScore = unitContextScore > wholeContextScore
+            ? unitContextScore
+            : wholeContextScore;
         if (branch.contextTerms.isNotEmpty && contextScore == 0) {
           continue;
         }
@@ -476,6 +999,23 @@ class LocalKnowledgeGraphExpander {
   List<String> _conditionValueTerms(List<String> keyTerms) {
     if (keyTerms.isEmpty) {
       return const [];
+    }
+    if (keyTerms.length >= 3) {
+      const valueMarkers = {
+        'szine',
+        'erteke',
+        'tipusa',
+        'allapota',
+        'foka',
+        'szintje',
+        'merteke',
+      };
+      for (var i = 0; i < keyTerms.length - 1; i += 1) {
+        if (valueMarkers.contains(keyTerms[i])) {
+          return keyTerms.sublist(i + 1);
+        }
+      }
+      return [keyTerms.first];
     }
     return [keyTerms.last];
   }
@@ -603,11 +1143,6 @@ class LocalKnowledgeGraphExpander {
   }
 
   bool _looksLikeFlowchart(String text) => text.contains('->');
-
-  String? _noteId(String sourceId) {
-    final parts = sourceId.split(':');
-    return parts.length >= 3 ? parts[1] : null;
-  }
 
   List<String> _terms(String value) {
     return _normalize(value)

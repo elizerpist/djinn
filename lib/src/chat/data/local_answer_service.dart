@@ -242,7 +242,7 @@ class LocalAnswerService implements AnswerService {
     final acronymExpansion = RegExp(
       r'\b([A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű]{1,10}\d{0,4})\s*\(([^()\n]{3,120})\)',
     );
-    return answer.replaceAllMapped(acronymExpansion, (match) {
+    final withoutParentheticals = answer.replaceAllMapped(acronymExpansion, (match) {
       final symbol = match.group(1)!;
       final explanation = match.group(2)!.trim();
       if (!_looksLikeSymbol(symbol)) {
@@ -257,6 +257,40 @@ class LocalAnswerService implements AnswerService {
       }
       DebugConsole.log(
         '[GroundingGuard] stripped unsupported acronym explanation '
+        'symbol=$symbol chars=${explanation.length}',
+      );
+      return symbol;
+    });
+    return _stripUnsupportedSymbolDefinitions(
+      withoutParentheticals,
+      normalizedEvidence: evidenceText,
+    );
+  }
+
+  String _stripUnsupportedSymbolDefinitions(
+    String answer, {
+    required String normalizedEvidence,
+  }) {
+    final definitionPattern = RegExp(
+      r'\b([A-ZÁÉÍÓÖŐÚÜŰ][A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű]{0,7}\d+'
+      r'[A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű]{0,4}|[A-ZÁÉÍÓÖŐÚÜŰ]{2,}\d{0,4})'
+      r'\s*(?:=|:|\baz\b|\bjelenti\b|\bjelentése\b)\s*([^,.;\n]{3,96})',
+    );
+    return answer.replaceAllMapped(definitionPattern, (match) {
+      final symbol = match.group(1)!;
+      final explanation = match.group(2)!.trim();
+      if (!_looksLikeSymbol(symbol)) {
+        return match.group(0)!;
+      }
+      if (_isExplanationSupported(
+        symbol: symbol,
+        explanation: explanation,
+        normalizedEvidence: normalizedEvidence,
+      )) {
+        return match.group(0)!;
+      }
+      DebugConsole.log(
+        '[GroundingGuard] stripped unsupported symbol definition '
         'symbol=$symbol chars=${explanation.length}',
       );
       return symbol;
@@ -350,26 +384,29 @@ class LocalAnswerService implements AnswerService {
     String? retrievalQuery,
   }) async {
     DebugConsole.log('[Offline] index mode=${settings.localIndexingMode}');
-    if (LocalIndexingModes.isModelBacked(settings.localIndexingMode)) {
-      DebugConsole.log(
-        '[Offline] index unavailable mode=${settings.localIndexingMode} '
-        'reason=local_embedding_backend_not_ready fallback=disabled',
-      );
-      return LocalAnswerResult(
-        text: 'A kiválasztott offline embedding index jelenleg nem elérhető. '
-            'Automatikus kulcsszó/regex fallback nincs, mert félrevezető lenne. '
-            'Válaszd a Kulcsszó/BM25/regex módot, ha vektor nélküli keresést szeretnél.',
-        status: 'offline_index_unavailable',
-        refusalReason: 'offline_index_unavailable',
-        citations: const [],
-      );
-    }
-    DebugConsole.log('[Offline] keyword search selected');
-    final results = await retriever.retrieveOffline(
-      query: retrievalQuery ?? question,
-      limit: settings.retrievalLimit,
-    );
+    final query = retrievalQuery ?? question;
+    final bool modelBacked = LocalIndexingModes.isModelBacked(settings.localIndexingMode);
+    final results = modelBacked
+        ? await retriever.retrieveLocalVector(
+            query: query,
+            limit: settings.retrievalLimit,
+            mode: settings.localIndexingMode,
+          )
+        : await retriever.retrieveOffline(
+            query: query,
+            limit: settings.retrievalLimit,
+          );
     if (results.isEmpty) {
+      if (modelBacked) {
+        DebugConsole.log('[Chat/RAG] offline vector matches=0');
+        return const LocalAnswerResult(
+          text:
+              'Offline vektoros graph keresési találatok. Ez nem AI által generált válasz.\n\nNincs offline vektoros találat.',
+          status: 'offline_search',
+          refusalReason: 'insufficient_offline_results',
+          citations: [],
+        );
+      }
       DebugConsole.log('[Chat/RAG] offline keyword matches=0');
       return const LocalAnswerResult(
         text:
@@ -379,7 +416,12 @@ class LocalAnswerService implements AnswerService {
         citations: [],
       );
     }
-    DebugConsole.log('[Chat/RAG] offline keyword matches=${results.length}');
+    if (modelBacked) {
+      DebugConsole.log('[Chat/RAG] offline vector matches=${results.length}');
+    } else {
+      DebugConsole.log('[Offline] keyword search selected');
+      DebugConsole.log('[Chat/RAG] offline keyword matches=${results.length}');
+    }
     final graphAnswer = _offlineGraphAnswer(
       question: question,
       evidence: results,
@@ -393,7 +435,7 @@ class LocalAnswerService implements AnswerService {
         })
         .join('\n');
     return LocalAnswerResult(
-      text: 'Offline keresési találatokból épített graph válasz. '
+      text: '${modelBacked ? 'Offline vektoros graph találatokból épített válasz. ' : 'Offline keresési találatokból épített graph válasz. '}'
           'Ez nem AI által generált válasz.\n\n'
           '$graphAnswer\n\nForrások:\n$excerpts',
       status: 'offline_search',

@@ -88,7 +88,11 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
   }
 
   void _commitCurrent({required String reason, bool clearIndex = false}) {
-    final updated = _block.copyWith(type: NoteBlockType.flowchart, clearIndex: clearIndex);
+    final updated = _block.copyWith(
+      type: NoteBlockType.flowchart,
+      nodes: _positionedNodes,
+      clearIndex: clearIndex,
+    );
     _block = updated;
     widget.onChanged?.call(updated);
     _log('commit reason=$reason nodes=${updated.nodes.length} edges=${updated.edges.length} clearIndex=$clearIndex');
@@ -464,13 +468,17 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
   }
 
   void _moveNode(NoteFlowchartNode node, Offset delta) {
-    final positioned = _positionedNodes;
     final moveCount = (_dragMoveCounts[node.id] ?? 0) + 1;
     _dragMoveCounts[node.id] = moveCount;
     if (moveCount % 16 == 0) {
       _log('drag update node=${node.id} moves=$moveCount dx=${delta.dx.toStringAsFixed(1)} dy=${delta.dy.toStringAsFixed(1)}');
     }
     setState(() {
+      final positioned = _positionedNodes;
+      if (!positioned.any((current) => current.id == node.id)) {
+        _log('drag update ignored node=${node.id} reason=missing_current_node');
+        return;
+      }
       _block = _block.copyWith(
         type: NoteBlockType.flowchart,
         nodes: [

@@ -117,6 +117,48 @@ void main() {
     );
   });
 
+  test('removes unsupported symbol definitions from grounded answers', () async {
+    final service = LocalAnswerService(
+      openAiClient: FakeOpenAiClient(
+        answerText:
+            'Légzési elégtelenség: DO2 az oxigénkínálat, '
+            'VO2 az oxigénigény, és DO2 kisebb mint VO2.',
+      ),
+      retriever: MemoryLocalRetriever(const [
+        SourceEvidence(
+          id: 'chunk-1',
+          sourceType: EvidenceSourceType.textChunk,
+          text: 'Légzési elégtelenség, amikor DO2 < VO2.',
+          label: 'Jegyzet · Légzési elégtelenség · Szöveg',
+          validationState: ValidationState.validated,
+          score: 0.95,
+        ),
+      ]),
+      citationVerifier: CitationVerifier(),
+      loadSettings: () async => AppSettings.defaults(),
+      hasApiKey: () async => true,
+      hasReadyDocuments: () async => true,
+    );
+
+    final result = await service.answer(
+      'Mikor beszélünk légzési elégtelenségről?',
+    );
+
+    expect(result.status, 'grounded');
+    expect(result.text, contains('DO2 kisebb'));
+    expect(result.text, contains('VO2'));
+    expect(result.text, isNot(contains('oxigénkínálat')));
+    expect(result.text, isNot(contains('oxigénigény')));
+    expect(
+      DebugConsole.allText,
+      contains('[GroundingGuard] stripped unsupported symbol definition symbol=DO2'),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[GroundingGuard] stripped unsupported symbol definition symbol=VO2'),
+    );
+  });
+
   test('uses Gemini key and client when Gemini is active', () async {
     final usedProviders = <AiProvider>[];
     final service = LocalAnswerService(
@@ -331,7 +373,7 @@ void main() {
     expect(DebugConsole.allText, contains('[LocalGraphAnswer] compose'));
   });
 
-  test('model-backed offline embedding mode does not fall back to keyword search', () async {
+  test('model-backed offline embedding mode uses local vector graph without keyword fallback', () async {
     final service = LocalAnswerService(
       openAiClient: _ThrowingAiClient(),
       retriever: MemoryLocalRetriever(const [
@@ -355,10 +397,12 @@ void main() {
 
     final result = await service.answer('thrombectomia');
 
-    expect(result.status, 'offline_index_unavailable');
-    expect(result.citations, isEmpty);
-    expect(result.text, contains('Automatikus kulcsszó/regex fallback nincs'));
-    expect(DebugConsole.allText, contains('[Offline] index unavailable'));
+    expect(result.status, 'offline_search');
+    expect(result.citations.single.sourceId, 'chunk-1');
+    expect(result.text, contains('Offline vektoros graph'));
+    expect(DebugConsole.allText, contains('[LocalVector] memory search'));
+    expect(DebugConsole.allText, contains('[Chat/RAG] offline vector matches=1'));
+    expect(DebugConsole.allText, isNot(contains('[Offline] index unavailable')));
     expect(DebugConsole.allText, isNot(contains('[Offline] index degraded')));
     expect(DebugConsole.allText, isNot(contains('[Offline] search start')));
   });

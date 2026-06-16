@@ -67,11 +67,11 @@ class LocalIndexingModes {
   static String description(String value) {
     return switch (normalize(value)) {
       mediapipeTextEmbedder =>
-        'Lokális szemantikus embedding, ha a Text Embedder modell asset telepítve van. Ha nem elérhető, nincs automatikus kulcsszó/regex fallback.',
+        'Lokális vektoros graph index Text Embedder-kompatibilis dimenzióval. Nem vált át automatikusan kulcsszó/regex keresésre.',
       onnxMultilingualE5 =>
-        'Multilingual lokális embedding ONNX Runtime-mal, külön modell assettel. Ha nem elérhető, nincs automatikus kulcsszó/regex fallback.',
+        'Multilingual lokális vektoros graph index E5-kompatibilis dimenzióval. Nem vált át automatikusan kulcsszó/regex keresésre.',
       embeddingGemma =>
-        'Google EmbeddingGemma alapú lokális embedding LiteRT futtatóval. Ha nem elérhető, nincs automatikus kulcsszó/regex fallback.',
+        'EmbeddingGemma-kompatibilis lokális vektoros graph index. Nem vált át automatikusan kulcsszó/regex keresésre.',
       keywordBm25 =>
         'Azonnal működő offline kulcsszó, BM25-szerű és regex keresés, vektor nélkül.',
       _ => 'Azonnal működő offline kulcsszó/BM25 keresés.',

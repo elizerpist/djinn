@@ -240,6 +240,57 @@ void main() {
     expect(find.byKey(const ValueKey('note-flowchart-palette-ghost-universal')), findsNothing);
   });
 
+
+
+  testWidgets('dragging an existing node after palette drop keeps the new node', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: const NoteBlock(
+            id: 'flow-1',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'node-1',
+                label: 'Kezdés',
+                shape: AiFlowchartNodeShape.startEnd,
+                order: 1,
+                x: 120,
+                y: 120,
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    final palette = find.byKey(const ValueKey('note-flowchart-palette-universal'));
+    final canvas = find.byKey(const ValueKey('note-flowchart-grid'));
+    final start = tester.getCenter(palette);
+    final drop = tester.getTopLeft(canvas) + const Offset(260, 300);
+
+    final gesture = await tester.startGesture(start);
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 80));
+    await gesture.moveTo(drop);
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.nodes, hasLength(2));
+
+    await tester.drag(
+      find.byKey(const ValueKey('note-flowchart-node-node-2')),
+      const Offset(20, 24),
+    );
+    await tester.pumpAndSettle();
+
+    expect(latest!.nodes, hasLength(2));
+    expect(latest!.nodes.map((node) => node.id), containsAll(['node-1', 'node-2']));
+  });
+
   testWidgets('flowchart palette exposes simplified logical elements only', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

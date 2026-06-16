@@ -1,6 +1,7 @@
 import '../../../objectbox.g.dart';
 import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
+import '../../offline/local_vector_search_service.dart';
 import '../../offline/offline_search_service.dart';
 import '../models/source_evidence.dart';
 
@@ -17,12 +18,22 @@ abstract class LocalRetriever {
     required String query,
     required int limit,
   });
+
+  Future<List<SourceEvidence>> retrieveLocalVector({
+    required String query,
+    required int limit,
+    required String mode,
+  });
 }
 
 class MemoryLocalRetriever implements LocalRetriever {
-  MemoryLocalRetriever(this._items);
+  MemoryLocalRetriever(
+    this._items, {
+    LocalVectorSearchService localVectorSearch = const LocalVectorSearchService(),
+  }) : _localVectorSearch = localVectorSearch;
 
   final List<SourceEvidence> _items;
+  final LocalVectorSearchService _localVectorSearch;
 
   @override
   Future<List<SourceEvidence>> retrieve({
@@ -58,6 +69,48 @@ class MemoryLocalRetriever implements LocalRetriever {
     return evidence;
   }
 
+
+
+  @override
+  Future<List<SourceEvidence>> retrieveLocalVector({
+    required String query,
+    required int limit,
+    required String mode,
+  }) async {
+    final evidence = _items
+        .where((item) => item.validationState != ValidationState.rejected)
+        .toList(growable: false);
+    final byId = {for (final item in evidence) item.id: item};
+    final matches = _localVectorSearch.search(
+      query: query,
+      mode: mode,
+      limit: limit,
+      chunks: [
+        for (final item in evidence)
+          LocalVectorChunk(id: item.id, label: item.label, text: item.text),
+      ],
+    );
+    DebugConsole.log(
+      '[LocalVector] memory search mode=$mode candidates=${evidence.length} matches=${matches.length}',
+    );
+    return [
+      for (final match in matches)
+        if (byId[match.id] != null)
+          SourceEvidence(
+            id: byId[match.id]!.id,
+            sourceType: byId[match.id]!.sourceType,
+            text: byId[match.id]!.text,
+            label: byId[match.id]!.label,
+            validationState: byId[match.id]!.validationState,
+            documentId: byId[match.id]!.documentId,
+            pageNumber: byId[match.id]!.pageNumber,
+            score: match.score,
+          ),
+    ];
+  }
+
+
+
   @override
   Future<List<SourceEvidence>> retrieveOffline({
     required String query,
@@ -74,8 +127,11 @@ class MemoryLocalRetriever implements LocalRetriever {
 }
 
 class ObjectBoxLocalRetriever implements LocalRetriever {
-  ObjectBoxLocalRetriever({required Store store})
-    : _embeddingBox = store.box<ChunkEmbeddingEntity>(),
+  ObjectBoxLocalRetriever({
+    required Store store,
+    LocalVectorSearchService localVectorSearch = const LocalVectorSearchService(),
+  }) : _localVectorSearch = localVectorSearch,
+      _embeddingBox = store.box<ChunkEmbeddingEntity>(),
       _chunkBox = store.box<DocumentChunkEntity>(),
       _flowchartBox = store.box<FlowchartEntity>(),
       _nodeBox = store.box<FlowchartNodeEntity>(),
@@ -83,6 +139,7 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
       _knowledgeEdgeBox = store.box<KnowledgeEdgeEntity>(),
       _knowledgeEvidenceBox = store.box<KnowledgeEvidenceEntity>();
 
+  final LocalVectorSearchService _localVectorSearch;
   final Box<ChunkEmbeddingEntity> _embeddingBox;
   final Box<DocumentChunkEntity> _chunkBox;
   final Box<FlowchartEntity> _flowchartBox;
@@ -161,6 +218,119 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     } finally {
       embeddingQuery.close();
     }
+  }
+
+
+  @override
+  Future<List<SourceEvidence>> retrieveLocalVector({
+    required String query,
+    required int limit,
+    required String mode,
+  }) async {
+    final evidence = _allSearchableEvidence();
+    final byId = {for (final item in evidence) item.id: item};
+    final matches = _localVectorSearch.search(
+      query: query,
+      mode: mode,
+      limit: limit,
+      chunks: [
+        for (final item in evidence)
+          LocalVectorChunk(id: item.id, label: item.label, text: item.text),
+      ],
+    );
+    final seeds = [
+      for (final match in matches)
+        if (byId[match.id] != null)
+          SourceEvidence(
+            id: byId[match.id]!.id,
+            sourceType: byId[match.id]!.sourceType,
+            text: byId[match.id]!.text,
+            label: byId[match.id]!.label,
+            validationState: byId[match.id]!.validationState,
+            documentId: byId[match.id]!.documentId,
+            pageNumber: byId[match.id]!.pageNumber,
+            score: match.score,
+          ),
+    ];
+    final graphExpanded = _expandWithGraphEvidence(
+      seeds: seeds,
+      existing: seeds,
+      limit: limit,
+    );
+    final result = [...seeds, ...graphExpanded].take(limit).toList(growable: false);
+    DebugConsole.log(
+      '[LocalVector] objectbox search mode=$mode candidates=${evidence.length} '
+      'matches=${seeds.length} graph=${graphExpanded.length} total=${result.length}',
+    );
+    return result;
+  }
+
+  List<SourceEvidence> _allSearchableEvidence() {
+    final evidence = <SourceEvidence>[];
+    final embeddingsBySourceId = {
+      for (final embedding in _embeddingBox.getAll())
+        embedding.sourceId: embedding,
+    };
+    for (final chunk in _chunkBox.getAll()) {
+      final sourceType = _sourceTypeFromWireName(
+        embeddingsBySourceId[chunk.publicId]?.sourceType ??
+            EvidenceSourceType.textChunk.wireName,
+      );
+      final validationState = _chunkValidationState(chunk);
+      if (validationState == ValidationState.rejected) {
+        continue;
+      }
+      evidence.add(
+        SourceEvidence(
+          id: chunk.publicId,
+          sourceType: sourceType,
+          text: chunk.text,
+          label: _chunkLabel(sourceType),
+          validationState: validationState,
+          documentId: chunk.documentPublicId,
+          pageNumber: chunk.pageNumber,
+        ),
+      );
+    }
+    for (final node in _nodeBox.getAll()) {
+      final state = _validationStateFromWire(node.validationState);
+      if (state == ValidationState.rejected ||
+          _flowchartRejected(node.flowchartPublicId)) {
+        continue;
+      }
+      final flowchart = _findFlowchart(node.flowchartPublicId);
+      evidence.add(
+        SourceEvidence(
+          id: node.publicId,
+          sourceType: EvidenceSourceType.flowchartNode,
+          text: node.label,
+          label: _flowchartLabel(state),
+          validationState: state,
+          documentId: flowchart?.documentPublicId,
+          pageNumber: flowchart?.pageNumber,
+        ),
+      );
+    }
+    for (final edge in _edgeBox.getAll()) {
+      final state = _validationStateFromWire(edge.validationState);
+      if (state == ValidationState.rejected ||
+          _flowchartRejected(edge.flowchartPublicId)) {
+        continue;
+      }
+      final flowchart = _findFlowchart(edge.flowchartPublicId);
+      evidence.add(
+        SourceEvidence(
+          id: edge.publicId,
+          sourceType: EvidenceSourceType.flowchartEdge,
+          text: _edgeRelation(edge),
+          label: _flowchartLabel(state),
+          validationState: state,
+          documentId: flowchart?.documentPublicId,
+          pageNumber: flowchart?.pageNumber,
+        ),
+      );
+    }
+    return evidence;
   }
 
   @override

@@ -56,7 +56,7 @@ void main() {
     expect(DebugConsole.allText, contains('[LocalGraph] link type=definition'));
   });
 
-  test('skips note keyword evidence on vector path unless explicitly selected', () async {
+  test('retrieves note vector evidence on vector path without keyword fallback', () async {
     final notes = MemoryNoteRepository();
     await notes.createDocumentNote(
       title: 'Anyagismeret jegyzet',
@@ -100,12 +100,13 @@ void main() {
     expect(results.map((item) => item.id), contains('pdf-1'));
     expect(
       results.map((item) => item.text).join('\n'),
-      isNot(contains('térfogattartó')),
+      contains('Állapot: Folyadék | Jellemző: térfogattartó'),
     );
     expect(
       DebugConsole.allText,
-      contains('[VectorGraph] note keyword expansion skipped reason=not_selected'),
+      contains('[VectorGraph] note local vector expansion mode=note_vector'),
     );
+    expect(DebugConsole.allText, isNot(contains('[Offline] search start')));
 
     DebugConsole.clear();
     final keywordResults = await retriever.retrieve(
@@ -240,6 +241,197 @@ Tartomány | Teendő | Áramlás
     expect(DebugConsole.allText, contains('type=branch_value'));
     expect(DebugConsole.allText, contains('key=spo2'));
     expect(DebugConsole.allText, contains('value=90 95'));
+  });
+
+
+  test('links flowchart branch process to only the relevant table row unit', () async {
+    final notes = MemoryNoteRepository();
+    await notes.createDocumentNote(
+      title: 'Légzési elégtelenség',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'flow',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'severity',
+                label: 'Súlyos légzési elégtelenség?',
+                kind: NoteFlowchartNodeKind.binaryDecision,
+                ports: [
+                  NoteFlowchartPort(
+                    id: 'yes',
+                    side: NoteFlowchartPortSide.bottom,
+                    label: 'Igen',
+                    semantic: NoteFlowchartPortSemantic.yes,
+                  ),
+                  NoteFlowchartPort(
+                    id: 'no',
+                    side: NoteFlowchartPortSide.bottom,
+                    label: 'Nem',
+                    semantic: NoteFlowchartPortSemantic.no,
+                  ),
+                ],
+              ),
+              NoteFlowchartNode(id: 'oxygen', label: 'Oxigén'),
+            ],
+            edges: [
+              NoteFlowchartEdge(
+                id: 'yes-edge',
+                fromNodeId: 'severity',
+                fromPortId: 'yes',
+                toNodeId: 'oxygen',
+                label: 'Igen',
+              ),
+              NoteFlowchartEdge(
+                id: 'no-edge',
+                fromNodeId: 'severity',
+                fromPortId: 'no',
+                toNodeId: 'oxygen',
+                label: 'Nem',
+              ),
+            ],
+          ),
+          NoteBlock(
+            id: 'oxygen-table',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos légzési elégtelenség', 'magas áramlású oxigén'],
+              ['Enyhe légzési elégtelenség', 'célzott oxigénterápia'],
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final retriever = NoteAwareLocalRetriever(
+      base: MemoryLocalRetriever(const []),
+      noteRepository: notes,
+    );
+
+    final results = await retriever.retrieveLocalVector(
+      query: 'súlyos légzési elégtelenség esetén oxigén',
+      limit: 8,
+      mode: 'embedding_gemma',
+    );
+    final joined = results.map((item) => item.text).join('\n');
+
+    expect(joined, contains('Állapot: Súlyos légzési elégtelenség | Teendő: magas áramlású oxigén'));
+    expect(joined, isNot(contains('Állapot: Enyhe légzési elégtelenség | Teendő: célzott oxigénterápia')));
+    expect(
+      DebugConsole.allText,
+      contains('type=branch_value'),
+    );
+  });
+
+  test('local vector note retrieval returns relevant long text rule units only', () async {
+    final notes = MemoryNoteRepository();
+    await notes.createDocumentNote(
+      title: 'Állapot szabályok',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'flow',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'state',
+                label: 'Aktív?',
+                kind: NoteFlowchartNodeKind.binaryDecision,
+                ports: [
+                  NoteFlowchartPort(
+                    id: 'yes',
+                    side: NoteFlowchartPortSide.bottom,
+                    label: 'Igen',
+                    semantic: NoteFlowchartPortSemantic.yes,
+                  ),
+                  NoteFlowchartPort(
+                    id: 'no',
+                    side: NoteFlowchartPortSide.bottom,
+                    label: 'Nem',
+                    semantic: NoteFlowchartPortSemantic.no,
+                  ),
+                ],
+              ),
+              NoteFlowchartNode(id: 'archive', label: 'Archiválás'),
+            ],
+            edges: [
+              NoteFlowchartEdge(
+                id: 'no-edge',
+                fromNodeId: 'state',
+                fromPortId: 'no',
+                toNodeId: 'archive',
+                label: 'Nem',
+              ),
+            ],
+          ),
+          NoteBlock(
+            id: 'long-rule',
+            type: NoteBlockType.paragraph,
+            text: 'Egy hosszú definíció szerint ha nem aktív, akkor archiválás következik; ha aktív, akkor azonnali feldolgozás indul.',
+          ),
+        ],
+      ),
+    );
+
+    final retriever = NoteAwareLocalRetriever(
+      base: MemoryLocalRetriever(const []),
+      noteRepository: notes,
+    );
+
+    final results = await retriever.retrieveLocalVector(
+      query: 'mi történik ha nem aktív?',
+      limit: 8,
+      mode: 'mediapipe_text_embedder',
+    );
+    final joined = results.map((item) => item.text).join('\n');
+
+    expect(joined, contains('ha nem aktív, akkor archiválás következik'));
+    expect(joined, isNot(contains('ha aktív, akkor azonnali feldolgozás indul')));
+    expect(DebugConsole.allText, contains('type=branch_value'));
+  });
+
+  test('local vector note retrieval connects shared symbols without keyword fallback', () async {
+    final notes = MemoryNoteRepository();
+    await notes.createDocumentNote(
+      title: 'Definíciók',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'definition',
+            type: NoteBlockType.paragraph,
+            text: 'Légzési elégtelenség, amikor DO2 < VO2.',
+          ),
+          NoteBlock(
+            id: 'symbols',
+            type: NoteBlockType.listItem,
+            listItems: [
+              NoteListItem(id: 'do2', text: 'DO2 = oxigénkínálat'),
+              NoteListItem(id: 'vo2', text: 'VO2 = oxigénigény'),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final retriever = NoteAwareLocalRetriever(
+      base: MemoryLocalRetriever(const []),
+      noteRepository: notes,
+    );
+
+    final results = await retriever.retrieveLocalVector(
+      query: 'mi a légzési elégtelenség?',
+      limit: 8,
+      mode: 'onnx_multilingual_e5',
+    );
+    final joined = results.map((item) => item.text).join('\n');
+
+    expect(joined, contains('DO2 < VO2'));
+    expect(joined, contains('DO2 = oxigénkínálat'));
+    expect(joined, contains('VO2 = oxigénigény'));
+    expect(DebugConsole.allText, isNot(contains('[Offline] search start')));
+    expect(DebugConsole.allText, contains('[LocalVector] note search'));
   });
 
 }
