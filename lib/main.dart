@@ -31,6 +31,7 @@ import 'src/google/gemini_http_client.dart';
 import 'src/openai/openai_client.dart';
 import 'src/openai/openai_http_client.dart';
 import 'src/rag/retrieval/local_retriever.dart';
+import 'src/rag/retrieval/note_aware_local_retriever.dart';
 import 'src/rag/verification/citation_verifier.dart';
 import 'src/settings/data/api_key_store.dart';
 import 'src/settings/data/app_settings_repository.dart';
@@ -166,14 +167,34 @@ class _DjinnAppState extends State<DjinnApp> {
       repository: knowledgeRepository,
       pageExtractor: PdfrxLocalPageExtractor(ocrEngine: localOcrEngine),
     );
-    final retriever = ObjectBoxLocalRetriever(store: store);
+    final noteRepository = FileNoteRepository(
+      file: File('${directory.path}/notes/notes.json'),
+    );
+    await noteRepository.load();
+    Future<bool> hasReadyLocalKnowledge() async {
+      if (await objectBoxKnowledgeRepository.hasReadyDocuments()) {
+        return true;
+      }
+      final notes = await noteRepository.listNotes();
+      return notes.any(
+        (note) =>
+            note.auditState.wireName != 'rejected' &&
+            note.document.blocks.any((block) => block.hasContent),
+      );
+    }
+
+    final baseRetriever = ObjectBoxLocalRetriever(store: store);
+    final retriever = NoteAwareLocalRetriever(
+      base: baseRetriever,
+      noteRepository: noteRepository,
+    );
     final answerService = LocalAnswerService(
       clientForProvider: clientForProvider,
       retriever: retriever,
       citationVerifier: CitationVerifier(),
       loadSettings: settingsRepository.load,
       hasApiKeyForProvider: hasKeyForProvider,
-      hasReadyDocuments: objectBoxKnowledgeRepository.hasReadyDocuments,
+      hasReadyDocuments: hasReadyLocalKnowledge,
     );
     final chatRepository = ObjectBoxChatRepository(store: store);
     final caseRepository = ObjectBoxCaseRepository(store: store);
@@ -184,10 +205,6 @@ class _DjinnAppState extends State<DjinnApp> {
     final pdfImportService = PdfImportService(
       importDirectory: Directory('${directory.path}/knowledge_pdfs'),
     );
-    final noteRepository = FileNoteRepository(
-      file: File('${directory.path}/notes/notes.json'),
-    );
-    await noteRepository.load();
     final flowchartValidationRepository =
         ObjectBoxFlowchartValidationRepository(store: store);
 

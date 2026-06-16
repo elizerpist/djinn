@@ -51,6 +51,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _voiceListenStarting = false;
   String _voiceLocale = 'hu-HU';
   VoiceMode _voiceMode = VoiceMode.whisperConversation;
+  AppSettings? _settings;
   String? _speakingMessageId;
   String? _pausedMessageId;
   late final VoiceController _voiceController;
@@ -117,6 +118,7 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _voiceLocale = settings.voiceLocale;
       _voiceMode = settings.voiceMode;
+      _settings = settings;
     });
   }
 
@@ -328,7 +330,14 @@ class _ChatScreenState extends State<ChatScreen> {
         title: DjinnAppBarTitle(title: widget.conversation.title),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        actions: const [DebugHeaderButton()],
+        actions: [
+          if (_settings case final settings?)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChatModeChip(settings: settings),
+            ),
+          const DebugHeaderButton(),
+        ],
       ),
       body: Column(
         children: [
@@ -437,6 +446,57 @@ class KnowledgeStatusBanner extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ChatModeChip extends StatelessWidget {
+  const ChatModeChip({super.key, required this.settings});
+
+  final AppSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, icon, color) = switch (settings.answerMode) {
+      AnswerModes.offline => (
+          'Offline',
+          Icons.cloud_off_outlined,
+          const Color(0xFF166534),
+        ),
+      AnswerModes.autoFallback => (
+          'Auto',
+          Icons.sync_alt,
+          const Color(0xFF92400E),
+        ),
+      _ => (
+          settings.activeProvider.label,
+          Icons.cloud_done_outlined,
+          const Color(0xFF155EEF),
+        ),
+    };
+    return Container(
+      key: const ValueKey('chat-mode-chip'),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],

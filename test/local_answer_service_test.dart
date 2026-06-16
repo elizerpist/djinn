@@ -249,7 +249,44 @@ void main() {
   });
 
 
-  test('model-backed offline embedding mode requires a local model asset', () async {
+  test('forced offline mode composes graph answer sections from evidence', () async {
+    final service = LocalAnswerService(
+      openAiClient: _ThrowingAiClient(),
+      retriever: MemoryLocalRetriever(const [
+        SourceEvidence(
+          id: 'definition-1',
+          sourceType: EvidenceSourceType.textChunk,
+          text: 'energia: munkavégző képesség',
+          label: 'Fizika definíció',
+          validationState: ValidationState.validated,
+          score: 0.9,
+        ),
+        SourceEvidence(
+          id: 'table-1',
+          sourceType: EvidenceSourceType.tableChunk,
+          text: 'Forma | Példa\nmozgási energia | mozgó test',
+          label: 'Fizika táblázat',
+          validationState: ValidationState.validated,
+          score: 0.85,
+        ),
+      ]),
+      citationVerifier: CitationVerifier(),
+      loadSettings: () async =>
+          AppSettings.defaults().copyWith(answerMode: AnswerModes.offline),
+      hasApiKey: () async => throw StateError('api key should not be checked'),
+      hasReadyDocuments: () async => true,
+    );
+
+    final result = await service.answer('mi az energia?');
+
+    expect(result.status, 'offline_search');
+    expect(result.text, contains('graph válasz'));
+    expect(result.text, contains('Definíciók: energia'));
+    expect(result.text, contains('Táblázatos szabályok'));
+    expect(DebugConsole.allText, contains('[LocalGraphAnswer] compose'));
+  });
+
+  test('model-backed offline embedding mode degrades to keyword graph search', () async {
     final service = LocalAnswerService(
       openAiClient: _ThrowingAiClient(),
       retriever: MemoryLocalRetriever(const [
@@ -273,10 +310,9 @@ void main() {
 
     final result = await service.answer('thrombectomia');
 
-    expect(result.status, 'offline_index_unavailable');
-    expect(result.refusalReason, 'local_embedding_model_missing');
-    expect(result.citations, isEmpty);
-    expect(DebugConsole.allText, contains('[Offline] index unavailable'));
+    expect(result.status, 'offline_search');
+    expect(result.citations.single.sourceId, 'chunk-1');
+    expect(DebugConsole.allText, contains('[Offline] index degraded'));
   });
 }
 

@@ -324,15 +324,8 @@ class LocalAnswerService implements AnswerService {
     DebugConsole.log('[Offline] index mode=${settings.localIndexingMode}');
     if (LocalIndexingModes.isModelBacked(settings.localIndexingMode)) {
       DebugConsole.log(
-        '[Offline] index unavailable mode=${settings.localIndexingMode}',
-      );
-      return LocalAnswerResult(
-        text: 'A kiválasztott lokális embedding módhoz még nincs telepített '
-            'modell asset. Válts Kulcsszó/BM25/regex módra, vagy telepítsd '
-            'a választott offline embedding modellt.',
-        status: 'offline_index_unavailable',
-        refusalReason: 'local_embedding_model_missing',
-        citations: const [],
+        '[Offline] index degraded mode=${settings.localIndexingMode} '
+        'fallback=${LocalIndexingModes.keywordBm25}',
       );
     }
     final results = await retriever.retrieveOffline(
@@ -350,6 +343,10 @@ class LocalAnswerService implements AnswerService {
       );
     }
     DebugConsole.log('[Chat/RAG] offline fallback matches=${results.length}');
+    final graphAnswer = _offlineGraphAnswer(
+      question: question,
+      evidence: results,
+    );
     final excerpts = results
         .map((item) {
           final page = item.pageNumber == null
@@ -359,11 +356,72 @@ class LocalAnswerService implements AnswerService {
         })
         .join('\n');
     return LocalAnswerResult(
-      text:
-          'Offline keresési találatok. Ez nem AI által generált válasz.\n\n$excerpts',
+      text: 'Offline keresési találatokból épített graph válasz. '
+          'Ez nem AI által generált válasz.\n\n'
+          '$graphAnswer\n\nForrások:\n$excerpts',
       status: 'offline_search',
       citations: results.map(_toChatCitation).toList(growable: false),
     );
+  }
+
+  String _offlineGraphAnswer({
+    required String question,
+    required List<SourceEvidence> evidence,
+  }) {
+    DebugConsole.log(
+      '[LocalGraphAnswer] compose questionChars=${question.length} '
+      'evidence=${evidence.length}',
+    );
+    final definitions = <String>[];
+    final processes = <String>[];
+    final tables = <String>[];
+    final facts = <String>[];
+    final seen = <String>{};
+    for (final item in evidence) {
+      final lines = item.text
+          .split(RegExp(r'\n+'))
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .take(8);
+      for (final line in lines) {
+        final normalized = line.toLowerCase();
+        if (!seen.add(normalized)) {
+          continue;
+        }
+        if (line.contains('->')) {
+          processes.add(line);
+        } else if (line.contains('|')) {
+          tables.add(line.replaceAll('|', ' -> '));
+        } else if (RegExp(r'^[^:]{2,48}:').hasMatch(line) ||
+            RegExp(r'^[^=]{2,48}=').hasMatch(line)) {
+          definitions.add(line);
+        } else {
+          facts.add(line);
+        }
+      }
+    }
+    DebugConsole.log(
+      '[LocalGraphAnswer] buckets definitions=${definitions.length} '
+      'tables=${tables.length} processes=${processes.length} facts=${facts.length}',
+    );
+    final sentences = <String>[];
+    if (definitions.isNotEmpty) {
+      sentences.add('Definíciók: ${definitions.take(3).join('; ')}.');
+    }
+    if (processes.isNotEmpty) {
+      sentences.add('Folyamatkapcsolatok: ${processes.take(4).join('; ')}.');
+    }
+    if (tables.isNotEmpty) {
+      sentences.add('Táblázatos szabályok: ${tables.take(4).join('; ')}.');
+    }
+    if (facts.isNotEmpty) {
+      sentences.add('Kapcsolt tények: ${facts.take(4).join('; ')}.');
+    }
+    if (sentences.isEmpty) {
+      return 'A lokális graph talált forrásokat, de nem tudott belőlük '
+          'összefoglaló szabályt képezni.';
+    }
+    return sentences.join('\n');
   }
 
   Future<bool> _hasKey(AiProvider provider) {

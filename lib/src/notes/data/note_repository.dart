@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:uuid/uuid.dart';
 
+import '../../debug/debug_console.dart';
 import '../../knowledge/models/local_extraction.dart';
 import '../models/note_document.dart';
 import '../models/note_folder.dart';
@@ -250,6 +251,12 @@ class MemoryNoteRepository implements NoteRepository {
             block,
       ],
     );
+    for (final block in document.blocks.where((block) => ids.contains(block.id))) {
+      DebugConsole.log(
+        '[LocalIndex] note block indexed note=$noteId block=${block.id} '
+        'hash=${block.indexedContentHash} chars=${block.plainTextForIndexing.length}',
+      );
+    }
     return updateNoteDocument(
       noteId,
       title: existing.title,
