@@ -21,6 +21,46 @@ enum NoteBlockType {
   }
 }
 
+class NoteSearchRoles {
+  static const none = '';
+  static const definition = 'definition';
+  static const fact = 'fact';
+  static const process = 'process';
+  static const tableRule = 'table_rule';
+  static const example = 'example';
+  static const analogy = 'analogy';
+  static const ignore = 'ignore';
+
+  static const values = [
+    none,
+    definition,
+    fact,
+    process,
+    tableRule,
+    example,
+    analogy,
+    ignore,
+  ];
+
+  static String normalize(String? value) {
+    final trimmed = value?.trim() ?? '';
+    return values.contains(trimmed) ? trimmed : none;
+  }
+
+  static String label(String value) {
+    return switch (normalize(value)) {
+      definition => 'Definíció',
+      fact => 'Tény',
+      process => 'Folyamat',
+      tableRule => 'Táblázatos szabály',
+      example => 'Példa',
+      analogy => 'Analógia',
+      ignore => 'Keresésből kihagyás',
+      _ => 'Nincs szerep',
+    };
+  }
+}
+
 String stableNoteContentHash(String value) {
   const offset = 0x811c9dc5;
   const prime = 0x01000193;
@@ -243,6 +283,9 @@ class NoteBlock {
     required this.type,
     this.text = '',
     this.title,
+    this.searchContext,
+    this.searchRole = NoteSearchRoles.none,
+    this.searchAliases = const [],
     this.level = 0,
     this.rows = const [],
     this.nodes = const [],
@@ -256,6 +299,9 @@ class NoteBlock {
   final NoteBlockType type;
   final String text;
   final String? title;
+  final String? searchContext;
+  final String searchRole;
+  final List<String> searchAliases;
   final int level;
   final List<List<String>> rows;
   final List<NoteFlowchartNode> nodes;
@@ -270,6 +316,9 @@ class NoteBlock {
       type: NoteBlockType.fromWireName(json['type']?.toString()),
       text: json['text']?.toString() ?? '',
       title: json['title']?.toString(),
+      searchContext: json['searchContext']?.toString(),
+      searchRole: NoteSearchRoles.normalize(json['searchRole']?.toString()),
+      searchAliases: _stringsFromJson(json['searchAliases']),
       level: json['level'] is int ? json['level'] as int : 0,
       rows: _rowsFromJson(json['rows']),
       nodes: _nodesFromJson(json['nodes']),
@@ -286,6 +335,15 @@ class NoteBlock {
       'type': type.wireName,
       if (text.isNotEmpty) 'text': text,
       if (title != null && title!.trim().isNotEmpty) 'title': title,
+      if (searchContext != null && searchContext!.trim().isNotEmpty)
+        'searchContext': searchContext,
+      if (NoteSearchRoles.normalize(searchRole) != NoteSearchRoles.none)
+        'searchRole': NoteSearchRoles.normalize(searchRole),
+      if (searchAliases.where((alias) => alias.trim().isNotEmpty).isNotEmpty)
+        'searchAliases': searchAliases
+            .map((alias) => alias.trim())
+            .where((alias) => alias.isNotEmpty)
+            .toList(growable: false),
       if (level != 0) 'level': level,
       if (rows.isNotEmpty) 'rows': rows,
       if (nodes.isNotEmpty) 'nodes': nodes.map((node) => node.toJson()).toList(),
@@ -306,10 +364,38 @@ class NoteBlock {
   }
 
   String get plainTextForIndexing {
+    final base = switch (type) {
+      NoteBlockType.listItem => _listText,
+      _ => plainText,
+    };
+    final metadata = searchMetadataText;
+    if (metadata.isEmpty) {
+      return base;
+    }
+    return '$metadata\n$base'.trim();
+  }
+
+  String get displayTextForIndexing {
     return switch (type) {
       NoteBlockType.listItem => _listText,
       _ => plainText,
     };
+  }
+
+  String get searchMetadataText {
+    final parts = <String>[];
+    final context = searchContext?.trim();
+    if (context != null && context.isNotEmpty) {
+      parts.add(context);
+    }
+    final role = NoteSearchRoles.normalize(searchRole);
+    if (role != NoteSearchRoles.none && role != NoteSearchRoles.ignore) {
+      parts.add(role.replaceAll('_', ' '));
+    }
+    parts.addAll(searchAliases.map((alias) => alias.trim()).where(
+      (alias) => alias.isNotEmpty,
+    ));
+    return parts.join('\n').trim();
   }
 
   bool get hasContent => plainTextForIndexing.trim().isNotEmpty;
@@ -382,6 +468,9 @@ class NoteBlock {
     NoteBlockType? type,
     String? text,
     String? title,
+    String? searchContext,
+    String? searchRole,
+    List<String>? searchAliases,
     int? level,
     List<List<String>>? rows,
     List<NoteFlowchartNode>? nodes,
@@ -396,6 +485,9 @@ class NoteBlock {
       type: type ?? this.type,
       text: text ?? this.text,
       title: title ?? this.title,
+      searchContext: searchContext ?? this.searchContext,
+      searchRole: searchRole ?? this.searchRole,
+      searchAliases: searchAliases ?? this.searchAliases,
       level: level ?? this.level,
       rows: rows ?? this.rows,
       nodes: nodes ?? this.nodes,
@@ -443,6 +535,16 @@ class NoteBlock {
     return value
         .whereType<Map>()
         .map((item) => NoteListItem.fromJson(Map<String, Object?>.from(item)))
+        .toList(growable: false);
+  }
+
+  static List<String> _stringsFromJson(Object? value) {
+    if (value is! List) {
+      return const [];
+    }
+    return value
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
         .toList(growable: false);
   }
 }

@@ -10,6 +10,7 @@ class SourceEvidence {
     this.documentId,
     this.pageNumber,
     this.score,
+    this.searchText,
   });
 
   final String id;
@@ -20,6 +21,15 @@ class SourceEvidence {
   final String? documentId;
   final int? pageNumber;
   final double? score;
+  final String? searchText;
+
+  String get searchableText {
+    final metadata = searchText?.trim();
+    if (metadata == null || metadata.isEmpty) {
+      return text;
+    }
+    return '$metadata\n$text';
+  }
 }
 
 class CitationVerificationResult {

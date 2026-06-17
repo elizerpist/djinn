@@ -644,6 +644,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'A graph a chunkok közötti kapcsolatokat tárolja: melyik rész melyik szekcióhoz tartozik, mi folytatódik a következő oldalon, melyik táblázat vagy flowchart milyen bizonyítékból származik. A VectorGraph a vektoros találatokat ezekkel a kapcsolatokkal egészíti ki, hogy a válasz kontextusban maradjon.',
         ),
         _AboutBlock(
+          title: 'Offline jegyzetírási útmutató',
+          body:
+              'Adj keresési kontextust, ha a blokk címe önmagában túl általános, például Magyarázat vagy Jegyzet. Egy blokk lehetőleg egy témát tartalmazzon. Definíciókat írj külön listaelembe, például DO2 = oxygénkínálat. Használj role mezőt definíció, tény, folyamat, táblázatos szabály, példa vagy analógia jelölésére. Aliasokhoz vedd fel a rövidítéseket és szimbólumokat. Ha egy blokk több témát kever, bontsd külön blokkokra, mert offline módban az app explicit kulcsszavakból, szimbólumokból, metadata boostból és graph kapcsolatokból dolgozik.',
+        ),
+        _AboutBlock(
           title: 'Mi az audit szerepe?',
           body:
               'Az audit arra való, hogy a user vagy egy későbbi AI ellenőrizze a kinyert tartalmat. Az auditált és indexelt chunk erősebb forrás lehet, mint egy nyers, bizonytalan OCR vagy AI kinyerés.',

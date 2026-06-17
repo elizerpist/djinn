@@ -389,7 +389,16 @@ class LocalAnswerService implements AnswerService {
     final bool modelBacked = LocalIndexingModes.isModelBacked(
       settings.localIndexingMode,
     );
-    final results = modelBacked
+    final bool hybrid = LocalIndexingModes.isHybrid(settings.localIndexingMode);
+    final results = hybrid
+        ? await retriever.retrieveHybrid(
+            query: query,
+            limit: settings.retrievalLimit,
+            vectorMode: LocalIndexingModes.vectorModeFor(
+              settings.localIndexingMode,
+            ),
+          )
+        : modelBacked
         ? await retriever.retrieveLocalVector(
             query: query,
             limit: settings.retrievalLimit,
@@ -400,6 +409,16 @@ class LocalAnswerService implements AnswerService {
             limit: settings.retrievalLimit,
           );
     if (results.isEmpty) {
+      if (hybrid) {
+        DebugConsole.log('[Chat/RAG] offline hybrid matches=0');
+        return const LocalAnswerResult(
+          text:
+              'Offline hybrid graph keresési találatok. Ez nem AI által generált válasz.\n\nNincs offline hybrid találat.',
+          status: 'offline_search',
+          refusalReason: 'insufficient_offline_results',
+          citations: [],
+        );
+      }
       if (modelBacked) {
         DebugConsole.log('[Chat/RAG] offline vector matches=0');
         return const LocalAnswerResult(
@@ -419,7 +438,9 @@ class LocalAnswerService implements AnswerService {
         citations: [],
       );
     }
-    if (modelBacked) {
+    if (hybrid) {
+      DebugConsole.log('[Chat/RAG] offline hybrid matches=${results.length}');
+    } else if (modelBacked) {
       DebugConsole.log('[Chat/RAG] offline vector matches=${results.length}');
     } else {
       DebugConsole.log('[Offline] keyword search selected');
@@ -437,9 +458,14 @@ class LocalAnswerService implements AnswerService {
           return '- ${item.label}$page: ${item.text}';
         })
         .join('\n');
+    final intro = hybrid
+        ? 'Offline hybrid graph találatokból épített válasz. '
+        : modelBacked
+        ? 'Offline vektoros graph találatokból épített válasz. '
+        : 'Offline keresési találatokból épített graph válasz. ';
     return LocalAnswerResult(
       text:
-          '${modelBacked ? 'Offline vektoros graph találatokból épített válasz. ' : 'Offline keresési találatokból épített graph válasz. '}'
+          intro
           'Ez nem AI által generált válasz.\n\n'
           '$graphAnswer\n\nForrások:\n$excerpts',
       status: 'offline_search',

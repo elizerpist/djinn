@@ -11,6 +11,7 @@ class NoteChunkViewModel {
     required this.kind,
     required this.text,
     required this.groupId,
+    this.searchText = '',
     this.isIndexFresh = false,
     this.needsReindex = false,
   });
@@ -22,6 +23,7 @@ class NoteChunkViewModel {
   final NoteChunkKind kind;
   final String text;
   final String groupId;
+  final String searchText;
   final bool isIndexFresh;
   final bool needsReindex;
 }
@@ -36,7 +38,11 @@ class NoteChunkBuilder {
   }) {
     final chunks = <NoteChunkViewModel>[];
     for (final block in document.blocks) {
-      final text = block.plainTextForIndexing.trimRight();
+      if (NoteSearchRoles.normalize(block.searchRole) ==
+          NoteSearchRoles.ignore) {
+        continue;
+      }
+      final text = block.displayTextForIndexing.trimRight();
       if (text.trim().isEmpty) {
         continue;
       }
@@ -49,6 +55,7 @@ class NoteChunkBuilder {
           kind: _kindFor(block.type),
           text: text,
           groupId: noteId,
+          searchText: block.searchMetadataText,
           isIndexFresh: block.isIndexFresh,
           needsReindex: block.needsReindex,
         ),

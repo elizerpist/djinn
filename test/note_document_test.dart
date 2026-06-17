@@ -109,6 +109,31 @@ void main() {
     expect(parsed.needsReindex, isTrue);
   });
 
+  test('serializes note block search metadata without polluting display text', () {
+    const block = NoteBlock(
+      id: 'block-1',
+      type: NoteBlockType.listItem,
+      title: 'Magyarázat',
+      searchContext: 'légzési elégtelenség',
+      searchRole: NoteSearchRoles.definition,
+      searchAliases: ['DO2', 'VO2'],
+      listItems: [
+        NoteListItem(id: 'do2', text: 'DO2 = oxygénkínálat'),
+      ],
+    );
+
+    final parsed = NoteBlock.fromJson(block.toJson());
+
+    expect(parsed.searchContext, 'légzési elégtelenség');
+    expect(parsed.searchRole, NoteSearchRoles.definition);
+    expect(parsed.searchAliases, ['DO2', 'VO2']);
+    expect(parsed.plainText, contains('Magyarázat'));
+    expect(parsed.plainText, isNot(contains('légzési elégtelenség')));
+    expect(parsed.displayTextForIndexing, contains('DO2 = oxygénkínálat'));
+    expect(parsed.searchMetadataText, contains('légzési elégtelenség'));
+    expect(parsed.searchMetadataText, contains('definition'));
+  });
+
   test('list block preserves ordered list items and hierarchy', () {
     const block = NoteBlock(
       id: 'list-1',

@@ -91,4 +91,55 @@ void main() {
     expect(result!.document.blocks.single.level, 1);
   });
 
+  testWidgets('block search metadata is saved in the document editor', (
+    tester,
+  ) async {
+    NoteDocumentEditorResult? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () async {
+              result = await Navigator.of(context).push<NoteDocumentEditorResult>(
+                MaterialPageRoute(
+                  builder: (_) => NoteDocumentEditorScreen(
+                    title: 'Meta',
+                    document: NoteDocument.empty(),
+                  ),
+                ),
+              );
+            },
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('note-document-block-block-1')),
+      'DO2 = oxygénkínálat',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('note-block-search-context-block-1')),
+      'légzési elégtelenség',
+    );
+    await tester.tap(find.byKey(const ValueKey('note-block-search-role-block-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Definíció').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('note-block-search-aliases-block-1')),
+      'DO2, VO2',
+    );
+    await tester.tap(find.byKey(const ValueKey('note-document-save')));
+    await tester.pumpAndSettle();
+
+    final block = result!.document.blocks.single;
+    expect(block.searchContext, 'légzési elégtelenség');
+    expect(block.searchRole, NoteSearchRoles.definition);
+    expect(block.searchAliases, ['DO2', 'VO2']);
+  });
+
 }

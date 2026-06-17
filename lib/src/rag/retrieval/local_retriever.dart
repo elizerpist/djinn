@@ -24,6 +24,12 @@ abstract class LocalRetriever {
     required int limit,
     required String mode,
   });
+
+  Future<List<SourceEvidence>> retrieveHybrid({
+    required String query,
+    required int limit,
+    required String vectorMode,
+  });
 }
 
 class MemoryLocalRetriever implements LocalRetriever {
@@ -87,7 +93,11 @@ class MemoryLocalRetriever implements LocalRetriever {
       limit: limit,
       chunks: [
         for (final item in evidence)
-          LocalVectorChunk(id: item.id, label: item.label, text: item.text),
+          LocalVectorChunk(
+            id: item.id,
+            label: item.label,
+            text: item.searchableText,
+          ),
       ],
     );
     DebugConsole.log(
@@ -105,8 +115,24 @@ class MemoryLocalRetriever implements LocalRetriever {
             documentId: byId[match.id]!.documentId,
             pageNumber: byId[match.id]!.pageNumber,
             score: match.score,
+            searchText: byId[match.id]!.searchText,
           ),
     ];
+  }
+
+  @override
+  Future<List<SourceEvidence>> retrieveHybrid({
+    required String query,
+    required int limit,
+    required String vectorMode,
+  }) async {
+    final vector = await retrieveLocalVector(
+      query: query,
+      limit: limit,
+      mode: vectorMode,
+    );
+    final keyword = await retrieveOffline(query: query, limit: limit);
+    return _dedupeEvidence([...vector, ...keyword]).take(limit).toList();
   }
 
 
@@ -124,6 +150,17 @@ class MemoryLocalRetriever implements LocalRetriever {
           .toList(growable: false),
     );
   }
+}
+
+List<SourceEvidence> _dedupeEvidence(List<SourceEvidence> items) {
+  final seen = <String>{};
+  final results = <SourceEvidence>[];
+  for (final item in items) {
+    if (seen.add(item.id)) {
+      results.add(item);
+    }
+  }
+  return results;
 }
 
 class ObjectBoxLocalRetriever implements LocalRetriever {
@@ -235,7 +272,11 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
       limit: limit,
       chunks: [
         for (final item in evidence)
-          LocalVectorChunk(id: item.id, label: item.label, text: item.text),
+          LocalVectorChunk(
+            id: item.id,
+            label: item.label,
+            text: item.searchableText,
+          ),
       ],
     );
     final seeds = [
@@ -250,6 +291,7 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
             documentId: byId[match.id]!.documentId,
             pageNumber: byId[match.id]!.pageNumber,
             score: match.score,
+            searchText: byId[match.id]!.searchText,
           ),
     ];
     final graphExpanded = _expandWithGraphEvidence(
@@ -261,6 +303,28 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     DebugConsole.log(
       '[LocalVector] objectbox search mode=$mode candidates=${evidence.length} '
       'matches=${seeds.length} graph=${graphExpanded.length} total=${result.length}',
+    );
+    return result;
+  }
+
+  @override
+  Future<List<SourceEvidence>> retrieveHybrid({
+    required String query,
+    required int limit,
+    required String vectorMode,
+  }) async {
+    final vector = await retrieveLocalVector(
+      query: query,
+      limit: limit,
+      mode: vectorMode,
+    );
+    final keyword = await retrieveOffline(query: query, limit: limit);
+    final result = _dedupeEvidence([...vector, ...keyword])
+        .take(limit)
+        .toList(growable: false);
+    DebugConsole.log(
+      '[HybridSearch] objectbox search mode=$vectorMode vector=${vector.length} '
+      'keyword=${keyword.length} total=${result.length}',
     );
     return result;
   }
@@ -758,8 +822,11 @@ List<SourceEvidence> _offlineSearchEvidence({
     limit: limit,
     chunks: evidence
         .map(
-          (item) =>
-              OfflineChunk(id: item.id, label: item.label, text: item.text),
+          (item) => OfflineChunk(
+            id: item.id,
+            label: item.label,
+            text: item.searchableText,
+          ),
         )
         .toList(growable: false),
   );

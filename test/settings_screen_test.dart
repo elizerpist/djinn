@@ -143,6 +143,40 @@ void main() {
     expect(settings.localIndexingMode, LocalIndexingModes.embeddingGemma);
   });
 
+  testWidgets('local indexing mode dropdown exposes mixed hybrid search', (
+    tester,
+  ) async {
+    final keyStore = MemoryApiKeyStore();
+    var settings = AppSettings.defaults();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          apiKeyStore: keyStore,
+          loadSettings: () async => settings,
+          saveSettings: (value) async => settings = value,
+          testApiKey: () async => true,
+          testApiKeyForProvider: (_, _) async => true,
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await _openSettingsSection(tester, 'mode');
+
+    await tester.ensureVisible(
+      find.byKey(const Key('local-indexing-mode-dropdown')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('local-indexing-mode-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mixed / hybrid + MediaPipe').last);
+    await tester.pumpAndSettle();
+
+    expect(settings.localIndexingMode, LocalIndexingModes.mixedMediapipeTextEmbedder);
+    expect(find.textContaining('exact kulcsszó'), findsOneWidget);
+  });
+
   testWidgets('tts locale dropdown autosaves selected voice locale', (
     tester,
   ) async {
@@ -360,6 +394,8 @@ void main() {
     expect(find.text('Mi az a vektorsearch?'), findsOneWidget);
     expect(find.text('Mi az a graph / VectorGraph?'), findsOneWidget);
     expect(find.text('Mi a kézi chunk?'), findsOneWidget);
+    expect(find.text('Offline jegyzetírási útmutató'), findsOneWidget);
+    expect(find.textContaining('Adj keresési kontextust'), findsOneWidget);
   });
 
   testWidgets('Gemini key test uses selected answer model and surfaces quota', (

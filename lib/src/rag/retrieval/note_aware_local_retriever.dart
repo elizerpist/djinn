@@ -67,7 +67,11 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         limit: limit - baseResults.length,
         chunks: [
           for (final item in noteEvidence)
-            LocalVectorChunk(id: item.id, label: item.label, text: item.text),
+            LocalVectorChunk(
+              id: item.id,
+              label: item.label,
+              text: item.searchableText,
+            ),
         ],
       );
       noteMatches = _pruneCompetingEvidence(
@@ -84,6 +88,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
                 documentId: noteById[match.id]!.documentId,
                 pageNumber: noteById[match.id]!.pageNumber,
                 score: match.score,
+                searchText: noteById[match.id]!.searchText,
               ),
         ],
       );
@@ -98,7 +103,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       seeds: combined,
       candidates: noteEvidence,
       existing: combined,
-      limit: limit,
+      limit: _graphExpansionLimit(limit, noteEvidence.length),
     );
     final result = _pruneCompetingEvidence(
       query: trimmed,
@@ -131,7 +136,11 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       limit: limit,
       chunks: [
         for (final item in noteEvidence)
-          LocalVectorChunk(id: item.id, label: item.label, text: item.text),
+          LocalVectorChunk(
+            id: item.id,
+            label: item.label,
+            text: item.searchableText,
+          ),
       ],
     );
     final noteSeeds = _pruneCompetingEvidence(
@@ -148,6 +157,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
               documentId: noteById[match.id]!.documentId,
               pageNumber: noteById[match.id]!.pageNumber,
               score: match.score,
+              searchText: noteById[match.id]!.searchText,
             ),
       ],
     );
@@ -157,7 +167,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       seeds: combined,
       candidates: noteEvidence,
       existing: combined,
-      limit: limit,
+      limit: _graphExpansionLimit(limit, noteEvidence.length),
     );
     final result = _pruneCompetingEvidence(
       query: query,
@@ -166,6 +176,86 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     DebugConsole.log(
       '[LocalVector] note search mode=$mode base=${baseResults.length} '
       'candidates=${noteEvidence.length} matches=${noteSeeds.length} '
+      'graph=${expanded.length} total=${result.length}',
+    );
+    return result;
+  }
+
+  @override
+  Future<List<SourceEvidence>> retrieveHybrid({
+    required String query,
+    required int limit,
+    required String vectorMode,
+  }) async {
+    final baseResults = await _base.retrieveHybrid(
+      query: query,
+      limit: limit,
+      vectorMode: vectorMode,
+    );
+    final noteEvidence = await _loadNoteEvidence(granular: true);
+    final noteById = {for (final item in noteEvidence) item.id: item};
+    final vectorMatches = _localVectorSearch.search(
+      query: query,
+      mode: vectorMode,
+      limit: limit,
+      chunks: [
+        for (final item in noteEvidence)
+          LocalVectorChunk(
+            id: item.id,
+            label: item.label,
+            text: item.searchableText,
+          ),
+      ],
+    );
+    final vectorSeeds = [
+      for (final match in vectorMatches)
+        if (noteById[match.id] != null)
+          SourceEvidence(
+            id: noteById[match.id]!.id,
+            sourceType: noteById[match.id]!.sourceType,
+            text: noteById[match.id]!.text,
+            label: noteById[match.id]!.label,
+            validationState: noteById[match.id]!.validationState,
+            documentId: noteById[match.id]!.documentId,
+            pageNumber: noteById[match.id]!.pageNumber,
+            score: match.score,
+            searchText: noteById[match.id]!.searchText,
+          ),
+    ];
+    final keywordSeeds = _keywordMatches(
+      query: query,
+      evidence: noteEvidence,
+      limit: limit,
+    );
+    final symbolSeeds = _symbolMatches(
+      query: query,
+      evidence: noteEvidence,
+      limit: limit,
+    );
+    final combined = _pruneCompetingEvidence(
+      query: query,
+      seeds: _dedupe([
+        ...baseResults,
+        ...vectorSeeds,
+        ...keywordSeeds,
+        ...symbolSeeds,
+      ]),
+    );
+    final expanded = _graphExpander.expand(
+      query: query,
+      seeds: combined,
+      candidates: noteEvidence,
+      existing: combined,
+      limit: _graphExpansionLimit(limit, noteEvidence.length),
+    );
+    final result = _pruneCompetingEvidence(
+      query: query,
+      seeds: _dedupe([...combined, ...expanded]),
+    ).take(limit).toList();
+    DebugConsole.log(
+      '[HybridSearch] note search mode=$vectorMode base=${baseResults.length} '
+      'candidates=${noteEvidence.length} vector=${vectorSeeds.length} '
+      'keyword=${keywordSeeds.length} symbol=${symbolSeeds.length} '
       'graph=${expanded.length} total=${result.length}',
     );
     return result;
@@ -360,6 +450,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
                   ? ValidationState.validated
                   : ValidationState.unreviewed,
               documentId: chunk.noteId,
+              searchText: chunk.searchText,
             ),
           );
         }
@@ -429,6 +520,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
               : '$baseLabel · részlet ${i + 1}',
           validationState: state,
           documentId: chunk.noteId,
+          searchText: chunk.searchText,
         ),
     ];
   }
@@ -438,8 +530,15 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     if (normalized.isEmpty) {
       return const [];
     }
-    final parts = normalized
-        .split(RegExp(r'(?:[.!?]+\s+|;\s*)'))
+    final boundaryAware = normalized.replaceAllMapped(
+      RegExp(
+        r'\s+(?=(?:Rejtett\s+jegyzet|Definíció|Definicio|Megjegyzés|Megjegyzes)\s*:)',
+        caseSensitive: false,
+      ),
+      (_) => '. ',
+    );
+    final parts = boundaryAware
+        .split(RegExp(r'(?:[.!?]+\s+|;\s*|\n+)'))
         .map((part) => part.trim())
         .where((part) => part.isNotEmpty)
         .toList(growable: false);
@@ -472,15 +571,18 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     final results = <SourceEvidence>[];
     for (var i = start; i < rows.length; i += 1) {
       final row = rows[i];
-      if (_rowCellsAreIndependentDefinitions(row)) {
-        for (var cellIndex = 0; cellIndex < row.length; cellIndex += 1) {
-          final cell = row[cellIndex].trim();
+      final definitionCells = _independentDefinitionCells(row);
+      if (definitionCells.isNotEmpty) {
+        for (
+          var cellIndex = 0;
+          cellIndex < definitionCells.length;
+          cellIndex += 1
+        ) {
+          final cell = definitionCells[cellIndex].trim();
           if (cell.isEmpty) {
             continue;
           }
-          final header = cellIndex < headers.length
-              ? headers[cellIndex].trim()
-              : '';
+          final header = _headerForDefinitionCell(headers, cellIndex);
           results.add(
             SourceEvidence(
               id: 'note:${chunk.noteId}:${chunk.blockId}:row-$i-cell-$cellIndex',
@@ -489,6 +591,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
               label: '$baseLabel · sor ${i + 1} · cella ${cellIndex + 1}',
               validationState: state,
               documentId: chunk.noteId,
+              searchText: chunk.searchText,
             ),
           );
         }
@@ -501,6 +604,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
             label: '$baseLabel · sor ${i + 1}',
             validationState: state,
             documentId: chunk.noteId,
+            searchText: chunk.searchText,
           ),
         );
       }
@@ -508,12 +612,46 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     return results;
   }
 
-  bool _rowCellsAreIndependentDefinitions(List<String> row) {
+  List<String> _independentDefinitionCells(List<String> row) {
     final cells = row
         .map((cell) => cell.trim())
         .where((cell) => cell.isNotEmpty)
         .toList(growable: false);
-    return cells.length > 1 && cells.every(_looksLikeInlineDefinition);
+    if (cells.isEmpty) {
+      return const [];
+    }
+    final logicalCells = <String>[];
+    for (final cell in cells) {
+      final split = _splitPipePackedDefinitions(cell);
+      logicalCells.addAll(split.length > 1 ? split : [cell]);
+    }
+    if (logicalCells.length > 1 &&
+        logicalCells.every(_looksLikeInlineDefinition)) {
+      return logicalCells;
+    }
+    return const [];
+  }
+
+  List<String> _splitPipePackedDefinitions(String value) {
+    final parts = value
+        .split(RegExp(r'\s*\|\s*'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.length <= 1 || !parts.every(_looksLikeInlineDefinition)) {
+      return const [];
+    }
+    return parts;
+  }
+
+  String _headerForDefinitionCell(List<String> headers, int cellIndex) {
+    if (cellIndex < headers.length) {
+      return headers[cellIndex].trim();
+    }
+    if (headers.length == 1) {
+      return headers.single.trim();
+    }
+    return '';
   }
 
   bool _looksLikeInlineDefinition(String value) {
@@ -568,6 +706,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
           label: '$baseLabel · listaelem 1',
           validationState: state,
           documentId: chunk.noteId,
+          searchText: chunk.searchText,
         ),
       ];
     }
@@ -584,6 +723,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
             label: '$baseLabel · listaelem ${i + 1}',
             validationState: state,
             documentId: chunk.noteId,
+            searchText: chunk.searchText,
           ),
     ];
   }
@@ -608,6 +748,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
           label: '$baseLabel · node',
           validationState: state,
           documentId: chunk.noteId,
+          searchText: chunk.searchText,
         ),
       );
     }
@@ -629,6 +770,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
           label: '$baseLabel · kapcsolat',
           validationState: state,
           documentId: chunk.noteId,
+          searchText: chunk.searchText,
         ),
       );
     }
@@ -641,6 +783,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
           label: baseLabel,
           validationState: state,
           documentId: chunk.noteId,
+          searchText: chunk.searchText,
         ),
       );
     }
@@ -670,8 +813,11 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     final byId = {for (final item in evidence) item.id: item};
     final chunks = evidence
         .map(
-          (item) =>
-              OfflineChunk(id: item.id, label: item.label, text: item.text),
+          (item) => OfflineChunk(
+            id: item.id,
+            label: item.label,
+            text: item.searchableText,
+          ),
         )
         .toList(growable: false);
     final matches = _offlineSearch.search(
@@ -693,6 +839,39 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     return results;
   }
 
+  List<SourceEvidence> _symbolMatches({
+    required String query,
+    required List<SourceEvidence> evidence,
+    required int limit,
+  }) {
+    final symbols = _acronyms(query);
+    if (symbols.isEmpty || evidence.isEmpty || limit <= 0) {
+      return const [];
+    }
+    final results = <SourceEvidence>[];
+    for (final item in evidence) {
+      if (results.length >= limit) {
+        break;
+      }
+      final text = item.searchableText;
+      for (final symbol in symbols) {
+        final escaped = RegExp.escape(symbol);
+        final definitionPattern = RegExp(
+          '(^|\\n|\\s)$escaped\\s*[:=\\-]',
+          caseSensitive: false,
+        );
+        if (definitionPattern.hasMatch(text)) {
+          results.add(item);
+          DebugConsole.log(
+            '[LocalIndex] note symbol match id=${item.id} symbol=$symbol',
+          );
+          break;
+        }
+      }
+    }
+    return results;
+  }
+
   List<SourceEvidence> _dedupe(List<SourceEvidence> items) {
     final seen = <String>{};
     final results = <SourceEvidence>[];
@@ -702,6 +881,14 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       }
     }
     return results;
+  }
+
+  int _graphExpansionLimit(int resultLimit, int candidateCount) {
+    final expandedLimit = resultLimit + 8;
+    if (candidateCount < expandedLimit) {
+      return candidateCount;
+    }
+    return expandedLimit;
   }
 
   EvidenceSourceType _sourceTypeFor(NoteChunkKind kind) {
@@ -719,6 +906,12 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       NoteChunkKind.table => 'Táblázat',
       NoteChunkKind.flowchart => 'Flowchart',
     };
+  }
+
+  Set<String> _acronyms(String value) {
+    return RegExp(
+      r'\b[A-ZÁÉÍÓÖŐÚÜŰ]{2,}[0-9]*\b',
+    ).allMatches(value).map((match) => match.group(0)!).toSet();
   }
 }
 
@@ -746,14 +939,17 @@ class LocalKnowledgeGraphExpander {
       'candidates=${candidates.length} queryTerms=${queryTerms.length}',
     );
     var existingLinks = 0;
+    final scannedSeedIds = <String>{};
     final pendingById = <String, _PendingGraphLink>{};
-    for (final seed in seeds) {
+    void collectLinks(SourceEvidence seed) {
+      if (!scannedSeedIds.add(seed.id)) {
+        return;
+      }
       final seedTerms = {
         ...queryTerms,
         ..._terms(seed.text),
-        ..._terms(seed.label),
       };
-      final seedAcronyms = _acronyms('${seed.text}\n${seed.label}\n$query');
+      final seedAcronyms = _acronyms('${seed.text}\n$query');
       DebugConsole.log(
         '[LocalGraph] seed source=${seed.id} type=${seed.sourceType.wireName} '
         'terms=${seedTerms.take(12).join(',')} '
@@ -767,6 +963,7 @@ class LocalKnowledgeGraphExpander {
           seed: seed,
           candidate: candidate,
           seedTerms: seedTerms,
+          queryTerms: queryTerms,
           seedAcronyms: seedAcronyms,
         );
         if (link == null) {
@@ -792,15 +989,17 @@ class LocalKnowledgeGraphExpander {
       }
     }
 
-    final pending = pendingById.values.toList(growable: false)
-      ..sort((a, b) => a.comparePriority(b));
+    for (final seed in seeds) {
+      collectLinks(seed);
+    }
+
     final results = <SourceEvidence>[];
-    for (final item in pending) {
-      if (results.length + existing.length >= limit) {
-        DebugConsole.log(
-          '[LocalGraph] link skipped source=${item.seed.id} '
-          'target=${item.candidate.id} reason=limit type=${item.link.type}',
-        );
+    while (pendingById.isNotEmpty && results.length + existing.length < limit) {
+      final pending = pendingById.values.toList(growable: false)
+        ..sort((a, b) => a.comparePriority(b));
+      final item = pending.first;
+      pendingById.remove(item.candidate.id);
+      if (existingIds.contains(item.candidate.id)) {
         continue;
       }
       existingIds.add(item.candidate.id);
@@ -809,10 +1008,21 @@ class LocalKnowledgeGraphExpander {
         '[LocalGraph] link type=${item.link.type} source=${item.seed.id} '
         'target=${item.candidate.id} reason=${item.link.reason}',
       );
+      collectLinks(item.candidate);
+    }
+    if (pendingById.isNotEmpty) {
+      final pending = pendingById.values.toList(growable: false)
+        ..sort((a, b) => a.comparePriority(b));
+      for (final item in pending) {
+        DebugConsole.log(
+          '[LocalGraph] link skipped source=${item.seed.id} '
+          'target=${item.candidate.id} reason=limit type=${item.link.type}',
+        );
+      }
     }
     DebugConsole.log(
       '[LocalGraph] expand result count=${results.length} '
-      'existingLinks=$existingLinks candidates=${pending.length}',
+      'existingLinks=$existingLinks candidates=${pendingById.length}',
     );
     return results;
   }
@@ -821,6 +1031,7 @@ class LocalKnowledgeGraphExpander {
     required SourceEvidence seed,
     required SourceEvidence candidate,
     required Set<String> seedTerms,
+    required Set<String> queryTerms,
     required Set<String> seedAcronyms,
   }) {
     final branchLink = _branchValueLink(
@@ -843,14 +1054,6 @@ class LocalKnowledgeGraphExpander {
       );
     }
 
-    final definitionKeys = _definitionKeys(candidate.text);
-    final definitionOverlap = definitionKeys.intersection(seedTerms);
-    if (definitionOverlap.isNotEmpty) {
-      return _GraphLink(
-        'definition',
-        'keys:${definitionOverlap.take(4).join(',')}',
-      );
-    }
     final candidateText = candidate.text;
     for (final acronym in seedAcronyms) {
       final escaped = RegExp.escape(acronym);
@@ -861,6 +1064,22 @@ class LocalKnowledgeGraphExpander {
       if (definitionPattern.hasMatch(candidateText)) {
         return _GraphLink('definition', 'symbol:$acronym');
       }
+    }
+    final candidateTerms = _terms(candidate.text).toSet();
+    final queryOverlap = candidateTerms.intersection(queryTerms);
+    if (queryOverlap.length >= 2 && _looksLikeDefinitionStatement(candidate.text)) {
+      return _GraphLink(
+        'definition',
+        'query_terms:${queryOverlap.take(4).join(',')}',
+      );
+    }
+    final definitionKeys = _definitionKeys(candidate.text);
+    final definitionOverlap = definitionKeys.intersection(seedTerms);
+    if (definitionOverlap.isNotEmpty) {
+      return _GraphLink(
+        'definition',
+        'keys:${definitionOverlap.take(4).join(',')}',
+      );
     }
     if (_hasUnmatchedBranchContext(seed: seed, candidate: candidate)) {
       DebugConsole.log(
@@ -884,13 +1103,12 @@ class LocalKnowledgeGraphExpander {
         );
         return null;
       }
-      final tableTerms = _terms(candidate.text).toSet();
+      final tableTerms = candidateTerms;
       final overlap = tableTerms.intersection(seedTerms).length;
       if (overlap >= 2 || definitionKeys.intersection(seedTerms).isNotEmpty) {
         return _GraphLink('table_join', 'term_overlap:$overlap');
       }
     }
-    final candidateTerms = _terms(candidate.text).toSet();
     final overlap = candidateTerms.intersection(seedTerms).length;
     if (overlap >= 3) {
       return _GraphLink('semantic_keyword', 'term_overlap:$overlap');
@@ -1204,16 +1422,28 @@ class LocalKnowledgeGraphExpander {
   Set<String> _definitionKeys(String text) {
     final keys = <String>{};
     for (final rawLine in text.split(RegExp(r'\n+'))) {
-      final line = rawLine.trim();
+      var line = rawLine.trim();
       if (line.isEmpty) {
         continue;
       }
-      final delimiter = RegExp(r'\s*(:|=|\|| - | – | — )\s*');
-      final match = delimiter.firstMatch(line);
-      if (match == null || match.start == 0) {
+      RegExpMatch? match;
+      String head;
+      while (true) {
+        final delimiter = RegExp(r'\s*(:|=|\|| - | – | — )\s*');
+        match = delimiter.firstMatch(line);
+        if (match == null || match.start == 0) {
+          head = '';
+          break;
+        }
+        head = line.substring(0, match.start).trim();
+        if (!_isGenericDefinitionHead(head)) {
+          break;
+        }
+        line = line.substring(match.end).trim();
+      }
+      if (match == null || head.isEmpty) {
         continue;
       }
-      final head = line.substring(0, match.start).trim();
       final headTerms = _terms(head);
       if (headTerms.isEmpty || headTerms.length > 4) {
         continue;
@@ -1222,6 +1452,36 @@ class LocalKnowledgeGraphExpander {
       keys.add(_normalize(head));
     }
     return keys.where((key) => key.length > 2).toSet();
+  }
+
+  bool _looksLikeDefinitionStatement(String text) {
+    final normalized = _normalize(text);
+    return text.contains('<') ||
+        text.contains('=') ||
+        normalized.contains('akkor all fenn') ||
+        normalized.contains('definicio') ||
+        normalized.contains('jelentese');
+  }
+
+  bool _isGenericDefinitionHead(String value) {
+    final normalized = _normalize(value);
+    const generic = {
+      'jegyzet',
+      'rejtett jegyzet',
+      'magyarazat',
+      'szoveg',
+      'lista',
+      'tablazat',
+      'flowchart',
+      'kapcsolat',
+      'node',
+      'cim',
+      'reszlet',
+      'elem',
+      'sor',
+      'cella',
+    };
+    return generic.contains(normalized);
   }
 
   bool _looksLikeFlowchart(String text) => text.contains('->');
@@ -1330,13 +1590,19 @@ class _GraphLink {
   final String reason;
 
   int get priority {
+    if (type == 'definition' && reason.startsWith('symbol:')) {
+      return 0;
+    }
+    if (type == 'definition' && reason.startsWith('query_terms:')) {
+      return 1;
+    }
     return switch (type) {
-      'definition' => 0,
-      'branch_value' => 1,
-      'table_join' => 2,
-      'semantic_keyword' => 3,
-      'flowchart' => 4,
-      _ => 5,
+      'definition' => 2,
+      'branch_value' => 3,
+      'table_join' => 4,
+      'semantic_keyword' => 5,
+      'flowchart' => 6,
+      _ => 7,
     };
   }
 }

@@ -7,6 +7,7 @@ import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/rag/models/source_evidence.dart';
 import 'package:djinn/src/rag/retrieval/local_retriever.dart';
 import 'package:djinn/src/rag/retrieval/note_aware_local_retriever.dart';
+import 'package:djinn/src/settings/models/app_settings.dart';
 
 void main() {
   setUp(DebugConsole.clear);
@@ -470,6 +471,56 @@ Tartomány | Teendő | Áramlás
     },
   );
 
+  test('hybrid note retrieval combines vector keyword symbol and metadata signals', () async {
+    final notes = MemoryNoteRepository();
+    await notes.createDocumentNote(
+      title: 'Oxigén jegyzet',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'definition',
+            type: NoteBlockType.paragraph,
+            searchContext: 'légzési elégtelenség',
+            searchRole: NoteSearchRoles.definition,
+            searchAliases: ['DO2', 'VO2'],
+            text: 'Légzési elégtelenség akkor áll fenn, amikor DO2 < VO2.',
+          ),
+          NoteBlock(
+            id: 'symbols',
+            type: NoteBlockType.listItem,
+            title: 'Magyarázat',
+            searchContext: 'légzési elégtelenség',
+            searchRole: NoteSearchRoles.definition,
+            listItems: [
+              NoteListItem(id: 'do2', text: 'DO2 = oxygénkínálat'),
+              NoteListItem(id: 'vo2', text: 'VO2 = oxygénigény'),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final retriever = NoteAwareLocalRetriever(
+      base: MemoryLocalRetriever(const []),
+      noteRepository: notes,
+    );
+
+    final results = await retriever.retrieveHybrid(
+      query: 'mit jelent a légzési elégtelenség?',
+      limit: 8,
+      vectorMode: LocalIndexingModes.mediapipeTextEmbedder,
+    );
+    final joined = results.map((item) => item.text).join('\n');
+
+    expect(joined, contains('DO2 < VO2'));
+    expect(joined, contains('DO2 = oxygénkínálat'));
+    expect(joined, contains('VO2 = oxygénigény'));
+    expect(DebugConsole.allText, contains('[HybridSearch] note search'));
+    expect(DebugConsole.allText, contains('symbol='));
+    expect(DebugConsole.allText, contains('keyword='));
+    expect(DebugConsole.allText, contains('vector='));
+  });
+
   test(
     'local vector graph keeps linked symbol definitions ahead of noisy flowchart edges',
     () async {
@@ -622,8 +673,127 @@ Tartomány | Teendő | Áramlás
         hasLength(lessThanOrEqualTo(3)),
       );
       expect(DebugConsole.allText, contains('type=definition'));
+      expect(DebugConsole.allText, isNot(contains('keys:jegyzet')));
     },
   );
+
+  test(
+    'local vector note retrieval keeps mixed-topic bolognai seed away from respiratory symbols',
+    () async {
+      final notes = MemoryNoteRepository();
+      await notes.createDocumentNote(
+        title: 'Légzési elégtelenség',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'definition',
+              type: NoteBlockType.paragraph,
+              text:
+                  'Bolognai spagetti készítésekor a ragu akkor lesz kiegyensúlyozott, ha a paradicsomos alap és a hús aránya megfelelő Rejtett jegyzet: légzési elégtelenség akkor áll fenn, amikor DO2 < VO2. A receptben ez olyan, mintha kevesebb szósz jutna a tésztára.',
+            ),
+            NoteBlock(
+              id: 'symbols',
+              type: NoteBlockType.listItem,
+              title: 'Magyarázat',
+              searchContext: 'légzési elégtelenség',
+              searchRole: NoteSearchRoles.definition,
+              listItems: [
+                NoteListItem(
+                  id: 'recipe',
+                  text:
+                      'Bolognai spagettihez először hagymát és fokhagymát pirítunk',
+                ),
+                NoteListItem(id: 'do2', text: 'DO2= oxygénkínálat'),
+                NoteListItem(id: 'vo2', text: 'VO2= oxygénigény'),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
+
+      final results = await retriever.retrieveLocalVector(
+        query: 'bolognai',
+        limit: 8,
+        mode: 'mediapipe_text_embedder',
+      );
+      final joined = results.map((item) => item.text).join('\n');
+
+      expect(joined, contains('Bolognai spagetti'));
+      expect(joined, isNot(contains('DO2')));
+      expect(joined, isNot(contains('VO2')));
+      expect(joined, isNot(contains('légzési elégtelenség akkor áll fenn')));
+    },
+  );
+
+  test('graph expansion follows symbols discovered through linked definitions', () {
+    final expander = LocalKnowledgeGraphExpander();
+    const table = SourceEvidence(
+      id: 'table:oxygen:row-1',
+      sourceType: EvidenceSourceType.tableChunk,
+      text:
+          'súlyos légzési elégtelenség: magas áramlású oxygén | enyhe légzési elégtelenség: célzott oxygénterápia',
+      label: 'Jegyzet · Táblázat · sor 2',
+      validationState: ValidationState.validated,
+    );
+    const node = SourceEvidence(
+      id: 'flow:resp:node',
+      sourceType: EvidenceSourceType.flowchartNode,
+      text: 'Légzési elégtelen?',
+      label: 'Jegyzet · Flowchart · node',
+      validationState: ValidationState.validated,
+    );
+    const hiddenDefinition = SourceEvidence(
+      id: 'text:hidden:part-1',
+      sourceType: EvidenceSourceType.textChunk,
+      text:
+          'Rejtett jegyzet: légzési elégtelenség akkor áll fenn, amikor DO2 < VO2',
+      label: 'Jegyzet · Szöveg · részlet 2',
+      validationState: ValidationState.validated,
+    );
+    const do2 = SourceEvidence(
+      id: 'list:symbols:item-do2',
+      sourceType: EvidenceSourceType.textChunk,
+      text: 'DO2= oxygénkínálat',
+      label: 'Jegyzet · Lista · elem',
+      validationState: ValidationState.validated,
+    );
+    const vo2 = SourceEvidence(
+      id: 'list:symbols:item-vo2',
+      sourceType: EvidenceSourceType.textChunk,
+      text: 'VO2= oxygénigény',
+      label: 'Jegyzet · Lista · elem',
+      validationState: ValidationState.validated,
+    );
+    const edge = SourceEvidence(
+      id: 'flow:resp:edge-1',
+      sourceType: EvidenceSourceType.flowchartEdge,
+      text: 'Légzési elégtelen? -> Súlyos? [Igen]',
+      label: 'Jegyzet · Flowchart · kapcsolat',
+      validationState: ValidationState.validated,
+    );
+
+    final results = expander.expand(
+      query: 'mi a légzési elégtelenség?',
+      seeds: const [table, node],
+      candidates: const [table, node, hiddenDefinition, do2, vo2, edge],
+      existing: const [table, node],
+      limit: 8,
+    );
+    final joined = results.map((item) => item.text).join('\n');
+
+    expect(joined, contains('DO2 < VO2'));
+    expect(joined, contains('DO2= oxygénkínálat'));
+    expect(joined, contains('VO2= oxygénigény'));
+    expect(DebugConsole.allText, contains('source=text:hidden:part-1'));
+    expect(DebugConsole.allText, contains('symbol:DO2'));
+    expect(DebugConsole.allText, contains('symbol:VO2'));
+    expect(DebugConsole.allText, isNot(contains('keys:jegyzet')));
+  });
 
   test('granular table evidence splits independent definition cells', () async {
     final notes = MemoryNoteRepository();
@@ -666,5 +836,48 @@ Tartomány | Teendő | Áramlás
       isNot(contains('súlyos légzési elégtelenség: magas áramlású oxygén')),
     );
     expect(results.single.id, endsWith(':row-0-cell-1'));
+  });
+
+  test('granular table evidence splits pipe-packed definition cells', () async {
+    final notes = MemoryNoteRepository();
+    await notes.createDocumentNote(
+      title: 'Oxigén szabályok',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'oxygen-table',
+            type: NoteBlockType.table,
+            rows: [
+              ['Szabály'],
+              [
+                'súlyos légzési elégtelenség: magas áramlású oxygén | enyhe légzési elégtelenség: célzott oxygénterápia',
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final retriever = NoteAwareLocalRetriever(
+      base: MemoryLocalRetriever(const []),
+      noteRepository: notes,
+    );
+
+    final results = await retriever.retrieveLocalVector(
+      query: 'enyhe légzési elégtelenség oxigén',
+      limit: 4,
+      mode: 'mediapipe_text_embedder',
+    );
+    final joined = results.map((item) => item.text).join('\n');
+
+    expect(
+      joined,
+      contains('enyhe légzési elégtelenség: célzott oxygénterápia'),
+    );
+    expect(
+      joined,
+      isNot(contains('súlyos légzési elégtelenség: magas áramlású oxygén')),
+    );
+    expect(results.single.id, endsWith(':row-1-cell-1'));
   });
 }

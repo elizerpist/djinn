@@ -358,6 +358,8 @@ class _BlockEditorCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               _body(context),
+              const SizedBox(height: 10),
+              _searchMetadataFields(context),
             ],
           ),
         ),
@@ -379,7 +381,8 @@ class _BlockEditorCard extends StatelessWidget {
             prefixText: block.type == NoteBlockType.listItem ? '• ' : null,
             border: const OutlineInputBorder(),
           ),
-          onChanged: (value) => onChanged(block.copyWith(text: value)),
+          onChanged: (value) =>
+              onChanged(block.copyWith(text: value, clearIndex: true)),
         );
       case NoteBlockType.table:
         return _StructuredPreview(
@@ -394,6 +397,109 @@ class _BlockEditorCard extends StatelessWidget {
           onPressed: onEditFlowchart,
         );
     }
+  }
+
+  Widget _searchMetadataFields(BuildContext context) {
+    final warning = _searchWarning();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          key: ValueKey('note-block-search-context-${block.id}'),
+          initialValue: block.searchContext ?? '',
+          decoration: const InputDecoration(
+            labelText: 'Keresési kontextus',
+            hintText: 'pl. légzési elégtelenség',
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) => onChanged(
+            block.copyWith(searchContext: value.trim(), clearIndex: true),
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: ValueKey('note-block-search-role-${block.id}'),
+          initialValue: NoteSearchRoles.normalize(block.searchRole),
+          decoration: const InputDecoration(
+            labelText: 'Tudástípus',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            for (final role in NoteSearchRoles.values)
+              DropdownMenuItem(
+                value: role,
+                child: Text(NoteSearchRoles.label(role)),
+              ),
+          ],
+          onChanged: (value) {
+            if (value != null) {
+              onChanged(block.copyWith(searchRole: value, clearIndex: true));
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          key: ValueKey('note-block-search-aliases-${block.id}'),
+          initialValue: block.searchAliases.join(', '),
+          decoration: const InputDecoration(
+            labelText: 'Aliasok / szimbólumok',
+            hintText: 'pl. DO2, VO2',
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) => onChanged(
+            block.copyWith(
+              searchAliases: value
+                  .split(',')
+                  .map((item) => item.trim())
+                  .where((item) => item.isNotEmpty)
+                  .toList(growable: false),
+              clearIndex: true,
+            ),
+          ),
+        ),
+        if (warning != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            warning,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF92400E),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String? _searchWarning() {
+    final title = block.title?.trim().toLowerCase();
+    const genericTitles = {
+      'magyarázat',
+      'magyarazat',
+      'jegyzet',
+      'szöveg',
+      'szoveg',
+      'lista',
+      'táblázat',
+      'tablazat',
+      'flowchart',
+    };
+    if (title != null &&
+        title.isNotEmpty &&
+        genericTitles.contains(title) &&
+        (block.searchContext == null || block.searchContext!.trim().isEmpty)) {
+      return 'A cím kereséshez túl általános. Adj keresési kontextust.';
+    }
+    final normalized = block.plainText.toLowerCase();
+    final mixedSignals = [
+      normalized.contains('do2') || normalized.contains('vo2'),
+      normalized.contains('bolognai'),
+      normalized.contains('légzési') || normalized.contains('legzesi'),
+    ].where((item) => item).length;
+    if (mixedSignals >= 2 &&
+        (block.searchContext == null || block.searchContext!.trim().isEmpty)) {
+      return 'Ez a blokk több témát keverhet. Offline kereséshez bontsd külön blokkokra vagy adj kontextust.';
+    }
+    return null;
   }
 
   IconData _iconFor(NoteBlockType type) {

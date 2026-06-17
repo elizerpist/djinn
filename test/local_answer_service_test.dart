@@ -464,10 +464,33 @@ void main() {
       expect(retriever.localVectorQueries, ['mi a rejtett adat?']);
     },
   );
+
+  test('forced offline mixed search uses hybrid retriever path', () async {
+    final retriever = _RecordingRetriever();
+    final service = LocalAnswerService(
+      openAiClient: _ThrowingAiClient(),
+      retriever: retriever,
+      citationVerifier: CitationVerifier(),
+      loadSettings: () async => AppSettings.defaults().copyWith(
+        answerMode: AnswerModes.offline,
+        localIndexingMode: LocalIndexingModes.mixedMediapipeTextEmbedder,
+      ),
+      hasApiKey: () async => throw StateError('api key should not be checked'),
+      hasReadyDocuments: () async => true,
+    );
+
+    await service.answer('mi a DO2?');
+
+    expect(retriever.hybridQueries, ['mi a DO2?']);
+    expect(retriever.hybridVectorModes, [LocalIndexingModes.mediapipeTextEmbedder]);
+    expect(retriever.localVectorQueries, isEmpty);
+  });
 }
 
 class _RecordingRetriever implements LocalRetriever {
   final localVectorQueries = <String>[];
+  final hybridQueries = <String>[];
+  final hybridVectorModes = <String>[];
 
   @override
   Future<List<SourceEvidence>> retrieve({
@@ -493,6 +516,25 @@ class _RecordingRetriever implements LocalRetriever {
         sourceType: EvidenceSourceType.textChunk,
         text: 'Bolognai recept rejtett adat: bazsalikom.',
         label: 'Jegyzet · Recept',
+        validationState: ValidationState.validated,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<SourceEvidence>> retrieveHybrid({
+    required String query,
+    required int limit,
+    required String vectorMode,
+  }) async {
+    hybridQueries.add(query);
+    hybridVectorModes.add(vectorMode);
+    return const [
+      SourceEvidence(
+        id: 'do2',
+        sourceType: EvidenceSourceType.textChunk,
+        text: 'DO2 = oxygénkínálat.',
+        label: 'Jegyzet · Definíció',
         validationState: ValidationState.validated,
       ),
     ];

@@ -64,6 +64,15 @@ void main() {
           .localIndexingMode,
       LocalIndexingModes.onnxMultilingualE5,
     );
+    final hybrid = settings.copyWith(
+      localIndexingMode: LocalIndexingModes.mixedMediapipeTextEmbedder,
+    );
+    expect(hybrid.localIndexingMode, LocalIndexingModes.mixedMediapipeTextEmbedder);
+    expect(LocalIndexingModes.isHybrid(hybrid.localIndexingMode), isTrue);
+    expect(
+      LocalIndexingModes.vectorModeFor(hybrid.localIndexingMode),
+      LocalIndexingModes.mediapipeTextEmbedder,
+    );
     expect(
       settings.copyWith(offlineFallbackEnabled: true).offlineFallbackEnabled,
       isFalse,

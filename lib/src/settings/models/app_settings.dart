@@ -42,12 +42,19 @@ class LocalIndexingModes {
   static const onnxMultilingualE5 = 'onnx_multilingual_e5';
   static const embeddingGemma = 'embedding_gemma';
   static const keywordBm25 = 'keyword_bm25';
+  static const mixedMediapipeTextEmbedder =
+      'mixed_hybrid_mediapipe_text_embedder';
+  static const mixedOnnxMultilingualE5 = 'mixed_hybrid_onnx_multilingual_e5';
+  static const mixedEmbeddingGemma = 'mixed_hybrid_embedding_gemma';
 
   static const values = [
     mediapipeTextEmbedder,
     onnxMultilingualE5,
     embeddingGemma,
     keywordBm25,
+    mixedMediapipeTextEmbedder,
+    mixedOnnxMultilingualE5,
+    mixedEmbeddingGemma,
   ];
 
   static String normalize(String value) {
@@ -60,6 +67,9 @@ class LocalIndexingModes {
       onnxMultilingualE5 => 'ONNX multilingual E5',
       embeddingGemma => 'LiteRT EmbeddingGemma',
       keywordBm25 => 'Kulcsszó/BM25/regex',
+      mixedMediapipeTextEmbedder => 'Mixed / hybrid + MediaPipe',
+      mixedOnnxMultilingualE5 => 'Mixed / hybrid + ONNX E5',
+      mixedEmbeddingGemma => 'Mixed / hybrid + EmbeddingGemma',
       _ => 'Kulcsszó/BM25/regex',
     };
   }
@@ -74,12 +84,38 @@ class LocalIndexingModes {
         'EmbeddingGemma-kompatibilis lokális vektoros graph index. Nem vált át automatikusan kulcsszó/regex keresésre.',
       keywordBm25 =>
         'Azonnal működő offline kulcsszó, BM25-szerű és regex keresés, vektor nélkül.',
+      mixedMediapipeTextEmbedder =>
+        'Hybrid offline keresés: exact kulcsszó, BM25/fuzzy, MediaPipe vektor, symbol/entity, graph expansion és metadata boost együtt.',
+      mixedOnnxMultilingualE5 =>
+        'Hybrid offline keresés: exact kulcsszó, BM25/fuzzy, ONNX E5 vektor, symbol/entity, graph expansion és metadata boost együtt.',
+      mixedEmbeddingGemma =>
+        'Hybrid offline keresés: exact kulcsszó, BM25/fuzzy, EmbeddingGemma vektor, symbol/entity, graph expansion és metadata boost együtt.',
       _ => 'Azonnal működő offline kulcsszó/BM25 keresés.',
     };
   }
 
   static bool isModelBacked(String value) {
-    return normalize(value) != keywordBm25;
+    final mode = normalize(value);
+    return mode != keywordBm25 && !isHybrid(mode);
+  }
+
+  static bool isHybrid(String value) {
+    return switch (normalize(value)) {
+      mixedMediapipeTextEmbedder ||
+      mixedOnnxMultilingualE5 ||
+      mixedEmbeddingGemma => true,
+      _ => false,
+    };
+  }
+
+  static String vectorModeFor(String value) {
+    return switch (normalize(value)) {
+      mixedMediapipeTextEmbedder => mediapipeTextEmbedder,
+      mixedOnnxMultilingualE5 => onnxMultilingualE5,
+      mixedEmbeddingGemma => embeddingGemma,
+      keywordBm25 => mediapipeTextEmbedder,
+      final mode => mode,
+    };
   }
 }
 
