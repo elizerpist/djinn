@@ -90,7 +90,7 @@ class NoteChunkEditorHeader extends StatelessWidget implements PreferredSizeWidg
             ),
           ],
         ),
-        if (saveAction != null) saveAction!,
+        ?saveAction,
       ],
     );
   }
