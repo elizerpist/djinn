@@ -276,7 +276,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     }
     final groups = <String, List<SourceEvidence>>{};
     for (final seed in scopedSeeds) {
-      final group = _competingGroupId(seed.id);
+      final group = _competingGroupId(seed);
       if (group != null) {
         groups.putIfAbsent(group, () => []).add(seed);
       }
@@ -475,9 +475,6 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       if (hasPositiveRequest) {
         return branch.polarity == 'negative';
       }
-      if (branch.polarity == 'negative') {
-        return true;
-      }
     }
     return false;
   }
@@ -513,12 +510,40 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         .length;
   }
 
-  String? _competingGroupId(String id) {
+  String? _competingGroupId(SourceEvidence evidence) {
+    final flowchartGroup = _flowchartBranchGroupId(evidence);
+    if (flowchartGroup != null) {
+      return flowchartGroup;
+    }
+    final id = evidence.id;
     for (final marker in const [':row-', ':part-']) {
       final index = id.lastIndexOf(marker);
       if (index > 0) {
         return id.substring(0, index);
       }
+    }
+    return null;
+  }
+
+  String? _flowchartBranchGroupId(SourceEvidence evidence) {
+    if (evidence.sourceType != EvidenceSourceType.flowchartEdge) {
+      return null;
+    }
+    final blockGroup = _flowchartBlockGroupId(evidence.id);
+    if (blockGroup == null) {
+      return null;
+    }
+    final branches = _branchSignalsFromText(evidence.text);
+    if (branches.length != 1 || branches.single.polarity == null) {
+      return null;
+    }
+    return '$blockGroup:branch-${branches.single.key}';
+  }
+
+  String? _flowchartBlockGroupId(String id) {
+    final edgeIndex = id.lastIndexOf(':edge-');
+    if (edgeIndex > 0) {
+      return id.substring(0, edgeIndex);
     }
     return null;
   }
