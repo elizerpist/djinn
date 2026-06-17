@@ -756,6 +756,60 @@ Tartomány | Teendő | Áramlás
   );
 
   test(
+    'qualified state query stays on therapy branch without root definitions',
+    () async {
+      final notes = await _respiratoryTherapyFixture();
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
+
+      final results = await retriever.retrieveLocalVector(
+        query: 'súlyos légzési elégtelenség',
+        limit: 8,
+        mode: 'onnx_multilingual_e5',
+      );
+      final joined = results.map((item) => item.text).join('\n');
+
+      expect(joined, contains('Súlyos? -> Oxygén [Igen]'));
+      expect(joined, contains('magas áramlású oxygén'));
+      expect(joined, contains('célzott oxygénterápia'));
+      expect(joined, isNot(contains('DO2 < VO2')));
+      expect(joined, isNot(contains('DO2= oxygénkínálat')));
+      expect(joined, isNot(contains('VO2= oxygénigény')));
+      expect(joined, isNot(contains('Kezdés -> Légzési elégtelen?')));
+      expect(joined, isNot(contains('Légzési elégtelen? -> Megfigyelés')));
+    },
+  );
+
+  test(
+    'decision node query does not walk unrelated flowchart branches by term overlap',
+    () async {
+      final notes = await _respiratoryTherapyFixture();
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
+
+      final results = await retriever.retrieveLocalVector(
+        query: 'súlyos?',
+        limit: 8,
+        mode: 'onnx_multilingual_e5',
+      );
+      final joined = results.map((item) => item.text).join('\n');
+
+      expect(joined, contains('Súlyos?'));
+      expect(joined, contains('Súlyos? -> Oxygén [Igen]'));
+      expect(joined, contains('Súlyos? -> Oxygén [Nem]'));
+      expect(joined, contains('magas áramlású oxygén'));
+      expect(joined, isNot(contains('Kezdés -> Légzési elégtelen?')));
+      expect(joined, isNot(contains('Légzési elégtelen? -> Megfigyelés')));
+      expect(joined, isNot(contains('Megfigyelés -> Javult?')));
+      expect(joined, isNot(contains('Javult? -> Oxygén')));
+    },
+  );
+
+  test(
     'topic facet query intersects topic and therapy instead of widening to all definitions',
     () async {
       final notes = await _respiratoryTherapyFixture();
@@ -1022,6 +1076,25 @@ Future<MemoryNoteRepository> _respiratoryTherapyFixture() async {
               ],
             ),
             NoteFlowchartNode(id: 'observe', label: 'Megfigyelés'),
+            NoteFlowchartNode(
+              id: 'improved',
+              label: 'Javult?',
+              kind: NoteFlowchartNodeKind.binaryDecision,
+              ports: [
+                NoteFlowchartPort(
+                  id: 'yes',
+                  side: NoteFlowchartPortSide.bottom,
+                  label: 'Igen',
+                  semantic: NoteFlowchartPortSemantic.yes,
+                ),
+                NoteFlowchartPort(
+                  id: 'no',
+                  side: NoteFlowchartPortSide.bottom,
+                  label: 'Nem',
+                  semantic: NoteFlowchartPortSemantic.no,
+                ),
+              ],
+            ),
             NoteFlowchartNode(id: 'oxygen', label: 'Oxygén'),
           ],
           edges: [
@@ -1043,6 +1116,26 @@ Future<MemoryNoteRepository> _respiratoryTherapyFixture() async {
               fromNodeId: 'resp',
               fromPortId: 'no',
               toNodeId: 'observe',
+              label: 'Nem',
+            ),
+            NoteFlowchartEdge(
+              id: 'edge-observe',
+              fromNodeId: 'observe',
+              toNodeId: 'improved',
+              label: 'Kimenet',
+            ),
+            NoteFlowchartEdge(
+              id: 'edge-improved-yes',
+              fromNodeId: 'improved',
+              fromPortId: 'yes',
+              toNodeId: 'oxygen',
+              label: 'Igen',
+            ),
+            NoteFlowchartEdge(
+              id: 'edge-improved-no',
+              fromNodeId: 'improved',
+              fromPortId: 'no',
+              toNodeId: 'oxygen',
               label: 'Nem',
             ),
             NoteFlowchartEdge(
