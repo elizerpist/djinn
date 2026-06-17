@@ -445,44 +445,66 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
 
   Widget _searchMetadataFields(BuildContext context) {
     final warning = _searchWarning();
+    final contextField = TextFormField(
+      key: ValueKey('note-block-search-context-${block.id}'),
+      initialValue: block.searchContext ?? '',
+      decoration: const InputDecoration(
+        labelText: 'Keresési kontextus',
+        hintText: 'pl. légzési elégtelenség',
+        border: OutlineInputBorder(),
+      ),
+      onChanged: (value) => onChanged(
+        block.copyWith(searchContext: value.trim(), clearIndex: true),
+      ),
+    );
+    final roleField = DropdownButtonFormField<String>(
+      key: ValueKey('note-block-search-role-${block.id}'),
+      initialValue: NoteSearchRoles.normalize(block.searchRole),
+      decoration: const InputDecoration(
+        labelText: 'Tudástípus',
+        border: OutlineInputBorder(),
+      ),
+      items: [
+        for (final role in NoteSearchRoles.values)
+          DropdownMenuItem(
+            value: role,
+            child: Text(NoteSearchRoles.label(role)),
+          ),
+      ],
+      onChanged: (value) {
+        if (value != null) {
+          onChanged(block.copyWith(searchRole: value, clearIndex: true));
+        }
+      },
+    );
+    final searchBasics = LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 520) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              contextField,
+              const SizedBox(height: 8),
+              roleField,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: contextField),
+            const SizedBox(width: 8),
+            SizedBox(width: 240, child: roleField),
+          ],
+        );
+      },
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _searchMetadataTagSummary(context),
         const SizedBox(height: 8),
-        TextFormField(
-          key: ValueKey('note-block-search-context-${block.id}'),
-          initialValue: block.searchContext ?? '',
-          decoration: const InputDecoration(
-            labelText: 'Keresési kontextus',
-            hintText: 'pl. légzési elégtelenség',
-            border: OutlineInputBorder(),
-          ),
-          onChanged: (value) => onChanged(
-            block.copyWith(searchContext: value.trim(), clearIndex: true),
-          ),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          key: ValueKey('note-block-search-role-${block.id}'),
-          initialValue: NoteSearchRoles.normalize(block.searchRole),
-          decoration: const InputDecoration(
-            labelText: 'Tudástípus',
-            border: OutlineInputBorder(),
-          ),
-          items: [
-            for (final role in NoteSearchRoles.values)
-              DropdownMenuItem(
-                value: role,
-                child: Text(NoteSearchRoles.label(role)),
-              ),
-          ],
-          onChanged: (value) {
-            if (value != null) {
-              onChanged(block.copyWith(searchRole: value, clearIndex: true));
-            }
-          },
-        ),
+        searchBasics,
         const SizedBox(height: 8),
         _typedTagEditor(),
         const SizedBox(height: 8),
