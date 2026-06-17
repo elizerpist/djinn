@@ -472,6 +472,10 @@ Build available tag recall from the active document's known tags and the current
 
 Listen to text selection changes and recompute whether the overflow menu can delete a selected text-range tag.
 
+- [x] **Step 8: Cover review and CI boundary cases**
+
+Add regression coverage for keyword/BM25 scoped tag retrieval, text range matching with original offsets, sparse/pipe-packed table definition cells preserving physical column coordinates, and flowchart edge labels staying tappable above node cards.
+
 ## Self-Review
 
 - Spec coverage: every checklist section maps to a task above.

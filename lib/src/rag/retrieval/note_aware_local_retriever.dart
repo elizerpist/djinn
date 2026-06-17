@@ -50,7 +50,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     }
     final noteEvidence = await _loadNoteEvidence(
       logEmbeddingFallback: allowKeywordExpansion,
-      granular: !allowKeywordExpansion,
+      granular: true,
     );
     final List<SourceEvidence> noteMatches;
     if (allowKeywordExpansion) {
@@ -745,36 +745,47 @@ class NoteAwareLocalRetriever implements LocalRetriever {
   }
 
   List<_TextUnit> _textUnits(String text) {
-    final normalized = text.trim();
-    if (normalized.isEmpty) {
+    if (text.trim().isEmpty) {
       return const [];
     }
-    final boundaryAware = normalized.replaceAllMapped(
-      RegExp(
-        r'\s+(?=(?:Rejtett\s+jegyzet|Definíció|Definicio|Megjegyzés|Megjegyzes)\s*:)',
-        caseSensitive: false,
-      ),
-      (_) => '. ',
+    final delimiter = RegExp(
+      r'(?:[.!?]+\s+|;\s*|\n+|\s+(?=(?:Rejtett\s+jegyzet|Definíció|Definicio|Megjegyzés|Megjegyzes)\s*:))',
+      caseSensitive: false,
     );
-    final parts = boundaryAware
-        .split(RegExp(r'(?:[.!?]+\s+|;\s*|\n+)'))
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .toList(growable: false);
-    if (parts.length <= 1) {
-      return [_TextUnit(text: normalized, start: 0, end: normalized.length)];
+    final units = <_TextUnit>[];
+    var segmentStart = 0;
+    for (final match in delimiter.allMatches(text)) {
+      _addTextUnit(
+        units,
+        source: text,
+        start: segmentStart,
+        end: match.start,
+      );
+      segmentStart = match.end;
     }
-    var searchStart = 0;
-    return [
-      for (final part in parts)
-        () {
-          final index = normalized.indexOf(part, searchStart);
-          final start = index < 0 ? searchStart : index;
-          final end = (start + part.length).clamp(0, normalized.length).toInt();
-          searchStart = end;
-          return _TextUnit(text: part, start: start, end: end);
-        }(),
-    ];
+    _addTextUnit(units, source: text, start: segmentStart, end: text.length);
+    return units;
+  }
+
+  void _addTextUnit(
+    List<_TextUnit> units, {
+    required String source,
+    required int start,
+    required int end,
+  }) {
+    if (start >= end) {
+      return;
+    }
+    final segment = source.substring(start, end);
+    final trimmed = segment.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    final leading = segment.length - segment.trimLeft().length;
+    final trailing = segment.length - segment.trimRight().length;
+    final unitStart = start + leading;
+    final unitEnd = end - trailing;
+    units.add(_TextUnit(text: trimmed, start: unitStart, end: unitEnd));
   }
 
   String _textRangeSearchText(NoteBlock block, _TextUnit unit) {
@@ -820,21 +831,25 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       final definitionCells = _independentDefinitionCells(row);
       if (definitionCells.isNotEmpty) {
         for (
-          var cellIndex = 0;
-          cellIndex < definitionCells.length;
-          cellIndex += 1
+          var logicalIndex = 0;
+          logicalIndex < definitionCells.length;
+          logicalIndex += 1
         ) {
-          final cell = definitionCells[cellIndex].trim();
+          final definitionCell = definitionCells[logicalIndex];
+          final cell = definitionCell.text.trim();
           if (cell.isEmpty) {
             continue;
           }
-          final header = _headerForDefinitionCell(headers, cellIndex);
+          final header = _headerForDefinitionCell(
+            headers,
+            definitionCell.columnIndex,
+          );
           results.add(
             SourceEvidence(
-              id: 'note:${chunk.noteId}:${chunk.blockId}:row-$rowIndex-cell-$cellIndex',
+              id: 'note:${chunk.noteId}:${chunk.blockId}:row-$rowIndex-cell-$logicalIndex',
               sourceType: EvidenceSourceType.tableChunk,
               text: _tableCellText(cell: cell, header: header, title: title),
-              label: '$baseLabel · sor ${rowIndex + 1} · cella ${cellIndex + 1}',
+              label: '$baseLabel · sor ${rowIndex + 1} · cella ${definitionCell.columnIndex + 1}',
               validationState: state,
               documentId: chunk.noteId,
               searchText: _joinSearchText([
@@ -842,7 +857,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
                 _tableScopedSearchText(
                   block,
                   rowIndex: rowIndex,
-                  columnIndex: cellIndex,
+                  columnIndex: definitionCell.columnIndex,
                 ),
               ]),
             ),
@@ -903,22 +918,30 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     return _tagSearchText(tags);
   }
 
-  List<String> _independentDefinitionCells(List<String> row) {
-    final cells = row
-        .map((cell) => cell.trim())
-        .where((cell) => cell.isNotEmpty)
-        .toList(growable: false);
-    if (cells.isEmpty) {
-      return const [];
-    }
+  List<_DefinitionCell> _independentDefinitionCells(List<String> row) {
     final logicalCells = <String>[];
-    for (final cell in cells) {
+    final definitionCells = <_DefinitionCell>[];
+    for (var columnIndex = 0; columnIndex < row.length; columnIndex += 1) {
+      final cell = row[columnIndex].trim();
+      if (cell.isEmpty) {
+        continue;
+      }
       final split = _splitPipePackedDefinitions(cell);
-      logicalCells.addAll(split.length > 1 ? split : [cell]);
+      final parts = split.length > 1 ? split : [cell];
+      for (final part in parts) {
+        final trimmed = part.trim();
+        if (trimmed.isEmpty) {
+          continue;
+        }
+        logicalCells.add(trimmed);
+        definitionCells.add(
+          _DefinitionCell(text: trimmed, columnIndex: columnIndex),
+        );
+      }
     }
     if (logicalCells.length > 1 &&
         logicalCells.every(_looksLikeInlineDefinition)) {
-      return logicalCells;
+      return definitionCells;
     }
     return const [];
   }
@@ -1277,6 +1300,16 @@ class _IndexedTableRow {
 
   final int index;
   final List<String> row;
+}
+
+class _DefinitionCell {
+  const _DefinitionCell({
+    required this.text,
+    required this.columnIndex,
+  });
+
+  final String text;
+  final int columnIndex;
 }
 
 List<_BranchSignal> _branchSignalsFromText(String text) {

@@ -1194,8 +1194,155 @@ Tartomány | Teendő | Áramlás
 
     expect(joined, contains('Súlyos'));
     expect(joined, contains('High flow'));
-    expect(joined, isNot(contains('Enyhe')));
+    expect(joined, isNot(contains('Állapot: Enyhe')));
     expect(joined, isNot(contains('Célzott oxygén')));
+  });
+
+  test('keyword expansion can find local scoped tags without whole chunk tag leakage', () async {
+    final notes = MemoryNoteRepository();
+    await notes.createDocumentNote(
+      title: 'Oxigén szabályok',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'oxygen-table',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Enyhe', 'Célzott oxygén'],
+              ['Súlyos', 'High flow'],
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'cell-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableCell,
+                  rowIndex: 2,
+                  columnIndex: 1,
+                ),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'piros prioritás',
+                    colorValue: 0xFFDC2626,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    final retriever = NoteAwareLocalRetriever(
+      base: MemoryLocalRetriever(const []),
+      noteRepository: notes,
+    );
+
+    final results = await retriever.retrieve(
+      queryVector: const [1, 2, 3],
+      query: 'piros prioritás',
+      limit: 4,
+      minimumSimilarity: 0.7,
+      allowKeywordExpansion: true,
+    );
+    final joined = results.map((item) => item.text).join('\n');
+
+    expect(joined, contains('Súlyos'));
+    expect(joined, contains('High flow'));
+    expect(joined, isNot(contains('Állapot: Enyhe')));
+    expect(joined, isNot(contains('Célzott oxygén')));
+  });
+
+  test('local text range tags use original block offsets for indented text', () async {
+    final notes = MemoryNoteRepository();
+    await notes.createDocumentNote(
+      title: 'Text range teszt',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: '    Enyhe eset.\n    Súlyos eset high flow.',
+            rangeTags: [
+              NoteTextRangeTag(
+                id: 'range-1',
+                start: 20,
+                end: 26,
+                tag: NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.state,
+                  label: 'piros prioritás',
+                  colorValue: 0xFFDC2626,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    final retriever = NoteAwareLocalRetriever(
+      base: MemoryLocalRetriever(const []),
+      noteRepository: notes,
+    );
+
+    final results = await retriever.retrieveLocalVector(
+      query: 'piros prioritás',
+      limit: 4,
+      mode: 'onnx_multilingual_e5',
+    );
+    final joined = results.map((item) => item.text).join('\n');
+
+    expect(joined, contains('Súlyos eset high flow'));
+    expect(joined, isNot(contains('Enyhe eset')));
+  });
+
+  test('local table cell tags use physical column index for sparse definition rows', () async {
+    final notes = MemoryNoteRepository();
+    await notes.createDocumentNote(
+      title: 'Sparse table tag teszt',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'sparse-table',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Szabály'],
+              ['', 'súlyos: high flow | enyhe: célzott oxygén'],
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'cell-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableCell,
+                  rowIndex: 1,
+                  columnIndex: 1,
+                ),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'piros prioritás',
+                    colorValue: 0xFFDC2626,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    final retriever = NoteAwareLocalRetriever(
+      base: MemoryLocalRetriever(const []),
+      noteRepository: notes,
+    );
+
+    final results = await retriever.retrieveLocalVector(
+      query: 'piros prioritás',
+      limit: 4,
+      mode: 'onnx_multilingual_e5',
+    );
+    final joined = results.map((item) => item.text).join('\n');
+
+    expect(joined, contains('súlyos: high flow'));
+    expect(joined, contains('enyhe: célzott oxygén'));
   });
 
   test('local flowchart node and edge tags only boost their matching units', () async {

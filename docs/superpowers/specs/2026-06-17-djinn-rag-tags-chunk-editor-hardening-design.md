@@ -116,6 +116,10 @@ Whole chunk tags may be included in chunk-level search metadata. Local tag metad
 
 Local tags must not be copied into `NoteBlock.searchMetadataText`, because that makes every granular evidence item inside the block look tagged.
 
+Keyword/BM25 fallback must use the same granular evidence path for local tags. Otherwise tag-only keyword queries cannot see text range, table scoped, or flowchart scoped assignments after they are removed from whole-block metadata.
+
+Text range matching must compare against offsets in the original block text, not a trimmed copy. Table definition splitting must preserve physical row and column coordinates even when empty cells are skipped or a packed definition cell is split into multiple evidence items.
+
 ### Scoped Target Stability
 
 Scoped tag targets must survive normal editing:
@@ -181,6 +185,7 @@ All four editors use the same header rule:
 - Flowchart nodes/boxes and edges are selectable.
 - Do not render tag pills on the infinite canvas.
 - Tagged nodes/edges use a light outline, glow, or corner marker.
+- Edge labels and edge action controls render above node cards so labels remain tappable when routes overlap a node.
 - Tag pills for the selected node/edge appear in a tray outside the canvas.
 - Creation actions are three separate vertical FABs on the right side at FAB height.
 - Zoom in/out controls replace the old top button area.

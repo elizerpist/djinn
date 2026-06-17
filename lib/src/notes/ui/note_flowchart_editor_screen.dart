@@ -1172,30 +1172,6 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                                     nodes: canvasNodes,
                                     nodeSizes: nodeSizes,
                                   ),
-                              for (final edge in visibleEdges)
-                                _EdgeLabel(
-                                  edge: edge,
-                                  nodes: canvasNodes,
-                                  nodeSizes: nodeSizes,
-                                  editing: _editingEdgeId == edge.id,
-                                  selected: _selectedEdgeId == edge.id,
-                                  tagged: _edgeHasTags(edge.id),
-                                  tagColor: _tagColorForTarget(
-                                    NoteTagTarget(
-                                      kind: NoteTagTargetKind.flowchartEdge,
-                                      elementId: edge.id,
-                                    ),
-                                  ),
-                                  inlineController: _editingEdgeId == edge.id ? _inlineEdgeController : null,
-                                  onSelect: () => setState(() {
-                                    _selectedEdgeId = edge.id;
-                                    _selectedNodeId = null;
-                                  }),
-                                  onEdit: () => _editEdgeLabel(edge),
-                                  onCommitEdit: () => _commitEdgeLabel(edge),
-                                  onCancelEdit: () => _cancelEdgeLabelEdit(edge),
-                                  onDelete: () => _deleteEdge(edge),
-                                ),
                               for (final canvasNode in visibleNodes)
                                 if (dataNodesById[canvasNode.id] != null)
                                   Positioned(
@@ -1239,6 +1215,30 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                                       ),
                                     ),
                                   ),
+                              for (final edge in visibleEdges)
+                                _EdgeLabel(
+                                  edge: edge,
+                                  nodes: canvasNodes,
+                                  nodeSizes: nodeSizes,
+                                  editing: _editingEdgeId == edge.id,
+                                  selected: _selectedEdgeId == edge.id,
+                                  tagged: _edgeHasTags(edge.id),
+                                  tagColor: _tagColorForTarget(
+                                    NoteTagTarget(
+                                      kind: NoteTagTargetKind.flowchartEdge,
+                                      elementId: edge.id,
+                                    ),
+                                  ),
+                                  inlineController: _editingEdgeId == edge.id ? _inlineEdgeController : null,
+                                  onSelect: () => setState(() {
+                                    _selectedEdgeId = edge.id;
+                                    _selectedNodeId = null;
+                                  }),
+                                  onEdit: () => _editEdgeLabel(edge),
+                                  onCommitEdit: () => _commitEdgeLabel(edge),
+                                  onCancelEdit: () => _cancelEdgeLabelEdit(edge),
+                                  onDelete: () => _deleteEdge(edge),
+                                ),
                             ],
                           ),
                         ),

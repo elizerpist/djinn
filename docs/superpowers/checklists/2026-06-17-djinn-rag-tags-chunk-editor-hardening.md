@@ -106,6 +106,10 @@ Date: 2026-06-17
 - [x] Text selected-tag deletion state updates when the text selection changes.
 - [x] Local range tags, table scoped tags, and flowchart scoped tags have targeted retriever tests proving they do not boost unrelated granular evidence.
 - [x] Root note tag menu and per-note editor tag menus both receive document-known tags for recall.
+- [x] Keyword/BM25 mode can retrieve local scoped tags without reintroducing whole-chunk tag leakage.
+- [x] Text range tag retrieval uses original block offsets, including leading indentation and blank-line cases.
+- [x] Sparse and pipe-packed table definition evidence uses the physical table column for scoped tag matching.
+- [x] Flowchart edge labels render above node cards so edge selection, deletion, and tag markers remain tappable when labels overlap nodes.
 
 ## Build And Release
 
