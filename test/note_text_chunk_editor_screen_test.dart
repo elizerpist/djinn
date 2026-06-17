@@ -27,6 +27,8 @@ void main() {
     );
     field.controller!.selection = const TextSelection(baseOffset: 0, extentOffset: 6);
     await tester.pump();
+    expect(find.byKey(const ValueKey('note-text-selection-rail')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-text-selection-rail-tag')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
     await tester.pumpAndSettle();
@@ -43,6 +45,8 @@ void main() {
     expect(latest!.rangeTags.single.start, 0);
     expect(latest!.rangeTags.single.end, 6);
     expect(latest!.rangeTags.single.tag.label, 'súlyos');
+    expect(find.byKey(const ValueKey('note-local-tag-pill-súlyos')), findsNothing);
+    expect(find.byKey(const ValueKey('note-text-range-highlight')), findsWidgets);
 
     await tester.enterText(
       find.byKey(const ValueKey('note-text-chunk-field')),
@@ -103,7 +107,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(latest!.rangeTags.single.tags.map((tag) => tag.label), contains('súlyos'));
-    expect(find.byKey(const ValueKey('note-local-tag-pill-súlyos')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-local-tag-pill-súlyos')), findsNothing);
     expect(find.byKey(const ValueKey('note-text-tip-bar')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-text-tag-selection')), findsNothing);
   });

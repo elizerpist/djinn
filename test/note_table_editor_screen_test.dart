@@ -82,7 +82,7 @@ void main() {
     expect(latest!.rows, everyElement(hasLength(4)));
   });
 
-  testWidgets('table editor selects cells and stores scoped tags in an external tray', (tester) async {
+  testWidgets('table editor selects cells and stores scoped tags in an expanding rail', (tester) async {
     NoteBlock? latest;
     await tester.pumpWidget(
       MaterialApp(
@@ -101,9 +101,16 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('note-table-select-cell-1-1')));
+    expect(find.byKey(const ValueKey('note-table-corner-head')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-column-head-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-row-head-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-select-cell-1-1')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('note-table-cell-1-1')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('note-table-selected-cell-1-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-row-expansion-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selection-action-rail')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
     await tester.pumpAndSettle();
@@ -122,9 +129,71 @@ void main() {
     );
     expect(latest!.scopedTags.single.target.rowIndex, 1);
     expect(latest!.scopedTags.single.target.columnIndex, 1);
-    expect(find.byKey(const ValueKey('note-table-cell-tag-marker-1-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-selected-tag-tray')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-selected-tag-pill-súlyos')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-cell-highlight-1-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-cell-tag-marker-1-1')), findsNothing);
+    expect(find.byKey(const ValueKey('note-selected-tag-tray')), findsNothing);
+    expect(find.byKey(const ValueKey('note-selection-rail-tag-pill-súlyos')), findsOneWidget);
+  });
+
+  testWidgets('table editor expands a column head with the shared rail', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-table-column-head-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('note-table-column-expansion-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selection-action-rail')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-rail-tag-column-1')), findsOneWidget);
+  });
+
+  testWidgets('table row and column tags highlight affected cell text instead of markers', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'row-tag',
+                target: NoteTagTarget(kind: NoteTagTargetKind.tableRow, rowIndex: 1),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'súlyos',
+                    colorValue: 0xFFDC2626,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('note-table-cell-highlight-1-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-cell-highlight-1-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-cell-tag-marker-1-1')), findsNothing);
+    expect(find.byKey(const ValueKey('note-selected-tag-tray')), findsNothing);
   });
 
   testWidgets('table editor remaps scoped cell tags when inserting columns before them', (tester) async {
@@ -168,8 +237,8 @@ void main() {
     expect(latest, isNotNull);
     expect(latest!.scopedTags.single.target.rowIndex, 1);
     expect(latest!.scopedTags.single.target.columnIndex, 2);
-    expect(find.byKey(const ValueKey('note-table-cell-tag-marker-1-2')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-table-cell-tag-marker-1-1')), findsNothing);
+    expect(find.byKey(const ValueKey('note-table-cell-highlight-1-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-cell-highlight-1-1')), findsNothing);
   });
 
   testWidgets('table editor remaps and drops scoped row tags when deleting rows', (tester) async {
@@ -216,3 +285,5 @@ void main() {
     expect(latest!.scopedTags, isEmpty);
   });
 }
+
+void _ignoreBlockChange(NoteBlock block) {}

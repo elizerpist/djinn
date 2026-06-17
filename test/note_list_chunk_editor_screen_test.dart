@@ -90,7 +90,35 @@ void main() {
       latest!.listItems.first.tags.map((tag) => tag.label),
       ['súlyos', 'légzési elégtelenség'],
     );
-    expect(find.byKey(const ValueKey('note-list-item-tag-pill-item-1-súlyos')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-list-item-tag-highlight-item-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-list-item-tag-pill-item-1-súlyos')), findsNothing);
     expect(find.byKey(const ValueKey('note-list-item-tags-item-1')), findsNothing);
   });
+
+  testWidgets('list item tap selects the card and opens the inline action rail', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteListChunkEditorScreen(
+          block: const NoteBlock(
+            id: 'list-1',
+            type: NoteBlockType.listItem,
+            listItems: [NoteListItem(id: 'item-1', text: 'High flow oxygen')],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-list-row-item-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('note-list-item-select-item-1')), findsNothing);
+    expect(find.byKey(const ValueKey('note-selection-action-rail')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-list-rail-tag-item-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-list-rail-outdent-item-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-list-rail-indent-item-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-list-rail-delete-item-1')), findsOneWidget);
+  });
 }
+
+void _ignoreBlockChange(NoteBlock block) {}
