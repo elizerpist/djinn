@@ -17,6 +17,7 @@ import '../models/note_document.dart';
 import '../models/note_folder.dart';
 import '../models/note_item.dart';
 import 'note_editor_route.dart';
+import 'tag_manager_sheet.dart';
 
 typedef ImportNotesForTest = Future<List<NoteItem>?> Function();
 
@@ -432,11 +433,10 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   Future<void> _showNoteTagDialog(NoteItem note) async {
-    final tags = await showDialog<List<NoteKnowledgeTag>>(
-      context: context,
-      builder: (context) => _NoteTagDialog(
-        initialText: note.document.tags.map((tag) => tag.metadataText).join(', '),
-      ),
+    final tags = await showTagManagerSheet(
+      context,
+      initialTags: note.document.tags,
+      title: 'Jegyzet tagek',
     );
     if (tags == null) {
       return;
@@ -751,64 +751,6 @@ class _FolderBar extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _NoteTagDialog extends StatefulWidget {
-  const _NoteTagDialog({required this.initialText});
-
-  final String initialText;
-
-  @override
-  State<_NoteTagDialog> createState() => _NoteTagDialogState();
-}
-
-class _NoteTagDialogState extends State<_NoteTagDialog> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialText);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      key: const ValueKey('notes-tag-dialog'),
-      title: const Text('Jegyzet tagek'),
-      content: TextField(
-        key: const ValueKey('notes-tag-input'),
-        controller: _controller,
-        autofocus: true,
-        minLines: 2,
-        maxLines: 4,
-        decoration: const InputDecoration(
-          labelText: 'Tagek',
-          hintText: 'topic:légzési elégtelenség, type:terápia',
-          border: OutlineInputBorder(),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Mégse'),
-        ),
-        FilledButton(
-          key: const ValueKey('notes-tag-save'),
-          onPressed: () => Navigator.of(context).pop(
-            NoteKnowledgeTag.parseMany(_controller.text),
-          ),
-          child: const Text('Mentés'),
-        ),
-      ],
     );
   }
 }

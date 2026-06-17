@@ -1233,6 +1233,13 @@ String? _evidenceSpecificNarrowTerm(
   if (stateLikeEvidence.isEmpty) {
     return null;
   }
+  final explicitStateTerm = _shortFlowchartStateTerm(
+    stateLikeEvidence,
+    candidates,
+  );
+  if (explicitStateTerm != null) {
+    return explicitStateTerm;
+  }
   final counts = <String, int>{};
   for (final term in candidates) {
     counts[term] = stateLikeEvidence
@@ -1255,6 +1262,32 @@ String? _evidenceSpecificNarrowTerm(
   for (final term in candidates) {
     if (counts[term] == minCount) {
       return term;
+    }
+  }
+  return null;
+}
+
+String? _shortFlowchartStateTerm(
+  List<SourceEvidence> evidence,
+  List<String> candidates,
+) {
+  final candidateSet = candidates.toSet();
+  for (final item in evidence) {
+    if (item.sourceType != EvidenceSourceType.flowchartNode) {
+      continue;
+    }
+    final nodeTerms = _scopeTermList(item.text)
+        .where((term) => !_isQuestionTerm(term))
+        .where((term) => !_isBranchValueTerm(term))
+        .toSet();
+    if (nodeTerms.length != 1) {
+      continue;
+    }
+    final nodeTerm = nodeTerms.single;
+    for (final candidate in candidateSet) {
+      if (_termsClose(candidate, nodeTerm)) {
+        return candidate;
+      }
     }
   }
   return null;

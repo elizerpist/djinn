@@ -99,4 +99,33 @@ void main() {
     expect(saved.document.blocks.single.text, 'Új szöveg');
   });
 
+  testWidgets('note menu opens the colored tag manager for the current note', (tester) async {
+    final repository = MemoryNoteRepository();
+    final note = await repository.createDocumentNote(
+      title: 'N',
+      document: const NoteDocument(blocks: [
+        NoteBlock(id: 'a', type: NoteBlockType.paragraph, text: 'Alpha'),
+      ]),
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: NoteEditorRoute(repository: repository, initialNote: note)),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-editor-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tagek'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('tag-manager-sheet')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'légzési elégtelenség');
+    await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.pumpAndSettle();
+
+    final saved = (await repository.listNotes()).single;
+    expect(saved.document.tags.single.label, 'légzési elégtelenség');
+    expect(saved.document.tags.single.colorValue, isNotNull);
+  });
+
 }

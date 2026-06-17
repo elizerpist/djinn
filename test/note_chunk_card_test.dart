@@ -106,4 +106,49 @@ void main() {
     expect(edited, isTrue);
   });
 
+  testWidgets('paragraph body highlights text range tags read only', (tester) async {
+    const block = NoteBlock(
+      id: 'block-1',
+      type: NoteBlockType.paragraph,
+      text: 'Súlyos esetben high flow oxygen.',
+      rangeTags: [
+        NoteTextRangeTag(
+          id: 'range-1',
+          start: 0,
+          end: 6,
+          tag: NoteKnowledgeTag(
+            type: NoteKnowledgeTagTypes.state,
+            label: 'súlyos',
+            colorValue: 0xFFDC2626,
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NoteChunkCard(
+            block: block,
+            expanded: true,
+            dragHandle: const Icon(Icons.drag_indicator),
+            onToggleExpanded: () {},
+            onOpenEditor: () {},
+            onDelete: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Részlet tag: state súlyos'), findsOneWidget);
+    final selectable = tester.widget<SelectableText>(find.byType(SelectableText));
+    final span = selectable.textSpan;
+    expect(span, isNotNull);
+    expect(span!.toPlainText(), 'Súlyos esetben high flow oxygen.');
+    expect(
+      span.children!.where((child) => child.style?.backgroundColor != null),
+      isNotEmpty,
+    );
+  });
+
 }

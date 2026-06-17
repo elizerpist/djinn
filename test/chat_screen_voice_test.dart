@@ -355,7 +355,7 @@ void main() {
     expect(speech.locales, ['hu-HU']);
   });
 
-  testWidgets('citation tap opens source excerpt dialog', (tester) async {
+  testWidgets('citation tap opens fullscreen read-only source preview', (tester) async {
     final repository = LocalChatRepository(
       clock: () => DateTime.utc(2026, 1, 1, 12),
     );
@@ -396,6 +396,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('citation-chunk-7')));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('citation-preview-screen')), findsOneWidget);
+    expect(find.byKey(const ValueKey('citation-preview-text')), findsOneWidget);
     expect(find.text('omsz.pdf'), findsWidgets);
     expect(find.text('7. oldal'), findsOneWidget);
     expect(find.text('ABCDE'), findsOneWidget);

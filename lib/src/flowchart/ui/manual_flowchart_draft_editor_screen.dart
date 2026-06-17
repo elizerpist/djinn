@@ -124,144 +124,37 @@ class _ManualFlowchartDraftEditorScreenState
   Future<EditableFlowchartNode?> _showNodeDialog({
     EditableFlowchartNode? existing,
   }) async {
-    final labelController = TextEditingController(text: existing?.label ?? '');
-    var shape = existing?.shape ?? AiFlowchartNodeShape.process;
     final order = existing?.order ?? _flowchart.nodes.length + 1;
-    final result = await showDialog<EditableFlowchartNode>(
+    return showDialog<EditableFlowchartNode>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(existing == null ? 'Új flowchart elem' : 'Elem szerkesztése'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                key: const ValueKey('manual-flowchart-node-label-field'),
-                controller: labelController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Felirat',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<AiFlowchartNodeShape>(
-                key: const ValueKey('manual-flowchart-node-shape-field'),
-                initialValue: shape,
-                decoration: const InputDecoration(
-                  labelText: 'Típus',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  for (final option in AiFlowchartNodeShape.values)
-                    if (option != AiFlowchartNodeShape.unknown)
-                      DropdownMenuItem(value: option, child: Text(_shapeLabel(option))),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setDialogState(() => shape = value);
-                  }
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Mégse'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final label = labelController.text.trim();
-                if (label.isEmpty) {
-                  return;
-                }
-                Navigator.of(context).pop(
-                  EditableFlowchartNode(
-                    id: existing?.id ?? _nextNodeId(),
-                    label: label,
-                    shape: shape,
-                    order: order,
-                  ),
-                );
-              },
-              child: const Text('Mentés'),
-            ),
-          ],
-        ),
+      builder: (context) => _ManualFlowchartNodeDialog(
+        existing: existing,
+        nodeId: existing?.id ?? _nextNodeId(),
+        order: order,
+        labelFieldKey: 'manual-flowchart-node-label-field',
+        shapeFieldKey: 'manual-flowchart-node-shape-field',
+        shapeLabel: _shapeLabel,
       ),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    labelController.dispose();
-    return result;
   }
 
   Future<void> _addEdge() async {
     if (_flowchart.nodes.length < 2) {
       return;
     }
-    var from = _flowchart.nodes.first.id;
-    var to = _flowchart.nodes.last.id;
-    final labelController = TextEditingController();
     final edge = await showDialog<EditableFlowchartEdge>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Új kapcsolat'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _NodeDropdown(
-                keyValue: 'manual-flowchart-edge-from-field',
-                label: 'Innen',
-                value: from,
-                nodes: _flowchart.nodes,
-                onChanged: (value) => setDialogState(() => from = value),
-              ),
-              const SizedBox(height: 12),
-              _NodeDropdown(
-                keyValue: 'manual-flowchart-edge-to-field',
-                label: 'Ide',
-                value: to,
-                nodes: _flowchart.nodes,
-                onChanged: (value) => setDialogState(() => to = value),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const ValueKey('manual-flowchart-edge-label-field'),
-                controller: labelController,
-                decoration: const InputDecoration(
-                  labelText: 'Ág felirata',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Mégse'),
-            ),
-            FilledButton(
-              onPressed: from == to
-                  ? null
-                  : () => Navigator.of(context).pop(
-                        EditableFlowchartEdge(
-                          id: _nextEdgeId(),
-                          fromNodeId: from,
-                          toNodeId: to,
-                          label: labelController.text.trim(),
-                          order: _flowchart.edges.length + 1,
-                        ),
-                      ),
-              child: const Text('Mentés'),
-            ),
-          ],
-        ),
+      builder: (context) => _ManualFlowchartEdgeDialog(
+        nodes: _flowchart.nodes,
+        initialFromNodeId: _flowchart.nodes.first.id,
+        initialToNodeId: _flowchart.nodes.last.id,
+        edgeId: _nextEdgeId(),
+        order: _flowchart.edges.length + 1,
+        fromFieldKey: 'manual-flowchart-edge-from-field',
+        toFieldKey: 'manual-flowchart-edge-to-field',
+        labelFieldKey: 'manual-flowchart-edge-label-field',
       ),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    labelController.dispose();
     if (edge == null) {
       return;
     }
@@ -356,6 +249,209 @@ class _ManualFlowchartDraftEditorScreenState
       AiFlowchartNodeShape.process => 'Folyamatlépés',
       AiFlowchartNodeShape.unknown => 'Ismeretlen',
     };
+  }
+}
+
+class _ManualFlowchartNodeDialog extends StatefulWidget {
+  const _ManualFlowchartNodeDialog({
+    required this.existing,
+    required this.nodeId,
+    required this.order,
+    required this.labelFieldKey,
+    required this.shapeFieldKey,
+    required this.shapeLabel,
+  });
+
+  final EditableFlowchartNode? existing;
+  final String nodeId;
+  final int order;
+  final String labelFieldKey;
+  final String shapeFieldKey;
+  final String Function(AiFlowchartNodeShape) shapeLabel;
+
+  @override
+  State<_ManualFlowchartNodeDialog> createState() => _ManualFlowchartNodeDialogState();
+}
+
+class _ManualFlowchartNodeDialogState extends State<_ManualFlowchartNodeDialog> {
+  late final TextEditingController _labelController;
+  late AiFlowchartNodeShape _shape;
+
+  @override
+  void initState() {
+    super.initState();
+    _labelController = TextEditingController(text: widget.existing?.label ?? '');
+    _shape = widget.existing?.shape ?? AiFlowchartNodeShape.process;
+  }
+
+  @override
+  void dispose() {
+    _labelController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.existing == null ? 'Új flowchart elem' : 'Elem szerkesztése'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            key: ValueKey(widget.labelFieldKey),
+            controller: _labelController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Felirat',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<AiFlowchartNodeShape>(
+            key: ValueKey(widget.shapeFieldKey),
+            initialValue: _shape,
+            decoration: const InputDecoration(
+              labelText: 'Típus',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              for (final option in AiFlowchartNodeShape.values)
+                if (option != AiFlowchartNodeShape.unknown)
+                  DropdownMenuItem(value: option, child: Text(widget.shapeLabel(option))),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _shape = value);
+              }
+            },
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Mégse'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final label = _labelController.text.trim();
+            if (label.isEmpty) {
+              return;
+            }
+            Navigator.of(context).pop(
+              EditableFlowchartNode(
+                id: widget.nodeId,
+                label: label,
+                shape: _shape,
+                order: widget.order,
+              ),
+            );
+          },
+          child: const Text('Mentés'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ManualFlowchartEdgeDialog extends StatefulWidget {
+  const _ManualFlowchartEdgeDialog({
+    required this.nodes,
+    required this.initialFromNodeId,
+    required this.initialToNodeId,
+    required this.edgeId,
+    required this.order,
+    required this.fromFieldKey,
+    required this.toFieldKey,
+    required this.labelFieldKey,
+  });
+
+  final List<EditableFlowchartNode> nodes;
+  final String initialFromNodeId;
+  final String initialToNodeId;
+  final String edgeId;
+  final int order;
+  final String fromFieldKey;
+  final String toFieldKey;
+  final String labelFieldKey;
+
+  @override
+  State<_ManualFlowchartEdgeDialog> createState() => _ManualFlowchartEdgeDialogState();
+}
+
+class _ManualFlowchartEdgeDialogState extends State<_ManualFlowchartEdgeDialog> {
+  late final TextEditingController _labelController;
+  late String _fromNodeId;
+  late String _toNodeId;
+
+  @override
+  void initState() {
+    super.initState();
+    _labelController = TextEditingController();
+    _fromNodeId = widget.initialFromNodeId;
+    _toNodeId = widget.initialToNodeId;
+  }
+
+  @override
+  void dispose() {
+    _labelController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Új kapcsolat'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _NodeDropdown(
+            keyValue: widget.fromFieldKey,
+            label: 'Innen',
+            value: _fromNodeId,
+            nodes: widget.nodes,
+            onChanged: (value) => setState(() => _fromNodeId = value),
+          ),
+          const SizedBox(height: 12),
+          _NodeDropdown(
+            keyValue: widget.toFieldKey,
+            label: 'Ide',
+            value: _toNodeId,
+            nodes: widget.nodes,
+            onChanged: (value) => setState(() => _toNodeId = value),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            key: ValueKey(widget.labelFieldKey),
+            controller: _labelController,
+            decoration: const InputDecoration(
+              labelText: 'Ág felirata',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Mégse'),
+        ),
+        FilledButton(
+          onPressed: _fromNodeId == _toNodeId
+              ? null
+              : () => Navigator.of(context).pop(
+                    EditableFlowchartEdge(
+                      id: widget.edgeId,
+                      fromNodeId: _fromNodeId,
+                      toNodeId: _toNodeId,
+                      label: _labelController.text.trim(),
+                      order: widget.order,
+                    ),
+                  ),
+          child: const Text('Mentés'),
+        ),
+      ],
+    );
   }
 }
 

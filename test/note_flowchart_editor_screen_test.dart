@@ -311,6 +311,8 @@ void main() {
     expect(find.byKey(const ValueKey('note-flowchart-palette-multi-decision')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-flowchart-palette-subprocess')), findsNothing);
     expect(find.byKey(const ValueKey('note-flowchart-palette-dataStore')), findsNothing);
+    expect(find.byKey(const ValueKey('note-flowchart-zoom-in')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-zoom-out')), findsOneWidget);
   });
 
   testWidgets('node body opens popup while label tap keeps inline editing', (tester) async {

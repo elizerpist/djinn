@@ -274,52 +274,23 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _showCitationExcerpt(ChatCitation citation) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(citation.title),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (citation.page case final page?) ...[
-                  Text(
-                    '$page. oldal',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                if (citation.section case final section?) ...[
-                  Text(
-                    section,
-                    style: const TextStyle(color: Color(0xFF4B5563)),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                Text(citation.excerpt),
-                if (citation.sourceId case final sourceId?) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    sourceId,
-                    style: const TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Bezárás'),
-            ),
-          ],
-        );
-      },
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            _CitationPreviewScreen(citation: citation),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            )),
+            child: child,
+          );
+        },
+      ),
     );
   }
 
@@ -451,6 +422,233 @@ class KnowledgeStatusBanner extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _CitationPreviewScreen extends StatelessWidget {
+  const _CitationPreviewScreen({required this.citation});
+
+  final ChatCitation citation;
+
+  @override
+  Widget build(BuildContext context) {
+    final sourceType = citation.sourceType;
+    final isFlowchart = sourceType == 'flowchart_node' || sourceType == 'flowchart_edge';
+    final isTable = sourceType == 'table_chunk' || sourceType == 'score_chunk';
+    return Scaffold(
+      key: const ValueKey('citation-preview-screen'),
+      appBar: AppBar(
+        title: Text(citation.title),
+        actions: [
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.close),
+            tooltip: 'Bezárás',
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (citation.sourceLabel case final label?) ...[
+                _PreviewHeader(label: label),
+                const SizedBox(height: 12),
+              ],
+              if (citation.page case final page?) ...[
+                Text(
+                  '$page. oldal',
+                  style: const TextStyle(
+                    color: Color(0xFF475569),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (citation.section case final section?) ...[
+                Text(section, style: const TextStyle(color: Color(0xFF475569))),
+                const SizedBox(height: 10),
+              ],
+              if (isFlowchart)
+                _FlowchartCitationPreview(excerpt: citation.excerpt)
+              else if (isTable)
+                _TableCitationPreview(excerpt: citation.excerpt)
+              else
+                _TextCitationPreview(excerpt: citation.excerpt),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewHeader extends StatelessWidget {
+  const _PreviewHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF1D4ED8),
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _TextCitationPreview extends StatelessWidget {
+  const _TextCitationPreview({required this.excerpt});
+
+  final String excerpt;
+
+  @override
+  Widget build(BuildContext context) {
+    return SelectableText(
+      key: const ValueKey('citation-preview-text'),
+      excerpt,
+      style: const TextStyle(
+        color: Color(0xFF111827),
+        fontSize: 16,
+        height: 1.45,
+      ),
+    );
+  }
+}
+
+class _TableCitationPreview extends StatelessWidget {
+  const _TableCitationPreview({required this.excerpt});
+
+  final String excerpt;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = excerpt
+        .split(RegExp(r'\n+'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .map((line) => line
+            .split(line.contains('|') ? '|' : ';')
+            .map((part) => part.trim())
+            .where((part) => part.isNotEmpty)
+            .toList(growable: false))
+        .where((row) => row.isNotEmpty)
+        .toList(growable: false);
+    final columns = rows.fold<int>(
+      0,
+      (max, row) => row.length > max ? row.length : max,
+    );
+    return SingleChildScrollView(
+      key: const ValueKey('citation-preview-table'),
+      scrollDirection: Axis.horizontal,
+      child: Table(
+        defaultColumnWidth: const IntrinsicColumnWidth(),
+        border: TableBorder.all(color: const Color(0xFFE2E8F0)),
+        children: [
+          for (final row in rows)
+            TableRow(
+              children: [
+                for (var index = 0; index < columns; index += 1)
+                  Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Text(
+                      index < row.length ? row[index] : '',
+                      style: const TextStyle(
+                        color: Color(0xFF334155),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FlowchartCitationPreview extends StatelessWidget {
+  const _FlowchartCitationPreview({required this.excerpt});
+
+  final String excerpt;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = excerpt
+        .split(RegExp(r'\n+'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    return Column(
+      key: const ValueKey('citation-preview-flowchart'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final line in lines)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Text(
+              _flowchartPreviewLine(line),
+              style: const TextStyle(
+                color: Color(0xFF1E293B),
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                height: 1.3,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _flowchartPreviewLine(String line) {
+    final match = RegExp(r'^\s*(.+?)\s*->\s*(.+?)(?:\s*\[(.*?)\])?\s*$')
+        .firstMatch(line);
+    if (match == null) {
+      return line;
+    }
+    final from = match.group(1)?.trim() ?? '';
+    final to = match.group(2)?.trim() ?? '';
+    final label = match.group(3)?.trim().toLowerCase() ?? '';
+    final condition = _conditionText(from);
+    if (label == 'igen') {
+      return 'Ha $condition, akkor $to.';
+    }
+    if (label == 'nem') {
+      return 'Ha nem $condition, akkor $to.';
+    }
+    if (label.isEmpty || label == 'kimenet') {
+      return '$from után $to.';
+    }
+    return 'Ha $condition: $label, akkor $to.';
+  }
+
+  String _conditionText(String value) {
+    final trimmed = value.trim().replaceFirst(RegExp(r'\?$'), '');
+    if (trimmed.isEmpty) {
+      return '';
+    }
+    return '${trimmed[0].toLowerCase()}${trimmed.substring(1)}';
   }
 }
 

@@ -87,16 +87,24 @@ class NoteKnowledgeTagTypes {
 }
 
 class NoteKnowledgeTag {
-  const NoteKnowledgeTag({required this.type, required this.label});
+  const NoteKnowledgeTag({
+    required this.type,
+    required this.label,
+    this.colorValue,
+  });
 
   final String type;
   final String label;
+  final int? colorValue;
 
   factory NoteKnowledgeTag.fromJson(Object? value) {
     if (value is Map) {
       return NoteKnowledgeTag(
         type: NoteKnowledgeTagTypes.normalize(value['type']?.toString()),
         label: value['label']?.toString().trim() ?? '',
+        colorValue: _tagColorFromJson(
+          value['colorValue'] ?? value['color'] ?? value['colorHex'],
+        ),
       );
     }
     return NoteKnowledgeTag.parse(value?.toString() ?? '');
@@ -142,12 +150,104 @@ class NoteKnowledgeTag {
     return '$normalizedType:$trimmedLabel';
   }
 
+  int get resolvedColorValue {
+    return colorValue ?? _stableTagColorValue(metadataText);
+  }
+
   Map<String, Object?> toJson() {
     return {
       'type': NoteKnowledgeTagTypes.normalize(type),
       'label': label.trim(),
+      if (colorValue != null) 'colorValue': colorValue,
     };
   }
+}
+
+class NoteTextRangeTag {
+  const NoteTextRangeTag({
+    required this.id,
+    required this.start,
+    required this.end,
+    required this.tag,
+  });
+
+  final String id;
+  final int start;
+  final int end;
+  final NoteKnowledgeTag tag;
+
+  factory NoteTextRangeTag.fromJson(Map<String, Object?> json) {
+    return NoteTextRangeTag(
+      id: json['id']?.toString() ?? 'range-1',
+      start: json['start'] is int ? json['start'] as int : 0,
+      end: json['end'] is int ? json['end'] as int : 0,
+      tag: NoteKnowledgeTag.fromJson(json['tag']),
+    );
+  }
+
+  bool get isValid => start >= 0 && end > start && tag.label.trim().isNotEmpty;
+
+  NoteTextRangeTag clampToTextLength(int length) {
+    final normalizedLength = length < 0 ? 0 : length;
+    final clampedStart = start.clamp(0, normalizedLength).toInt();
+    final clampedEnd = end.clamp(0, normalizedLength).toInt();
+    return NoteTextRangeTag(
+      id: id,
+      start: clampedStart,
+      end: clampedEnd,
+      tag: tag,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'start': start,
+      'end': end,
+      'tag': tag.toJson(),
+    };
+  }
+}
+
+const List<int> noteTagColorSlots = [
+  0xFF2563EB,
+  0xFF059669,
+  0xFF7C3AED,
+  0xFFEA580C,
+  0xFFDC2626,
+  0xFF0D9488,
+  0xFFDB2777,
+  0xFF475569,
+];
+
+int _stableTagColorValue(String seed) {
+  var hash = 0;
+  for (final codeUnit in seed.codeUnits) {
+    hash = (hash * 31 + codeUnit) & 0x7fffffff;
+  }
+  if (hash == 0) {
+    return noteTagColorSlots.first;
+  }
+  return noteTagColorSlots[hash % noteTagColorSlots.length];
+}
+
+int? _tagColorFromJson(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  final raw = value?.toString().trim();
+  if (raw == null || raw.isEmpty) {
+    return null;
+  }
+  final normalized = raw
+      .replaceFirst('#', '')
+      .replaceFirst('0x', '')
+      .replaceFirst('0X', '');
+  final argb = normalized.length == 6 ? 'FF$normalized' : normalized;
+  return int.tryParse(argb, radix: 16);
 }
 
 List<NoteKnowledgeTag> _tagsFromJson(Object? value) {
@@ -166,6 +266,17 @@ String _metadataTextFromTags(List<NoteKnowledgeTag> tags) {
       .where((value) => value.isNotEmpty)
       .join('\n')
       .trim();
+}
+
+List<NoteTextRangeTag> _rangeTagsFromJson(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+  return value
+      .whereType<Map>()
+      .map((item) => NoteTextRangeTag.fromJson(Map<String, Object?>.from(item)))
+      .where((tag) => tag.isValid)
+      .toList(growable: false);
 }
 
 String stableNoteContentHash(String value) {
@@ -424,6 +535,7 @@ class NoteBlock {
     this.searchRole = NoteSearchRoles.none,
     this.searchAliases = const [],
     this.tags = const [],
+    this.rangeTags = const [],
     this.level = 0,
     this.rows = const [],
     this.nodes = const [],
@@ -441,6 +553,7 @@ class NoteBlock {
   final String searchRole;
   final List<String> searchAliases;
   final List<NoteKnowledgeTag> tags;
+  final List<NoteTextRangeTag> rangeTags;
   final int level;
   final List<List<String>> rows;
   final List<NoteFlowchartNode> nodes;
@@ -459,6 +572,7 @@ class NoteBlock {
       searchRole: NoteSearchRoles.normalize(json['searchRole']?.toString()),
       searchAliases: _stringsFromJson(json['searchAliases']),
       tags: _tagsFromJson(json['tags']),
+      rangeTags: _rangeTagsFromJson(json['rangeTags']),
       level: json['level'] is int ? json['level'] as int : 0,
       rows: _rowsFromJson(json['rows']),
       nodes: _nodesFromJson(json['nodes']),
@@ -485,6 +599,8 @@ class NoteBlock {
             .where((alias) => alias.isNotEmpty)
             .toList(growable: false),
       if (tags.isNotEmpty) 'tags': tags.map((tag) => tag.toJson()).toList(),
+      if (rangeTags.isNotEmpty)
+        'rangeTags': rangeTags.map((tag) => tag.toJson()).toList(),
       if (level != 0) 'level': level,
       if (rows.isNotEmpty) 'rows': rows,
       if (nodes.isNotEmpty) 'nodes': nodes.map((node) => node.toJson()).toList(),
@@ -539,6 +655,12 @@ class NoteBlock {
     final tagMetadata = _metadataTextFromTags(tags);
     if (tagMetadata.isNotEmpty) {
       parts.add(tagMetadata);
+    }
+    final rangeTagMetadata = _metadataTextFromTags(
+      rangeTags.map((rangeTag) => rangeTag.tag).toList(growable: false),
+    );
+    if (rangeTagMetadata.isNotEmpty) {
+      parts.add(rangeTagMetadata);
     }
     return parts.join('\n').trim();
   }
@@ -617,6 +739,7 @@ class NoteBlock {
     String? searchRole,
     List<String>? searchAliases,
     List<NoteKnowledgeTag>? tags,
+    List<NoteTextRangeTag>? rangeTags,
     int? level,
     List<List<String>>? rows,
     List<NoteFlowchartNode>? nodes,
@@ -635,6 +758,7 @@ class NoteBlock {
       searchRole: searchRole ?? this.searchRole,
       searchAliases: searchAliases ?? this.searchAliases,
       tags: tags ?? this.tags,
+      rangeTags: rangeTags ?? this.rangeTags,
       level: level ?? this.level,
       rows: rows ?? this.rows,
       nodes: nodes ?? this.nodes,

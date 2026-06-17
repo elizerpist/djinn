@@ -380,7 +380,7 @@ void main() {
 
       expect(result.status, 'offline_search');
       expect(result.text, contains('graph válasz'));
-      expect(result.text, contains('Definíciók: energia'));
+      expect(result.text, contains('Definíciók\n- energia'));
       expect(result.text, contains('Táblázatos szabályok'));
       expect(DebugConsole.allText, contains('[LocalGraphAnswer] compose'));
     },
@@ -465,6 +465,54 @@ void main() {
     },
   );
 
+  test('offline graph answer is sectioned and groups citations by chunk', () async {
+    final service = LocalAnswerService(
+      openAiClient: _ThrowingAiClient(),
+      retriever: const _StaticRetriever([
+        SourceEvidence(
+          id: 'note:n1:block-flow:edge-8',
+          sourceType: EvidenceSourceType.flowchartEdge,
+          text: 'Súlyos? -> Oxygén [Igen]',
+          label: 'Jegyzet · Légzési elégtelenség · Flowchart · kapcsolat: Súlyos? -> Oxygén [Igen]',
+          validationState: ValidationState.validated,
+        ),
+        SourceEvidence(
+          id: 'note:n1:block-flow:node-6',
+          sourceType: EvidenceSourceType.flowchartNode,
+          text: 'Súlyos?',
+          label: 'Jegyzet · Légzési elégtelenség · Flowchart · node: Súlyos?',
+          validationState: ValidationState.validated,
+        ),
+        SourceEvidence(
+          id: 'note:n1:block-table:row-1',
+          sourceType: EvidenceSourceType.tableChunk,
+          text:
+              'súlyos légzési elégtelenség: magas áramlású oxygén | enyhe légzési elégtelenség: célzott oxygénterápia',
+          label: 'Jegyzet · Légzési elégtelenség · Táblázat · sor 1',
+          validationState: ValidationState.validated,
+        ),
+      ]),
+      citationVerifier: CitationVerifier(),
+      loadSettings: () async => AppSettings.defaults().copyWith(
+        answerMode: AnswerModes.offline,
+        localIndexingMode: LocalIndexingModes.keywordBm25,
+      ),
+      hasApiKey: () async => throw StateError('api key should not be checked'),
+      hasReadyDocuments: () async => true,
+    );
+
+    final result = await service.answer('súlyos?');
+
+    expect(result.text, contains('Folyamatkapcsolatok\n- Ha súlyos, akkor Oxygén.'));
+    expect(result.text, contains('Táblázatos szabályok\n- súlyos légzési elégtelenség'));
+    expect(result.text, isNot(contains('Források:')));
+    expect(result.text, isNot(contains('Súlyos? -> Oxygén')));
+    expect(result.citations.map((citation) => citation.sourceId), [
+      'note:n1:block-flow',
+      'note:n1:block-table',
+    ]);
+  });
+
   test('forced offline mixed search uses hybrid retriever path', () async {
     final retriever = _RecordingRetriever();
     final service = LocalAnswerService(
@@ -546,6 +594,49 @@ class _RecordingRetriever implements LocalRetriever {
     required int limit,
   }) async {
     return const [];
+  }
+}
+
+class _StaticRetriever implements LocalRetriever {
+  const _StaticRetriever(this.items);
+
+  final List<SourceEvidence> items;
+
+  @override
+  Future<List<SourceEvidence>> retrieve({
+    required List<double> queryVector,
+    required int limit,
+    required double minimumSimilarity,
+    String? query,
+    bool allowKeywordExpansion = false,
+  }) async {
+    return items.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<List<SourceEvidence>> retrieveLocalVector({
+    required String query,
+    required int limit,
+    required String mode,
+  }) async {
+    return items.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<List<SourceEvidence>> retrieveHybrid({
+    required String query,
+    required int limit,
+    required String vectorMode,
+  }) async {
+    return items.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<List<SourceEvidence>> retrieveOffline({
+    required String query,
+    required int limit,
+  }) async {
+    return items.take(limit).toList(growable: false);
   }
 }
 

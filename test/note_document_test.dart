@@ -190,6 +190,35 @@ void main() {
     expect(parsed.text, isNot(contains('state:')));
   });
 
+  test('serializes colored text range tags as searchable metadata only', () {
+    const block = NoteBlock(
+      id: 'text-1',
+      type: NoteBlockType.paragraph,
+      text: 'Enyhe esetben célzott oxygén, súlyos esetben high flow.',
+      rangeTags: [
+        NoteTextRangeTag(
+          id: 'range-1',
+          start: 31,
+          end: 37,
+          tag: NoteKnowledgeTag(
+            type: NoteKnowledgeTagTypes.state,
+            label: 'súlyos',
+            colorValue: 0xFFDC2626,
+          ),
+        ),
+      ],
+    );
+
+    final parsed = NoteBlock.fromJson(block.toJson());
+
+    expect(parsed.rangeTags.single.start, 31);
+    expect(parsed.rangeTags.single.end, 37);
+    expect(parsed.rangeTags.single.tag.colorValue, 0xFFDC2626);
+    expect(parsed.searchMetadataText, contains('state:súlyos'));
+    expect(parsed.plainText, contains('súlyos esetben high flow'));
+    expect(parsed.plainText, isNot(contains('state:')));
+  });
+
   test('list block preserves ordered list items and hierarchy', () {
     const block = NoteBlock(
       id: 'list-1',

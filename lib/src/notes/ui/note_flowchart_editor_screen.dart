@@ -159,9 +159,21 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
         'visible=${visible.left.toStringAsFixed(0)},${visible.top.toStringAsFixed(0)},${visible.width.toStringAsFixed(0)}x${visible.height.toStringAsFixed(0)}',
       );
     }
-    if (mounted) {
+    if (mounted && (_viewportLogTick == 1 || _viewportLogTick % 4 == 0)) {
       setState(() {});
     }
+  }
+
+  void _zoomCanvas(double factor) {
+    final current = _canvasController.value;
+    final currentScale = current.getMaxScaleOnAxis();
+    final targetScale = (currentScale * factor).clamp(0.22, 3.0).toDouble();
+    if ((targetScale - currentScale).abs() < 0.01) {
+      return;
+    }
+    final scale = targetScale / currentScale;
+    final next = Matrix4.copy(current)..scaleByDouble(scale, scale, scale, 1.0);
+    _canvasController.value = next;
   }
 
   _CanvasGeometry _canvasGeometryFor(List<NoteFlowchartNode> nodes) {
@@ -920,7 +932,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
               InteractiveViewer(
                 transformationController: _canvasController,
                 constrained: false,
-                boundaryMargin: const EdgeInsets.all(20000),
+                boundaryMargin: const EdgeInsets.all(100000),
                 minScale: 0.22,
                 maxScale: 3.0,
                 child: DragTarget<NoteFlowchartNodeKind>(
@@ -1016,6 +1028,15 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
               Positioned(
                 right: 12,
                 top: 12,
+                child: _FlowchartZoomControls(
+                  onZoomIn: () => _zoomCanvas(1.18),
+                  onZoomOut: () => _zoomCanvas(1 / 1.18),
+                ),
+              ),
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 16,
                 child: _FlowchartPalette(
                   activeKind: _paletteDragKind,
                   onTapIgnored: (kind) => _log('palette tap ignored kind=${kind.wireName} reason=drag_only'),
@@ -1318,6 +1339,42 @@ class _ConnectorButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FlowchartZoomControls extends StatelessWidget {
+  const _FlowchartZoomControls({
+    required this.onZoomIn,
+    required this.onZoomOut,
+  });
+
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 2,
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(999),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            key: const ValueKey('note-flowchart-zoom-out'),
+            tooltip: 'Kicsinyítés',
+            onPressed: onZoomOut,
+            icon: const Icon(Icons.remove),
+          ),
+          IconButton(
+            key: const ValueKey('note-flowchart-zoom-in'),
+            tooltip: 'Nagyítás',
+            onPressed: onZoomIn,
+            icon: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }

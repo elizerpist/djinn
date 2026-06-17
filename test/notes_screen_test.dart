@@ -146,12 +146,21 @@ void main() {
     await tester.tap(find.text('Tagek'));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('notes-tag-dialog')), findsOneWidget);
+    expect(find.byKey(const ValueKey('tag-manager-sheet')), findsOneWidget);
     await tester.enterText(
-      find.byKey(const ValueKey('notes-tag-input')),
-      'topic:légzési elégtelenség, type:terápia',
+      find.byKey(const ValueKey('tag-manager-name')),
+      'légzési elégtelenség',
     );
-    await tester.tap(find.byKey(const ValueKey('notes-tag-save')));
+    await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-manager-type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('type').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'terápia');
+    await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
     await tester.pumpAndSettle();
 
     final updated = (await repository.listNotes()).single;

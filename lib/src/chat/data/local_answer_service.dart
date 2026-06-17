@@ -2,6 +2,7 @@ import '../../ai/ai_client.dart';
 import '../../ai/ai_client_resolver.dart';
 import '../../ai/ai_provider.dart';
 import '../../debug/debug_console.dart';
+import '../../local_store/entities.dart';
 import '../../openai/openai_client.dart';
 import '../../rag/models/source_evidence.dart';
 import '../../rag/retrieval/local_retriever.dart';
@@ -334,6 +335,81 @@ class LocalAnswerService implements AnswerService {
     );
   }
 
+  List<ChatCitation> _toGroupedChatCitations(List<SourceEvidence> evidence) {
+    final grouped = <String, List<SourceEvidence>>{};
+    for (final item in evidence) {
+      grouped.putIfAbsent(_citationGroupId(item), () => <SourceEvidence>[]).add(item);
+    }
+    return grouped.entries.map((entry) {
+      final items = entry.value;
+      final first = items.first;
+      final sourceType = _groupSourceType(items);
+      return ChatCitation(
+        documentId: first.documentId ?? '',
+        title: _compactCitationTitle(first.label),
+        page: first.pageNumber,
+        section: null,
+        excerpt: _groupExcerpt(items),
+        sourceId: entry.key,
+        sourceType: sourceType.wireName,
+        sourceLabel: _compactCitationTitle(first.label),
+        validationState: first.validationState.wireName,
+      );
+    }).toList(growable: false);
+  }
+
+  String _citationGroupId(SourceEvidence evidence) {
+    final parts = evidence.id.split(':');
+    if (parts.length >= 3 && parts.first == 'note') {
+      return parts.take(3).join(':');
+    }
+    return evidence.id.replaceFirst(
+      RegExp(r':(?:part|item|row|node|edge)-[^:]+$'),
+      '',
+    );
+  }
+
+  String _compactCitationTitle(String label) {
+    final parts = label
+        .split(' · ')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.length >= 3) {
+      return parts.take(3).join(' · ');
+    }
+    final colon = label.indexOf(':');
+    return colon == -1 ? label.trim() : label.substring(0, colon).trim();
+  }
+
+  EvidenceSourceType _groupSourceType(List<SourceEvidence> items) {
+    if (items.any((item) =>
+        item.sourceType == EvidenceSourceType.flowchartEdge ||
+        item.sourceType == EvidenceSourceType.flowchartNode)) {
+      return EvidenceSourceType.flowchartEdge;
+    }
+    if (items.any((item) => item.sourceType == EvidenceSourceType.tableChunk)) {
+      return EvidenceSourceType.tableChunk;
+    }
+    return items.first.sourceType;
+  }
+
+  String _groupExcerpt(List<SourceEvidence> items) {
+    final seen = <String>{};
+    final lines = <String>[];
+    for (final item in items) {
+      final text = item.text.trim();
+      if (text.isEmpty || !seen.add(text.toLowerCase())) {
+        continue;
+      }
+      lines.add(text);
+      if (lines.length >= 6) {
+        break;
+      }
+    }
+    return lines.join('\n\n');
+  }
+
   String _retrievalQuery({
     required String question,
     required String conversationContext,
@@ -450,26 +526,18 @@ class LocalAnswerService implements AnswerService {
       question: question,
       evidence: results,
     );
-    final excerpts = results
-        .map((item) {
-          final page = item.pageNumber == null
-              ? ''
-              : ' ${item.pageNumber}. oldal';
-          return '- ${item.label}$page: ${item.text}';
-        })
-        .join('\n');
     final intro = hybrid
-        ? 'Offline hybrid graph találatokból épített válasz. '
+        ? 'Offline hybrid graph találatokból épített válasz.'
         : modelBacked
-        ? 'Offline vektoros graph találatokból épített válasz. '
-        : 'Offline keresési találatokból épített graph válasz. ';
+        ? 'Offline vektoros graph találatokból épített válasz.'
+        : 'Offline keresési találatokból épített graph válasz.';
     return LocalAnswerResult(
       text:
           '$intro'
-          'Ez nem AI által generált válasz.\n\n'
-          '$graphAnswer\n\nForrások:\n$excerpts',
+          '\nEz nem AI által generált válasz.\n\n'
+          '$graphAnswer',
       status: 'offline_search',
-      citations: results.map(_toChatCitation).toList(growable: false),
+      citations: _toGroupedChatCitations(results),
     );
   }
 
@@ -498,9 +566,9 @@ class LocalAnswerService implements AnswerService {
           continue;
         }
         if (line.contains('->')) {
-          processes.add(line);
+          processes.add(_formatFlowchartRelation(line));
         } else if (line.contains('|')) {
-          tables.add(line.replaceAll('|', ' -> '));
+          tables.add(_formatTableRule(line));
         } else if (RegExp(r'^[^:]{2,48}:').hasMatch(line) ||
             RegExp(r'^[^=]{2,48}=').hasMatch(line)) {
           definitions.add(line);
@@ -515,22 +583,70 @@ class LocalAnswerService implements AnswerService {
     );
     final sentences = <String>[];
     if (definitions.isNotEmpty) {
-      sentences.add('Definíciók: ${definitions.take(3).join('; ')}.');
+      sentences.add(_answerSection('Definíciók', definitions.take(3)));
     }
     if (processes.isNotEmpty) {
-      sentences.add('Folyamatkapcsolatok: ${processes.take(4).join('; ')}.');
+      sentences.add(_answerSection('Folyamatkapcsolatok', processes.take(4)));
     }
     if (tables.isNotEmpty) {
-      sentences.add('Táblázatos szabályok: ${tables.take(4).join('; ')}.');
+      sentences.add(_answerSection('Táblázatos szabályok', tables.take(4)));
     }
     if (facts.isNotEmpty) {
-      sentences.add('Kapcsolt tények: ${facts.take(4).join('; ')}.');
+      sentences.add(_answerSection('Kapcsolt tények', facts.take(4)));
     }
     if (sentences.isEmpty) {
       return 'A lokális graph talált forrásokat, de nem tudott belőlük '
           'összefoglaló szabályt képezni.';
     }
     return sentences.join('\n');
+  }
+
+  String _answerSection(String title, Iterable<String> items) {
+    final lines = items
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .map((item) => '- ${item.replaceAll('\n', '\n  ')}')
+        .toList(growable: false);
+    return '$title\n${lines.join('\n')}';
+  }
+
+  String _formatTableRule(String line) {
+    return line
+        .split('|')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .join('\n');
+  }
+
+  String _formatFlowchartRelation(String line) {
+    final match = RegExp(r'^\s*(.+?)\s*->\s*(.+?)(?:\s*\[(.*?)\])?\s*$')
+        .firstMatch(line);
+    if (match == null) {
+      return line;
+    }
+    final from = match.group(1)?.trim() ?? '';
+    final to = match.group(2)?.trim() ?? '';
+    final label = match.group(3)?.trim() ?? '';
+    final condition = _decisionPhrase(from);
+    final normalizedLabel = _normalizeEvidenceText(label);
+    if (normalizedLabel == 'igen' || normalizedLabel == 'yes') {
+      return 'Ha $condition, akkor $to.';
+    }
+    if (normalizedLabel == 'nem' || normalizedLabel == 'no') {
+      return 'Ha nem $condition, akkor $to.';
+    }
+    if (normalizedLabel.isEmpty || normalizedLabel == 'kimenet') {
+      return '$from után $to.';
+    }
+    return 'Ha $condition: $label, akkor $to.';
+  }
+
+  String _decisionPhrase(String value) {
+    final trimmed = value.trim().replaceFirst(RegExp(r'\?$'), '');
+    if (trimmed.isEmpty) {
+      return '';
+    }
+    return '${trimmed[0].toLowerCase()}${trimmed.substring(1)}';
   }
 
   Future<bool> _hasKey(AiProvider provider) {

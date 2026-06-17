@@ -337,7 +337,12 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
     if (label.isEmpty) {
       return;
     }
-    final tag = NoteKnowledgeTag(type: _selectedTagType, label: label);
+    final tagSeed = NoteKnowledgeTag(type: _selectedTagType, label: label);
+    final tag = NoteKnowledgeTag(
+      type: _selectedTagType,
+      label: label,
+      colorValue: tagSeed.resolvedColorValue,
+    );
     onChanged(
       block.copyWith(
         tags: [...block.tags, tag],
@@ -562,6 +567,7 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
       if (label.isNotEmpty) {
         chips.add(_metadataChip(
           'Tag: ${NoteKnowledgeTagTypes.normalize(tag.type)} $label',
+          color: Color(tag.resolvedColorValue),
         ));
       }
     }
@@ -576,6 +582,7 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
       if (label.isNotEmpty && !directTagKeys.contains(key)) {
         chips.add(_metadataChip(
           'Örökölt tag: ${NoteKnowledgeTagTypes.normalize(tag.type)} $label',
+          color: Color(tag.resolvedColorValue),
         ));
       }
     }
@@ -659,9 +666,12 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
     );
   }
 
-  Widget _metadataChip(String label) {
+  Widget _metadataChip(String label, {Color? color}) {
+    final chipColor = color ?? const Color(0xFF64748B);
     return Chip(
       label: Text(label),
+      backgroundColor: chipColor.withValues(alpha: 0.11),
+      labelStyle: TextStyle(color: chipColor, fontWeight: FontWeight.w700),
       visualDensity: VisualDensity.compact,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );

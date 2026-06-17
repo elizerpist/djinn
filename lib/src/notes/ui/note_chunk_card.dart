@@ -144,7 +144,13 @@ class NoteChunkCard extends StatelessWidget {
     for (final tag in block.tags) {
       final label = _tagLabel('Tag', tag);
       if (label != null) {
-        chips.add(_StatusChip(label: label, color: const Color(0xFF7C3AED)));
+        chips.add(_StatusChip(label: label, color: Color(tag.resolvedColorValue)));
+      }
+    }
+    for (final rangeTag in block.rangeTags) {
+      final label = _tagLabel('Részlet tag', rangeTag.tag);
+      if (label != null) {
+        chips.add(_StatusChip(label: label, color: Color(rangeTag.tag.resolvedColorValue)));
       }
     }
     final directTagKeys = {
@@ -157,7 +163,7 @@ class NoteChunkCard extends StatelessWidget {
       if (!directTagKeys.contains(key)) {
         final label = _tagLabel('Örökölt tag', tag);
         if (label != null) {
-          chips.add(_StatusChip(label: label, color: const Color(0xFF0F766E)));
+          chips.add(_StatusChip(label: label, color: Color(tag.resolvedColorValue)));
         }
       }
     }
@@ -263,20 +269,62 @@ class _ParagraphBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = block.text.trim();
-    if (text.isEmpty) {
+    final text = block.text;
+    if (text.trim().isEmpty) {
       return const _EmptyBody();
     }
-    return SelectableText(
-      text,
-      style: TextStyle(
-        fontSize: block.type == NoteBlockType.heading ? 18 : 14,
-        fontWeight: block.type == NoteBlockType.heading ? FontWeight.w800 : FontWeight.w500,
-        color: const Color(0xFF111827),
-        height: 1.35,
-      ),
+    final style = TextStyle(
+      fontSize: block.type == NoteBlockType.heading ? 18 : 14,
+      fontWeight: block.type == NoteBlockType.heading
+          ? FontWeight.w800
+          : FontWeight.w500,
+      color: const Color(0xFF111827),
+      height: 1.35,
     );
+    if (block.rangeTags.isEmpty) {
+      return SelectableText(text.trim(), style: style);
+    }
+    return SelectableText.rich(_taggedTextSpan(text, block.rangeTags, style));
   }
+}
+
+TextSpan _taggedTextSpan(
+  String text,
+  List<NoteTextRangeTag> rangeTags,
+  TextStyle style,
+) {
+  final validTags = rangeTags
+      .map((tag) => tag.clampToTextLength(text.length))
+      .where((tag) => tag.isValid)
+      .toList()
+    ..sort((a, b) => a.start.compareTo(b.start));
+  if (validTags.isEmpty) {
+    return TextSpan(style: style, text: text.trim());
+  }
+  final spans = <TextSpan>[];
+  var cursor = 0;
+  for (final rangeTag in validTags) {
+    if (rangeTag.start < cursor) {
+      continue;
+    }
+    if (rangeTag.start > cursor) {
+      spans.add(TextSpan(text: text.substring(cursor, rangeTag.start)));
+    }
+    spans.add(TextSpan(
+      text: text.substring(rangeTag.start, rangeTag.end),
+      style: TextStyle(
+        backgroundColor: Color(
+          rangeTag.tag.resolvedColorValue,
+        ).withValues(alpha: 0.22),
+        fontWeight: FontWeight.w800,
+      ),
+    ));
+    cursor = rangeTag.end;
+  }
+  if (cursor < text.length) {
+    spans.add(TextSpan(text: text.substring(cursor)));
+  }
+  return TextSpan(style: style, children: spans);
 }
 
 class _ListBody extends StatelessWidget {

@@ -158,7 +158,7 @@ void main() {
     expect(opened, citation);
   });
 
-  testWidgets('renders table citation as a compact structured card', (
+  testWidgets('renders table citation as a compact source link', (
     tester,
   ) async {
     final message = ChatMessage(
@@ -187,12 +187,14 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey('citation-card-table-1')), findsOneWidget);
-    expect(find.text('Tünet'), findsOneWidget);
-    expect(find.text('Arcparesis'), findsOneWidget);
+    expect(find.byKey(const ValueKey('citation-table-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('citation-card-table-1')), findsNothing);
+    expect(find.text('Táblázatból kinyert részlet'), findsOneWidget);
+    expect(find.text('Tünet'), findsNothing);
+    expect(find.text('Arcparesis'), findsNothing);
   });
 
-  testWidgets('renders flowchart citation as a relationship card', (
+  testWidgets('renders flowchart citation as a compact source link', (
     tester,
   ) async {
     final message = ChatMessage(
@@ -221,11 +223,9 @@ void main() {
       ),
     );
 
-    expect(
-      find.byKey(const ValueKey('citation-card-flow-1:e1')),
-      findsOneWidget,
-    );
-    expect(find.textContaining('ABCDE vizsgálat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('citation-flow-1:e1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('citation-card-flow-1:e1')), findsNothing);
+    expect(find.textContaining('ABCDE vizsgálat'), findsNothing);
     expect(find.byIcon(Icons.account_tree_outlined), findsOneWidget);
   });
 
