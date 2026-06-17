@@ -109,6 +109,59 @@ void main() {
     expect(find.text('Jegyzetek'), findsOneWidget);
   });
 
+  testWidgets('header menu opens the tag usage guide', (tester) async {
+    final repository = MemoryNoteRepository();
+    await tester.pumpWidget(MaterialApp(home: NotesScreen(repository: repository)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('notes-header-menu')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tagek'), findsOneWidget);
+    await tester.tap(find.text('Tagek'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('notes-tag-dialog')), findsOneWidget);
+    expect(find.text('Direct tag'), findsOneWidget);
+    expect(find.text('Örökölt tag'), findsOneWidget);
+  });
+
+  testWidgets('selected-note menu opens note tag assignment dialog', (tester) async {
+    final repository = MemoryNoteRepository();
+    final note = await repository.createDocumentNote(
+      title: 'Légzési elégtelenség',
+      document: const NoteDocument(blocks: [
+        NoteBlock(id: 'p1', type: NoteBlockType.paragraph, text: 'Oxigénterápia'),
+      ]),
+    );
+    await tester.pumpWidget(MaterialApp(home: NotesScreen(repository: repository)));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(ValueKey('note-box-${note.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('notes-selection-menu')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tagek'), findsOneWidget);
+    await tester.tap(find.text('Tagek'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('notes-tag-dialog')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('notes-tag-input')),
+      'topic:légzési elégtelenség, type:terápia',
+    );
+    await tester.tap(find.byKey(const ValueKey('notes-tag-save')));
+    await tester.pumpAndSettle();
+
+    final updated = (await repository.listNotes()).single;
+    final document = NoteDocument.fromPayload(updated.payloadJson);
+    expect(document.tags.map((tag) => '${tag.type}:${tag.label}'), [
+      'topic:légzési elégtelenség',
+      'type:terápia',
+    ]);
+  });
+
 
   testWidgets('header menu imports exported notes into the current library', (tester) async {
     final repository = MemoryNoteRepository();

@@ -724,6 +724,9 @@ Tartomány | Teendő | Áramlás
       final joined = results.map((item) => item.text).join('\n');
 
       expect(joined, contains('Bolognai spagetti'));
+      expect(joined, contains('ragu'));
+      expect(joined, contains('paradicsomos alap'));
+      expect(joined, contains('hagymát és fokhagymát'));
       expect(joined, isNot(contains('DO2')));
       expect(joined, isNot(contains('VO2')));
       expect(joined, isNot(contains('légzési elégtelenség akkor áll fenn')));

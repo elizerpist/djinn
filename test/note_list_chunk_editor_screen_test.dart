@@ -52,4 +52,36 @@ void main() {
     expect(latest!.title, 'Felszerelés lista');
     expect(latest!.plainText, startsWith('Felszerelés lista'));
   });
+
+  testWidgets('list editor autosaves typed item tags', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteListChunkEditorScreen(
+          block: const NoteBlock(
+            id: 'list-1',
+            type: NoteBlockType.listItem,
+            listItems: [NoteListItem(id: 'item-1', text: 'High flow oxygen')],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('note-list-item-tags-item-1')),
+      'state:súlyos, topic:légzési elégtelenség',
+    );
+    await tester.pump();
+
+    expect(latest, isNotNull);
+    expect(latest!.listItems.first.tags.map((tag) => tag.type), [
+      NoteKnowledgeTagTypes.state,
+      NoteKnowledgeTagTypes.topic,
+    ]);
+    expect(latest!.listItems.first.tags.map((tag) => tag.label), [
+      'súlyos',
+      'légzési elégtelenség',
+    ]);
+  });
 }

@@ -389,6 +389,111 @@ void main() {
     expect(latest!.edges.single.toPortId, 'left-1');
   });
 
+  testWidgets('connector dots derive input output and shared port states', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: NoteBlock(
+            id: 'flow-port-state',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'a',
+                label: 'A',
+                x: 120,
+                y: 120,
+                ports: [
+                  NoteFlowchartPort(
+                    id: 'shared',
+                    side: NoteFlowchartPortSide.bottom,
+                    label: 'közös',
+                  ),
+                ],
+              ),
+              NoteFlowchartNode(
+                id: 'b',
+                label: 'B',
+                x: 120,
+                y: 320,
+                ports: [
+                  NoteFlowchartPort(
+                    id: 'in',
+                    side: NoteFlowchartPortSide.top,
+                    label: 'be',
+                  ),
+                  NoteFlowchartPort(
+                    id: 'out',
+                    side: NoteFlowchartPortSide.bottom,
+                    label: 'ki',
+                  ),
+                ],
+              ),
+            ],
+            edges: [
+              NoteFlowchartEdge(
+                id: 'edge-forward',
+                fromNodeId: 'a',
+                fromPortId: 'shared',
+                toNodeId: 'b',
+                toPortId: 'in',
+                label: '',
+              ),
+              NoteFlowchartEdge(
+                id: 'edge-back',
+                fromNodeId: 'b',
+                fromPortId: 'out',
+                toNodeId: 'a',
+                toPortId: 'shared',
+                label: '',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('note-flowchart-connector-state-a-shared-inputAndOutput')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-flowchart-connector-outer-a-shared')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-flowchart-connector-state-b-in-inputOnly')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-flowchart-connector-state-b-out-outputOnly')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('loop-closing edges are exposed separately from normal edges', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: NoteBlock(
+            id: 'flow-loop',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(id: 'a', label: 'A', x: 120, y: 120),
+              NoteFlowchartNode(id: 'b', label: 'B', x: 120, y: 320),
+            ],
+            edges: [
+              NoteFlowchartEdge(id: 'edge-forward', fromNodeId: 'a', toNodeId: 'b', label: ''),
+              NoteFlowchartEdge(id: 'edge-back', fromNodeId: 'b', toNodeId: 'a', label: ''),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('note-flowchart-edge-edge-forward')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-loop-edge-edge-back')), findsOneWidget);
+  });
+
   testWidgets('all edge labels can delete non decision edges', (tester) async {
     NoteBlock? latest;
     await tester.pumpWidget(

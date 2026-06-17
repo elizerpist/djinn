@@ -188,4 +188,76 @@ void main() {
     expect(find.text('Tag: VO2'), findsOneWidget);
   });
 
+  testWidgets('typed direct and inherited block tags are visible and editable', (
+    tester,
+  ) async {
+    NoteDocumentEditorResult? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () async {
+              result = await Navigator.of(context).push<NoteDocumentEditorResult>(
+                MaterialPageRoute(
+                  builder: (_) => const NoteDocumentEditorScreen(
+                    title: 'Tagelt jegyzet',
+                    document: NoteDocument(
+                      tags: [
+                        NoteKnowledgeTag(
+                          type: NoteKnowledgeTagTypes.topic,
+                          label: 'légzési elégtelenség',
+                        ),
+                      ],
+                      blocks: [
+                        NoteBlock(
+                          id: 'block-1',
+                          type: NoteBlockType.paragraph,
+                          text: 'Súlyos esetben high flow oxygen.',
+                          tags: [
+                            NoteKnowledgeTag(
+                              type: NoteKnowledgeTagTypes.state,
+                              label: 'súlyos',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('note-block-tag-type-block-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-block-tag-label-block-1')), findsOneWidget);
+    expect(find.text('Tag: state súlyos'), findsOneWidget);
+    expect(find.text('Örökölt tag: topic légzési elégtelenség'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('note-block-tag-type-block-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('branch').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('note-block-tag-label-block-1')),
+      'oxygén',
+    );
+    await tester.tap(find.byKey(const ValueKey('note-block-tag-add-block-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-document-save')));
+    await tester.pumpAndSettle();
+
+    expect(result, isNotNull);
+    expect(
+      result!.document.blocks.single.tags.map((tag) => '${tag.type}:${tag.label}'),
+      contains('branch:oxygén'),
+    );
+  });
+
 }

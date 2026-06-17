@@ -134,6 +134,62 @@ void main() {
     expect(parsed.searchMetadataText, contains('definition'));
   });
 
+  test('serializes typed document and block tags as search metadata only', () {
+    const document = NoteDocument(
+      tags: [
+        NoteKnowledgeTag(
+          type: NoteKnowledgeTagTypes.topic,
+          label: 'légzési elégtelenség',
+        ),
+      ],
+      blocks: [
+        NoteBlock(
+          id: 'block-1',
+          type: NoteBlockType.paragraph,
+          text: 'Súlyos esetben high flow oxygen.',
+          tags: [
+            NoteKnowledgeTag(
+              type: NoteKnowledgeTagTypes.state,
+              label: 'súlyos',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final parsed = NoteDocument.fromPayload(document.toPayloadJson());
+    final block = parsed.blocks.single;
+
+    expect(parsed.tags.single.type, NoteKnowledgeTagTypes.topic);
+    expect(parsed.tags.single.label, 'légzési elégtelenség');
+    expect(block.tags.single.type, NoteKnowledgeTagTypes.state);
+    expect(block.tags.single.label, 'súlyos');
+    expect(parsed.searchMetadataText, contains('topic:légzési elégtelenség'));
+    expect(block.searchMetadataText, contains('state:súlyos'));
+    expect(parsed.plainText, isNot(contains('topic:')));
+    expect(block.plainText, isNot(contains('state:')));
+  });
+
+  test('serializes list item tags without polluting list display text', () {
+    const item = NoteListItem(
+      id: 'i1',
+      text: 'magas áramlású oxygén',
+      tags: [
+        NoteKnowledgeTag(
+          type: NoteKnowledgeTagTypes.state,
+          label: 'súlyos',
+        ),
+      ],
+    );
+
+    final parsed = NoteListItem.fromJson(item.toJson());
+
+    expect(parsed.tags.single.type, NoteKnowledgeTagTypes.state);
+    expect(parsed.tags.single.label, 'súlyos');
+    expect(parsed.searchMetadataText, contains('state:súlyos'));
+    expect(parsed.text, isNot(contains('state:')));
+  });
+
   test('list block preserves ordered list items and hierarchy', () {
     const block = NoteBlock(
       id: 'list-1',

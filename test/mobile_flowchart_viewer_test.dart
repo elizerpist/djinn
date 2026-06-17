@@ -75,13 +75,58 @@ void main() {
     ],
   );
 
-  testWidgets('port-aware list view follows the HTML branch structure and shows dangling branches', (tester) async {
+  const loopPortData = MobileFlowchartData(
+    id: 'flow-loop-ports',
+    title: 'Loop és portok',
+    nodes: [
+      MobileFlowchartNode(
+        id: 'a',
+        label: 'A',
+        x: 120,
+        y: 120,
+        ports: [
+          MobileFlowchartPort(id: 'shared', side: 'bottom', label: 'közös'),
+        ],
+      ),
+      MobileFlowchartNode(
+        id: 'b',
+        label: 'B',
+        x: 120,
+        y: 320,
+        ports: [
+          MobileFlowchartPort(id: 'in', side: 'top', label: 'be'),
+          MobileFlowchartPort(id: 'out', side: 'bottom', label: 'ki'),
+        ],
+      ),
+    ],
+    edges: [
+      MobileFlowchartEdge(
+        id: 'edge-forward',
+        fromNodeId: 'a',
+        fromPortId: 'shared',
+        toNodeId: 'b',
+        toPortId: 'in',
+        label: '',
+      ),
+      MobileFlowchartEdge(
+        id: 'edge-back',
+        fromNodeId: 'b',
+        fromPortId: 'out',
+        toNodeId: 'a',
+        toPortId: 'shared',
+        label: '',
+      ),
+    ],
+  );
+
+  testWidgets('port-aware list view renders clean path steps without duplicate decisions', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(body: MobileFlowchartViewer(data: portAwareData))));
 
-    expect(find.byKey(const ValueKey('mobile-flowchart-branch-start-kimenet')), findsOneWidget);
-    expect(find.byKey(const ValueKey('mobile-flowchart-process-sat')), findsOneWidget);
+    expect(find.text('Start'), findsOneWidget);
+    expect(find.text('Szaturáció? 90-95%'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-process-sat')), findsNothing);
+    expect(find.byKey(const ValueKey('mobile-flowchart-process-decision')), findsNothing);
     expect(find.byKey(const ValueKey('mobile-flowchart-branch-sat-90-95')), findsOneWidget);
-    expect(find.byKey(const ValueKey('mobile-flowchart-process-decision')), findsOneWidget);
     expect(find.byKey(const ValueKey('mobile-flowchart-branch-decision-igen')), findsOneWidget);
     expect(find.byKey(const ValueKey('mobile-flowchart-process-transport')), findsOneWidget);
     expect(find.byKey(const ValueKey('mobile-flowchart-leaf-sat-80-alatt')), findsOneWidget);
@@ -104,6 +149,40 @@ void main() {
     expect(find.text('90-95%'), findsOneWidget);
     expect(find.text('Többágú döntés'), findsNothing);
     expect(find.text('Folyamat'), findsNothing);
+  });
+
+  testWidgets('canvas preview has no grid and marks loop and reused ports', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: MobileFlowchartViewer(data: loopPortData)),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('mobile-flowchart-selector-canvas')));
+    await tester.pumpAndSettle();
+
+    final gridPainters = tester
+        .widgetList<CustomPaint>(find.byType(CustomPaint))
+        .where((widget) => widget.painter.runtimeType.toString() == '_GridPainter');
+    expect(gridPainters, isEmpty);
+    expect(find.byKey(const ValueKey('mobile-flowchart-canvas-grid')), findsNothing);
+    expect(find.byKey(const ValueKey('mobile-flowchart-loop-edge-edge-back')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('mobile-flowchart-canvas-port-state-a-shared-inputAndOutput')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile-flowchart-canvas-port-outer-a-shared')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile-flowchart-canvas-port-state-b-in-inputOnly')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile-flowchart-canvas-port-state-b-out-outputOnly')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('switching between list and canvas does not reuse keyed list widgets', (tester) async {
@@ -149,9 +228,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('mobile-flowchart-guide-answer-kimenet')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('mobile-flowchart-guide-next')));
-    await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('mobile-flowchart-guide-next')), findsNothing);
     expect(find.byKey(const ValueKey('mobile-flowchart-guide-answer-90-95')), findsOneWidget);
     expect(find.byKey(const ValueKey('mobile-flowchart-guide-disabled-80-alatt')), findsOneWidget);
   });
@@ -236,7 +314,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('mobile-flowchart-guide-answer-igen')));
     await tester.pumpAndSettle();
     expect(find.textContaining('Célzott O2-terápia'), findsOneWidget);
-    expect(find.byKey(const ValueKey('mobile-flowchart-guide-next')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-guide-next')), findsNothing);
+    expect(find.byKey(const ValueKey('mobile-flowchart-guide-answer-igen')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-flowchart-guide-answer-nem')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('mobile-flowchart-guide-back')));
     await tester.pumpAndSettle();
