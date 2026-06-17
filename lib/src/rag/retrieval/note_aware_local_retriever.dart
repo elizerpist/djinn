@@ -360,6 +360,18 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         );
         return false;
       }
+      final narrowTerm = scope.primaryNarrowTerm;
+      if (scope.isNarrowState &&
+          narrowTerm != null &&
+          (seed.sourceType == EvidenceSourceType.flowchartNode ||
+              seed.sourceType == EvidenceSourceType.flowchartEdge) &&
+          !_coversScopeTerms(seed.searchableText, {narrowTerm})) {
+        DebugConsole.log(
+          '[LocalIndex] evidence pruned id=${seed.id} '
+          'reason=query_primary_state_mismatch term=$narrowTerm',
+        );
+        return false;
+      }
       return true;
     }).toList(growable: false);
   }
@@ -1007,15 +1019,18 @@ class NoteAwareLocalRetriever implements LocalRetriever {
 class _QueryScope {
   _QueryScope({
     required this.terms,
+    required this.orderedTerms,
     required this.facetTerms,
     required this.topicTerms,
+    required this.primaryNarrowTerm,
     required this.hasSymbol,
     required this.hasDefinitionIntent,
     required this.isNarrowState,
   });
 
   factory _QueryScope.from(String query) {
-    final terms = _scopeTerms(query);
+    final orderedTerms = _scopeTermList(query);
+    final terms = orderedTerms.toSet();
     final facetTerms = terms.where(_isFacetTerm).toSet();
     final definitionIntent = _hasDefinitionIntent(query, terms);
     final hasSymbol = RegExp(r'\b[A-Z]{2,}[0-9]*\b').hasMatch(query);
@@ -1028,8 +1043,10 @@ class _QueryScope {
         .toSet();
     return _QueryScope(
       terms: terms,
+      orderedTerms: orderedTerms,
       facetTerms: facetTerms,
       topicTerms: topicTerms,
+      primaryNarrowTerm: _standaloneNarrowTerm(orderedTerms, facetTerms),
       hasSymbol: hasSymbol,
       hasDefinitionIntent: definitionIntent,
       isNarrowState: isNarrowState,
@@ -1040,21 +1057,25 @@ class _QueryScope {
     if (hasFacetIntent || hasDefinitionIntent || hasSymbol || terms.isEmpty) {
       return this;
     }
+    final narrowTerm =
+        primaryNarrowTerm ?? _evidenceSpecificNarrowTerm(evidence, orderedTerms, facetTerms);
     final hasStateLikeSeed = evidence.any((item) {
       if (item.sourceType != EvidenceSourceType.tableChunk &&
           item.sourceType != EvidenceSourceType.flowchartNode &&
           item.sourceType != EvidenceSourceType.flowchartEdge) {
         return false;
       }
-      return _coversAnyScopeTerm(item.text, terms);
+      return narrowTerm != null && _coversScopeTerm(item.searchableText, narrowTerm);
     });
-    if (!hasStateLikeSeed || isNarrowState) {
+    if (!hasStateLikeSeed || (isNarrowState && primaryNarrowTerm == narrowTerm)) {
       return this;
     }
     return _QueryScope(
       terms: terms,
+      orderedTerms: orderedTerms,
       facetTerms: facetTerms,
       topicTerms: topicTerms,
+      primaryNarrowTerm: narrowTerm,
       hasSymbol: hasSymbol,
       hasDefinitionIntent: hasDefinitionIntent,
       isNarrowState: true,
@@ -1062,8 +1083,10 @@ class _QueryScope {
   }
 
   final Set<String> terms;
+  final List<String> orderedTerms;
   final Set<String> facetTerms;
   final Set<String> topicTerms;
+  final String? primaryNarrowTerm;
   final bool hasSymbol;
   final bool hasDefinitionIntent;
   final bool isNarrowState;
@@ -1094,10 +1117,14 @@ class _QueryScope {
 }
 
 Set<String> _scopeTerms(String value) {
+  return _scopeTermList(value).toSet();
+}
+
+List<String> _scopeTermList(String value) {
   return _scopeNormalize(value)
       .split(RegExp(r'\s+'))
       .where((term) => term.length > 2)
-      .toSet();
+      .toList(growable: false);
 }
 
 String _scopeNormalize(String value) {
@@ -1152,6 +1179,10 @@ bool _scopeContainsTerm(String normalized, String term) {
   return tokens.any((token) => _termsClose(token, term));
 }
 
+bool _coversScopeTerm(String value, String term) {
+  return _scopeContainsTerm(_scopeNormalize(value), term);
+}
+
 bool _coversAnyScopeTerm(String value, Set<String> terms) {
   if (terms.isEmpty) {
     return false;
@@ -1166,6 +1197,71 @@ bool _coversAllScopeTerms(String value, Set<String> terms) {
   }
   final normalized = _scopeNormalize(value);
   return terms.every((term) => _scopeContainsTerm(normalized, term));
+}
+
+String? _standaloneNarrowTerm(List<String> terms, Set<String> facetTerms) {
+  final candidates = terms
+      .where((term) => !facetTerms.contains(term))
+      .where((term) => !_isQuestionTerm(term))
+      .where((term) => !_isBranchValueTerm(term))
+      .toList(growable: false);
+  if (candidates.length == 1) {
+    return candidates.single;
+  }
+  return null;
+}
+
+String? _evidenceSpecificNarrowTerm(
+  List<SourceEvidence> evidence,
+  List<String> terms,
+  Set<String> facetTerms,
+) {
+  final candidates = terms
+      .where((term) => !facetTerms.contains(term))
+      .where((term) => !_isQuestionTerm(term))
+      .where((term) => !_isBranchValueTerm(term))
+      .toList(growable: false);
+  if (candidates.length <= 1) {
+    return candidates.isEmpty ? null : candidates.single;
+  }
+  final stateLikeEvidence = evidence
+      .where((item) =>
+          item.sourceType == EvidenceSourceType.tableChunk ||
+          item.sourceType == EvidenceSourceType.flowchartNode ||
+          item.sourceType == EvidenceSourceType.flowchartEdge)
+      .toList(growable: false);
+  if (stateLikeEvidence.isEmpty) {
+    return null;
+  }
+  final counts = <String, int>{};
+  for (final term in candidates) {
+    counts[term] = stateLikeEvidence
+        .where((item) => _coversScopeTerm(item.searchableText, term))
+        .length;
+  }
+  final presentCounts = counts.entries.where((entry) => entry.value > 0);
+  if (presentCounts.length < 2) {
+    return null;
+  }
+  final maxCount = presentCounts
+      .map((entry) => entry.value)
+      .reduce((first, second) => first > second ? first : second);
+  final minCount = presentCounts
+      .map((entry) => entry.value)
+      .reduce((first, second) => first < second ? first : second);
+  if (minCount >= maxCount) {
+    return null;
+  }
+  for (final term in candidates) {
+    if (counts[term] == minCount) {
+      return term;
+    }
+  }
+  return null;
+}
+
+bool _isBranchValueTerm(String term) {
+  return const {'igen', 'nem', 'yes', 'no'}.contains(term);
 }
 
 bool _termsClose(String first, String second) {
@@ -1916,17 +2012,19 @@ class _GraphLink {
   final String reason;
 
   int get priority {
-    if (type == 'definition' && reason.startsWith('symbol:')) {
+    if (type == 'table_companion') {
       return 0;
     }
-    if (type == 'definition' && reason.startsWith('query_terms:')) {
+    if (type == 'definition' && reason.startsWith('symbol:')) {
       return 1;
     }
+    if (type == 'definition' && reason.startsWith('query_terms:')) {
+      return 2;
+    }
     return switch (type) {
-      'definition' => 2,
-      'branch_value' => 3,
-      'table_join' => 4,
-      'table_companion' => 5,
+      'definition' => 3,
+      'branch_value' => 4,
+      'table_join' => 5,
       'semantic_keyword' => 6,
       'flowchart' => 7,
       _ => 8,

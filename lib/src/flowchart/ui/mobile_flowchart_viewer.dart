@@ -510,12 +510,14 @@ class _FlowchartListView extends StatelessWidget {
       }
       final childBranches = _branchesFor(data, target);
       final targetIsDecision = _isDecisionNode(target);
-      if (!targetIsDecision) {
+      final showTargetCard =
+          !targetIsDecision || (!_isDecisionNode(node) && !_isStartNode(node));
+      if (showTargetCard) {
         widgets.add(
           _ProcessCard(
             key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-process-${target.id}')),
             node: target,
-            terminal: childBranches.isEmpty,
+            terminal: childBranches.isEmpty && !targetIsDecision,
           ),
         );
       }
@@ -1246,7 +1248,12 @@ class _FlowchartGuideView extends StatelessWidget {
             if (item.target == null)
               _GuideDisabledChoice(key: ValueKey('mobile-flowchart-guide-disabled-${item.key}'), label: item.label)
             else
-              _GuideChoice(key: ValueKey('mobile-flowchart-guide-answer-${item.key}'), branch: item, onTap: () => onAnswer(item)),
+              _GuideChoice(
+                key: ValueKey('mobile-flowchart-guide-answer-${item.key}'),
+                branch: item,
+                showTargetLabel: item.source.id != branch.source.id,
+                onTap: () => onAnswer(item),
+              ),
       ],
     );
   }
@@ -1300,14 +1307,23 @@ class _GuideCard extends StatelessWidget {
 }
 
 class _GuideChoice extends StatelessWidget {
-  const _GuideChoice({super.key, required this.branch, required this.onTap});
+  const _GuideChoice({
+    super.key,
+    required this.branch,
+    required this.onTap,
+    this.showTargetLabel = true,
+  });
 
   final _ResolvedBranch branch;
   final VoidCallback onTap;
+  final bool showTargetLabel;
 
   @override
   Widget build(BuildContext context) {
     final color = _isYes(branch.label) ? const Color(0xFF16613B) : _isNo(branch.label) ? const Color(0xFF8A3428) : const Color(0xFF374151);
+    final targetLabel = showTargetLabel && branch.target?.label.trim().isNotEmpty == true
+        ? branch.target!.label.trim()
+        : 'Választás';
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(10),
@@ -1321,7 +1337,7 @@ class _GuideChoice extends StatelessWidget {
             child: Row(children: [
               _AnswerChip(label: branch.label, color: color),
               const SizedBox(width: 8),
-              Expanded(child: Text(branch.target?.label.trim().isNotEmpty == true ? branch.target!.label.trim() : 'Tovább', style: const TextStyle(fontWeight: FontWeight.w800))),
+              Expanded(child: Text(targetLabel, style: const TextStyle(fontWeight: FontWeight.w800))),
             ]),
           ),
         ),

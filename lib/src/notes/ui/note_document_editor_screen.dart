@@ -450,8 +450,6 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
       children: [
         _searchMetadataTagSummary(context),
         const SizedBox(height: 8),
-        _typedTagEditor(),
-        const SizedBox(height: 8),
         TextFormField(
           key: ValueKey('note-block-search-context-${block.id}'),
           initialValue: block.searchContext ?? '',
@@ -485,6 +483,8 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
             }
           },
         ),
+        const SizedBox(height: 8),
+        _typedTagEditor(),
         const SizedBox(height: 8),
         TextFormField(
           key: ValueKey('note-block-search-aliases-${block.id}'),
