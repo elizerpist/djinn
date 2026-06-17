@@ -450,6 +450,8 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
       children: [
         _searchMetadataTagSummary(context),
         const SizedBox(height: 8),
+        _typedTagEditor(),
+        const SizedBox(height: 8),
         TextFormField(
           key: ValueKey('note-block-search-context-${block.id}'),
           initialValue: block.searchContext ?? '',
@@ -503,8 +505,6 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
-        _typedTagEditor(),
         if (warning != null) ...[
           const SizedBox(height: 8),
           Text(
@@ -573,51 +573,66 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
   }
 
   Widget _typedTagEditor() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 140,
-          child: DropdownButtonFormField<String>(
-            key: ValueKey('note-block-tag-type-${block.id}'),
-            initialValue: _selectedTagType,
-            decoration: const InputDecoration(
-              labelText: 'Tag típus',
-              border: OutlineInputBorder(),
-            ),
-            items: [
-              for (final type in NoteKnowledgeTagTypes.values)
-                DropdownMenuItem(value: type, child: Text(type)),
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _selectedTagType = value);
-              }
-            },
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TextField(
-            key: ValueKey('note-block-tag-label-${block.id}'),
-            controller: _tagLabelController,
-            decoration: const InputDecoration(
-              labelText: 'Tag',
-              hintText: 'pl. súlyos, terápia, oxygen',
-              border: OutlineInputBorder(),
-            ),
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _addTypedTag(),
-          ),
-        ),
-        const SizedBox(width: 8),
-        IconButton.filledTonal(
-          key: ValueKey('note-block-tag-add-${block.id}'),
-          tooltip: 'Tag hozzáadása',
-          onPressed: _addTypedTag,
-          icon: const Icon(Icons.add),
-        ),
+    final typeField = DropdownButtonFormField<String>(
+      key: ValueKey('note-block-tag-type-${block.id}'),
+      initialValue: _selectedTagType,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Tag típus',
+        border: OutlineInputBorder(),
+      ),
+      items: [
+        for (final type in NoteKnowledgeTagTypes.values)
+          DropdownMenuItem(value: type, child: Text(type)),
       ],
+      onChanged: (value) {
+        if (value != null) {
+          setState(() => _selectedTagType = value);
+        }
+      },
+    );
+    final labelField = TextField(
+      key: ValueKey('note-block-tag-label-${block.id}'),
+      controller: _tagLabelController,
+      decoration: const InputDecoration(
+        labelText: 'Tag',
+        hintText: 'pl. súlyos, terápia, oxygen',
+        border: OutlineInputBorder(),
+      ),
+      textInputAction: TextInputAction.done,
+      onSubmitted: (_) => _addTypedTag(),
+    );
+    final addButton = IconButton.filledTonal(
+      key: ValueKey('note-block-tag-add-${block.id}'),
+      tooltip: 'Tag hozzáadása',
+      onPressed: _addTypedTag,
+      icon: const Icon(Icons.add),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 360) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(width: double.infinity, child: typeField),
+              const SizedBox(height: 8),
+              labelField,
+              const SizedBox(height: 8),
+              Align(alignment: Alignment.centerRight, child: addButton),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: 176, child: typeField),
+            const SizedBox(width: 8),
+            Expanded(child: labelField),
+            const SizedBox(width: 8),
+            addButton,
+          ],
+        );
+      },
     );
   }
 

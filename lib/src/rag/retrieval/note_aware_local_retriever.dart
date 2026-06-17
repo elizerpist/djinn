@@ -1075,7 +1075,7 @@ class _QueryScope {
 
   bool get allowSymbolExpansion => hasSymbol || allowDefinitionExpansion;
 
-  bool get keepTableCompanions => hasFacetIntent || isNarrowState;
+  bool get keepTableCompanions => hasFacetIntent || (isNarrowState && terms.length <= 3);
 
   bool branchSignalAllowed(_BranchSignal branch) {
     if (!isNarrowState || terms.isEmpty) {
@@ -1469,11 +1469,11 @@ class LocalKnowledgeGraphExpander {
     if (!id.startsWith('note:')) {
       return null;
     }
-    final blockIndex = id.indexOf(':block-');
-    if (blockIndex <= 0) {
+    final noteEnd = id.indexOf(':', 'note:'.length);
+    if (noteEnd <= 'note:'.length) {
       return null;
     }
-    return id.substring(0, blockIndex);
+    return id.substring(0, noteEnd);
   }
 
   String? _rowGroupId(String id) {

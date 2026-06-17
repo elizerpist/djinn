@@ -509,12 +509,13 @@ class _FlowchartListView extends StatelessWidget {
         continue;
       }
       final childBranches = _branchesFor(data, target);
-      if (childBranches.isEmpty) {
+      final targetIsDecision = _isDecisionNode(target);
+      if (!targetIsDecision) {
         widgets.add(
           _ProcessCard(
             key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-process-${target.id}')),
             node: target,
-            terminal: true,
+            terminal: childBranches.isEmpty,
           ),
         );
       }
@@ -1227,7 +1228,7 @@ class _FlowchartGuideView extends StatelessWidget {
       );
     }
     final target = branch.target;
-    final outgoing = target == null ? <_ResolvedBranch>[] : _branchesFor(data, target);
+    final outgoing = _guideBranchesForAnswer(data, branch);
     return _GuidePanel(
       children: [
         if (canGoBack) _GuideBackButton(onBack: onBack),
@@ -1601,6 +1602,40 @@ bool _isStartNode(MobileFlowchartNode node) {
   final role = node.role.trim().toLowerCase();
   final shape = node.shape.trim().toLowerCase();
   return role == 'start' || shape == 'start_end';
+}
+
+bool _isDecisionNode(MobileFlowchartNode node) {
+  final kind = node.kind.trim().toLowerCase();
+  final shape = node.shape.trim().toLowerCase();
+  return kind == 'multi_decision' ||
+      kind == 'binary_decision' ||
+      shape == 'decision';
+}
+
+List<_ResolvedBranch> _guideBranchesForAnswer(
+  MobileFlowchartData data,
+  _ResolvedBranch branch,
+) {
+  final target = branch.target;
+  if (target == null) {
+    return const [];
+  }
+  if (_isDecisionNode(target)) {
+    return _branchesFor(data, target);
+  }
+  final sourceBranches = _branchesFor(data, branch.source);
+  if (sourceBranches.length > 1) {
+    return sourceBranches;
+  }
+  final branches = _branchesFor(data, target);
+  if (branches.length != 1) {
+    return branches;
+  }
+  final next = branches.single.target;
+  if (next != null && _isDecisionNode(next)) {
+    return _branchesFor(data, next);
+  }
+  return branches;
 }
 
 _PortUsageState _portUsageState(
