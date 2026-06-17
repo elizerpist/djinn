@@ -221,6 +221,7 @@ class _NotesScreenState extends State<NotesScreen> {
       ),
       const PopupMenuItem<String>(value: 'new-folder', child: Text('Új mappa')),
       const PopupMenuItem<String>(value: 'import', child: Text('Import')),
+      const PopupMenuItem<String>(value: 'tags', child: Text('Tagek')),
       if (_notes.isNotEmpty) const PopupMenuItem<String>(value: 'select-all', child: Text('Összes kijelölése')),
       const PopupMenuDivider(),
       const PopupMenuItem<_NoteSortMode>(
@@ -242,6 +243,7 @@ class _NotesScreenState extends State<NotesScreen> {
         PopupMenuItem(value: 'chunks', child: Text('Chunkok megtekintése')),
         PopupMenuItem(value: 'index', child: Text('Indexelés / újraindexelés')),
         PopupMenuItem(value: 'audit', child: Text('Kinyert tartalom audit')),
+        PopupMenuItem(value: 'tags', child: Text('Tagek')),
         PopupMenuItem(value: 'move', child: Text('Mozgatás mappába')),
         PopupMenuItem(value: 'export', child: Text('Export')),
         PopupMenuItem(value: 'share', child: Text('Megosztás')),
@@ -273,6 +275,10 @@ class _NotesScreenState extends State<NotesScreen> {
       await _importNotes();
       return;
     }
+    if (value == 'tags') {
+      await _showTagGuideDialog();
+      return;
+    }
     if (value == 'select-all') {
       setState(() => _selectedNoteIds = _notes.map((note) => note.id).toSet());
       return;
@@ -297,6 +303,10 @@ class _NotesScreenState extends State<NotesScreen> {
       final note = selected.single;
       _exitSelection();
       await _openValidationCard(note);
+      return;
+    }
+    if (value == 'tags') {
+      await _showNoteTagDialog(selected.single);
       return;
     }
     if (value == 'index') {
@@ -391,6 +401,82 @@ class _NotesScreenState extends State<NotesScreen> {
       return;
     }
     await widget.repository.updateNoteDocument(note.id, title: trimmed, document: note.document);
+    await _load();
+  }
+
+  Future<void> _showTagGuideDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('notes-tag-dialog'),
+        title: const Text('Tagek'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Direct tag'),
+            SizedBox(height: 6),
+            Text('Örökölt tag'),
+            SizedBox(height: 12),
+            Text('Formátum: topic:légzési elégtelenség, state:súlyos, type:terápia.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showNoteTagDialog(NoteItem note) async {
+    final controller = TextEditingController(
+      text: note.document.tags.map((tag) => tag.metadataText).join(', '),
+    );
+    final tags = await showDialog<List<NoteKnowledgeTag>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('notes-tag-dialog'),
+        title: const Text('Jegyzet tagek'),
+        content: TextField(
+          key: const ValueKey('notes-tag-input'),
+          controller: controller,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Tagek',
+            hintText: 'topic:légzési elégtelenség, type:terápia',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            key: const ValueKey('notes-tag-save'),
+            onPressed: () => Navigator.of(context).pop(
+              NoteKnowledgeTag.parseMany(controller.text),
+            ),
+            child: const Text('Mentés'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (tags == null) {
+      return;
+    }
+    await widget.repository.updateNoteDocument(
+      note.id,
+      title: note.title,
+      document: note.document.copyWith(tags: tags),
+    );
+    _exitSelection();
     await _load();
   }
 

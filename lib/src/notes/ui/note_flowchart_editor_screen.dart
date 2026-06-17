@@ -884,6 +884,10 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     final visibleRect = _visibleCanvasRect(geometry.size);
     final visibleNodes = _visibleNodes(canvasNodes, nodeSizes, visibleRect);
     final visibleEdges = _visibleEdges(_block.edges, canvasNodesById, nodeSizes, visibleRect.inflate(240));
+    final loopEdgeIds = {
+      for (final edge in _block.edges)
+        if (_isLoopClosingNoteEdge(_block.edges, edge)) edge.id,
+    };
     if (_viewportLogTick == 0) {
       _log(
         'canvas build size=${geometry.size.width.toStringAsFixed(0)}x${geometry.size.height.toStringAsFixed(0)} '
@@ -941,10 +945,18 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                                   painter: _FlowchartEdgePainter(
                                     nodes: canvasNodes,
                                     edges: visibleEdges,
+                                    loopEdgeIds: loopEdgeIds,
                                     nodeSizes: nodeSizes,
                                   ),
                                 ),
                               ),
+                              for (final edge in visibleEdges)
+                                if (loopEdgeIds.contains(edge.id))
+                                  _LoopEdgeAnchor(
+                                    edge: edge,
+                                    nodes: canvasNodes,
+                                    nodeSizes: nodeSizes,
+                                  ),
                               for (final edge in visibleEdges)
                                 _EdgeLabel(
                                   edge: edge,
@@ -971,7 +983,10 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                                       child: _CanvasNodeCard(
                                         node: dataNodesById[canvasNode.id]!,
                                         size: nodeSizes[canvasNode.id] ?? _nodeSizeFor(canvasNode),
-                                        connectors: _connectorsForNode(dataNodesById[canvasNode.id]!),
+                                        connectors: _connectorsForNode(
+                                          dataNodesById[canvasNode.id]!,
+                                          edges: _block.edges,
+                                        ),
                                         linkSource: _linkSource,
                                         onMoveStart: () => _beginMove(dataNodesById[canvasNode.id]!),
                                         onMove: (delta) => _moveNode(
@@ -1234,9 +1249,12 @@ class _ConnectorButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = selected
         ? const Color(0xFF2563EB)
-        : connector.semantic == NoteFlowchartPortSemantic.normal
-            ? const Color(0xFF059669)
-            : const Color(0xFF7C3AED);
+        : switch (connector.usage) {
+            _ConnectorUsageState.inputOnly => const Color(0xFF0F766E),
+            _ConnectorUsageState.outputOnly => const Color(0xFF7C3AED),
+            _ConnectorUsageState.inputAndOutput => const Color(0xFF0F766E),
+            _ConnectorUsageState.unused => const Color(0xFF6B7280),
+          };
     final icon = switch (connector.semantic) {
       NoteFlowchartPortSemantic.yes => Icons.add,
       NoteFlowchartPortSemantic.no => Icons.remove,
@@ -1261,23 +1279,39 @@ class _ConnectorButton extends StatelessWidget {
                   duration: const Duration(milliseconds: 140),
                   curve: Curves.easeOutBack,
                   scale: selected ? 1.28 : 1,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 120),
-                    width: selected ? 30 : 24,
-                    height: selected ? 30 : 24,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: color, width: selected ? 2.4 : 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withValues(alpha: selected ? 0.34 : 0.18),
-                          blurRadius: selected ? 12 : 6,
-                          offset: const Offset(0, 2),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (connector.usage == _ConnectorUsageState.inputAndOutput)
+                        DecoratedBox(
+                          key: ValueKey('note-flowchart-connector-outer-${connector.nodeId}-${connector.id}'),
+                          decoration: BoxDecoration(
+                            color: Colors.transparent,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF7C3AED), width: 2),
+                          ),
+                          child: const SizedBox.square(dimension: 34),
                         ),
-                      ],
-                    ),
-                    child: Icon(icon, size: connector.semantic == NoteFlowchartPortSemantic.normal ? 12 : 15, color: color),
+                      AnimatedContainer(
+                        key: ValueKey('note-flowchart-connector-state-${connector.nodeId}-${connector.id}-${connector.usage.name}'),
+                        duration: const Duration(milliseconds: 120),
+                        width: selected ? 30 : 24,
+                        height: selected ? 30 : 24,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: color, width: selected ? 2.4 : 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: color.withValues(alpha: selected ? 0.34 : 0.18),
+                              blurRadius: selected ? 12 : 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(icon, size: connector.semantic == NoteFlowchartPortSemantic.normal ? 12 : 15, color: color),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1505,6 +1539,49 @@ class _EdgeLabel extends StatelessWidget {
   }
 }
 
+class _LoopEdgeAnchor extends StatelessWidget {
+  const _LoopEdgeAnchor({
+    required this.edge,
+    required this.nodes,
+    required this.nodeSizes,
+  });
+
+  final NoteFlowchartEdge edge;
+  final List<NoteFlowchartNode> nodes;
+  final Map<String, Size> nodeSizes;
+
+  @override
+  Widget build(BuildContext context) {
+    final from = _nodeById(edge.fromNodeId);
+    final to = _nodeById(edge.toNodeId);
+    if (from == null || to == null) {
+      return const SizedBox.shrink();
+    }
+    final route = _routeEdge(edge, from, to, nodeSizes);
+    if (route.points.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final middle = route.points[route.points.length ~/ 2];
+    return Positioned(
+      key: ValueKey('note-flowchart-loop-edge-${edge.id}'),
+      left: middle.dx,
+      top: middle.dy,
+      width: 1,
+      height: 1,
+      child: const SizedBox.expand(),
+    );
+  }
+
+  NoteFlowchartNode? _nodeById(String id) {
+    for (final node in nodes) {
+      if (node.id == id) {
+        return node;
+      }
+    }
+    return null;
+  }
+}
+
 class _FlowchartGridPainter extends CustomPainter {
   const _FlowchartGridPainter({required this.step});
 
@@ -1536,23 +1613,18 @@ class _FlowchartEdgePainter extends CustomPainter {
   const _FlowchartEdgePainter({
     required this.nodes,
     required this.edges,
+    required this.loopEdgeIds,
     required this.nodeSizes,
   });
 
   final List<NoteFlowchartNode> nodes;
   final List<NoteFlowchartEdge> edges;
+  final Set<String> loopEdgeIds;
   final Map<String, Size> nodeSizes;
 
   @override
   void paint(Canvas canvas, Size size) {
     final nodesById = {for (final node in nodes) node.id: node};
-    final paint = Paint()
-      ..color = const Color(0xFF7C3AED)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    final arrowPaint = Paint()
-      ..color = const Color(0xFF7C3AED)
-      ..style = PaintingStyle.fill;
     for (final edge in edges) {
       final from = nodesById[edge.fromNodeId];
       final to = nodesById[edge.toNodeId];
@@ -1563,12 +1635,36 @@ class _FlowchartEdgePainter extends CustomPainter {
       if (route.points.length < 2) {
         continue;
       }
+      final loop = loopEdgeIds.contains(edge.id);
+      final color = loop ? const Color(0xFFEA580C) : const Color(0xFF7C3AED);
+      final paint = Paint()
+        ..color = color
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke;
+      final arrowPaint = Paint()
+        ..color = color
+        ..style = PaintingStyle.fill;
       final path = Path()..moveTo(route.points.first.dx, route.points.first.dy);
       for (final point in route.points.skip(1)) {
         path.lineTo(point.dx, point.dy);
       }
-      canvas.drawPath(path, paint);
+      if (loop) {
+        _drawDashedPath(canvas, path, paint);
+      } else {
+        canvas.drawPath(path, paint);
+      }
       _drawArrow(canvas, route.points[route.points.length - 2], route.points.last, arrowPaint);
+    }
+  }
+
+  void _drawDashedPath(Canvas canvas, Path path, Paint paint) {
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = math.min(distance + 10, metric.length);
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+        distance += 16;
+      }
     }
   }
 
@@ -1587,7 +1683,10 @@ class _FlowchartEdgePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _FlowchartEdgePainter oldDelegate) {
-    return oldDelegate.nodes != nodes || oldDelegate.edges != edges || oldDelegate.nodeSizes != nodeSizes;
+    return oldDelegate.nodes != nodes ||
+        oldDelegate.edges != edges ||
+        oldDelegate.loopEdgeIds != loopEdgeIds ||
+        oldDelegate.nodeSizes != nodeSizes;
   }
 }
 
@@ -1882,6 +1981,8 @@ class _LinkEndpoint {
   final String edgeLabel;
 }
 
+enum _ConnectorUsageState { inputOnly, outputOnly, inputAndOutput, unused }
+
 class _ConnectorSpec {
   const _ConnectorSpec({
     required this.id,
@@ -1890,6 +1991,7 @@ class _ConnectorSpec {
     required this.unitOffset,
     required this.side,
     required this.semantic,
+    required this.usage,
     required this.tooltip,
     this.edgeLabel = '',
   });
@@ -1900,6 +2002,7 @@ class _ConnectorSpec {
   final Offset unitOffset;
   final NoteFlowchartPortSide side;
   final NoteFlowchartPortSemantic semantic;
+  final _ConnectorUsageState usage;
   final String tooltip;
   final String edgeLabel;
 }
@@ -1934,7 +2037,10 @@ List<NoteFlowchartPort> _portsForNode(NoteFlowchartNode node) {
   ];
 }
 
-List<_ConnectorSpec> _connectorsForNode(NoteFlowchartNode node) {
+List<_ConnectorSpec> _connectorsForNode(
+  NoteFlowchartNode node, {
+  List<NoteFlowchartEdge> edges = const [],
+}) {
   final size = _nodeSizeFor(node);
   final ports = _portsForNode(node);
   final grouped = <NoteFlowchartPortSide, List<NoteFlowchartPort>>{
@@ -1950,10 +2056,78 @@ List<_ConnectorSpec> _connectorsForNode(NoteFlowchartNode node) {
           unitOffset: _portUnitOffset(side, i, grouped[side]!.length),
           side: side,
           semantic: grouped[side]![i].semantic,
+          usage: _connectorUsageState(
+            edges,
+            node.id,
+            grouped[side]![i].id,
+          ),
           tooltip: grouped[side]![i].label.trim().isEmpty ? _sideLabel(side) : grouped[side]![i].label.trim(),
           edgeLabel: _edgeLabelForPort(grouped[side]![i]),
         ),
   ];
+}
+
+_ConnectorUsageState _connectorUsageState(
+  List<NoteFlowchartEdge> edges,
+  String nodeId,
+  String connectorId,
+) {
+  final input = edges.any(
+    (edge) => edge.toNodeId == nodeId && edge.toPortId == connectorId,
+  );
+  final output = edges.any(
+    (edge) => edge.fromNodeId == nodeId && edge.fromPortId == connectorId,
+  );
+  if (input && output) {
+    return _ConnectorUsageState.inputAndOutput;
+  }
+  if (input) {
+    return _ConnectorUsageState.inputOnly;
+  }
+  if (output) {
+    return _ConnectorUsageState.outputOnly;
+  }
+  return _ConnectorUsageState.unused;
+}
+
+bool _isLoopClosingNoteEdge(
+  List<NoteFlowchartEdge> edges,
+  NoteFlowchartEdge edge,
+) {
+  return _hasNotePathBetween(
+    edges,
+    startNodeId: edge.toNodeId,
+    targetNodeId: edge.fromNodeId,
+    ignoredEdgeId: edge.id,
+  );
+}
+
+bool _hasNotePathBetween(
+  List<NoteFlowchartEdge> edges, {
+  required String startNodeId,
+  required String targetNodeId,
+  required String ignoredEdgeId,
+}) {
+  final visited = <String>{};
+  bool visit(String nodeId) {
+    if (nodeId == targetNodeId) {
+      return true;
+    }
+    if (!visited.add(nodeId)) {
+      return false;
+    }
+    final outgoing = edges.where(
+      (edge) => edge.id != ignoredEdgeId && edge.fromNodeId == nodeId,
+    );
+    for (final edge in outgoing) {
+      if (visit(edge.toNodeId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  return visit(startNodeId);
 }
 
 Offset _portUnitOffset(NoteFlowchartPortSide side, int index, int count) {
@@ -2018,6 +2192,7 @@ Offset _edgeStart(NoteFlowchartEdge edge, NoteFlowchartNode from, Map<String, Si
             unitOffset: const Offset(0.5, 0.5),
             side: NoteFlowchartPortSide.bottom,
             semantic: NoteFlowchartPortSemantic.normal,
+            usage: _ConnectorUsageState.unused,
             tooltip: 'Kapcsolat',
           )
         : connectors.last,
@@ -2043,6 +2218,7 @@ Offset _edgeEnd(NoteFlowchartEdge edge, NoteFlowchartNode to, Map<String, Size> 
             unitOffset: const Offset(0.5, 0.5),
             side: NoteFlowchartPortSide.top,
             semantic: NoteFlowchartPortSemantic.normal,
+            usage: _ConnectorUsageState.unused,
             tooltip: 'Kapcsolat',
           )
         : connectors.first,
@@ -2080,6 +2256,7 @@ _ConnectorSpec _edgeStartConnector(
             unitOffset: const Offset(0.5, 0.5),
             side: NoteFlowchartPortSide.bottom,
             semantic: NoteFlowchartPortSemantic.normal,
+            usage: _ConnectorUsageState.unused,
             tooltip: 'Kapcsolat',
           )
         : connectors.last,
@@ -2107,6 +2284,7 @@ _ConnectorSpec _edgeEndConnector(
             unitOffset: const Offset(0.5, 0.5),
             side: NoteFlowchartPortSide.top,
             semantic: NoteFlowchartPortSemantic.normal,
+            usage: _ConnectorUsageState.unused,
             tooltip: 'Kapcsolat',
           )
         : connectors.first,

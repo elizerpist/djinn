@@ -37,6 +37,7 @@ class NoteChunkBuilder {
     required NoteDocument document,
   }) {
     final chunks = <NoteChunkViewModel>[];
+    final documentSearchText = document.searchMetadataText;
     for (final block in document.blocks) {
       if (NoteSearchRoles.normalize(block.searchRole) ==
           NoteSearchRoles.ignore) {
@@ -55,7 +56,10 @@ class NoteChunkBuilder {
           kind: _kindFor(block.type),
           text: text,
           groupId: noteId,
-          searchText: block.searchMetadataText,
+          searchText: _joinSearchText([
+            documentSearchText,
+            block.searchMetadataText,
+          ]),
           isIndexFresh: block.isIndexFresh,
           needsReindex: block.needsReindex,
         ),
@@ -71,5 +75,13 @@ class NoteChunkBuilder {
       NoteBlockType.flowchart => NoteChunkKind.flowchart,
       NoteBlockType.heading || NoteBlockType.paragraph => NoteChunkKind.text,
     };
+  }
+
+  String _joinSearchText(List<String> values) {
+    return values
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .join('\n')
+        .trim();
   }
 }

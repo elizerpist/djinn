@@ -64,4 +64,46 @@ void main() {
     expect(padding.padding, const EdgeInsets.fromLTRB(8, 10, 8, 2));
   });
 
+  testWidgets('chunk card exposes direct inherited tags and edit action', (tester) async {
+    var edited = false;
+    const block = NoteBlock(
+      id: 'block-1',
+      type: NoteBlockType.paragraph,
+      text: 'High flow oxygen.',
+      tags: [
+        NoteKnowledgeTag(
+          type: NoteKnowledgeTagTypes.state,
+          label: 'súlyos',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NoteChunkCard(
+            block: block,
+            expanded: false,
+            inheritedTags: const [
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.topic,
+                label: 'légzési elégtelenség',
+              ),
+            ],
+            dragHandle: const Icon(Icons.drag_indicator),
+            onToggleExpanded: () {},
+            onOpenEditor: () {},
+            onEditTags: () => edited = true,
+            onDelete: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Tag: state súlyos'), findsOneWidget);
+    expect(find.text('Örökölt tag: topic légzési elégtelenség'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('note-chunk-tags-block-1')));
+    expect(edited, isTrue);
+  });
+
 }

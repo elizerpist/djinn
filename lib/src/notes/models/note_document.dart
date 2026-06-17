@@ -61,6 +61,113 @@ class NoteSearchRoles {
   }
 }
 
+class NoteKnowledgeTagTypes {
+  static const topic = 'topic';
+  static const type = 'type';
+  static const state = 'state';
+  static const symbol = 'symbol';
+  static const node = 'node';
+  static const branch = 'branch';
+  static const custom = 'custom';
+
+  static const values = [
+    topic,
+    type,
+    state,
+    symbol,
+    node,
+    branch,
+    custom,
+  ];
+
+  static String normalize(String? value) {
+    final normalized = value?.trim().toLowerCase().replaceAll(' ', '_') ?? '';
+    return values.contains(normalized) ? normalized : custom;
+  }
+}
+
+class NoteKnowledgeTag {
+  const NoteKnowledgeTag({required this.type, required this.label});
+
+  final String type;
+  final String label;
+
+  factory NoteKnowledgeTag.fromJson(Object? value) {
+    if (value is Map) {
+      return NoteKnowledgeTag(
+        type: NoteKnowledgeTagTypes.normalize(value['type']?.toString()),
+        label: value['label']?.toString().trim() ?? '',
+      );
+    }
+    return NoteKnowledgeTag.parse(value?.toString() ?? '');
+  }
+
+  static NoteKnowledgeTag parse(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return const NoteKnowledgeTag(
+        type: NoteKnowledgeTagTypes.custom,
+        label: '',
+      );
+    }
+    final separator = trimmed.indexOf(':');
+    if (separator <= 0) {
+      return NoteKnowledgeTag(
+        type: NoteKnowledgeTagTypes.custom,
+        label: trimmed,
+      );
+    }
+    final type = trimmed.substring(0, separator).trim();
+    final label = trimmed.substring(separator + 1).trim();
+    return NoteKnowledgeTag(
+      type: NoteKnowledgeTagTypes.normalize(type),
+      label: label,
+    );
+  }
+
+  static List<NoteKnowledgeTag> parseMany(String value) {
+    return value
+        .split(',')
+        .map(NoteKnowledgeTag.parse)
+        .where((tag) => tag.label.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
+  String get metadataText {
+    final normalizedType = NoteKnowledgeTagTypes.normalize(type);
+    final trimmedLabel = label.trim();
+    if (trimmedLabel.isEmpty) {
+      return '';
+    }
+    return '$normalizedType:$trimmedLabel';
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'type': NoteKnowledgeTagTypes.normalize(type),
+      'label': label.trim(),
+    };
+  }
+}
+
+List<NoteKnowledgeTag> _tagsFromJson(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+  return value
+      .map(NoteKnowledgeTag.fromJson)
+      .where((tag) => tag.label.trim().isNotEmpty)
+      .toList(growable: false);
+}
+
+String _metadataTextFromTags(List<NoteKnowledgeTag> tags) {
+  return tags
+      .map((tag) => tag.metadataText)
+      .where((value) => value.isNotEmpty)
+      .join('\n')
+      .trim();
+}
+
 String stableNoteContentHash(String value) {
   const offset = 0x811c9dc5;
   const prime = 0x01000193;
@@ -73,9 +180,14 @@ String stableNoteContentHash(String value) {
 }
 
 class NoteDocument {
-  const NoteDocument({required this.blocks, this.schemaVersion = 1});
+  const NoteDocument({
+    required this.blocks,
+    this.schemaVersion = 1,
+    this.tags = const [],
+  });
 
   final int schemaVersion;
+  final List<NoteKnowledgeTag> tags;
   final List<NoteBlock> blocks;
 
   factory NoteDocument.empty() {
@@ -104,6 +216,7 @@ class NoteDocument {
             schemaVersion: decoded['schemaVersion'] is int
                 ? decoded['schemaVersion'] as int
                 : 1,
+            tags: _tagsFromJson(decoded['tags']),
             blocks: parsedBlocks.isEmpty
                 ? NoteDocument.empty().blocks
                 : parsedBlocks,
@@ -171,8 +284,13 @@ class NoteDocument {
     return jsonEncode({
       'schemaVersion': schemaVersion,
       'type': 'document',
+      if (tags.isNotEmpty) 'tags': tags.map((tag) => tag.toJson()).toList(),
       'blocks': blocks.map((block) => block.toJson()).toList(),
     });
+  }
+
+  String get searchMetadataText {
+    return _metadataTextFromTags(tags);
   }
 
   String get plainText {
@@ -191,9 +309,13 @@ class NoteDocument {
     return '${value.substring(0, 177)}...';
   }
 
-  NoteDocument copyWith({List<NoteBlock>? blocks}) {
+  NoteDocument copyWith({
+    List<NoteBlock>? blocks,
+    List<NoteKnowledgeTag>? tags,
+  }) {
     return NoteDocument(
       schemaVersion: schemaVersion,
+      tags: tags ?? this.tags,
       blocks: blocks ?? this.blocks,
     );
   }
@@ -242,12 +364,14 @@ class NoteListItem {
     required this.text,
     this.level = 0,
     this.checked = false,
+    this.tags = const [],
   });
 
   final String id;
   final String text;
   final int level;
   final bool checked;
+  final List<NoteKnowledgeTag> tags;
 
   factory NoteListItem.fromJson(Map<String, Object?> json) {
     return NoteListItem(
@@ -255,6 +379,7 @@ class NoteListItem {
       text: json['text']?.toString() ?? '',
       level: json['level'] is int ? json['level'] as int : 0,
       checked: json['checked'] == true,
+      tags: _tagsFromJson(json['tags']),
     );
   }
 
@@ -264,15 +389,27 @@ class NoteListItem {
       'text': text,
       if (level != 0) 'level': level,
       if (checked) 'checked': true,
+      if (tags.isNotEmpty) 'tags': tags.map((tag) => tag.toJson()).toList(),
     };
   }
 
-  NoteListItem copyWith({String? id, String? text, int? level, bool? checked}) {
+  String get searchMetadataText {
+    return _metadataTextFromTags(tags);
+  }
+
+  NoteListItem copyWith({
+    String? id,
+    String? text,
+    int? level,
+    bool? checked,
+    List<NoteKnowledgeTag>? tags,
+  }) {
     return NoteListItem(
       id: id ?? this.id,
       text: text ?? this.text,
       level: level ?? this.level,
       checked: checked ?? this.checked,
+      tags: tags ?? this.tags,
     );
   }
 }
@@ -286,6 +423,7 @@ class NoteBlock {
     this.searchContext,
     this.searchRole = NoteSearchRoles.none,
     this.searchAliases = const [],
+    this.tags = const [],
     this.level = 0,
     this.rows = const [],
     this.nodes = const [],
@@ -302,6 +440,7 @@ class NoteBlock {
   final String? searchContext;
   final String searchRole;
   final List<String> searchAliases;
+  final List<NoteKnowledgeTag> tags;
   final int level;
   final List<List<String>> rows;
   final List<NoteFlowchartNode> nodes;
@@ -319,6 +458,7 @@ class NoteBlock {
       searchContext: json['searchContext']?.toString(),
       searchRole: NoteSearchRoles.normalize(json['searchRole']?.toString()),
       searchAliases: _stringsFromJson(json['searchAliases']),
+      tags: _tagsFromJson(json['tags']),
       level: json['level'] is int ? json['level'] as int : 0,
       rows: _rowsFromJson(json['rows']),
       nodes: _nodesFromJson(json['nodes']),
@@ -344,6 +484,7 @@ class NoteBlock {
             .map((alias) => alias.trim())
             .where((alias) => alias.isNotEmpty)
             .toList(growable: false),
+      if (tags.isNotEmpty) 'tags': tags.map((tag) => tag.toJson()).toList(),
       if (level != 0) 'level': level,
       if (rows.isNotEmpty) 'rows': rows,
       if (nodes.isNotEmpty) 'nodes': nodes.map((node) => node.toJson()).toList(),
@@ -395,6 +536,10 @@ class NoteBlock {
     parts.addAll(searchAliases.map((alias) => alias.trim()).where(
       (alias) => alias.isNotEmpty,
     ));
+    final tagMetadata = _metadataTextFromTags(tags);
+    if (tagMetadata.isNotEmpty) {
+      parts.add(tagMetadata);
+    }
     return parts.join('\n').trim();
   }
 
@@ -471,6 +616,7 @@ class NoteBlock {
     String? searchContext,
     String? searchRole,
     List<String>? searchAliases,
+    List<NoteKnowledgeTag>? tags,
     int? level,
     List<List<String>>? rows,
     List<NoteFlowchartNode>? nodes,
@@ -488,6 +634,7 @@ class NoteBlock {
       searchContext: searchContext ?? this.searchContext,
       searchRole: searchRole ?? this.searchRole,
       searchAliases: searchAliases ?? this.searchAliases,
+      tags: tags ?? this.tags,
       level: level ?? this.level,
       rows: rows ?? this.rows,
       nodes: nodes ?? this.nodes,

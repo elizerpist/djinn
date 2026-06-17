@@ -265,7 +265,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     required String query,
     required List<SourceEvidence> seeds,
   }) {
-    final scope = _QueryScope.from(query);
+    final scope = _QueryScope.from(query).forEvidence(seeds);
     final scopedSeeds = _filterByQueryScope(scope, seeds);
     if (scopedSeeds.length < 2) {
       return scopedSeeds;
@@ -801,7 +801,10 @@ class NoteAwareLocalRetriever implements LocalRetriever {
             label: '$baseLabel · listaelem ${i + 1}',
             validationState: state,
             documentId: chunk.noteId,
-            searchText: chunk.searchText,
+            searchText: _joinSearchText([
+              chunk.searchText,
+              block.listItems[i].searchMetadataText,
+            ]),
           ),
     ];
   }
@@ -969,6 +972,14 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     return expandedLimit;
   }
 
+  String _joinSearchText(List<String?> values) {
+    return values
+        .map((value) => value?.trim() ?? '')
+        .where((value) => value.isNotEmpty)
+        .join('\n')
+        .trim();
+  }
+
   EvidenceSourceType _sourceTypeFor(NoteChunkKind kind) {
     return switch (kind) {
       NoteChunkKind.table => EvidenceSourceType.tableChunk,
@@ -1008,9 +1019,9 @@ class _QueryScope {
     final facetTerms = terms.where(_isFacetTerm).toSet();
     final definitionIntent = _hasDefinitionIntent(query, terms);
     final hasSymbol = RegExp(r'\b[A-Z]{2,}[0-9]*\b').hasMatch(query);
-    final isNarrowState =
-        terms.length == 1 ||
-        terms.any((term) => const {'igen', 'nem', 'yes', 'no'}.contains(term));
+    final isNarrowState = terms.any(
+      (term) => const {'igen', 'nem', 'yes', 'no'}.contains(term),
+    );
     final topicTerms = terms
         .where((term) => !facetTerms.contains(term))
         .where((term) => !_isQuestionTerm(term))
@@ -1022,6 +1033,31 @@ class _QueryScope {
       hasSymbol: hasSymbol,
       hasDefinitionIntent: definitionIntent,
       isNarrowState: isNarrowState,
+    );
+  }
+
+  _QueryScope forEvidence(List<SourceEvidence> evidence) {
+    if (hasFacetIntent || hasDefinitionIntent || hasSymbol || terms.isEmpty) {
+      return this;
+    }
+    final hasStateLikeSeed = evidence.any((item) {
+      if (item.sourceType != EvidenceSourceType.tableChunk &&
+          item.sourceType != EvidenceSourceType.flowchartNode &&
+          item.sourceType != EvidenceSourceType.flowchartEdge) {
+        return false;
+      }
+      return _coversAnyScopeTerm(item.text, terms);
+    });
+    if (!hasStateLikeSeed || isNarrowState) {
+      return this;
+    }
+    return _QueryScope(
+      terms: terms,
+      facetTerms: facetTerms,
+      topicTerms: topicTerms,
+      hasSymbol: hasSymbol,
+      hasDefinitionIntent: hasDefinitionIntent,
+      isNarrowState: true,
     );
   }
 
@@ -1116,6 +1152,22 @@ bool _scopeContainsTerm(String normalized, String term) {
   return tokens.any((token) => _termsClose(token, term));
 }
 
+bool _coversAnyScopeTerm(String value, Set<String> terms) {
+  if (terms.isEmpty) {
+    return false;
+  }
+  final normalized = _scopeNormalize(value);
+  return terms.any((term) => _scopeContainsTerm(normalized, term));
+}
+
+bool _coversAllScopeTerms(String value, Set<String> terms) {
+  if (terms.isEmpty) {
+    return false;
+  }
+  final normalized = _scopeNormalize(value);
+  return terms.every((term) => _scopeContainsTerm(normalized, term));
+}
+
 bool _termsClose(String first, String second) {
   if (first == second) {
     return true;
@@ -1145,7 +1197,7 @@ class LocalKnowledgeGraphExpander {
     }
     final existingIds = existing.map((item) => item.id).toSet();
     final queryTerms = _terms(query).toSet();
-    final scope = _QueryScope.from(query);
+    final scope = _QueryScope.from(query).forEvidence(seeds);
     DebugConsole.log(
       '[LocalGraph] expand start seeds=${seeds.length} '
       'candidates=${candidates.length} queryTerms=${queryTerms.length}',
@@ -1311,7 +1363,23 @@ class LocalKnowledgeGraphExpander {
       );
       return null;
     }
+    if (_sameNoteScope(seed.id, candidate.id) &&
+        queryTerms.isNotEmpty &&
+        _coversAnyScopeTerm(seed.text, queryTerms) &&
+        _coversAnyScopeTerm(candidate.text, queryTerms) &&
+        !scope.isNarrowState) {
+      return _GraphLink('local_context', 'query_local_scope');
+    }
     if (_looksLikeFlowchart(candidate.text)) {
+      if (scope.isNarrowState &&
+          scope.terms.isNotEmpty &&
+          !_coversAllScopeTerms(candidate.text, scope.terms)) {
+        DebugConsole.log(
+          '[LocalGraph] link skipped source=${seed.id} target=${candidate.id} '
+          'reason=narrow_flowchart_scope',
+        );
+        return null;
+      }
       final flowTerms = _terms(candidate.text).toSet();
       final overlap = flowTerms.intersection(seedTerms).length;
       if (overlap >= 2) {
@@ -1328,11 +1396,25 @@ class LocalKnowledgeGraphExpander {
       }
       final tableTerms = candidateTerms;
       final overlap = tableTerms.intersection(seedTerms).length;
+      if (scope.isNarrowState &&
+          scope.terms.isNotEmpty &&
+          !_coversAllScopeTerms(candidate.text, scope.terms)) {
+        DebugConsole.log(
+          '[LocalGraph] link skipped source=${seed.id} target=${candidate.id} '
+          'reason=narrow_table_scope',
+        );
+        return null;
+      }
       if (overlap >= 2 || definitionKeys.intersection(seedTerms).isNotEmpty) {
         return _GraphLink('table_join', 'term_overlap:$overlap');
       }
     }
     final overlap = candidateTerms.intersection(seedTerms).length;
+    if (scope.isNarrowState &&
+        scope.terms.isNotEmpty &&
+        !_coversAllScopeTerms(candidate.text, scope.terms)) {
+      return null;
+    }
     if (overlap >= 3) {
       return _GraphLink('semantic_keyword', 'term_overlap:$overlap');
     }
@@ -1375,6 +1457,23 @@ class LocalKnowledgeGraphExpander {
     final first = _rowGroupId(a);
     final second = _rowGroupId(b);
     return first != null && first == second;
+  }
+
+  bool _sameNoteScope(String a, String b) {
+    final first = _noteScopeId(a);
+    final second = _noteScopeId(b);
+    return first != null && first == second;
+  }
+
+  String? _noteScopeId(String id) {
+    if (!id.startsWith('note:')) {
+      return null;
+    }
+    final blockIndex = id.indexOf(':block-');
+    if (blockIndex <= 0) {
+      return null;
+    }
+    return id.substring(0, blockIndex);
   }
 
   String? _rowGroupId(String id) {

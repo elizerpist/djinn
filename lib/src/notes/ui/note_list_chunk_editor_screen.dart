@@ -69,7 +69,9 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
 
   void _deleteItem(NoteListItem item) {
     if (_items.length == 1) {
-      _replaceItem(item.copyWith(text: '', level: 0, checked: false));
+      _replaceItem(
+        item.copyWith(text: '', level: 0, checked: false, tags: const []),
+      );
       return;
     }
     setState(() => _items = _items.where((candidate) => candidate.id != item.id).toList());
@@ -188,45 +190,65 @@ class _ListItemRow extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
-          child: Row(
+          child: Column(
             children: [
-              ReorderableDragStartListener(
-                index: index,
-                child: const SizedBox.square(
-                  dimension: 36,
-                  child: Icon(Icons.drag_indicator, color: Color(0xFF9CA3AF)),
-                ),
-              ),
-              Checkbox(
-                value: item.checked,
-                onChanged: (value) => onChanged(item.copyWith(checked: value ?? false)),
-              ),
-              Expanded(
-                child: TextFormField(
-                  key: ValueKey('note-list-item-${item.id}'),
-                  initialValue: item.text,
-                  decoration: const InputDecoration(
-                    hintText: 'Listaelem',
-                    border: InputBorder.none,
+              Row(
+                children: [
+                  ReorderableDragStartListener(
+                    index: index,
+                    child: const SizedBox.square(
+                      dimension: 36,
+                      child: Icon(Icons.drag_indicator, color: Color(0xFF9CA3AF)),
+                    ),
                   ),
-                  onChanged: (value) => onChanged(item.copyWith(text: value)),
+                  Checkbox(
+                    value: item.checked,
+                    onChanged: (value) => onChanged(item.copyWith(checked: value ?? false)),
+                  ),
+                  Expanded(
+                    child: TextFormField(
+                      key: ValueKey('note-list-item-${item.id}'),
+                      initialValue: item.text,
+                      decoration: const InputDecoration(
+                        hintText: 'Listaelem',
+                        border: InputBorder.none,
+                      ),
+                      onChanged: (value) => onChanged(item.copyWith(text: value)),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Kijjebb',
+                    onPressed: onOutdent,
+                    icon: const Icon(Icons.format_indent_decrease, size: 20),
+                  ),
+                  IconButton(
+                    tooltip: 'Beljebb',
+                    onPressed: onIndent,
+                    icon: const Icon(Icons.format_indent_increase, size: 20),
+                  ),
+                  IconButton(
+                    key: ValueKey('note-list-delete-${item.id}'),
+                    tooltip: 'Listaelem törlése',
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(52, 0, 8, 8),
+                child: TextFormField(
+                  key: ValueKey('note-list-item-tags-${item.id}'),
+                  initialValue: item.tags.map((tag) => tag.metadataText).join(', '),
+                  decoration: const InputDecoration(
+                    labelText: 'Tagek',
+                    hintText: 'pl. state:súlyos, topic:légzési elégtelenség',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (value) => onChanged(
+                    item.copyWith(tags: NoteKnowledgeTag.parseMany(value)),
+                  ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Kijjebb',
-                onPressed: onOutdent,
-                icon: const Icon(Icons.format_indent_decrease, size: 20),
-              ),
-              IconButton(
-                tooltip: 'Beljebb',
-                onPressed: onIndent,
-                icon: const Icon(Icons.format_indent_increase, size: 20),
-              ),
-              IconButton(
-                key: ValueKey('note-list-delete-${item.id}'),
-                tooltip: 'Listaelem törlése',
-                onPressed: onDelete,
-                icon: const Icon(Icons.close),
               ),
             ],
           ),

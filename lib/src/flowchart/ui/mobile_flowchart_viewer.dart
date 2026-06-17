@@ -93,6 +93,8 @@ class MobileFlowchartEdge {
 
 enum MobileFlowchartViewMode { list, canvas, guide }
 
+enum _PortUsageState { inputOnly, outputOnly, inputAndOutput, unused }
+
 class MobileFlowchartViewer extends StatefulWidget {
   const MobileFlowchartViewer({super.key, required this.data});
 
@@ -207,7 +209,6 @@ class _MobileFlowchartViewerState extends State<MobileFlowchartViewer> {
                   canGoBack: _guideBackStack.isNotEmpty,
                   pathLabel: _guidePathLabel(),
                   onAnswer: _chooseGuideAnswer,
-                  onNext: _advanceGuide,
                   onBack: _goGuideBack,
                 ),
             },
@@ -269,16 +270,6 @@ class _MobileFlowchartViewerState extends State<MobileFlowchartViewer> {
       _guideBackStack.add(current);
     }
     setState(() => _guideStep = _GuideStep.answer(branch));
-  }
-
-  void _advanceGuide() {
-    final step = _guideStep;
-    final target = step?.branch?.target;
-    if (target == null) {
-      return;
-    }
-    _guideBackStack.add(step!);
-    setState(() => _guideStep = _GuideStep.decision(target.id));
   }
 
   void _goGuideBack() {
@@ -463,12 +454,16 @@ class _FlowchartListView extends StatelessWidget {
     final keyCounts = <String, int>{};
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: _branchWidgets(
-        root,
-        path: const [],
-        visited: const {},
-        keyCounts: keyCounts,
-      ),
+      children: [
+        if (_isStartNode(root))
+          const _ListStartStep(),
+        ..._branchWidgets(
+          root,
+          path: const [],
+          visited: const {},
+          keyCounts: keyCounts,
+        ),
+      ],
     );
   }
 
@@ -513,24 +508,41 @@ class _FlowchartListView extends StatelessWidget {
         widgets.add(_LeafCard(key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-leaf-${node.id}-${branch.key}')), label: branch.label));
         continue;
       }
-      widgets.add(
-        _ProcessCard(
-          key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-process-${target.id}')),
-          node: target,
-          terminal: _branchesFor(data, target).isEmpty,
-        ),
-      );
+      final childBranches = _branchesFor(data, target);
+      if (childBranches.isEmpty) {
+        widgets.add(
+          _ProcessCard(
+            key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-process-${target.id}')),
+            node: target,
+            terminal: true,
+          ),
+        );
+      }
       if (visited.contains(target.id)) {
         widgets.add(_LeafCard(key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-cycle-${node.id}-${branch.key}')), label: 'Visszacsatolás'));
         continue;
       }
-      final childBranches = _branchesFor(data, target);
       if (childBranches.isNotEmpty) {
         widgets.add(_Arrow(key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-arrow-${node.id}-${target.id}-${branch.key}-children'))));
         widgets.addAll(_branchWidgets(target, path: nextPath, visited: {...visited, node.id}, keyCounts: keyCounts));
       }
     }
     return widgets;
+  }
+}
+
+class _ListStartStep extends StatelessWidget {
+  const _ListStartStep();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(bottom: 6),
+      child: Text(
+        'Start',
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF617080)),
+      ),
+    );
   }
 }
 
@@ -592,6 +604,13 @@ class _BranchCard extends StatelessWidget {
                           node.label.trim().isEmpty ? 'Döntés' : node.label.trim(),
                           style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF21313F), height: 1.22),
                         ),
+                        if (!_isYes(answer) && !_isNo(answer)) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            '${node.label.trim().isEmpty ? 'Döntés' : node.label.trim()} $answer',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF334155)),
+                          ),
+                        ],
                         const SizedBox(height: 6),
                         Wrap(
                           spacing: 6,
@@ -793,16 +812,20 @@ class _FlowchartCanvasView extends StatelessWidget {
                     height: size.height,
                     child: Stack(
                       children: [
-                        Positioned.fill(child: CustomPaint(painter: const _GridPainter(step: 24))),
                         Positioned.fill(child: CustomPaint(painter: _CanvasEdgePainter(data: data, layout: layout, bounds: bounds))),
                         for (final edge in data.edges)
                           if (nodes[edge.fromNodeId] != null && nodes[edge.toNodeId] != null)
                             _CanvasEdgeAnchor(edge: edge, data: data, layout: layout, bounds: bounds),
                         for (final edge in data.edges)
+                          if (nodes[edge.fromNodeId] != null &&
+                              nodes[edge.toNodeId] != null &&
+                              _isLoopClosingEdge(data, edge))
+                            _CanvasLoopEdgeAnchor(edge: edge, data: data, layout: layout, bounds: bounds),
+                        for (final edge in data.edges)
                           if (nodes[edge.fromNodeId] != null && nodes[edge.toNodeId] != null)
                             _CanvasEdgeLabel(edge: edge, data: data, layout: layout, bounds: bounds),
                         for (final node in data.nodes)
-                          _CanvasNodePreview(node: node, offset: layout[node.id]! - bounds.topLeft),
+                          _CanvasNodePreview(data: data, node: node, offset: layout[node.id]! - bounds.topLeft),
                       ],
                     ),
                   ),
@@ -838,8 +861,9 @@ class _FlowchartCanvasView extends StatelessWidget {
 }
 
 class _CanvasNodePreview extends StatelessWidget {
-  const _CanvasNodePreview({required this.node, required this.offset});
+  const _CanvasNodePreview({required this.data, required this.node, required this.offset});
 
+  final MobileFlowchartData data;
   final MobileFlowchartNode node;
   final Offset offset;
 
@@ -878,7 +902,9 @@ class _CanvasNodePreview extends StatelessWidget {
           for (final port in ports)
             _CanvasPortDot(
               key: ValueKey('mobile-flowchart-canvas-port-${node.id}-${port.id}'),
+              nodeId: node.id,
               port: port,
+              usage: _portUsageState(data, node.id, port.id),
               nodeSize: size,
               unitOffset: _portUnitOffset(port.side, ports.where((p) => p.side == port.side).toList().indexOf(port), ports.where((p) => p.side == port.side).length),
             ),
@@ -939,15 +965,29 @@ class _CanvasNodeShapePainter extends CustomPainter {
 }
 
 class _CanvasPortDot extends StatelessWidget {
-  const _CanvasPortDot({super.key, required this.port, required this.nodeSize, required this.unitOffset});
+  const _CanvasPortDot({
+    super.key,
+    required this.nodeId,
+    required this.port,
+    required this.usage,
+    required this.nodeSize,
+    required this.unitOffset,
+  });
 
+  final String nodeId;
   final MobileFlowchartPort port;
+  final _PortUsageState usage;
   final Size nodeSize;
   final Offset unitOffset;
 
   @override
   Widget build(BuildContext context) {
-    final color = port.semantic == 'normal' ? const Color(0xFF059669) : const Color(0xFF7C3AED);
+    final color = switch (usage) {
+      _PortUsageState.inputOnly => const Color(0xFF0F766E),
+      _PortUsageState.outputOnly => const Color(0xFF7C3AED),
+      _PortUsageState.inputAndOutput => const Color(0xFF0F766E),
+      _PortUsageState.unused => const Color(0xFF6B7280),
+    };
     final icon = switch (port.semantic) {
       'yes' => Icons.add,
       'no' => Icons.remove,
@@ -957,9 +997,25 @@ class _CanvasPortDot extends StatelessWidget {
     return Positioned(
       left: nodeSize.width * unitOffset.dx - 11,
       top: nodeSize.height * unitOffset.dy - 11,
-      child: DecoratedBox(
-        decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: color, width: 1.5)),
-        child: SizedBox.square(dimension: 22, child: Icon(icon, size: 12, color: color)),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (usage == _PortUsageState.inputAndOutput)
+            DecoratedBox(
+              key: ValueKey('mobile-flowchart-canvas-port-outer-$nodeId-${port.id}'),
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF7C3AED), width: 2),
+              ),
+              child: const SizedBox.square(dimension: 30),
+            ),
+          DecoratedBox(
+            key: ValueKey('mobile-flowchart-canvas-port-state-$nodeId-${port.id}-${usage.name}'),
+            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: color, width: 1.5)),
+            child: SizedBox.square(dimension: 22, child: Icon(icon, size: 12, color: color)),
+          ),
+        ],
       ),
     );
   }
@@ -975,25 +1031,42 @@ class _CanvasEdgePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final nodesById = {for (final node in data.nodes) node.id: node};
-    final paint = Paint()
-      ..color = const Color(0xFF7C3AED)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    final arrowPaint = Paint()
-      ..color = const Color(0xFF7C3AED)
-      ..style = PaintingStyle.fill;
     for (final edge in data.edges) {
       final from = nodesById[edge.fromNodeId];
       final to = nodesById[edge.toNodeId];
       if (from == null || to == null) continue;
       final route = _routeEdge(edge, from, to, layout).map((point) => point - bounds.topLeft).toList(growable: false);
       if (route.length < 2) continue;
+      final loop = _isLoopClosingEdge(data, edge);
+      final color = loop ? const Color(0xFFEA580C) : const Color(0xFF7C3AED);
+      final paint = Paint()
+        ..color = color
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke;
+      final arrowPaint = Paint()
+        ..color = color
+        ..style = PaintingStyle.fill;
       final path = Path()..moveTo(route.first.dx, route.first.dy);
       for (final point in route.skip(1)) {
         path.lineTo(point.dx, point.dy);
       }
-      canvas.drawPath(path, paint);
+      if (loop) {
+        _drawDashedPath(canvas, path, paint);
+      } else {
+        canvas.drawPath(path, paint);
+      }
       _drawArrow(canvas, route[route.length - 2], route.last, arrowPaint);
+    }
+  }
+
+  void _drawDashedPath(Canvas canvas, Path path, Paint paint) {
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = math.min(distance + 10, metric.length);
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+        distance += 16;
+      }
     }
   }
 
@@ -1028,6 +1101,34 @@ class _CanvasEdgeAnchor extends StatelessWidget {
     final middle = route[route.length ~/ 2];
     return Positioned(
       key: ValueKey('mobile-flowchart-canvas-edge-${edge.id}'),
+      left: middle.dx,
+      top: middle.dy,
+      width: 1,
+      height: 1,
+      child: const SizedBox.expand(),
+    );
+  }
+}
+
+class _CanvasLoopEdgeAnchor extends StatelessWidget {
+  const _CanvasLoopEdgeAnchor({required this.edge, required this.data, required this.layout, required this.bounds});
+
+  final MobileFlowchartEdge edge;
+  final MobileFlowchartData data;
+  final Map<String, Offset> layout;
+  final Rect bounds;
+
+  @override
+  Widget build(BuildContext context) {
+    final nodes = {for (final node in data.nodes) node.id: node};
+    final from = nodes[edge.fromNodeId];
+    final to = nodes[edge.toNodeId];
+    if (from == null || to == null) return const SizedBox.shrink();
+    final route = _routeEdge(edge, from, to, layout).map((point) => point - bounds.topLeft).toList(growable: false);
+    if (route.isEmpty) return const SizedBox.shrink();
+    final middle = route[route.length ~/ 2];
+    return Positioned(
+      key: ValueKey('mobile-flowchart-loop-edge-${edge.id}'),
       left: middle.dx,
       top: middle.dy,
       width: 1,
@@ -1076,27 +1177,6 @@ class _CanvasEdgeLabel extends StatelessWidget {
   }
 }
 
-class _GridPainter extends CustomPainter {
-  const _GridPainter({required this.step});
-
-  final double step;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final light = Paint()..color = const Color(0xFFEDE9FE)..strokeWidth = 0.7;
-    final strong = Paint()..color = const Color(0xFFD8B4FE)..strokeWidth = 1.0;
-    for (var x = 0.0; x <= size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), ((x / step).round() % 4 == 0) ? strong : light);
-    }
-    for (var y = 0.0; y <= size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), ((y / step).round() % 4 == 0) ? strong : light);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _GridPainter oldDelegate) => oldDelegate.step != step;
-}
-
 class _FlowchartGuideView extends StatelessWidget {
   const _FlowchartGuideView({
     super.key,
@@ -1105,7 +1185,6 @@ class _FlowchartGuideView extends StatelessWidget {
     required this.canGoBack,
     required this.pathLabel,
     required this.onAnswer,
-    required this.onNext,
     required this.onBack,
   });
 
@@ -1114,7 +1193,6 @@ class _FlowchartGuideView extends StatelessWidget {
   final bool canGoBack;
   final String pathLabel;
   final ValueChanged<_ResolvedBranch> onAnswer;
-  final VoidCallback onNext;
   final VoidCallback onBack;
 
   @override
@@ -1149,6 +1227,7 @@ class _FlowchartGuideView extends StatelessWidget {
       );
     }
     final target = branch.target;
+    final outgoing = target == null ? <_ResolvedBranch>[] : _branchesFor(data, target);
     return _GuidePanel(
       children: [
         if (canGoBack) _GuideBackButton(onBack: onBack),
@@ -1159,15 +1238,14 @@ class _FlowchartGuideView extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.3),
           ),
         ),
-        if (target != null && _branchesFor(data, target).isNotEmpty)
-          FilledButton.icon(
-            key: const ValueKey('mobile-flowchart-guide-next'),
-            onPressed: onNext,
-            icon: const Icon(Icons.arrow_forward),
-            label: const Text('Tovább a következő döntéshez', overflow: TextOverflow.ellipsis),
-          )
+        if (outgoing.isEmpty)
+          const _GuideDisabledChoice(label: 'Ág vége')
         else
-          const _GuideDisabledChoice(label: 'Ág vége'),
+          for (final item in outgoing)
+            if (item.target == null)
+              _GuideDisabledChoice(key: ValueKey('mobile-flowchart-guide-disabled-${item.key}'), label: item.label)
+            else
+              _GuideChoice(key: ValueKey('mobile-flowchart-guide-answer-${item.key}'), branch: item, onTap: () => onAnswer(item)),
       ],
     );
   }
@@ -1512,11 +1590,77 @@ IconData _shapeIcon(MobileFlowchartNode node) {
 String _nodeTypeText(MobileFlowchartNode node) {
   final kind = node.kind.trim().toLowerCase();
   final role = node.role.trim().toLowerCase();
-  if (role == 'start') return 'Kezdés';
+  if (role == 'start') return 'Start';
   if (role == 'end') return 'Vége';
   if (kind == 'multi_decision') return 'Többágú döntés';
   if (kind == 'binary_decision' || node.shape == 'decision') return 'Döntés';
   return 'Folyamat';
+}
+
+bool _isStartNode(MobileFlowchartNode node) {
+  final role = node.role.trim().toLowerCase();
+  final shape = node.shape.trim().toLowerCase();
+  return role == 'start' || shape == 'start_end';
+}
+
+_PortUsageState _portUsageState(
+  MobileFlowchartData data,
+  String nodeId,
+  String portId,
+) {
+  final input = data.edges.any(
+    (edge) => edge.toNodeId == nodeId && edge.toPortId == portId,
+  );
+  final output = data.edges.any(
+    (edge) => edge.fromNodeId == nodeId && edge.fromPortId == portId,
+  );
+  if (input && output) {
+    return _PortUsageState.inputAndOutput;
+  }
+  if (input) {
+    return _PortUsageState.inputOnly;
+  }
+  if (output) {
+    return _PortUsageState.outputOnly;
+  }
+  return _PortUsageState.unused;
+}
+
+bool _isLoopClosingEdge(MobileFlowchartData data, MobileFlowchartEdge edge) {
+  return _hasPathBetween(
+    data,
+    startNodeId: edge.toNodeId,
+    targetNodeId: edge.fromNodeId,
+    ignoredEdgeId: edge.id,
+  );
+}
+
+bool _hasPathBetween(
+  MobileFlowchartData data, {
+  required String startNodeId,
+  required String targetNodeId,
+  required String ignoredEdgeId,
+}) {
+  final visited = <String>{};
+  bool visit(String nodeId) {
+    if (nodeId == targetNodeId) {
+      return true;
+    }
+    if (!visited.add(nodeId)) {
+      return false;
+    }
+    final outgoing = data.edges.where(
+      (edge) => edge.id != ignoredEdgeId && edge.fromNodeId == nodeId,
+    );
+    for (final edge in outgoing) {
+      if (visit(edge.toNodeId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  return visit(startNodeId);
 }
 
 String _visualShape(MobileFlowchartNode node) {

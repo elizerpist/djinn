@@ -12,6 +12,8 @@ class NoteChunkCard extends StatelessWidget {
     required this.onToggleExpanded,
     required this.onOpenEditor,
     required this.onDelete,
+    this.inheritedTags = const [],
+    this.onEditTags,
   });
 
   final NoteBlock block;
@@ -20,6 +22,8 @@ class NoteChunkCard extends StatelessWidget {
   final VoidCallback onToggleExpanded;
   final VoidCallback onOpenEditor;
   final VoidCallback onDelete;
+  final List<NoteKnowledgeTag> inheritedTags;
+  final VoidCallback? onEditTags;
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +89,13 @@ class NoteChunkCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (onEditTags != null)
+                      IconButton(
+                        key: ValueKey('note-chunk-tags-${block.id}'),
+                        tooltip: 'Chunk tagek',
+                        onPressed: onEditTags,
+                        icon: const Icon(Icons.sell_outlined),
+                      ),
                     IconButton(
                       key: ValueKey('note-chunk-delete-${block.id}'),
                       tooltip: 'Chunk törlése',
@@ -130,10 +141,38 @@ class NoteChunkCard extends StatelessWidget {
     } else if (block.needsReindex) {
       chips.add(const _StatusChip(label: 'Újraindexelendő', color: Color(0xFFD97706)));
     }
+    for (final tag in block.tags) {
+      final label = _tagLabel('Tag', tag);
+      if (label != null) {
+        chips.add(_StatusChip(label: label, color: const Color(0xFF7C3AED)));
+      }
+    }
+    final directTagKeys = {
+      for (final tag in block.tags)
+        '${NoteKnowledgeTagTypes.normalize(tag.type)}:${tag.label.trim().toLowerCase()}',
+    };
+    for (final tag in inheritedTags) {
+      final key =
+          '${NoteKnowledgeTagTypes.normalize(tag.type)}:${tag.label.trim().toLowerCase()}';
+      if (!directTagKeys.contains(key)) {
+        final label = _tagLabel('Örökölt tag', tag);
+        if (label != null) {
+          chips.add(_StatusChip(label: label, color: const Color(0xFF0F766E)));
+        }
+      }
+    }
     if (chips.isEmpty) {
       chips.add(const _StatusChip(label: 'Üres', color: Color(0xFF6B7280)));
     }
     return chips;
+  }
+
+  String? _tagLabel(String prefix, NoteKnowledgeTag tag) {
+    final label = tag.label.trim();
+    if (label.isEmpty) {
+      return null;
+    }
+    return '$prefix: ${NoteKnowledgeTagTypes.normalize(tag.type)} $label';
   }
 
   String _titleFor(NoteBlock block) {

@@ -182,6 +182,7 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
       NoteDocumentEditorResult(
         title: _titleController.text.trim(),
         document: NoteDocument(
+          tags: widget.document.tags,
           blocks: normalizedBlocks.isEmpty ? NoteDocument.empty().blocks : normalizedBlocks,
         ),
       ),
@@ -221,6 +222,7 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
           for (final block in _blocks) ...[
             _BlockEditorCard(
               block: block,
+              inheritedTags: widget.document.tags,
               onChanged: _replaceBlock,
               onDelete: () => _deleteBlock(block),
               onMoveUp: () => _moveBlock(block, -1),
@@ -280,9 +282,10 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
   }
 }
 
-class _BlockEditorCard extends StatelessWidget {
+class _BlockEditorCard extends StatefulWidget {
   const _BlockEditorCard({
     required this.block,
+    required this.inheritedTags,
     required this.onChanged,
     required this.onDelete,
     required this.onMoveUp,
@@ -294,6 +297,7 @@ class _BlockEditorCard extends StatelessWidget {
   });
 
   final NoteBlock block;
+  final List<NoteKnowledgeTag> inheritedTags;
   final ValueChanged<NoteBlock> onChanged;
   final VoidCallback onDelete;
   final VoidCallback onMoveUp;
@@ -302,6 +306,46 @@ class _BlockEditorCard extends StatelessWidget {
   final VoidCallback onOutdent;
   final VoidCallback onEditTable;
   final VoidCallback onEditFlowchart;
+
+  @override
+  State<_BlockEditorCard> createState() => _BlockEditorCardState();
+}
+
+class _BlockEditorCardState extends State<_BlockEditorCard> {
+  final TextEditingController _tagLabelController = TextEditingController();
+  String _selectedTagType = NoteKnowledgeTagTypes.topic;
+
+  NoteBlock get block => widget.block;
+
+  ValueChanged<NoteBlock> get onChanged => widget.onChanged;
+  VoidCallback get onDelete => widget.onDelete;
+  VoidCallback get onMoveUp => widget.onMoveUp;
+  VoidCallback get onMoveDown => widget.onMoveDown;
+  VoidCallback get onIndent => widget.onIndent;
+  VoidCallback get onOutdent => widget.onOutdent;
+  VoidCallback get onEditTable => widget.onEditTable;
+  VoidCallback get onEditFlowchart => widget.onEditFlowchart;
+
+  @override
+  void dispose() {
+    _tagLabelController.dispose();
+    super.dispose();
+  }
+
+  void _addTypedTag() {
+    final label = _tagLabelController.text.trim();
+    if (label.isEmpty) {
+      return;
+    }
+    final tag = NoteKnowledgeTag(type: _selectedTagType, label: label);
+    onChanged(
+      block.copyWith(
+        tags: [...block.tags, tag],
+        clearIndex: true,
+      ),
+    );
+    _tagLabelController.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -459,6 +503,8 @@ class _BlockEditorCard extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 8),
+        _typedTagEditor(),
         if (warning != null) ...[
           const SizedBox(height: 8),
           Text(
@@ -488,6 +534,28 @@ class _BlockEditorCard extends StatelessWidget {
         chips.add(_metadataChip('Tag: $tag'));
       }
     }
+    for (final tag in block.tags) {
+      final label = tag.label.trim();
+      if (label.isNotEmpty) {
+        chips.add(_metadataChip(
+          'Tag: ${NoteKnowledgeTagTypes.normalize(tag.type)} $label',
+        ));
+      }
+    }
+    final directTagKeys = {
+      for (final tag in block.tags)
+        '${NoteKnowledgeTagTypes.normalize(tag.type)}:${tag.label.trim().toLowerCase()}',
+    };
+    for (final tag in widget.inheritedTags) {
+      final label = tag.label.trim();
+      final key =
+          '${NoteKnowledgeTagTypes.normalize(tag.type)}:${label.toLowerCase()}';
+      if (label.isNotEmpty && !directTagKeys.contains(key)) {
+        chips.add(_metadataChip(
+          'Örökölt tag: ${NoteKnowledgeTagTypes.normalize(tag.type)} $label',
+        ));
+      }
+    }
     if (chips.isEmpty) {
       chips.add(_metadataChip('Nincs keresési metadata'));
     }
@@ -500,6 +568,55 @@ class _BlockEditorCard extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Wrap(spacing: 6, runSpacing: 6, children: chips),
+      ],
+    );
+  }
+
+  Widget _typedTagEditor() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 140,
+          child: DropdownButtonFormField<String>(
+            key: ValueKey('note-block-tag-type-${block.id}'),
+            initialValue: _selectedTagType,
+            decoration: const InputDecoration(
+              labelText: 'Tag típus',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              for (final type in NoteKnowledgeTagTypes.values)
+                DropdownMenuItem(value: type, child: Text(type)),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _selectedTagType = value);
+              }
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            key: ValueKey('note-block-tag-label-${block.id}'),
+            controller: _tagLabelController,
+            decoration: const InputDecoration(
+              labelText: 'Tag',
+              hintText: 'pl. súlyos, terápia, oxygen',
+              border: OutlineInputBorder(),
+            ),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _addTypedTag(),
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton.filledTonal(
+          key: ValueKey('note-block-tag-add-${block.id}'),
+          tooltip: 'Tag hozzáadása',
+          onPressed: _addTypedTag,
+          icon: const Icon(Icons.add),
+        ),
       ],
     );
   }

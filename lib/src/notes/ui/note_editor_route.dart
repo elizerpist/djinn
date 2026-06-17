@@ -299,6 +299,49 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     }
   }
 
+  Future<void> _showBlockTagDialog(NoteBlock block) async {
+    final controller = TextEditingController(
+      text: block.tags.map((tag) => tag.metadataText).join(', '),
+    );
+    final tags = await showDialog<List<NoteKnowledgeTag>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: ValueKey('note-chunk-tag-dialog-${block.id}'),
+        title: const Text('Chunk tagek'),
+        content: TextField(
+          key: ValueKey('note-chunk-tag-input-${block.id}'),
+          controller: controller,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Tagek',
+            hintText: 'topic:légzési elégtelenség, state:súlyos, type:terápia',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            key: ValueKey('note-chunk-tag-save-${block.id}'),
+            onPressed: () => Navigator.of(context).pop(
+              NoteKnowledgeTag.parseMany(controller.text),
+            ),
+            child: const Text('Mentés'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (tags == null) {
+      return;
+    }
+    _replaceBlock(block.copyWith(tags: tags, clearIndex: true));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -335,6 +378,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
                   child: NoteChunkCard(
                     block: block,
                     expanded: _expandedBlockIds.contains(block.id),
+                    inheritedTags: _document.tags,
                     dragHandle: ReorderableDragStartListener(
                       index: index,
                       child: const Icon(Icons.drag_indicator, color: Color(0xFF9CA3AF)),
@@ -347,6 +391,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
                       });
                     },
                     onOpenEditor: () => unawaited(_openBlockEditor(block)),
+                    onEditTags: () => unawaited(_showBlockTagDialog(block)),
                     onDelete: () => _deleteBlock(block),
                   ),
                 );
