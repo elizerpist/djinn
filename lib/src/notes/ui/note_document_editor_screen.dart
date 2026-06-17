@@ -404,6 +404,8 @@ class _BlockEditorCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _searchMetadataTagSummary(context),
+        const SizedBox(height: 8),
         TextFormField(
           key: ValueKey('note-block-search-context-${block.id}'),
           initialValue: block.searchContext ?? '',
@@ -442,8 +444,8 @@ class _BlockEditorCard extends StatelessWidget {
           key: ValueKey('note-block-search-aliases-${block.id}'),
           initialValue: block.searchAliases.join(', '),
           decoration: const InputDecoration(
-            labelText: 'Aliasok / szimbólumok',
-            hintText: 'pl. DO2, VO2',
+            labelText: 'Tagek / aliasok / szimbólumok',
+            hintText: 'pl. légzési elégtelenség, terápia, DO2, VO2',
             border: OutlineInputBorder(),
           ),
           onChanged: (value) => onChanged(
@@ -467,6 +469,46 @@ class _BlockEditorCard extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _searchMetadataTagSummary(BuildContext context) {
+    final chips = <Widget>[];
+    final contextValue = block.searchContext?.trim();
+    if (contextValue != null && contextValue.isNotEmpty) {
+      chips.add(_metadataChip('Kontextus: $contextValue'));
+    }
+    final role = NoteSearchRoles.normalize(block.searchRole);
+    if (role != NoteSearchRoles.none && role != NoteSearchRoles.ignore) {
+      chips.add(_metadataChip('Tudástípus: ${NoteSearchRoles.label(role)}'));
+    }
+    for (final alias in block.searchAliases) {
+      final tag = alias.trim();
+      if (tag.isNotEmpty) {
+        chips.add(_metadataChip('Tag: $tag'));
+      }
+    }
+    if (chips.isEmpty) {
+      chips.add(_metadataChip('Nincs keresési metadata'));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Keresési metadata / tagek',
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+        const SizedBox(height: 6),
+        Wrap(spacing: 6, runSpacing: 6, children: chips),
+      ],
+    );
+  }
+
+  Widget _metadataChip(String label) {
+    return Chip(
+      label: Text(label),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
 

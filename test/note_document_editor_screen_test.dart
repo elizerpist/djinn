@@ -142,4 +142,48 @@ void main() {
     expect(block.searchAliases, ['DO2', 'VO2']);
   });
 
+  testWidgets('block search metadata tags are visible in the editor', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () {
+              Navigator.of(context).push<NoteDocumentEditorResult>(
+                MaterialPageRoute(
+                  builder: (_) => const NoteDocumentEditorScreen(
+                    title: 'Meta',
+                    document: NoteDocument(
+                      blocks: [
+                        NoteBlock(
+                          id: 'block-1',
+                          type: NoteBlockType.paragraph,
+                          text: 'DO2 = oxygénkínálat',
+                          searchContext: 'légzési elégtelenség',
+                          searchRole: NoteSearchRoles.definition,
+                          searchAliases: ['DO2', 'VO2'],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Keresési metadata / tagek'), findsOneWidget);
+    expect(find.text('Kontextus: légzési elégtelenség'), findsOneWidget);
+    expect(find.text('Tudástípus: Definíció'), findsOneWidget);
+    expect(find.text('Tag: DO2'), findsOneWidget);
+    expect(find.text('Tag: VO2'), findsOneWidget);
+  });
+
 }

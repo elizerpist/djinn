@@ -646,7 +646,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _AboutBlock(
           title: 'Offline jegyzetírási útmutató',
           body:
-              'Adj keresési kontextust, ha a blokk címe önmagában túl általános, például Magyarázat vagy Jegyzet. Egy blokk lehetőleg egy témát tartalmazzon. Definíciókat írj külön listaelembe, például DO2 = oxygénkínálat. Használj role mezőt definíció, tény, folyamat, táblázatos szabály, példa vagy analógia jelölésére. Aliasokhoz vedd fel a rövidítéseket és szimbólumokat. Ha egy blokk több témát kever, bontsd külön blokkokra, mert offline módban az app explicit kulcsszavakból, szimbólumokból, metadata boostból és graph kapcsolatokból dolgozik.',
+              'Adj keresési kontextust, ha a blokk címe önmagában túl általános, például Magyarázat vagy Jegyzet. Egy blokk lehetőleg egy témát tartalmazzon. Definíciókat írj külön listaelembe, például DO2 = oxygénkínálat. Használd a tudástípust definíció, tény, folyamat, táblázatos szabály, példa vagy analógia jelölésére. A tagekhez, aliasokhoz és szimbólumokhoz vedd fel a rövidítéseket, terápiás/fogalmi kulcsszavakat és alternatív neveket. Általános kérdésnél a teljes témakör bővülhet, de minél specifikusabb a kérdés, például terápia vagy egy flowchart ág, annál szűkebb kontextusból épül a válasz. Ha egy blokk több témát kever, bontsd külön blokkokra, mert offline módban az app explicit kulcsszavakból, szimbólumokból, metadata boostból és graph kapcsolatokból dolgozik.',
         ),
         _AboutBlock(
           title: 'Mi az audit szerepe?',

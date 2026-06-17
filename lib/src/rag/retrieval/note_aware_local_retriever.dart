@@ -265,26 +265,32 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     required String query,
     required List<SourceEvidence> seeds,
   }) {
-    if (seeds.length < 2) {
-      return seeds;
+    final scope = _QueryScope.from(query);
+    final scopedSeeds = _filterByQueryScope(scope, seeds);
+    if (scopedSeeds.length < 2) {
+      return scopedSeeds;
     }
     final queryTerms = _simpleTerms(query);
     if (queryTerms.isEmpty) {
-      return seeds;
+      return scopedSeeds;
     }
     final groups = <String, List<SourceEvidence>>{};
-    for (final seed in seeds) {
+    for (final seed in scopedSeeds) {
       final group = _competingGroupId(seed.id);
       if (group != null) {
         groups.putIfAbsent(group, () => []).add(seed);
       }
     }
     if (groups.isEmpty) {
-      return seeds;
+      return scopedSeeds;
     }
     final removedIds = <String>{};
     for (final entry in groups.entries) {
       if (entry.value.length < 2) {
+        continue;
+      }
+      if (scope.keepTableCompanions &&
+          entry.value.any((seed) => seed.sourceType == EvidenceSourceType.tableChunk)) {
         continue;
       }
       final scores = <String, int>{};
@@ -315,11 +321,83 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       }
     }
     if (removedIds.isEmpty) {
-      return seeds;
+      return scopedSeeds;
     }
-    return seeds
+    return scopedSeeds
         .where((seed) => !removedIds.contains(seed.id))
         .toList(growable: false);
+  }
+
+  List<SourceEvidence> _filterByQueryScope(
+    _QueryScope scope,
+    List<SourceEvidence> seeds,
+  ) {
+    if (!scope.hasFacetIntent && scope.allowDefinitionExpansion) {
+      return seeds;
+    }
+    return seeds.where((seed) {
+      if (scope.hasFacetIntent) {
+        if (!_isFacetEvidence(scope, seed)) {
+          DebugConsole.log(
+            '[LocalIndex] evidence pruned id=${seed.id} '
+            'reason=query_facet_scope',
+          );
+          return false;
+        }
+        if (scope.topicTerms.isNotEmpty &&
+            !_coversScopeTerms(seed.searchableText, scope.topicTerms)) {
+          DebugConsole.log(
+            '[LocalIndex] evidence pruned id=${seed.id} '
+            'reason=query_topic_facet_mismatch',
+          );
+          return false;
+        }
+      }
+      if (!scope.allowDefinitionExpansion && _isDefinitionEvidence(seed)) {
+        DebugConsole.log(
+          '[LocalIndex] evidence pruned id=${seed.id} '
+          'reason=query_scope_definition_suppressed',
+        );
+        return false;
+      }
+      return true;
+    }).toList(growable: false);
+  }
+
+  bool _isFacetEvidence(_QueryScope scope, SourceEvidence evidence) {
+    if (evidence.sourceType == EvidenceSourceType.tableChunk) {
+      return true;
+    }
+    final normalized = _scopeNormalize(evidence.searchableText);
+    if (normalized.contains('table rule')) {
+      return true;
+    }
+    return scope.facetTerms.any(
+      (term) => _scopeContainsTerm(normalized, term),
+    );
+  }
+
+  bool _isDefinitionEvidence(SourceEvidence evidence) {
+    if (evidence.sourceType == EvidenceSourceType.tableChunk ||
+        evidence.sourceType == EvidenceSourceType.flowchartNode ||
+        evidence.sourceType == EvidenceSourceType.flowchartEdge) {
+      return false;
+    }
+    final metadata = _scopeNormalize(evidence.searchText ?? '');
+    if (metadata.contains('definition')) {
+      return true;
+    }
+    final normalized = _scopeNormalize(evidence.text);
+    return evidence.text.contains('<') ||
+        evidence.text.contains('=') ||
+        normalized.contains('akkor all fenn') ||
+        normalized.contains('definicio') ||
+        normalized.contains('jelentese');
+  }
+
+  bool _coversScopeTerms(String value, Set<String> terms) {
+    final normalized = _scopeNormalize(value);
+    return terms.every((term) => _scopeContainsTerm(normalized, term));
   }
 
   String? _competingGroupId(String id) {
@@ -915,6 +993,139 @@ class NoteAwareLocalRetriever implements LocalRetriever {
   }
 }
 
+class _QueryScope {
+  _QueryScope({
+    required this.terms,
+    required this.facetTerms,
+    required this.topicTerms,
+    required this.hasSymbol,
+    required this.hasDefinitionIntent,
+    required this.isNarrowState,
+  });
+
+  factory _QueryScope.from(String query) {
+    final terms = _scopeTerms(query);
+    final facetTerms = terms.where(_isFacetTerm).toSet();
+    final definitionIntent = _hasDefinitionIntent(query, terms);
+    final hasSymbol = RegExp(r'\b[A-Z]{2,}[0-9]*\b').hasMatch(query);
+    final isNarrowState =
+        terms.length == 1 ||
+        terms.any((term) => const {'igen', 'nem', 'yes', 'no'}.contains(term));
+    final topicTerms = terms
+        .where((term) => !facetTerms.contains(term))
+        .where((term) => !_isQuestionTerm(term))
+        .toSet();
+    return _QueryScope(
+      terms: terms,
+      facetTerms: facetTerms,
+      topicTerms: topicTerms,
+      hasSymbol: hasSymbol,
+      hasDefinitionIntent: definitionIntent,
+      isNarrowState: isNarrowState,
+    );
+  }
+
+  final Set<String> terms;
+  final Set<String> facetTerms;
+  final Set<String> topicTerms;
+  final bool hasSymbol;
+  final bool hasDefinitionIntent;
+  final bool isNarrowState;
+
+  bool get hasFacetIntent => facetTerms.isNotEmpty;
+
+  bool get allowDefinitionExpansion =>
+      !hasFacetIntent && (!isNarrowState || hasDefinitionIntent || hasSymbol);
+
+  bool get allowSymbolExpansion => hasSymbol || allowDefinitionExpansion;
+
+  bool get keepTableCompanions => hasFacetIntent || isNarrowState;
+
+  bool branchSignalAllowed(_BranchSignal branch) {
+    if (!isNarrowState || terms.isEmpty) {
+      return true;
+    }
+    final branchTerms = {
+      ..._scopeTerms(branch.key),
+      ..._scopeTerms(branch.value),
+      ...branch.valueTerms,
+      ...branch.contextTerms,
+    };
+    return terms.any(
+      (term) => branchTerms.any((branchTerm) => _termsClose(term, branchTerm)),
+    );
+  }
+}
+
+Set<String> _scopeTerms(String value) {
+  return _scopeNormalize(value)
+      .split(RegExp(r'\s+'))
+      .where((term) => term.length > 2)
+      .toSet();
+}
+
+String _scopeNormalize(String value) {
+  return value
+      .toLowerCase()
+      .replaceAll('á', 'a')
+      .replaceAll('é', 'e')
+      .replaceAll('í', 'i')
+      .replaceAll('ó', 'o')
+      .replaceAll('ö', 'o')
+      .replaceAll('ő', 'o')
+      .replaceAll('ú', 'u')
+      .replaceAll('ü', 'u')
+      .replaceAll('ű', 'u')
+      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .trim();
+}
+
+bool _isFacetTerm(String term) {
+  return term.startsWith('terap') ||
+      term.startsWith('kezeles') ||
+      term.startsWith('teendo') ||
+      term.startsWith('szabaly') ||
+      term == 'rule';
+}
+
+bool _isQuestionTerm(String term) {
+  return const {
+    'milyen',
+    'mikor',
+    'hogyan',
+    'mennyi',
+    'miert',
+    'azert',
+    'eseten',
+    'soran',
+  }.contains(term);
+}
+
+bool _hasDefinitionIntent(String query, Set<String> terms) {
+  final normalized = _scopeNormalize(query);
+  return terms.contains('definicio') ||
+      terms.contains('jelentes') ||
+      terms.contains('jelentese') ||
+      normalized.startsWith('mi ') ||
+      normalized.startsWith('mi az ') ||
+      normalized.startsWith('mit jelent');
+}
+
+bool _scopeContainsTerm(String normalized, String term) {
+  final tokens = normalized.split(RegExp(r'\s+'));
+  return tokens.any((token) => _termsClose(token, term));
+}
+
+bool _termsClose(String first, String second) {
+  if (first == second) {
+    return true;
+  }
+  if (first.length < 4 || second.length < 4) {
+    return false;
+  }
+  return first.contains(second) || second.contains(first);
+}
+
 class LocalKnowledgeGraphExpander {
   const LocalKnowledgeGraphExpander();
 
@@ -934,6 +1145,7 @@ class LocalKnowledgeGraphExpander {
     }
     final existingIds = existing.map((item) => item.id).toSet();
     final queryTerms = _terms(query).toSet();
+    final scope = _QueryScope.from(query);
     DebugConsole.log(
       '[LocalGraph] expand start seeds=${seeds.length} '
       'candidates=${candidates.length} queryTerms=${queryTerms.length}',
@@ -945,11 +1157,10 @@ class LocalKnowledgeGraphExpander {
       if (!scannedSeedIds.add(seed.id)) {
         return;
       }
-      final seedTerms = {
-        ...queryTerms,
-        ..._terms(seed.text),
-      };
-      final seedAcronyms = _acronyms('${seed.text}\n$query');
+      final seedTerms = _terms(seed.searchableText).toSet();
+      final seedAcronyms = _acronyms(
+        scope.hasSymbol ? '${seed.searchableText}\n$query' : seed.searchableText,
+      );
       DebugConsole.log(
         '[LocalGraph] seed source=${seed.id} type=${seed.sourceType.wireName} '
         'terms=${seedTerms.take(12).join(',')} '
@@ -965,6 +1176,7 @@ class LocalKnowledgeGraphExpander {
           seedTerms: seedTerms,
           queryTerms: queryTerms,
           seedAcronyms: seedAcronyms,
+          scope: scope,
         );
         if (link == null) {
           continue;
@@ -1033,11 +1245,19 @@ class LocalKnowledgeGraphExpander {
     required Set<String> seedTerms,
     required Set<String> queryTerms,
     required Set<String> seedAcronyms,
+    required _QueryScope scope,
   }) {
+    if (scope.keepTableCompanions &&
+        seed.sourceType == EvidenceSourceType.tableChunk &&
+        candidate.sourceType == EvidenceSourceType.tableChunk &&
+        _sameTableRowGroup(seed.id, candidate.id)) {
+      return _GraphLink('table_companion', 'same_table_scope');
+    }
     final branchLink = _branchValueLink(
       seed: seed,
       candidate: candidate,
       seedTerms: seedTerms,
+      scope: scope,
     );
     if (branchLink != null) {
       return branchLink;
@@ -1046,6 +1266,7 @@ class LocalKnowledgeGraphExpander {
       seed: candidate,
       candidate: seed,
       seedTerms: seedTerms,
+      scope: scope,
     );
     if (reverseBranchLink != null) {
       return _GraphLink(
@@ -1061,13 +1282,15 @@ class LocalKnowledgeGraphExpander {
         '(^|\\n|\\s)$escaped\\s*[:=\\-]',
         caseSensitive: false,
       );
-      if (definitionPattern.hasMatch(candidateText)) {
+      if (scope.allowSymbolExpansion && definitionPattern.hasMatch(candidateText)) {
         return _GraphLink('definition', 'symbol:$acronym');
       }
     }
     final candidateTerms = _terms(candidate.text).toSet();
     final queryOverlap = candidateTerms.intersection(queryTerms);
-    if (queryOverlap.length >= 2 && _looksLikeDefinitionStatement(candidate.text)) {
+    if (scope.allowDefinitionExpansion &&
+        queryOverlap.length >= 2 &&
+        _looksLikeDefinitionStatement(candidate.text)) {
       return _GraphLink(
         'definition',
         'query_terms:${queryOverlap.take(4).join(',')}',
@@ -1075,7 +1298,7 @@ class LocalKnowledgeGraphExpander {
     }
     final definitionKeys = _definitionKeys(candidate.text);
     final definitionOverlap = definitionKeys.intersection(seedTerms);
-    if (definitionOverlap.isNotEmpty) {
+    if (scope.allowDefinitionExpansion && definitionOverlap.isNotEmpty) {
       return _GraphLink(
         'definition',
         'keys:${definitionOverlap.take(4).join(',')}',
@@ -1166,6 +1389,7 @@ class LocalKnowledgeGraphExpander {
     required SourceEvidence seed,
     required SourceEvidence candidate,
     required Set<String> seedTerms,
+    required _QueryScope scope,
   }) {
     final branches = _branchSignals(seed.text);
     if (branches.isEmpty) {
@@ -1180,6 +1404,9 @@ class LocalKnowledgeGraphExpander {
         'value=${branch.value} polarity=${branch.polarity ?? 'custom'} '
         'context=${branch.contextTerms.join(',')}',
       );
+      if (!scope.branchSignalAllowed(branch)) {
+        continue;
+      }
       final wholeContextScore = _contextScore(
         candidateNormalized,
         branch.contextTerms,
@@ -1600,9 +1827,10 @@ class _GraphLink {
       'definition' => 2,
       'branch_value' => 3,
       'table_join' => 4,
-      'semantic_keyword' => 5,
-      'flowchart' => 6,
-      _ => 7,
+      'table_companion' => 5,
+      'semantic_keyword' => 6,
+      'flowchart' => 7,
+      _ => 8,
     };
   }
 }
