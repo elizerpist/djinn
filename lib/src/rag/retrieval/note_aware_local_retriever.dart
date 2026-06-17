@@ -265,8 +265,9 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     required String query,
     required List<SourceEvidence> seeds,
   }) {
-    final scope = _QueryScope.from(query).forEvidence(seeds);
-    final scopedSeeds = _filterByQueryScope(scope, seeds);
+    final metadataSeeds = _preferDirectMetadataMatches(query, seeds);
+    final scope = _QueryScope.from(query).forEvidence(metadataSeeds);
+    final scopedSeeds = _filterByQueryScope(scope, metadataSeeds);
     if (scopedSeeds.length < 2) {
       return scopedSeeds;
     }
@@ -326,6 +327,48 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     return scopedSeeds
         .where((seed) => !removedIds.contains(seed.id))
         .toList(growable: false);
+  }
+
+  List<SourceEvidence> _preferDirectMetadataMatches(
+    String query,
+    List<SourceEvidence> seeds,
+  ) {
+    final queryTerms = _simpleTerms(query);
+    if (queryTerms.isEmpty || seeds.length < 2) {
+      return seeds;
+    }
+    final matched = seeds
+        .where((seed) => _coversSimpleTerms(seed.searchText ?? '', queryTerms))
+        .toList(growable: false);
+    if (matched.isEmpty) {
+      return seeds;
+    }
+    final matchedIds = matched.map((seed) => seed.id).toSet();
+    var prunedNoteEvidence = false;
+    final filtered = <SourceEvidence>[];
+    for (final seed in seeds) {
+      if (!seed.id.startsWith('note:') || matchedIds.contains(seed.id)) {
+        filtered.add(seed);
+        continue;
+      }
+      prunedNoteEvidence = true;
+      DebugConsole.log(
+        '[LocalIndex] evidence pruned id=${seed.id} '
+        'reason=direct_metadata_match_preferred',
+      );
+    }
+    return prunedNoteEvidence ? filtered : seeds;
+  }
+
+  bool _coversSimpleTerms(String value, Set<String> terms) {
+    if (terms.isEmpty) {
+      return true;
+    }
+    final normalized = _simpleNormalize(value);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return terms.every((term) => _simpleContainsTerm(normalized, term));
   }
 
   List<SourceEvidence> _filterByQueryScope(
