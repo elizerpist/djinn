@@ -332,7 +332,18 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     _QueryScope scope,
     List<SourceEvidence> seeds,
   ) {
-    if (!scope.hasFacetIntent && scope.allowDefinitionExpansion) {
+    final noteScopes = seeds
+        .map((seed) => _evidenceNoteScopeId(seed.id))
+        .whereType<String>()
+        .toSet();
+    final hasMultipleNoteScopes = noteScopes.length > 1;
+    final needsMultiNoteTopicGate = !scope.hasDefinitionIntent &&
+        !scope.hasFacetIntent &&
+        hasMultipleNoteScopes &&
+        scope.topicTerms.length >= 3;
+    if (!scope.hasFacetIntent &&
+        scope.allowDefinitionExpansion &&
+        !needsMultiNoteTopicGate) {
       return seeds;
     }
     return seeds.where((seed) {
@@ -360,6 +371,16 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         );
         return false;
       }
+      if (!scope.hasDefinitionIntent &&
+          !scope.hasFacetIntent &&
+          needsMultiNoteTopicGate &&
+          _queryTopicCoverage(seed.searchableText, scope.topicTerms) < 2) {
+        DebugConsole.log(
+          '[LocalIndex] evidence pruned id=${seed.id} '
+          'reason=query_topic_undercovered',
+        );
+        return false;
+      }
       final narrowTerm = scope.primaryNarrowTerm;
       if (scope.isNarrowState &&
           narrowTerm != null &&
@@ -374,6 +395,17 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       }
       return true;
     }).toList(growable: false);
+  }
+
+  String? _evidenceNoteScopeId(String id) {
+    if (!id.startsWith('note:')) {
+      return null;
+    }
+    final noteEnd = id.indexOf(':', 'note:'.length);
+    if (noteEnd <= 'note:'.length) {
+      return null;
+    }
+    return id.substring(0, noteEnd);
   }
 
   bool _isFacetEvidence(_QueryScope scope, SourceEvidence evidence) {
@@ -410,6 +442,14 @@ class NoteAwareLocalRetriever implements LocalRetriever {
   bool _coversScopeTerms(String value, Set<String> terms) {
     final normalized = _scopeNormalize(value);
     return terms.every((term) => _scopeContainsTerm(normalized, term));
+  }
+
+  int _queryTopicCoverage(String value, Set<String> terms) {
+    final normalized = _scopeNormalize(value);
+    return terms
+        .where((term) => !_isQuestionTerm(term))
+        .where((term) => _scopeContainsTerm(normalized, term))
+        .length;
   }
 
   String? _competingGroupId(String id) {
@@ -1813,6 +1853,9 @@ class LocalKnowledgeGraphExpander {
   }
 
   bool _hasAffirmedCondition(String candidateNormalized, _BranchSignal branch) {
+    if (_containsBranchNegativeMarker(candidateNormalized)) {
+      return false;
+    }
     final hasNegatedValue = branch.valueTerms.any(
       (term) => _hasNegatedTerm(candidateNormalized, term),
     );
@@ -1828,6 +1871,11 @@ class LocalKnowledgeGraphExpander {
       }
     }
     return false;
+  }
+
+  bool _containsBranchNegativeMarker(String candidateNormalized) {
+    final tokens = candidateNormalized.split(RegExp(r'\s+'));
+    return tokens.any((token) => token == 'nem' || token == 'no');
   }
 
   bool _containsNegatedPhrase(String candidateNormalized, String phrase) {

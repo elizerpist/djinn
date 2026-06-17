@@ -169,23 +169,37 @@ class NoteTextRangeTag {
     required this.start,
     required this.end,
     required this.tag,
+    this.tags = const [],
   });
 
   final String id;
   final int start;
   final int end;
   final NoteKnowledgeTag tag;
+  final List<NoteKnowledgeTag> tags;
+
+  List<NoteKnowledgeTag> get resolvedTags {
+    if (tags.isNotEmpty) {
+      return tags;
+    }
+    return tag.label.trim().isEmpty ? const [] : [tag];
+  }
 
   factory NoteTextRangeTag.fromJson(Map<String, Object?> json) {
+    final parsedTags = _tagsFromJson(json['tags']);
+    final primaryTag = parsedTags.isNotEmpty
+        ? parsedTags.first
+        : NoteKnowledgeTag.fromJson(json['tag']);
     return NoteTextRangeTag(
       id: json['id']?.toString() ?? 'range-1',
       start: json['start'] is int ? json['start'] as int : 0,
       end: json['end'] is int ? json['end'] as int : 0,
-      tag: NoteKnowledgeTag.fromJson(json['tag']),
+      tag: primaryTag,
+      tags: parsedTags,
     );
   }
 
-  bool get isValid => start >= 0 && end > start && tag.label.trim().isNotEmpty;
+  bool get isValid => start >= 0 && end > start && resolvedTags.isNotEmpty;
 
   NoteTextRangeTag clampToTextLength(int length) {
     final normalizedLength = length < 0 ? 0 : length;
@@ -196,6 +210,7 @@ class NoteTextRangeTag {
       start: clampedStart,
       end: clampedEnd,
       tag: tag,
+      tags: tags,
     );
   }
 
@@ -205,6 +220,103 @@ class NoteTextRangeTag {
       'start': start,
       'end': end,
       'tag': tag.toJson(),
+      if (tags.isNotEmpty) 'tags': tags.map((tag) => tag.toJson()).toList(),
+    };
+  }
+}
+
+enum NoteTagTargetKind {
+  textRange('text_range'),
+  listItem('list_item'),
+  tableRow('table_row'),
+  tableColumn('table_column'),
+  tableCell('table_cell'),
+  flowchartNode('flowchart_node'),
+  flowchartEdge('flowchart_edge');
+
+  const NoteTagTargetKind(this.wireName);
+
+  final String wireName;
+
+  static NoteTagTargetKind fromWireName(String? value) {
+    for (final kind in values) {
+      if (kind.wireName == value) {
+        return kind;
+      }
+    }
+    return NoteTagTargetKind.textRange;
+  }
+}
+
+class NoteTagTarget {
+  const NoteTagTarget({
+    required this.kind,
+    this.rangeId,
+    this.listItemId,
+    this.rowIndex,
+    this.columnIndex,
+    this.elementId,
+  });
+
+  final NoteTagTargetKind kind;
+  final String? rangeId;
+  final String? listItemId;
+  final int? rowIndex;
+  final int? columnIndex;
+  final String? elementId;
+
+  factory NoteTagTarget.fromJson(Object? value) {
+    if (value is! Map) {
+      return const NoteTagTarget(kind: NoteTagTargetKind.textRange);
+    }
+    return NoteTagTarget(
+      kind: NoteTagTargetKind.fromWireName(value['kind']?.toString()),
+      rangeId: value['rangeId']?.toString(),
+      listItemId: value['listItemId']?.toString(),
+      rowIndex: value['rowIndex'] is int ? value['rowIndex'] as int : null,
+      columnIndex: value['columnIndex'] is int ? value['columnIndex'] as int : null,
+      elementId: value['elementId']?.toString(),
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'kind': kind.wireName,
+      if (rangeId != null) 'rangeId': rangeId,
+      if (listItemId != null) 'listItemId': listItemId,
+      if (rowIndex != null) 'rowIndex': rowIndex,
+      if (columnIndex != null) 'columnIndex': columnIndex,
+      if (elementId != null) 'elementId': elementId,
+    };
+  }
+}
+
+class NoteScopedTagAssignment {
+  const NoteScopedTagAssignment({
+    required this.id,
+    required this.target,
+    required this.tags,
+  });
+
+  final String id;
+  final NoteTagTarget target;
+  final List<NoteKnowledgeTag> tags;
+
+  factory NoteScopedTagAssignment.fromJson(Map<String, Object?> json) {
+    return NoteScopedTagAssignment(
+      id: json['id']?.toString() ?? 'tag-assignment-1',
+      target: NoteTagTarget.fromJson(json['target']),
+      tags: _tagsFromJson(json['tags']),
+    );
+  }
+
+  bool get isValid => tags.any((tag) => tag.label.trim().isNotEmpty);
+
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'target': target.toJson(),
+      'tags': tags.map((tag) => tag.toJson()).toList(),
     };
   }
 }
@@ -276,6 +388,21 @@ List<NoteTextRangeTag> _rangeTagsFromJson(Object? value) {
       .whereType<Map>()
       .map((item) => NoteTextRangeTag.fromJson(Map<String, Object?>.from(item)))
       .where((tag) => tag.isValid)
+      .toList(growable: false);
+}
+
+List<NoteScopedTagAssignment> _scopedTagsFromJson(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+  return value
+      .whereType<Map>()
+      .map(
+        (item) => NoteScopedTagAssignment.fromJson(
+          Map<String, Object?>.from(item),
+        ),
+      )
+      .where((assignment) => assignment.isValid)
       .toList(growable: false);
 }
 
@@ -536,6 +663,7 @@ class NoteBlock {
     this.searchAliases = const [],
     this.tags = const [],
     this.rangeTags = const [],
+    this.scopedTags = const [],
     this.level = 0,
     this.rows = const [],
     this.nodes = const [],
@@ -554,6 +682,7 @@ class NoteBlock {
   final List<String> searchAliases;
   final List<NoteKnowledgeTag> tags;
   final List<NoteTextRangeTag> rangeTags;
+  final List<NoteScopedTagAssignment> scopedTags;
   final int level;
   final List<List<String>> rows;
   final List<NoteFlowchartNode> nodes;
@@ -573,6 +702,7 @@ class NoteBlock {
       searchAliases: _stringsFromJson(json['searchAliases']),
       tags: _tagsFromJson(json['tags']),
       rangeTags: _rangeTagsFromJson(json['rangeTags']),
+      scopedTags: _scopedTagsFromJson(json['scopedTags']),
       level: json['level'] is int ? json['level'] as int : 0,
       rows: _rowsFromJson(json['rows']),
       nodes: _nodesFromJson(json['nodes']),
@@ -601,6 +731,8 @@ class NoteBlock {
       if (tags.isNotEmpty) 'tags': tags.map((tag) => tag.toJson()).toList(),
       if (rangeTags.isNotEmpty)
         'rangeTags': rangeTags.map((tag) => tag.toJson()).toList(),
+      if (scopedTags.isNotEmpty)
+        'scopedTags': scopedTags.map((assignment) => assignment.toJson()).toList(),
       if (level != 0) 'level': level,
       if (rows.isNotEmpty) 'rows': rows,
       if (nodes.isNotEmpty) 'nodes': nodes.map((node) => node.toJson()).toList(),
@@ -657,10 +789,20 @@ class NoteBlock {
       parts.add(tagMetadata);
     }
     final rangeTagMetadata = _metadataTextFromTags(
-      rangeTags.map((rangeTag) => rangeTag.tag).toList(growable: false),
+      [
+        for (final rangeTag in rangeTags) ...rangeTag.resolvedTags,
+      ],
     );
     if (rangeTagMetadata.isNotEmpty) {
       parts.add(rangeTagMetadata);
+    }
+    final scopedTagMetadata = _metadataTextFromTags(
+      [
+        for (final assignment in scopedTags) ...assignment.tags,
+      ],
+    );
+    if (scopedTagMetadata.isNotEmpty) {
+      parts.add(scopedTagMetadata);
     }
     return parts.join('\n').trim();
   }
@@ -740,6 +882,7 @@ class NoteBlock {
     List<String>? searchAliases,
     List<NoteKnowledgeTag>? tags,
     List<NoteTextRangeTag>? rangeTags,
+    List<NoteScopedTagAssignment>? scopedTags,
     int? level,
     List<List<String>>? rows,
     List<NoteFlowchartNode>? nodes,
@@ -759,6 +902,7 @@ class NoteBlock {
       searchAliases: searchAliases ?? this.searchAliases,
       tags: tags ?? this.tags,
       rangeTags: rangeTags ?? this.rangeTags,
+      scopedTags: scopedTags ?? this.scopedTags,
       level: level ?? this.level,
       rows: rows ?? this.rows,
       nodes: nodes ?? this.nodes,

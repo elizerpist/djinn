@@ -24,9 +24,10 @@ void main() {
     await tester.pump();
     expect(latest!.listItems.first.text, 'Első pont');
 
-    await tester.tap(find.byKey(const ValueKey('note-list-add-item')));
+    await tester.tap(find.byKey(const ValueKey('note-list-header-add-item')));
     await tester.pumpAndSettle();
     expect(latest!.listItems, hasLength(2));
+    expect(find.byKey(const ValueKey('note-list-add-item')), findsNothing);
   });
 
   testWidgets('list editor autosaves editable list title', (tester) async {
@@ -45,7 +46,8 @@ void main() {
       ),
     );
 
-    await tester.enterText(find.byKey(const ValueKey('note-list-title-field')), 'Felszerelés lista');
+    expect(find.byKey(const ValueKey('note-list-title-field')), findsNothing);
+    await tester.enterText(find.byKey(const ValueKey('note-chunk-title-field')), 'Felszerelés lista');
     await tester.pump();
 
     expect(latest, isNotNull);
@@ -53,7 +55,7 @@ void main() {
     expect(latest!.plainText, startsWith('Felszerelés lista'));
   });
 
-  testWidgets('list editor autosaves typed item tags', (tester) async {
+  testWidgets('list editor tags the selected item through the shared menu', (tester) async {
     NoteBlock? latest;
     await tester.pumpWidget(
       MaterialApp(
@@ -68,20 +70,27 @@ void main() {
       ),
     );
 
-    await tester.enterText(
-      find.byKey(const ValueKey('note-list-item-tags-item-1')),
-      'state:súlyos, topic:légzési elégtelenség',
-    );
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('note-list-item-select-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-chunk-menu-tag-selection')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'súlyos');
+    await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'légzési elégtelenség');
+    await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.pumpAndSettle();
 
     expect(latest, isNotNull);
-    expect(latest!.listItems.first.tags.map((tag) => tag.type), [
-      NoteKnowledgeTagTypes.state,
-      NoteKnowledgeTagTypes.topic,
-    ]);
-    expect(latest!.listItems.first.tags.map((tag) => tag.label), [
-      'súlyos',
-      'légzési elégtelenség',
-    ]);
+    expect(
+      latest!.listItems.first.tags.map((tag) => tag.label),
+      ['súlyos', 'légzési elégtelenség'],
+    );
+    expect(find.byKey(const ValueKey('note-list-item-tag-pill-item-1-súlyos')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-list-item-tags-item-1')), findsNothing);
   });
 }

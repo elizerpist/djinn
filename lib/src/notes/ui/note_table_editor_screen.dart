@@ -1,28 +1,38 @@
 import 'package:flutter/material.dart';
 
 import '../models/note_document.dart';
+import 'note_chunk_editor_header.dart';
+import 'note_tag_pills.dart';
+import 'tag_manager_sheet.dart';
 
 class NoteTableEditorScreen extends StatefulWidget {
   const NoteTableEditorScreen({
     super.key,
     required this.block,
     this.onChanged,
+    this.onDelete,
   });
 
   final NoteBlock block;
   final ValueChanged<NoteBlock>? onChanged;
+  final VoidCallback? onDelete;
 
   @override
   State<NoteTableEditorScreen> createState() => _NoteTableEditorScreenState();
 }
 
 class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
+  late NoteBlock _block;
   late List<List<String>> _rows;
+  late final TextEditingController _titleController;
   final Map<String, TextEditingController> _cellControllers = <String, TextEditingController>{};
+  _TableSelection? _selection;
 
   @override
   void initState() {
     super.initState();
+    _block = widget.block;
+    _titleController = TextEditingController(text: widget.block.title ?? '');
     _rows = widget.block.rows.isEmpty
         ? [
             ['', ''],
@@ -35,6 +45,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
 
   @override
   void dispose() {
+    _titleController.dispose();
     for (final controller in _cellControllers.values) {
       controller.dispose();
     }
@@ -106,7 +117,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
 
   NoteBlock _currentBlock() {
     _normalizeRows();
-    return widget.block.copyWith(
+    return _block.copyWith(
       rows: [
         for (final row in _rows)
           row.map((cell) => cell.trim()).toList(growable: false),
@@ -116,7 +127,14 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   }
 
   void _emitChange() {
-    widget.onChanged?.call(_currentBlock());
+    _block = _currentBlock();
+    widget.onChanged?.call(_block);
+  }
+
+  void _emitTitle(String value) {
+    _titleController.text = value;
+    setState(() => _block = _block.copyWith(title: value.trim(), clearIndex: true));
+    widget.onChanged?.call(_block);
   }
 
   void _addRow() {
@@ -173,14 +191,114 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     Navigator.of(context).pop(_currentBlock());
   }
 
+  Future<void> _tagChunk() async {
+    final tags = await showTagManagerSheet(
+      context,
+      initialTags: _block.tags,
+      title: 'Chunk tagjei',
+    );
+    if (tags == null) {
+      return;
+    }
+    setState(() => _block = _block.copyWith(tags: tags, clearIndex: true));
+    widget.onChanged?.call(_block);
+  }
+
+  Future<void> _tagSelection() async {
+    final selection = _selection;
+    if (selection == null) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Válassz ki sort, oszlopot vagy cellát a tageléshez')),
+      );
+      return;
+    }
+    final tags = await showTagManagerSheet(
+      context,
+      initialTags: _tagsForSelection(selection),
+      title: 'Kijelölt táblázatrész tagjei',
+    );
+    if (tags == null) {
+      return;
+    }
+    setState(() {
+      final target = selection.toTagTarget();
+      _block = _block.copyWith(
+        scopedTags: [
+          for (final assignment in _block.scopedTags)
+            if (!_sameTarget(assignment.target, target)) assignment,
+          if (tags.isNotEmpty)
+            NoteScopedTagAssignment(
+              id: 'table-tag-${DateTime.now().microsecondsSinceEpoch}',
+              target: target,
+              tags: tags,
+            ),
+        ],
+        clearIndex: true,
+      );
+    });
+    widget.onChanged?.call(_block);
+  }
+
+  void _deleteSelectedTag() {
+    final selection = _selection;
+    if (selection == null) {
+      return;
+    }
+    final target = selection.toTagTarget();
+    setState(() {
+      _block = _block.copyWith(
+        scopedTags: [
+          for (final assignment in _block.scopedTags)
+            if (!_sameTarget(assignment.target, target)) assignment,
+        ],
+        clearIndex: true,
+      );
+    });
+    widget.onChanged?.call(_block);
+  }
+
+  void _deleteChunk() {
+    widget.onDelete?.call();
+    Navigator.of(context).maybePop();
+  }
+
+  List<NoteKnowledgeTag> _tagsForSelection(_TableSelection selection) {
+    final target = selection.toTagTarget();
+    for (final assignment in _block.scopedTags) {
+      if (_sameTarget(assignment.target, target)) {
+        return assignment.tags;
+      }
+    }
+    return const [];
+  }
+
+  bool _hasTags(_TableSelection selection) => _tagsForSelection(selection).isNotEmpty;
+
+  bool _sameTarget(NoteTagTarget left, NoteTagTarget right) {
+    return left.kind == right.kind &&
+        left.rowIndex == right.rowIndex &&
+        left.columnIndex == right.columnIndex &&
+        left.elementId == right.elementId &&
+        left.listItemId == right.listItemId &&
+        left.rangeId == right.rangeId;
+  }
+
   @override
   Widget build(BuildContext context) {
     _normalizeRows();
     final columnCount = _columnCount;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Táblázat szerkesztő'),
-        actions: [
+      appBar: NoteChunkEditorHeader(
+        title: _block.title,
+        fallbackTitle: 'Táblázat',
+        onTitleChanged: _emitTitle,
+        onTagChunk: () => unawaited(_tagChunk()),
+        onTagSelection: () => unawaited(_tagSelection()),
+        onDeleteSelectedTag: _deleteSelectedTag,
+        onDeleteChunk: _deleteChunk,
+        canDeleteSelectedTag: _selection != null && _hasTags(_selection!),
+        trailingActions: [
           IconButton(
             key: const ValueKey('note-table-appbar-add-column'),
             tooltip: 'Oszlop hozzáadása',
@@ -193,93 +311,269 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
             onPressed: _addRow,
             icon: const Icon(Icons.table_rows_outlined),
           ),
-          if (widget.onChanged == null)
-            TextButton.icon(
-              key: const ValueKey('note-table-save'),
-              onPressed: _save,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Mentés'),
-            ),
         ],
+        saveAction: widget.onChanged == null
+            ? TextButton.icon(
+                key: const ValueKey('note-table-save'),
+                onPressed: _save,
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Mentés'),
+              )
+            : null,
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 120),
-        scrollDirection: Axis.horizontal,
-        child: SingleChildScrollView(
-          child: DataTable(
-            columns: [
-              for (var column = 0; column < columnCount; column += 1)
-                DataColumn(
-                  label: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Oszlop ${column + 1}'),
-                      IconButton(
-                        key: ValueKey('note-table-insert-column-$column'),
-                        tooltip: 'Oszlop beszúrása jobbra',
-                        onPressed: () => _insertColumn(column + 1),
-                        icon: const Icon(Icons.add, size: 16),
-                      ),
-                      IconButton(
-                        key: ValueKey('note-table-delete-column-$column'),
-                        tooltip: 'Oszlop törlése',
-                        onPressed: () => _deleteColumn(column),
-                        icon: const Icon(Icons.close, size: 16),
-                      ),
-                    ],
-                  ),
-                ),
-              const DataColumn(label: Text('Sor')),
-            ],
-            rows: [
-              for (var row = 0; row < _rows.length; row += 1)
-                DataRow(
-                  cells: [
+      body: Column(
+        children: [
+          if (_block.tags.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: NoteTagPills(tags: _block.tags),
+              ),
+            ),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              scrollDirection: Axis.horizontal,
+              child: SingleChildScrollView(
+                child: DataTable(
+                  columns: [
                     for (var column = 0; column < columnCount; column += 1)
-                      DataCell(
-                        SizedBox(
-                          width: 140,
-                          child: TextFormField(
-                            key: ValueKey('note-table-cell-$row-$column'),
-                            controller: _controllerFor(row, column),
-                            decoration: const InputDecoration(border: InputBorder.none),
-                            onChanged: (value) => _updateCell(row, column, value),
-                          ),
+                      DataColumn(
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            InkWell(
+                              key: ValueKey('note-table-select-column-$column'),
+                              onTap: () => setState(
+                                () => _selection = _TableSelection.column(column),
+                              ),
+                              child: Stack(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    child: Text('Oszlop ${column + 1}'),
+                                  ),
+                                  if (_hasTags(_TableSelection.column(column)))
+                                    const Positioned(
+                                      left: 0,
+                                      right: 0,
+                                      top: 0,
+                                      child: _TableTopMarker(),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              key: ValueKey('note-table-insert-column-$column'),
+                              tooltip: 'Oszlop beszúrása jobbra',
+                              onPressed: () => _insertColumn(column + 1),
+                              icon: const Icon(Icons.add, size: 16),
+                            ),
+                            IconButton(
+                              key: ValueKey('note-table-delete-column-$column'),
+                              tooltip: 'Oszlop törlése',
+                              onPressed: () => _deleteColumn(column),
+                              icon: const Icon(Icons.close, size: 16),
+                            ),
+                          ],
                         ),
                       ),
-                    DataCell(
-                      IconButton(
-                        tooltip: 'Sor törlése',
-                        onPressed: () => _deleteRow(row),
-                        icon: const Icon(Icons.delete_outline),
+                    const DataColumn(label: Text('Sor')),
+                  ],
+                  rows: [
+                    for (var row = 0; row < _rows.length; row += 1)
+                      DataRow(
+                        cells: [
+                          for (var column = 0; column < columnCount; column += 1)
+                            DataCell(
+                              SizedBox(
+                                width: 150,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    if (_selection?.isCell(row, column) == true)
+                                      Positioned.fill(
+                                        child: DecoratedBox(
+                                          key: ValueKey('note-table-selected-cell-$row-$column'),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: const Color(0xFF2563EB),
+                                              width: 2,
+                                            ),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                        ),
+                                      ),
+                                    TextFormField(
+                                      key: ValueKey('note-table-cell-$row-$column'),
+                                      controller: _controllerFor(row, column),
+                                      decoration: const InputDecoration(border: InputBorder.none),
+                                      onChanged: (value) => _updateCell(row, column, value),
+                                    ),
+                                    Positioned(
+                                      right: -6,
+                                      top: -4,
+                                      child: IconButton(
+                                        key: ValueKey('note-table-select-cell-$row-$column'),
+                                        tooltip: 'Cella kijelölése',
+                                        visualDensity: VisualDensity.compact,
+                                        constraints: const BoxConstraints.tightFor(width: 26, height: 26),
+                                        padding: EdgeInsets.zero,
+                                        onPressed: () => setState(
+                                          () => _selection = _TableSelection.cell(row, column),
+                                        ),
+                                        icon: const Icon(Icons.crop_square, size: 14),
+                                      ),
+                                    ),
+                                    if (_hasTags(_TableSelection.cell(row, column)))
+                                      Positioned(
+                                        key: ValueKey('note-table-cell-tag-marker-$row-$column'),
+                                        right: 2,
+                                        bottom: 2,
+                                        child: const _TableCornerMarker(),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                InkWell(
+                                  key: ValueKey('note-table-select-row-$row'),
+                                  onTap: () => setState(
+                                    () => _selection = _TableSelection.row(row),
+                                  ),
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 36,
+                                    child: _hasTags(_TableSelection.row(row))
+                                        ? const _TableRowMarker()
+                                        : const Icon(Icons.table_rows_outlined, size: 16),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Sor törlése',
+                                  onPressed: () => _deleteRow(row),
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
                   ],
                 ),
-            ],
+              ),
+            ),
           ),
-        ),
-      ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton.small(
-            key: const ValueKey('note-table-add-column'),
-            heroTag: 'note-table-add-column',
-            onPressed: _addColumn,
-            child: const Icon(Icons.view_column_outlined),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton.extended(
-            key: const ValueKey('note-table-add-row'),
-            heroTag: 'note-table-add-row',
-            onPressed: _addRow,
-            icon: const Icon(Icons.table_rows_outlined),
-            label: const Text('Sor'),
-          ),
+          if (_selection != null && _tagsForSelection(_selection!).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: NoteSelectedTagTray(tags: _tagsForSelection(_selection!)),
+              ),
+            ),
         ],
       ),
     );
   }
 }
+
+enum _TableSelectionKind { row, column, cell }
+
+class _TableSelection {
+  const _TableSelection._(this.kind, {this.rowIndex, this.columnIndex});
+
+  factory _TableSelection.row(int rowIndex) {
+    return _TableSelection._(_TableSelectionKind.row, rowIndex: rowIndex);
+  }
+
+  factory _TableSelection.column(int columnIndex) {
+    return _TableSelection._(_TableSelectionKind.column, columnIndex: columnIndex);
+  }
+
+  factory _TableSelection.cell(int rowIndex, int columnIndex) {
+    return _TableSelection._(
+      _TableSelectionKind.cell,
+      rowIndex: rowIndex,
+      columnIndex: columnIndex,
+    );
+  }
+
+  final _TableSelectionKind kind;
+  final int? rowIndex;
+  final int? columnIndex;
+
+  bool isCell(int row, int column) {
+    return kind == _TableSelectionKind.cell &&
+        rowIndex == row &&
+        columnIndex == column;
+  }
+
+  NoteTagTarget toTagTarget() {
+    return switch (kind) {
+      _TableSelectionKind.row => NoteTagTarget(
+          kind: NoteTagTargetKind.tableRow,
+          rowIndex: rowIndex,
+        ),
+      _TableSelectionKind.column => NoteTagTarget(
+          kind: NoteTagTargetKind.tableColumn,
+          columnIndex: columnIndex,
+        ),
+      _TableSelectionKind.cell => NoteTagTarget(
+          kind: NoteTagTargetKind.tableCell,
+          rowIndex: rowIndex,
+          columnIndex: columnIndex,
+        ),
+    };
+  }
+}
+
+class _TableCornerMarker extends StatelessWidget {
+  const _TableCornerMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2563EB),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: const SizedBox.square(dimension: 8),
+    );
+  }
+}
+
+class _TableTopMarker extends StatelessWidget {
+  const _TableTopMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(color: Color(0xFF2563EB)),
+      child: SizedBox(height: 4),
+    );
+  }
+}
+
+class _TableRowMarker extends StatelessWidget {
+  const _TableRowMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Align(
+      alignment: Alignment.centerLeft,
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: Color(0xFF2563EB)),
+        child: SizedBox(width: 4, height: 28),
+      ),
+    );
+  }
+}
+
+void unawaited(Future<void> future) {}

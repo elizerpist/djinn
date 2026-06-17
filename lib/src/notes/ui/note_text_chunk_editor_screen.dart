@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/note_document.dart';
+import 'note_chunk_editor_header.dart';
+import 'note_tag_pills.dart';
 import 'tag_manager_sheet.dart';
 
 class NoteTextChunkEditorScreen extends StatefulWidget {
@@ -8,10 +10,12 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
     super.key,
     required this.block,
     required this.onChanged,
+    this.onDelete,
   });
 
   final NoteBlock block;
   final ValueChanged<NoteBlock> onChanged;
+  final VoidCallback? onDelete;
 
   @override
   State<NoteTextChunkEditorScreen> createState() => _NoteTextChunkEditorScreenState();
@@ -55,6 +59,26 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     widget.onChanged(_block);
   }
 
+  void _emitTitle(String value) {
+    setState(() {
+      _block = _block.copyWith(title: value.trim(), clearIndex: true);
+    });
+    widget.onChanged(_block);
+  }
+
+  Future<void> _tagChunk() async {
+    final tags = await showTagManagerSheet(
+      context,
+      initialTags: _block.tags,
+      title: 'Chunk tagjei',
+    );
+    if (tags == null) {
+      return;
+    }
+    setState(() => _block = _block.copyWith(tags: tags, clearIndex: true));
+    widget.onChanged(_block);
+  }
+
   Future<void> _tagSelection() async {
     final text = _controller.text;
     final selection = _controller.selection;
@@ -70,7 +94,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     final tags = await showTagManagerSheet(
       context,
       initialTags: const [],
-      singleSelection: true,
       title: 'Kijelölt rész tagje',
     );
     if (tags == null || tags.isEmpty) {
@@ -81,6 +104,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       start: start.clamp(0, text.length).toInt(),
       end: end.clamp(0, text.length).toInt(),
       tag: tags.first,
+      tags: tags,
     );
     if (!rangeTag.isValid) {
       return;
@@ -91,6 +115,40 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
     });
     widget.onChanged(_block);
+  }
+
+  bool _selectionHasTag() {
+    final selection = _controller.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      return false;
+    }
+    final start = selection.start < selection.end ? selection.start : selection.end;
+    final end = selection.start < selection.end ? selection.end : selection.start;
+    return _block.rangeTags.any(
+      (tag) => tag.start < end && tag.end > start,
+    );
+  }
+
+  void _deleteSelectedTag() {
+    final selection = _controller.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      return;
+    }
+    final start = selection.start < selection.end ? selection.start : selection.end;
+    final end = selection.start < selection.end ? selection.end : selection.start;
+    setState(() {
+      final rangeTags = _block.rangeTags
+          .where((tag) => !(tag.start < end && tag.end > start))
+          .toList(growable: false);
+      _controller.rangeTags = rangeTags;
+      _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
+    });
+    widget.onChanged(_block);
+  }
+
+  void _deleteChunk() {
+    widget.onDelete?.call();
+    Navigator.of(context).maybePop();
   }
 
   void _changeParagraphIndent(int delta) {
@@ -134,15 +192,16 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       key: const ValueKey('note-text-chunk-editor'),
-      appBar: AppBar(
-        title: Text(_block.type == NoteBlockType.heading ? 'Címsor szerkesztése' : 'Szöveg szerkesztése'),
-        actions: [
-          IconButton(
-            key: const ValueKey('note-text-tag-selection'),
-            tooltip: 'Kijelölt rész tagelése',
-            onPressed: () => unawaited(_tagSelection()),
-            icon: const Icon(Icons.label_outline),
-          ),
+      appBar: NoteChunkEditorHeader(
+        title: _block.title,
+        fallbackTitle: _block.type == NoteBlockType.heading ? 'Címsor' : 'Szöveg',
+        onTitleChanged: _emitTitle,
+        onTagChunk: () => unawaited(_tagChunk()),
+        onTagSelection: () => unawaited(_tagSelection()),
+        onDeleteSelectedTag: _deleteSelectedTag,
+        onDeleteChunk: _deleteChunk,
+        canDeleteSelectedTag: _selectionHasTag(),
+        trailingActions: [
           IconButton(
             key: const ValueKey('note-text-outdent'),
             tooltip: 'Bekezdés kijjebb',
@@ -157,25 +216,67 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        child: TextField(
-          key: const ValueKey('note-text-chunk-field'),
-          controller: _controller,
-          focusNode: _focusNode,
-          autofocus: true,
-          expands: true,
-          maxLines: null,
-          minLines: null,
-          keyboardType: TextInputType.multiline,
-          textInputAction: TextInputAction.newline,
-          decoration: const InputDecoration(
-            hintText: 'Írd ide a chunk tartalmát',
-            border: InputBorder.none,
+      body: Column(
+        children: [
+          if (_block.tags.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: NoteTagPills(tags: _block.tags),
+              ),
+            ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: TextField(
+                key: const ValueKey('note-text-chunk-field'),
+                controller: _controller,
+                focusNode: _focusNode,
+                autofocus: true,
+                expands: true,
+                maxLines: null,
+                minLines: null,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                decoration: const InputDecoration(
+                  hintText: 'Írd ide a chunk tartalmát',
+                  border: InputBorder.none,
+                ),
+                style: const TextStyle(fontSize: 16, height: 1.45),
+                onChanged: _emitText,
+              ),
+            ),
           ),
-          style: const TextStyle(fontSize: 16, height: 1.45),
-          onChanged: _emitText,
-        ),
+          if (_block.rangeTags.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: NoteTagPills(
+                  tags: [
+                    for (final rangeTag in _block.rangeTags)
+                      ...rangeTag.resolvedTags,
+                  ],
+                  prefix: 'note-local-tag-pill',
+                ),
+              ),
+            ),
+          Container(
+            key: const ValueKey('note-text-tip-bar'),
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'Írj szöveget, jelöld ki a részt, majd a hárompontos menüből taggeld.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -218,6 +319,7 @@ List<NoteTextRangeTag> _adjustRangeTagsForEdit({
             start: tag.start + delta,
             end: tag.end + delta,
             tag: tag.tag,
+            tags: tag.tags,
           );
         }
         final replacementEnd = newSuffix;
@@ -227,6 +329,7 @@ List<NoteTextRangeTag> _adjustRangeTagsForEdit({
             start: prefix,
             end: replacementEnd,
             tag: tag.tag,
+            tags: tag.tags,
           );
         }
         return NoteTextRangeTag(
@@ -236,6 +339,7 @@ List<NoteTextRangeTag> _adjustRangeTagsForEdit({
               ? tag.end + delta
               : replacementEnd,
           tag: tag.tag,
+          tags: tag.tags,
         );
       })
       .map((tag) => tag.clampToTextLength(newText.length))
@@ -285,7 +389,7 @@ class _TaggedTextEditingController extends TextEditingController {
         text: textValue.substring(rangeTag.start, rangeTag.end),
         style: TextStyle(
           backgroundColor: Color(
-            rangeTag.tag.resolvedColorValue,
+            rangeTag.resolvedTags.first.resolvedColorValue,
           ).withValues(alpha: 0.22),
           fontWeight: FontWeight.w600,
         ),

@@ -353,6 +353,188 @@ Tartomány | Teendő | Áramlás
   );
 
   test(
+    'does not return opposite branch polarity siblings as supporting evidence',
+    () async {
+      final notes = MemoryNoteRepository();
+      await notes.createDocumentNote(
+        title: 'Légzési elégtelenség',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'flow',
+              type: NoteBlockType.flowchart,
+              nodes: [
+                NoteFlowchartNode(
+                  id: 'severity',
+                  label: 'Súlyos?',
+                  kind: NoteFlowchartNodeKind.binaryDecision,
+                  ports: [
+                    NoteFlowchartPort(
+                      id: 'yes',
+                      side: NoteFlowchartPortSide.bottom,
+                      label: 'Igen',
+                      semantic: NoteFlowchartPortSemantic.yes,
+                    ),
+                    NoteFlowchartPort(
+                      id: 'no',
+                      side: NoteFlowchartPortSide.bottom,
+                      label: 'Nem',
+                      semantic: NoteFlowchartPortSemantic.no,
+                    ),
+                  ],
+                ),
+                NoteFlowchartNode(id: 'oxygen', label: 'Oxigén'),
+                NoteFlowchartNode(id: 'observe', label: 'Megfigyelés'),
+              ],
+              edges: [
+                NoteFlowchartEdge(
+                  id: 'yes-edge',
+                  fromNodeId: 'severity',
+                  fromPortId: 'yes',
+                  toNodeId: 'oxygen',
+                  label: 'Igen',
+                ),
+                NoteFlowchartEdge(
+                  id: 'no-edge',
+                  fromNodeId: 'severity',
+                  fromPortId: 'no',
+                  toNodeId: 'observe',
+                  label: 'Nem',
+                ),
+              ],
+            ),
+            NoteBlock(
+              id: 'oxygen-table',
+              type: NoteBlockType.table,
+              rows: [
+                ['Állapot', 'Teendő'],
+                ['Súlyos légzési elégtelenség', 'magas áramlású oxigén'],
+                ['Nem súlyos légzési elégtelenség', 'megfigyelés'],
+              ],
+            ),
+          ],
+        ),
+      );
+
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
+
+      final results = await retriever.retrieveLocalVector(
+        query: 'súlyos légzési elégtelenség esetén oxigén',
+        limit: 8,
+        mode: 'mediapipe_text_embedder',
+      );
+      final ids = results.map((item) => item.id).join('\n');
+      final joined = results.map((item) => item.text).join('\n');
+
+      expect(ids, contains('yes-edge'));
+      expect(ids, isNot(contains('no-edge')));
+      expect(joined, contains('magas áramlású oxigén'));
+      expect(joined, isNot(contains('megfigyelés')));
+    },
+  );
+
+  test(
+    'keeps generic severe injury notes out of respiratory failure queries',
+    () async {
+      final notes = MemoryNoteRepository();
+      await notes.createDocumentNote(
+        title: 'Légzési elégtelenség',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'therapy',
+              type: NoteBlockType.table,
+              rows: [
+                ['Állapot', 'Teendő'],
+                ['Súlyos légzési elégtelenség', 'magas áramlású oxigén'],
+              ],
+            ),
+          ],
+        ),
+      );
+      await notes.createDocumentNote(
+        title: 'Súlyos sérült',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'trauma',
+              type: NoteBlockType.paragraph,
+              text: 'Súlyos sérült ellátásakor elsődleges a vérzéscsillapítás.',
+            ),
+          ],
+        ),
+      );
+
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
+
+      final results = await retriever.retrieveLocalVector(
+        query: 'súlyos légzési elégtelenség',
+        limit: 8,
+        mode: 'embedding_gemma',
+      );
+      final labels = results.map((item) => item.label).join('\n');
+      final text = results.map((item) => item.text).join('\n');
+
+      expect(labels, contains('Légzési elégtelenség'));
+      expect(labels, isNot(contains('Súlyos sérült')));
+      expect(text, contains('magas áramlású oxigén'));
+      expect(text, isNot(contains('vérzéscsillapítás')));
+    },
+  );
+
+  test(
+    'mixed severe injury respiratory failure queries can retain both notes',
+    () async {
+      final notes = MemoryNoteRepository();
+      await notes.createDocumentNote(
+        title: 'Légzési elégtelenség',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'resp',
+              type: NoteBlockType.paragraph,
+              text: 'Súlyos légzési elégtelenség esetén magas áramlású oxigén szükséges.',
+            ),
+          ],
+        ),
+      );
+      await notes.createDocumentNote(
+        title: 'Súlyos sérült',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'trauma-resp',
+              type: NoteBlockType.paragraph,
+              text: 'Súlyos sérült légzési elégtelensége esetén légútbiztosítás és oxigén kell.',
+            ),
+          ],
+        ),
+      );
+
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
+
+      final results = await retriever.retrieveLocalVector(
+        query: 'súlyos sérült légzési elégtelensége',
+        limit: 8,
+        mode: 'embedding_gemma',
+      );
+      final labels = results.map((item) => item.label).join('\n');
+
+      expect(labels, contains('Légzési elégtelenség'));
+      expect(labels, contains('Súlyos sérült'));
+    },
+  );
+
+  test(
     'local vector note retrieval returns relevant long text rule units only',
     () async {
       final notes = MemoryNoteRepository();

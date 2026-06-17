@@ -35,10 +35,12 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('note-table-cell-0-1')), '88-92%');
-    await tester.tap(find.byKey(const ValueKey('note-table-add-column')));
+    expect(find.byKey(const ValueKey('note-table-add-column')), findsNothing);
+    expect(find.byKey(const ValueKey('note-table-add-row')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('note-table-appbar-add-column')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('note-table-cell-0-2')), 'Cél');
-    await tester.tap(find.byKey(const ValueKey('note-table-add-row')));
+    await tester.tap(find.byKey(const ValueKey('note-table-appbar-add-row')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('note-table-cell-1-0')), 'SpO2');
     await tester.tap(find.byKey(const ValueKey('note-table-save')));
@@ -78,6 +80,51 @@ void main() {
     expect(find.byKey(const ValueKey('note-table-cell-1-3')), findsOneWidget);
     expect(latest, isNotNull);
     expect(latest!.rows, everyElement(hasLength(4)));
+  });
+
+  testWidgets('table editor selects cells and stores scoped tags in an external tray', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            title: 'Oxigén táblázat',
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-table-select-cell-1-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-table-selected-cell-1-1')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-chunk-menu-tag-selection')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'súlyos');
+    await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(
+      latest!.scopedTags.single.target.kind,
+      NoteTagTargetKind.tableCell,
+    );
+    expect(latest!.scopedTags.single.target.rowIndex, 1);
+    expect(latest!.scopedTags.single.target.columnIndex, 1);
+    expect(find.byKey(const ValueKey('note-table-cell-tag-marker-1-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selected-tag-tray')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selected-tag-pill-súlyos')), findsOneWidget);
   });
 
 }

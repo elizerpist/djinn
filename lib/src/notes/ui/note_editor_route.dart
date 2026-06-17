@@ -269,18 +269,22 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         NoteBlockType.heading || NoteBlockType.paragraph => NoteTextChunkEditorScreen(
             block: current,
             onChanged: _replaceBlock,
+            onDelete: () => _deleteBlock(current),
           ),
         NoteBlockType.listItem => NoteListChunkEditorScreen(
             block: current,
             onChanged: _replaceBlock,
+            onDelete: () => _deleteBlock(current),
           ),
         NoteBlockType.table => NoteTableEditorScreen(
             block: current,
             onChanged: _replaceBlock,
+            onDelete: () => _deleteBlock(current),
           ),
         NoteBlockType.flowchart => NoteFlowchartEditorScreen(
             block: current,
             onChanged: _replaceBlock,
+            onDelete: () => _deleteBlock(current),
           ),
       };
     }

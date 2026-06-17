@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,16 +7,21 @@ import 'package:flutter/services.dart';
 import '../../ai/ai_client.dart';
 import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
+import 'note_chunk_editor_header.dart';
+import 'note_tag_pills.dart';
+import 'tag_manager_sheet.dart';
 
 class NoteFlowchartEditorScreen extends StatefulWidget {
   const NoteFlowchartEditorScreen({
     super.key,
     required this.block,
     this.onChanged,
+    this.onDelete,
   });
 
   final NoteBlock block;
   final ValueChanged<NoteBlock>? onChanged;
+  final VoidCallback? onDelete;
 
   @override
   State<NoteFlowchartEditorScreen> createState() => _NoteFlowchartEditorScreenState();
@@ -39,6 +45,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
   final TextEditingController _inlineEdgeController = TextEditingController();
   String? _editingNodeId;
   String? _editingEdgeId;
+  String? _selectedNodeId;
   final Map<String, Stopwatch> _dragWatches = <String, Stopwatch>{};
   final Map<String, int> _dragMoveCounts = <String, int>{};
   Size _viewportSize = const Size(430, 720);
@@ -102,6 +109,105 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     Navigator.of(context).pop(_block);
   }
 
+  void _emitTitle(String value) {
+    setState(() => _block = _block.copyWith(title: value.trim(), clearIndex: true));
+    widget.onChanged?.call(_block);
+  }
+
+  Future<void> _tagChunk() async {
+    final tags = await showTagManagerSheet(
+      context,
+      initialTags: _block.tags,
+      title: 'Chunk tagjei',
+    );
+    if (tags == null) {
+      return;
+    }
+    setState(() => _block = _block.copyWith(tags: tags, clearIndex: true));
+    widget.onChanged?.call(_block);
+  }
+
+  Future<void> _tagSelection() async {
+    final selectedNodeId = _selectedNodeId;
+    if (selectedNodeId == null) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Válassz ki egy flowchart boxot a tageléshez')),
+      );
+      return;
+    }
+    final tags = await showTagManagerSheet(
+      context,
+      initialTags: _tagsForNode(selectedNodeId),
+      title: 'Flowchart box tagjei',
+    );
+    if (tags == null) {
+      return;
+    }
+    final target = NoteTagTarget(
+      kind: NoteTagTargetKind.flowchartNode,
+      elementId: selectedNodeId,
+    );
+    setState(() {
+      _block = _block.copyWith(
+        scopedTags: [
+          for (final assignment in _block.scopedTags)
+            if (!_sameTagTarget(assignment.target, target)) assignment,
+          if (tags.isNotEmpty)
+            NoteScopedTagAssignment(
+              id: 'flow-tag-${DateTime.now().microsecondsSinceEpoch}',
+              target: target,
+              tags: tags,
+            ),
+        ],
+        clearIndex: true,
+      );
+    });
+    widget.onChanged?.call(_block);
+  }
+
+  void _deleteSelectedTag() {
+    final selectedNodeId = _selectedNodeId;
+    if (selectedNodeId == null) {
+      return;
+    }
+    final target = NoteTagTarget(
+      kind: NoteTagTargetKind.flowchartNode,
+      elementId: selectedNodeId,
+    );
+    setState(() {
+      _block = _block.copyWith(
+        scopedTags: [
+          for (final assignment in _block.scopedTags)
+            if (!_sameTagTarget(assignment.target, target)) assignment,
+        ],
+        clearIndex: true,
+      );
+    });
+    widget.onChanged?.call(_block);
+  }
+
+  void _deleteChunk() {
+    widget.onDelete?.call();
+    Navigator.of(context).maybePop();
+  }
+
+  bool _sameTagTarget(NoteTagTarget left, NoteTagTarget right) {
+    return left.kind == right.kind && left.elementId == right.elementId;
+  }
+
+  List<NoteKnowledgeTag> _tagsForNode(String nodeId) {
+    for (final assignment in _block.scopedTags) {
+      if (assignment.target.kind == NoteTagTargetKind.flowchartNode &&
+          assignment.target.elementId == nodeId) {
+        return assignment.tags;
+      }
+    }
+    return const [];
+  }
+
+  bool _nodeHasTags(String nodeId) => _tagsForNode(nodeId).isNotEmpty;
+
   String _nextNodeId() {
     var index = _block.nodes.length + 1;
     while (_block.nodes.any((node) => node.id == 'node-$index')) {
@@ -159,7 +265,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
         'visible=${visible.left.toStringAsFixed(0)},${visible.top.toStringAsFixed(0)},${visible.width.toStringAsFixed(0)}x${visible.height.toStringAsFixed(0)}',
       );
     }
-    if (mounted && (_viewportLogTick == 1 || _viewportLogTick % 4 == 0)) {
+    if (mounted && (_viewportLogTick == 1 || _viewportLogTick % 12 == 0)) {
       setState(() {});
     }
   }
@@ -908,17 +1014,23 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     }
     return Scaffold(
       key: const ValueKey('note-flowchart-canvas-editor'),
-      appBar: AppBar(
-        title: const Text('Flowchart szerkesztő'),
-        actions: [
-          if (widget.onChanged == null)
-            TextButton.icon(
-              key: const ValueKey('note-flowchart-save'),
-              onPressed: _save,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Mentés'),
-            ),
-        ],
+      appBar: NoteChunkEditorHeader(
+        title: _block.title,
+        fallbackTitle: 'Flowchart',
+        onTitleChanged: _emitTitle,
+        onTagChunk: () => unawaited(_tagChunk()),
+        onTagSelection: () => unawaited(_tagSelection()),
+        onDeleteSelectedTag: _deleteSelectedTag,
+        onDeleteChunk: _deleteChunk,
+        canDeleteSelectedTag: _selectedNodeId != null && _nodeHasTags(_selectedNodeId!),
+        saveAction: widget.onChanged == null
+            ? TextButton.icon(
+                key: const ValueKey('note-flowchart-save'),
+                onPressed: _save,
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Mentés'),
+              )
+            : null,
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -1012,7 +1124,10 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                                         onCancelEdit: () => _cancelNodeEdit(dataNodesById[canvasNode.id]!),
                                         inlineController: _editingNodeId == canvasNode.id ? _inlineNodeController : null,
                                         editing: _editingNodeId == canvasNode.id,
+                                        selected: _selectedNodeId == canvasNode.id,
+                                        tagged: _nodeHasTags(canvasNode.id),
                                         connectModeActive: _linkSource != null,
+                                        onSelect: () => setState(() => _selectedNodeId = canvasNode.id),
                                         onDelete: () => _deleteNode(dataNodesById[canvasNode.id]!),
                                         onConnectorTap: (connector) => _handleConnectorTap(dataNodesById[canvasNode.id]!, connector),
                                       ),
@@ -1033,10 +1148,15 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                   onZoomOut: () => _zoomCanvas(1 / 1.18),
                 ),
               ),
+              if (_selectedNodeId != null && _tagsForNode(_selectedNodeId!).isNotEmpty)
+                Positioned(
+                  left: 12,
+                  top: 68,
+                  child: NoteSelectedTagTray(tags: _tagsForNode(_selectedNodeId!)),
+                ),
               Positioned(
-                left: 12,
-                right: 12,
-                bottom: 16,
+                right: 16,
+                bottom: 24,
                 child: _FlowchartPalette(
                   activeKind: _paletteDragKind,
                   onTapIgnored: (kind) => _log('palette tap ignored kind=${kind.wireName} reason=drag_only'),
@@ -1087,7 +1207,10 @@ class _CanvasNodeCard extends StatelessWidget {
     required this.onCancelEdit,
     required this.inlineController,
     required this.editing,
+    required this.selected,
+    required this.tagged,
     required this.connectModeActive,
+    required this.onSelect,
     required this.onDelete,
     required this.onConnectorTap,
   });
@@ -1105,7 +1228,10 @@ class _CanvasNodeCard extends StatelessWidget {
   final VoidCallback onCancelEdit;
   final TextEditingController? inlineController;
   final bool editing;
+  final bool selected;
+  final bool tagged;
   final bool connectModeActive;
+  final VoidCallback onSelect;
   final VoidCallback onDelete;
   final ValueChanged<_ConnectorSpec> onConnectorTap;
 
@@ -1143,8 +1269,8 @@ class _CanvasNodeCard extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: selectedForLink ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
-                        width: selectedForLink ? 2 : 1,
+                        color: selectedForLink || selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+                        width: selectedForLink || selected ? 2 : 1,
                       ),
                       boxShadow: const [
                         BoxShadow(color: Color(0x1A111827), blurRadius: 10, offset: Offset(0, 3)),
@@ -1219,6 +1345,23 @@ class _CanvasNodeCard extends StatelessWidget {
                             ),
                           ),
                           IconButton(
+                            key: ValueKey('note-flowchart-node-select-${node.id}'),
+                            tooltip: 'Box kijelölése',
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                            onPressed: onSelect,
+                            icon: Icon(
+                              selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                              size: 17,
+                            ),
+                          ),
+                          if (tagged)
+                            Padding(
+                              key: ValueKey('note-flowchart-node-tag-marker-${node.id}'),
+                              padding: const EdgeInsets.only(top: 9, right: 2),
+                              child: const _FlowchartTagMarker(),
+                            ),
+                          IconButton(
                             tooltip: 'Törlés',
                             visualDensity: VisualDensity.compact,
                             onPressed: onDelete,
@@ -1251,6 +1394,24 @@ class _CanvasNodeCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FlowchartTagMarker extends StatelessWidget {
+  const _FlowchartTagMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2563EB),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: const [
+          BoxShadow(color: Color(0x332563EB), blurRadius: 8),
+        ],
+      ),
+      child: const SizedBox.square(dimension: 10),
     );
   }
 }
@@ -1404,36 +1565,25 @@ class _FlowchartPalette extends StatelessWidget {
       NoteFlowchartNodeKind.binaryDecision,
       NoteFlowchartNodeKind.multiDecision,
     ];
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [BoxShadow(color: Color(0x1A111827), blurRadius: 12, offset: Offset(0, 4))],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final kind in kinds) ...[
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onTapIgnored(kind),
-                onLongPressStart: (details) => onDragStart(kind, details.globalPosition),
-                onLongPressMoveUpdate: (details) => onDragUpdate(kind, details.globalPosition),
-                onLongPressEnd: (details) => onDragEnd(kind, details.globalPosition),
-                onLongPressCancel: () => onDragCancel(kind),
-                child: Opacity(
-                  opacity: activeKind == kind ? 0.35 : 1,
-                  child: _PaletteButton(kind: kind),
-                ),
-              ),
-              if (kind != kinds.last) const SizedBox(height: 4),
-            ],
-          ],
-        ),
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final kind in kinds) ...[
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onTapIgnored(kind),
+            onLongPressStart: (details) => onDragStart(kind, details.globalPosition),
+            onLongPressMoveUpdate: (details) => onDragUpdate(kind, details.globalPosition),
+            onLongPressEnd: (details) => onDragEnd(kind, details.globalPosition),
+            onLongPressCancel: () => onDragCancel(kind),
+            child: Opacity(
+              opacity: activeKind == kind ? 0.35 : 1,
+              child: _PaletteButton(kind: kind),
+            ),
+          ),
+          if (kind != kinds.last) const SizedBox(height: 12),
+        ],
+      ],
     );
   }
 }
@@ -1448,16 +1598,15 @@ class _PaletteButton extends StatelessWidget {
     return Semantics(
       label: _kindLabel(kind),
       button: true,
-      child: DecoratedBox(
-        key: ValueKey('note-flowchart-palette-${_kindKey(kind)}'),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-        ),
+      child: Material(
+        key: ValueKey('note-flowchart-fab-${_kindKey(kind)}'),
+        elevation: 4,
+        color: const Color(0xFF2563EB),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
         child: SizedBox.square(
-          dimension: 48,
-          child: Icon(_kindIcon(kind), color: const Color(0xFF374151)),
+          dimension: 52,
+          child: Icon(_kindIcon(kind), color: Colors.white),
         ),
       ),
     );

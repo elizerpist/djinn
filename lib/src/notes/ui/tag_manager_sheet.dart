@@ -5,6 +5,7 @@ import '../models/note_document.dart';
 Future<List<NoteKnowledgeTag>?> showTagManagerSheet(
   BuildContext context, {
   required List<NoteKnowledgeTag> initialTags,
+  List<NoteKnowledgeTag> availableTags = const [],
   bool singleSelection = false,
   String title = 'Tagek',
 }) {
@@ -14,6 +15,7 @@ Future<List<NoteKnowledgeTag>?> showTagManagerSheet(
     useSafeArea: true,
     builder: (context) => _TagManagerSheet(
       initialTags: initialTags,
+      availableTags: availableTags,
       singleSelection: singleSelection,
       title: title,
     ),
@@ -23,11 +25,13 @@ Future<List<NoteKnowledgeTag>?> showTagManagerSheet(
 class _TagManagerSheet extends StatefulWidget {
   const _TagManagerSheet({
     required this.initialTags,
+    required this.availableTags,
     required this.singleSelection,
     required this.title,
   });
 
   final List<NoteKnowledgeTag> initialTags;
+  final List<NoteKnowledgeTag> availableTags;
   final bool singleSelection;
   final String title;
 
@@ -36,15 +40,23 @@ class _TagManagerSheet extends StatefulWidget {
 }
 
 class _TagManagerSheetState extends State<_TagManagerSheet> {
+  static final Map<String, NoteKnowledgeTag> _registry = <String, NoteKnowledgeTag>{};
+
   late List<NoteKnowledgeTag> _tags;
+  late List<NoteKnowledgeTag> _availableTags;
   late final TextEditingController _labelController;
   String _type = NoteKnowledgeTagTypes.topic;
   int _colorValue = noteTagColorSlots.first;
+  String? _editingKey;
 
   @override
   void initState() {
     super.initState();
     _tags = [...widget.initialTags];
+    for (final tag in [...widget.availableTags, ...widget.initialTags]) {
+      _rememberTag(tag);
+    }
+    _availableTags = _sortedRegisteredTags();
     _labelController = TextEditingController();
     if (_tags.isNotEmpty) {
       _type = NoteKnowledgeTagTypes.normalize(_tags.last.type);
@@ -68,16 +80,23 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
       label: label,
       colorValue: _colorValue,
     );
+    final editedKey = _editingKey;
+    if (editedKey != null) {
+      _registry.remove(editedKey);
+    }
+    _rememberTag(tag);
     setState(() {
+      _availableTags = _sortedRegisteredTags();
       if (widget.singleSelection) {
         _tags = [tag];
       } else {
         _tags = [
-          ..._tags.where((existing) => existing.metadataText != tag.metadataText),
+          ..._tags.where((existing) => existing.metadataText != tag.metadataText && existing.metadataText != editedKey),
           tag,
         ];
       }
       _labelController.clear();
+      _editingKey = null;
     });
   }
 
@@ -87,6 +106,62 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
           .where((existing) => existing.metadataText != tag.metadataText)
           .toList(growable: false);
     });
+  }
+
+  void _toggleAvailableTag(NoteKnowledgeTag tag, bool selected) {
+    setState(() {
+      if (widget.singleSelection) {
+        _tags = selected ? [tag] : const [];
+        return;
+      }
+      if (selected) {
+        _tags = [
+          ..._tags.where((existing) => existing.metadataText != tag.metadataText),
+          tag,
+        ];
+      } else {
+        _tags = _tags.where((existing) => existing.metadataText != tag.metadataText).toList(growable: false);
+      }
+    });
+  }
+
+  void _editTag(NoteKnowledgeTag tag) {
+    setState(() {
+      _editingKey = tag.metadataText;
+      _type = NoteKnowledgeTagTypes.normalize(tag.type);
+      _colorValue = tag.resolvedColorValue;
+      _labelController.text = tag.label;
+      _labelController.selection = TextSelection.collapsed(offset: _labelController.text.length);
+    });
+  }
+
+  void _deleteAvailableTag(NoteKnowledgeTag tag) {
+    setState(() {
+      _registry.remove(tag.metadataText);
+      _availableTags = _sortedRegisteredTags();
+      _tags = _tags.where((existing) => existing.metadataText != tag.metadataText).toList(growable: false);
+      if (_editingKey == tag.metadataText) {
+        _editingKey = null;
+        _labelController.clear();
+      }
+    });
+  }
+
+  bool _isSelected(NoteKnowledgeTag tag) {
+    return _tags.any((selected) => selected.metadataText == tag.metadataText);
+  }
+
+  static void _rememberTag(NoteKnowledgeTag tag) {
+    if (tag.metadataText.isEmpty) {
+      return;
+    }
+    _registry[tag.metadataText] = tag;
+  }
+
+  static List<NoteKnowledgeTag> _sortedRegisteredTags() {
+    final tags = _registry.values.toList(growable: false);
+    tags.sort((a, b) => a.metadataText.compareTo(b.metadataText));
+    return tags;
   }
 
   @override
@@ -130,6 +205,29 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
                   ),
               ],
             ),
+            if (_availableTags.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(
+                'Mentett tagek',
+                style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final tag in _availableTags)
+                    _SavedTagChip(
+                      key: ValueKey('tag-saved-chip-${tag.metadataText}'),
+                      tag: tag,
+                      selected: _isSelected(tag),
+                      onSelected: (selected) => _toggleAvailableTag(tag, selected),
+                      onEdit: () => _editTag(tag),
+                      onDelete: () => _deleteAvailableTag(tag),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               key: const ValueKey('tag-manager-type'),
@@ -182,7 +280,7 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
                     key: const ValueKey('tag-manager-add'),
                     onPressed: _addTag,
                     icon: const Icon(Icons.add),
-                    label: const Text('Hozzáadás'),
+                    label: Text(_editingKey == null ? 'Hozzáadás' : 'Frissítés'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -233,6 +331,58 @@ class _ColorSlotButton extends StatelessWidget {
           ),
         ),
         child: selected ? const Icon(Icons.check, color: Colors.white, size: 18) : null,
+      ),
+    );
+  }
+}
+
+class _SavedTagChip extends StatelessWidget {
+  const _SavedTagChip({
+    super.key,
+    required this.tag,
+    required this.selected,
+    required this.onSelected,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final NoteKnowledgeTag tag;
+  final bool selected;
+  final ValueChanged<bool> onSelected;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: selected ? Color(tag.resolvedColorValue).withValues(alpha: 0.12) : Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FilterChip(
+            avatar: CircleAvatar(backgroundColor: Color(tag.resolvedColorValue)),
+            label: Text(tag.metadataText),
+            selected: selected,
+            onSelected: onSelected,
+          ),
+          IconButton(
+            tooltip: 'Tag szerkesztése',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined, size: 16),
+          ),
+          IconButton(
+            tooltip: 'Tag törlése',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+            onPressed: onDelete,
+            icon: const Icon(Icons.close, size: 16),
+          ),
+        ],
       ),
     );
   }

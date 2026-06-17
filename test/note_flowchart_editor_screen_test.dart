@@ -183,7 +183,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('note-flowchart-palette-universal')));
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-fab-universal')));
     await tester.pumpAndSettle();
 
     expect(latest, isNull);
@@ -216,7 +216,7 @@ void main() {
       ),
     );
 
-    final palette = find.byKey(const ValueKey('note-flowchart-palette-universal'));
+    final palette = find.byKey(const ValueKey('note-flowchart-fab-universal'));
     final canvas = find.byKey(const ValueKey('note-flowchart-grid'));
     final start = tester.getCenter(palette);
     final drop = tester.getTopLeft(canvas) + const Offset(260, 260);
@@ -266,7 +266,7 @@ void main() {
       ),
     );
 
-    final palette = find.byKey(const ValueKey('note-flowchart-palette-universal'));
+    final palette = find.byKey(const ValueKey('note-flowchart-fab-universal'));
     final canvas = find.byKey(const ValueKey('note-flowchart-grid'));
     final start = tester.getCenter(palette);
     final drop = tester.getTopLeft(canvas) + const Offset(260, 300);
@@ -306,13 +306,22 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey('note-flowchart-palette-universal')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-flowchart-palette-binary-decision')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-flowchart-palette-multi-decision')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-fab-universal')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-fab-binary-decision')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-fab-multi-decision')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-flowchart-palette-subprocess')), findsNothing);
     expect(find.byKey(const ValueKey('note-flowchart-palette-dataStore')), findsNothing);
+    expect(find.byKey(const ValueKey('note-flowchart-palette-container')), findsNothing);
     expect(find.byKey(const ValueKey('note-flowchart-zoom-in')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-flowchart-zoom-out')), findsOneWidget);
+
+    final universal = tester.getTopLeft(find.byKey(const ValueKey('note-flowchart-fab-universal')));
+    final binary = tester.getTopLeft(find.byKey(const ValueKey('note-flowchart-fab-binary-decision')));
+    final multi = tester.getTopLeft(find.byKey(const ValueKey('note-flowchart-fab-multi-decision')));
+    expect(binary.dx, universal.dx);
+    expect(multi.dx, universal.dx);
+    expect(binary.dy, greaterThan(universal.dy));
+    expect(multi.dy, greaterThan(binary.dy));
   });
 
   testWidgets('node body opens popup while label tap keeps inline editing', (tester) async {
@@ -343,6 +352,45 @@ void main() {
     expect(find.byKey(const ValueKey('note-flowchart-node-popup')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-flowchart-node-popup-type-universal')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-flowchart-node-popup-add-port-right')), findsOneWidget);
+  });
+
+  testWidgets('flowchart selected node tags render in tray instead of on canvas', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: const NoteBlock(
+            id: 'flow-tags',
+            type: NoteBlockType.flowchart,
+            title: 'Ellátási ág',
+            nodes: [
+              NoteFlowchartNode(id: 'node-1', label: 'Súlyos?', x: 120, y: 120),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-node-select-node-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-chunk-menu-tag-selection')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'súlyos');
+    await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.scopedTags.single.target.kind, NoteTagTargetKind.flowchartNode);
+    expect(latest!.scopedTags.single.target.elementId, 'node-1');
+    expect(find.byKey(const ValueKey('note-flowchart-node-tag-marker-node-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selected-tag-tray')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selected-tag-pill-súlyos')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-canvas-tag-pill-súlyos')), findsNothing);
   });
 
   testWidgets('ports connect in tapped direction and store endpoint ids', (tester) async {

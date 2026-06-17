@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../models/note_document.dart';
+import 'note_chunk_editor_header.dart';
+import 'note_tag_pills.dart';
+import 'tag_manager_sheet.dart';
 
 class NoteListChunkEditorScreen extends StatefulWidget {
   const NoteListChunkEditorScreen({
     super.key,
     required this.block,
     required this.onChanged,
+    this.onDelete,
   });
 
   final NoteBlock block;
   final ValueChanged<NoteBlock> onChanged;
+  final VoidCallback? onDelete;
 
   @override
   State<NoteListChunkEditorScreen> createState() => _NoteListChunkEditorScreenState();
@@ -20,6 +25,7 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
   late NoteBlock _block;
   late List<NoteListItem> _items;
   late final TextEditingController _titleController;
+  String? _selectedItemId;
 
   @override
   void initState() {
@@ -52,6 +58,11 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
     widget.onChanged(_block);
   }
 
+  void _emitTitle(String value) {
+    _titleController.text = value;
+    _emit();
+  }
+
   void _replaceItem(NoteListItem item) {
     setState(() {
       _items = [
@@ -60,6 +71,70 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
       ];
     });
     _emit();
+  }
+
+  Future<void> _tagChunk() async {
+    final tags = await showTagManagerSheet(
+      context,
+      initialTags: _block.tags,
+      title: 'Chunk tagjei',
+    );
+    if (tags == null) {
+      return;
+    }
+    setState(() => _block = _block.copyWith(tags: tags, clearIndex: true));
+    widget.onChanged(_block);
+  }
+
+  Future<void> _tagSelection() async {
+    final selectedId = _selectedItemId;
+    if (selectedId == null) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Válassz ki egy listaelemet a tageléshez')),
+      );
+      return;
+    }
+    final item = _items.firstWhere(
+      (candidate) => candidate.id == selectedId,
+      orElse: () => _items.first,
+    );
+    final tags = await showTagManagerSheet(
+      context,
+      initialTags: item.tags,
+      title: 'Listaelem tagjei',
+    );
+    if (tags == null) {
+      return;
+    }
+    _replaceItem(item.copyWith(tags: tags));
+  }
+
+  bool get _selectedItemHasTags {
+    final selectedId = _selectedItemId;
+    if (selectedId == null) {
+      return false;
+    }
+    return _items.any(
+      (item) => item.id == selectedId && item.tags.isNotEmpty,
+    );
+  }
+
+  void _deleteSelectedTag() {
+    final selectedId = _selectedItemId;
+    if (selectedId == null) {
+      return;
+    }
+    final item = _items.firstWhere(
+      (candidate) => candidate.id == selectedId,
+      orElse: () => _items.first,
+    );
+    _replaceItem(item.copyWith(tags: const []));
+  }
+
+  void _deleteChunk() {
+    widget.onDelete?.call();
+    Navigator.of(context).maybePop();
   }
 
   void _addItem() {
@@ -97,27 +172,39 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       key: const ValueKey('note-list-chunk-editor'),
-      appBar: AppBar(title: const Text('Lista szerkesztése')),
+      appBar: NoteChunkEditorHeader(
+        title: _block.title,
+        fallbackTitle: 'Lista',
+        onTitleChanged: _emitTitle,
+        onTagChunk: () => unawaited(_tagChunk()),
+        onTagSelection: () => unawaited(_tagSelection()),
+        onDeleteSelectedTag: _deleteSelectedTag,
+        onDeleteChunk: _deleteChunk,
+        canDeleteSelectedTag: _selectedItemHasTags,
+        trailingActions: [
+          IconButton(
+            key: const ValueKey('note-list-header-add-item'),
+            tooltip: 'Új listaelem',
+            onPressed: _addItem,
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              key: const ValueKey('note-list-title-field'),
-              controller: _titleController,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Lista neve',
-                border: OutlineInputBorder(),
+          if (_block.tags.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: NoteTagPills(tags: _block.tags),
               ),
-              onChanged: (_) => _emit(),
             ),
-          ),
           Expanded(
             child: ReorderableListView.builder(
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
-              itemCount: _items.length + 1,
+              itemCount: _items.length,
               // ignore: deprecated_member_use
               onReorder: (oldIndex, newIndex) {
                 if (oldIndex >= _items.length || newIndex > _items.length) {
@@ -126,26 +213,13 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
                 _reorder(oldIndex, newIndex);
               },
               itemBuilder: (context, index) {
-                if (index == _items.length) {
-                  return Padding(
-                    key: const ValueKey('note-list-add-row'),
-                    padding: const EdgeInsets.only(left: 44, top: 4),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton.filledTonal(
-                        key: const ValueKey('note-list-add-item'),
-                        tooltip: 'Új listaelem',
-                        onPressed: _addItem,
-                        icon: const Icon(Icons.add),
-                      ),
-                    ),
-                  );
-                }
                 final item = _items[index];
                 return _ListItemRow(
                   key: ValueKey('note-list-row-${item.id}'),
                   index: index,
                   item: item,
+                  selected: _selectedItemId == item.id,
+                  onSelect: () => setState(() => _selectedItemId = item.id),
                   onChanged: _replaceItem,
                   onDelete: () => _deleteItem(item),
                   onIndent: () => _changeIndent(item, 1),
@@ -165,6 +239,8 @@ class _ListItemRow extends StatelessWidget {
     super.key,
     required this.index,
     required this.item,
+    required this.selected,
+    required this.onSelect,
     required this.onChanged,
     required this.onDelete,
     required this.onIndent,
@@ -173,6 +249,8 @@ class _ListItemRow extends StatelessWidget {
 
   final int index;
   final NoteListItem item;
+  final bool selected;
+  final VoidCallback onSelect;
   final ValueChanged<NoteListItem> onChanged;
   final VoidCallback onDelete;
   final VoidCallback onIndent;
@@ -186,7 +264,10 @@ class _ListItemRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(
+            color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+            width: selected ? 2 : 1,
+          ),
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
@@ -204,6 +285,15 @@ class _ListItemRow extends StatelessWidget {
                   Checkbox(
                     value: item.checked,
                     onChanged: (value) => onChanged(item.copyWith(checked: value ?? false)),
+                  ),
+                  IconButton(
+                    key: ValueKey('note-list-item-select-${item.id}'),
+                    tooltip: 'Listaelem kijelölése',
+                    onPressed: onSelect,
+                    icon: Icon(
+                      selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      size: 20,
+                    ),
                   ),
                   Expanded(
                     child: TextFormField(
@@ -234,22 +324,18 @@ class _ListItemRow extends StatelessWidget {
                   ),
                 ],
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(52, 0, 8, 8),
-                child: TextFormField(
-                  key: ValueKey('note-list-item-tags-${item.id}'),
-                  initialValue: item.tags.map((tag) => tag.metadataText).join(', '),
-                  decoration: const InputDecoration(
-                    labelText: 'Tagek',
-                    hintText: 'pl. state:súlyos, topic:légzési elégtelenség',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  onChanged: (value) => onChanged(
-                    item.copyWith(tags: NoteKnowledgeTag.parseMany(value)),
+              if (item.tags.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(52, 0, 8, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: NoteTagPills(
+                      tags: item.tags,
+                      prefix: 'note-list-item-tag-pill-${item.id}',
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -257,3 +343,5 @@ class _ListItemRow extends StatelessWidget {
     );
   }
 }
+
+void unawaited(Future<void> future) {}

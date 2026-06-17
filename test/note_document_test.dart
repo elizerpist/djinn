@@ -219,6 +219,134 @@ void main() {
     expect(parsed.plainText, isNot(contains('state:')));
   });
 
+  test('serializes multitag text ranges and scoped table flowchart tag assignments', () {
+    const severe = NoteKnowledgeTag(
+      type: NoteKnowledgeTagTypes.state,
+      label: 'súlyos',
+      colorValue: 0xFFDC2626,
+    );
+    const respiratory = NoteKnowledgeTag(
+      type: NoteKnowledgeTagTypes.topic,
+      label: 'légzési elégtelenség',
+      colorValue: 0xFF2563EB,
+    );
+    const document = NoteDocument(
+      blocks: [
+        NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: 'Súlyos légzési elégtelenség.',
+          rangeTags: [
+            NoteTextRangeTag(
+              id: 'range-1',
+              start: 0,
+              end: 29,
+              tag: severe,
+              tags: [severe, respiratory],
+            ),
+          ],
+        ),
+        NoteBlock(
+          id: 'table-1',
+          type: NoteBlockType.table,
+          rows: [
+            ['Állapot', 'Teendő'],
+            ['Súlyos', 'high flow'],
+          ],
+          scopedTags: [
+            NoteScopedTagAssignment(
+              id: 'row-tag',
+              target: NoteTagTarget(
+                kind: NoteTagTargetKind.tableRow,
+                rowIndex: 1,
+              ),
+              tags: [severe],
+            ),
+            NoteScopedTagAssignment(
+              id: 'column-tag',
+              target: NoteTagTarget(
+                kind: NoteTagTargetKind.tableColumn,
+                columnIndex: 1,
+              ),
+              tags: [respiratory],
+            ),
+            NoteScopedTagAssignment(
+              id: 'cell-tag',
+              target: NoteTagTarget(
+                kind: NoteTagTargetKind.tableCell,
+                rowIndex: 1,
+                columnIndex: 1,
+              ),
+              tags: [severe, respiratory],
+            ),
+          ],
+        ),
+        NoteBlock(
+          id: 'flow-1',
+          type: NoteBlockType.flowchart,
+          nodes: [
+            NoteFlowchartNode(id: 'n1', label: 'Súlyos?'),
+            NoteFlowchartNode(id: 'n2', label: 'Oxigén'),
+          ],
+          edges: [
+            NoteFlowchartEdge(
+              id: 'e1',
+              fromNodeId: 'n1',
+              toNodeId: 'n2',
+              label: 'Igen',
+            ),
+          ],
+          scopedTags: [
+            NoteScopedTagAssignment(
+              id: 'node-tag',
+              target: NoteTagTarget(
+                kind: NoteTagTargetKind.flowchartNode,
+                elementId: 'n1',
+              ),
+              tags: [severe],
+            ),
+            NoteScopedTagAssignment(
+              id: 'edge-tag',
+              target: NoteTagTarget(
+                kind: NoteTagTargetKind.flowchartEdge,
+                elementId: 'e1',
+              ),
+              tags: [respiratory],
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final parsed = NoteDocument.fromPayload(document.toPayloadJson());
+    final textBlock = parsed.blocks[0];
+    final tableBlock = parsed.blocks[1];
+    final flowBlock = parsed.blocks[2];
+
+    expect(textBlock.rangeTags.single.tags.map((tag) => tag.label), [
+      'súlyos',
+      'légzési elégtelenség',
+    ]);
+    expect(
+      tableBlock.scopedTags.map((assignment) => assignment.target.kind),
+      containsAll([
+        NoteTagTargetKind.tableRow,
+        NoteTagTargetKind.tableColumn,
+        NoteTagTargetKind.tableCell,
+      ]),
+    );
+    expect(
+      flowBlock.scopedTags.map((assignment) => assignment.target.kind),
+      containsAll([
+        NoteTagTargetKind.flowchartNode,
+        NoteTagTargetKind.flowchartEdge,
+      ]),
+    );
+    expect(tableBlock.searchMetadataText, contains('state:súlyos'));
+    expect(flowBlock.searchMetadataText, contains('topic:légzési elégtelenség'));
+    expect(parsed.plainText, isNot(contains('state:')));
+  });
+
   test('list block preserves ordered list items and hierarchy', () {
     const block = NoteBlock(
       id: 'list-1',
