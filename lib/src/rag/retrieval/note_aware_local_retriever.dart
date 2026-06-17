@@ -393,6 +393,13 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         );
         return false;
       }
+      if (_flowchartBranchConflictsWithQuery(seed, scope)) {
+        DebugConsole.log(
+          '[LocalIndex] evidence pruned id=${seed.id} '
+          'reason=query_branch_polarity_mismatch',
+        );
+        return false;
+      }
       return true;
     }).toList(growable: false);
   }
@@ -437,6 +444,60 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         normalized.contains('akkor all fenn') ||
         normalized.contains('definicio') ||
         normalized.contains('jelentese');
+  }
+
+  bool _flowchartBranchConflictsWithQuery(
+    SourceEvidence evidence,
+    _QueryScope scope,
+  ) {
+    if (!scope.isNarrowState ||
+        evidence.sourceType != EvidenceSourceType.flowchartEdge) {
+      return false;
+    }
+    final branches = _branchSignalsFromText(evidence.text);
+    if (branches.isEmpty) {
+      return false;
+    }
+    final hasNegativeRequest = scope.terms.any(
+      (term) => term == 'nem' || term == 'no',
+    );
+    final hasPositiveRequest = scope.terms.any(
+      (term) => term == 'igen' || term == 'yes',
+    );
+    for (final branch in branches) {
+      if (branch.polarity == null ||
+          !_queryTargetsBranchCondition(branch, scope)) {
+        continue;
+      }
+      if (hasNegativeRequest) {
+        return branch.polarity == 'positive';
+      }
+      if (hasPositiveRequest) {
+        return branch.polarity == 'negative';
+      }
+      if (branch.polarity == 'negative') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _queryTargetsBranchCondition(_BranchSignal branch, _QueryScope scope) {
+    final conditionTerms = {
+      ..._scopeTerms(branch.key),
+      ...branch.valueTerms,
+      ...branch.contextTerms,
+    };
+    if (conditionTerms.isEmpty) {
+      return false;
+    }
+    final queryConditionTerms = scope.terms
+        .where((term) => !_isQuestionTerm(term))
+        .where((term) => !_isBranchValueTerm(term))
+        .where((term) => !scope.facetTerms.contains(term));
+    return queryConditionTerms.any(
+      (term) => conditionTerms.any((condition) => _termsClose(term, condition)),
+    );
   }
 
   bool _coversScopeTerms(String value, Set<String> terms) {
@@ -1054,6 +1115,87 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       r'\b[A-ZÁÉÍÓÖŐÚÜŰ]{2,}[0-9]*\b',
     ).allMatches(value).map((match) => match.group(0)!).toSet();
   }
+}
+
+List<_BranchSignal> _branchSignalsFromText(String text) {
+  final signals = <_BranchSignal>[];
+  final edgePattern = RegExp(r'^(.+?)\s*->\s*(.+?)(?:\s*\[(.+?)\])?\s*$');
+  for (final rawLine in text.split(RegExp(r'\n+'))) {
+    final line = rawLine.trim();
+    if (line.isEmpty) {
+      continue;
+    }
+    final match = edgePattern.firstMatch(line);
+    if (match == null) {
+      continue;
+    }
+    final source = match.group(1)!.trim();
+    final label = (match.group(3) ?? '').trim();
+    if (!source.contains('?') || label.isEmpty) {
+      continue;
+    }
+    final keyText = source.replaceAll('?', ' ').trim();
+    final key = _scopeNormalize(keyText);
+    final value = _scopeNormalize(label);
+    if (key.isEmpty || value.isEmpty) {
+      continue;
+    }
+    final polarity = _branchPolarityFor(value);
+    final keyTerms = _scopeTermList(keyText);
+    final valueTerms = polarity == null
+        ? _scopeTermList(label)
+        : _branchConditionValueTerms(keyTerms);
+    final valueTermSet = valueTerms.toSet();
+    final contextTerms = polarity == null
+        ? keyTerms
+        : keyTerms
+              .where((term) => !valueTermSet.contains(term))
+              .toList(growable: false);
+    signals.add(
+      _BranchSignal(
+        key: key,
+        value: value,
+        polarity: polarity,
+        valueTerms: valueTerms,
+        contextTerms: contextTerms,
+      ),
+    );
+  }
+  return signals;
+}
+
+String? _branchPolarityFor(String normalizedValue) {
+  if (normalizedValue == 'igen' || normalizedValue == 'yes') {
+    return 'positive';
+  }
+  if (normalizedValue == 'nem' || normalizedValue == 'no') {
+    return 'negative';
+  }
+  return null;
+}
+
+List<String> _branchConditionValueTerms(List<String> keyTerms) {
+  if (keyTerms.isEmpty) {
+    return const [];
+  }
+  if (keyTerms.length >= 3) {
+    const valueMarkers = {
+      'szine',
+      'erteke',
+      'tipusa',
+      'allapota',
+      'foka',
+      'szintje',
+      'merteke',
+    };
+    for (var i = 0; i < keyTerms.length - 1; i += 1) {
+      if (valueMarkers.contains(keyTerms[i])) {
+        return keyTerms.sublist(i + 1);
+      }
+    }
+    return [keyTerms.first];
+  }
+  return [keyTerms.last];
 }
 
 class _QueryScope {

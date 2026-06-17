@@ -22,8 +22,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
     await tester.pump();
-    final editable = tester.widget<EditableText>(find.byType(EditableText));
-    editable.controller.selection = const TextSelection(baseOffset: 0, extentOffset: 6);
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    field.controller!.selection = const TextSelection(baseOffset: 0, extentOffset: 6);
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
@@ -85,8 +87,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
     await tester.pump();
-    final editable = tester.widget<EditableText>(find.byType(EditableText).last);
-    editable.controller.selection = const TextSelection(baseOffset: 0, extentOffset: 6);
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    field.controller!.selection = const TextSelection(baseOffset: 0, extentOffset: 6);
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
     await tester.pumpAndSettle();
