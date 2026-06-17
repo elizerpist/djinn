@@ -730,6 +730,74 @@ Tartomány | Teendő | Áramlás
     },
   );
 
+  test(
+    'state query stays on branch and therapy evidence without root symbol expansion',
+    () async {
+      final notes = await _respiratoryTherapyFixture();
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
+
+      final results = await retriever.retrieveLocalVector(
+        query: 'súlyos',
+        limit: 8,
+        mode: 'mediapipe_text_embedder',
+      );
+      final joined = results.map((item) => item.text).join('\n');
+
+      expect(joined, contains('Súlyos?'));
+      expect(joined, contains('magas áramlású oxygén'));
+      expect(joined, contains('célzott oxygénterápia'));
+      expect(joined, isNot(contains('DO2 < VO2')));
+      expect(joined, isNot(contains('DO2= oxygénkínálat')));
+      expect(joined, isNot(contains('VO2= oxygénigény')));
+    },
+  );
+
+  test(
+    'topic facet query intersects topic and therapy instead of widening to all definitions',
+    () async {
+      final notes = await _respiratoryTherapyFixture();
+      await notes.createDocumentNote(
+        title: 'Hypoglycaemia',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'hypo-therapy',
+              type: NoteBlockType.table,
+              title: 'Terápia',
+              searchContext: 'hypoglycaemia',
+              searchRole: NoteSearchRoles.tableRule,
+              rows: [
+                ['állapot', 'teendő'],
+                ['súlyos hypoglycaemia', 'glükóz adása'],
+              ],
+            ),
+          ],
+        ),
+      );
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
+
+      final results = await retriever.retrieveHybrid(
+        query: 'légzési elégtelenség terápiája',
+        limit: 8,
+        vectorMode: LocalIndexingModes.mediapipeTextEmbedder,
+      );
+      final joined = results.map((item) => item.text).join('\n');
+
+      expect(joined, contains('magas áramlású oxygén'));
+      expect(joined, contains('célzott oxygénterápia'));
+      expect(joined, isNot(contains('DO2 < VO2')));
+      expect(joined, isNot(contains('DO2= oxygénkínálat')));
+      expect(joined, isNot(contains('VO2= oxygénigény')));
+      expect(joined, isNot(contains('glükóz adása')));
+    },
+  );
+
   test('graph expansion follows symbols discovered through linked definitions', () {
     final expander = LocalKnowledgeGraphExpander();
     const table = SourceEvidence(
@@ -880,4 +948,133 @@ Tartomány | Teendő | Áramlás
     );
     expect(results.single.id, endsWith(':row-1-cell-1'));
   });
+}
+
+Future<MemoryNoteRepository> _respiratoryTherapyFixture() async {
+  final notes = MemoryNoteRepository();
+  await notes.createDocumentNote(
+    title: 'Légzési elégtelenség',
+    document: const NoteDocument(
+      blocks: [
+        NoteBlock(
+          id: 'definition',
+          type: NoteBlockType.paragraph,
+          searchContext: 'légzési elégtelenség',
+          searchRole: NoteSearchRoles.definition,
+          searchAliases: ['DO2', 'VO2'],
+          text:
+              'Bolognai spagetti készítésekor a ragu akkor lesz kiegyensúlyozott. Rejtett jegyzet: légzési elégtelenség akkor áll fenn, amikor DO2 < VO2.',
+        ),
+        NoteBlock(
+          id: 'symbols',
+          type: NoteBlockType.listItem,
+          title: 'Magyarázat',
+          searchContext: 'légzési elégtelenség',
+          searchRole: NoteSearchRoles.definition,
+          listItems: [
+            NoteListItem(id: 'do2', text: 'DO2= oxygénkínálat'),
+            NoteListItem(id: 'vo2', text: 'VO2= oxygénigény'),
+          ],
+        ),
+        NoteBlock(
+          id: 'flow',
+          type: NoteBlockType.flowchart,
+          searchContext: 'légzési elégtelenség',
+          searchRole: NoteSearchRoles.process,
+          nodes: [
+            NoteFlowchartNode(id: 'start', label: 'Kezdés'),
+            NoteFlowchartNode(
+              id: 'resp',
+              label: 'Légzési elégtelen?',
+              kind: NoteFlowchartNodeKind.binaryDecision,
+              ports: [
+                NoteFlowchartPort(
+                  id: 'yes',
+                  side: NoteFlowchartPortSide.bottom,
+                  label: 'Igen',
+                  semantic: NoteFlowchartPortSemantic.yes,
+                ),
+                NoteFlowchartPort(
+                  id: 'no',
+                  side: NoteFlowchartPortSide.bottom,
+                  label: 'Nem',
+                  semantic: NoteFlowchartPortSemantic.no,
+                ),
+              ],
+            ),
+            NoteFlowchartNode(
+              id: 'severe',
+              label: 'Súlyos?',
+              kind: NoteFlowchartNodeKind.binaryDecision,
+              ports: [
+                NoteFlowchartPort(
+                  id: 'yes',
+                  side: NoteFlowchartPortSide.bottom,
+                  label: 'Igen',
+                  semantic: NoteFlowchartPortSemantic.yes,
+                ),
+                NoteFlowchartPort(
+                  id: 'no',
+                  side: NoteFlowchartPortSide.bottom,
+                  label: 'Nem',
+                  semantic: NoteFlowchartPortSemantic.no,
+                ),
+              ],
+            ),
+            NoteFlowchartNode(id: 'observe', label: 'Megfigyelés'),
+            NoteFlowchartNode(id: 'oxygen', label: 'Oxygén'),
+          ],
+          edges: [
+            NoteFlowchartEdge(
+              id: 'edge-start',
+              fromNodeId: 'start',
+              toNodeId: 'resp',
+              label: 'Kimenet',
+            ),
+            NoteFlowchartEdge(
+              id: 'edge-resp-yes',
+              fromNodeId: 'resp',
+              fromPortId: 'yes',
+              toNodeId: 'severe',
+              label: 'Igen',
+            ),
+            NoteFlowchartEdge(
+              id: 'edge-resp-no',
+              fromNodeId: 'resp',
+              fromPortId: 'no',
+              toNodeId: 'observe',
+              label: 'Nem',
+            ),
+            NoteFlowchartEdge(
+              id: 'edge-severe-yes',
+              fromNodeId: 'severe',
+              fromPortId: 'yes',
+              toNodeId: 'oxygen',
+              label: 'Igen',
+            ),
+            NoteFlowchartEdge(
+              id: 'edge-severe-no',
+              fromNodeId: 'severe',
+              fromPortId: 'no',
+              toNodeId: 'oxygen',
+              label: 'Nem',
+            ),
+          ],
+        ),
+        NoteBlock(
+          id: 'therapy',
+          type: NoteBlockType.table,
+          title: 'Terápia',
+          searchContext: 'légzési elégtelenség',
+          searchRole: NoteSearchRoles.tableRule,
+          rows: [
+            ['Állapot', 'Teendő'],
+            ['súlyos légzési elégtelenség', 'magas áramlású oxygén'],
+            ['enyhe légzési elégtelenség', 'célzott oxygénterápia'],
+          ],
+        ),
+      ],
+    ),
+  );
+  return notes;
 }
