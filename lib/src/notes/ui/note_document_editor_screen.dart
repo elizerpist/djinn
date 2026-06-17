@@ -460,6 +460,7 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
     final roleField = DropdownButtonFormField<String>(
       key: ValueKey('note-block-search-role-${block.id}'),
       initialValue: NoteSearchRoles.normalize(block.searchRole),
+      isExpanded: true,
       decoration: const InputDecoration(
         labelText: 'Tudástípus',
         border: OutlineInputBorder(),
