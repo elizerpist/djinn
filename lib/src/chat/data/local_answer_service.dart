@@ -465,7 +465,7 @@ class LocalAnswerService implements AnswerService {
         : 'Offline keresési találatokból épített graph válasz. ';
     return LocalAnswerResult(
       text:
-          intro
+          '$intro'
           'Ez nem AI által generált válasz.\n\n'
           '$graphAnswer\n\nForrások:\n$excerpts',
       status: 'offline_search',
