@@ -1194,8 +1194,8 @@ Tartomány | Teendő | Áramlás
 
     expect(joined, contains('Súlyos'));
     expect(joined, contains('High flow'));
-    expect(joined, isNot(contains('Állapot: Enyhe')));
-    expect(joined, isNot(contains('Célzott oxygén')));
+    expect(joined.contains('Állapot: Enyhe'), isFalse);
+    expect(joined.contains('Célzott oxygén'), isFalse);
   });
 
   test('keyword expansion can find local scoped tags without whole chunk tag leakage', () async {
@@ -1249,8 +1249,8 @@ Tartomány | Teendő | Áramlás
 
     expect(joined, contains('Súlyos'));
     expect(joined, contains('High flow'));
-    expect(joined, isNot(contains('Állapot: Enyhe')));
-    expect(joined, isNot(contains('Célzott oxygén')));
+    expect(joined.contains('Állapot: Enyhe'), isFalse);
+    expect(joined.contains('Célzott oxygén'), isFalse);
   });
 
   test('local text range tags use original block offsets for indented text', () async {
