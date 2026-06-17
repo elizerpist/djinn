@@ -37,11 +37,8 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('note-document-add-list')));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('note-document-block-block-2')),
-      160,
-      scrollable: find.byType(ListView),
-    );
+    await tester.drag(find.byType(ListView), const Offset(0, -700));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('note-document-block-block-2')),
       'Első vázlatpont',
