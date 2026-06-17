@@ -73,7 +73,11 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('note-table-cell-1-2')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('note-table-insert-column-0')));
+    await tester.tap(find.byKey(const ValueKey('note-table-column-head-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('note-table-rail-insert-column-right-column-0')),
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('note-table-cell-0-3')), findsOneWidget);
@@ -231,7 +235,11 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('note-table-insert-column-0')));
+    await tester.tap(find.byKey(const ValueKey('note-table-column-head-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('note-table-rail-insert-column-right-column-0')),
+    );
     await tester.pumpAndSettle();
 
     expect(latest, isNotNull);
@@ -273,13 +281,17 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('note-table-delete-row-1')));
+    await tester.tap(find.byKey(const ValueKey('note-table-row-head-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-table-rail-delete-row-1')));
     await tester.pumpAndSettle();
 
     expect(latest, isNotNull);
     expect(latest!.scopedTags.single.target.rowIndex, 1);
 
-    await tester.tap(find.byKey(const ValueKey('note-table-delete-row-1')));
+    await tester.tap(find.byKey(const ValueKey('note-table-row-head-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-table-rail-delete-row-1')));
     await tester.pumpAndSettle();
 
     expect(latest!.scopedTags, isEmpty);

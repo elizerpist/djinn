@@ -300,12 +300,112 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
 
   bool _hasTags(_TableSelection selection) => _tagsForSelection(selection).isNotEmpty;
 
-  Color _colorForSelection(_TableSelection selection) {
-    final tags = _tagsForSelection(selection);
-    if (tags.isEmpty) {
-      return const Color(0xFF2563EB);
+  List<NoteKnowledgeTag> _tagsForCell(int row, int column) {
+    final tags = <NoteKnowledgeTag>[];
+    for (final assignment in _block.scopedTags) {
+      final target = assignment.target;
+      final applies = switch (target.kind) {
+        NoteTagTargetKind.tableRow => target.rowIndex == row,
+        NoteTagTargetKind.tableColumn => target.columnIndex == column,
+        NoteTagTargetKind.tableCell =>
+          target.rowIndex == row && target.columnIndex == column,
+        _ => false,
+      };
+      if (applies) {
+        tags.addAll(assignment.tags);
+      }
     }
-    return Color(tags.first.resolvedColorValue);
+    return tags;
+  }
+
+  Color? _highlightColorForCell(int row, int column) {
+    final tags = _tagsForCell(row, column);
+    if (tags.isEmpty) {
+      return null;
+    }
+    return Color(tags.first.resolvedColorValue).withValues(alpha: 0.16);
+  }
+
+  void _select(_TableSelection selection) {
+    setState(() => _selection = selection);
+  }
+
+  Widget _railForSelection(_TableSelection selection) {
+    return NoteSelectionActionRail(
+      tags: _tagsForSelection(selection),
+      label: switch (selection.kind) {
+        _TableSelectionKind.row => 'Sor ${selection.rowIndex! + 1}',
+        _TableSelectionKind.column => 'Oszlop ${selection.columnIndex! + 1}',
+        _TableSelectionKind.cell =>
+          'Cella ${selection.rowIndex! + 1}:${selection.columnIndex! + 1}',
+      },
+      actions: _railActions(selection),
+    );
+  }
+
+  List<Widget> _railActions(_TableSelection selection) {
+    final actions = <Widget>[
+      IconButton(
+        key: ValueKey(_tagRailKey(selection)),
+        tooltip: 'Tagelés',
+        onPressed: () => unawaited(_tagSelection()),
+        icon: const Icon(Icons.sell_outlined),
+      ),
+    ];
+    if (_hasTags(selection)) {
+      actions.add(
+        IconButton(
+          key: ValueKey('${_tagRailKey(selection)}-delete-tag'),
+          tooltip: 'Tag törlése',
+          onPressed: _deleteSelectedTag,
+          icon: const Icon(Icons.label_off_outlined),
+        ),
+      );
+    }
+    if (selection.kind == _TableSelectionKind.row ||
+        selection.kind == _TableSelectionKind.cell) {
+      final row = selection.rowIndex!;
+      actions.add(
+        IconButton(
+          key: ValueKey('note-table-rail-delete-row-$row'),
+          tooltip: 'Sor törlése',
+          onPressed: () => _deleteRow(row),
+          icon: const Icon(Icons.delete_outline),
+        ),
+      );
+    }
+    if (selection.kind == _TableSelectionKind.column ||
+        selection.kind == _TableSelectionKind.cell) {
+      final column = selection.columnIndex!;
+      actions
+        ..add(
+          IconButton(
+            key: ValueKey('note-table-rail-insert-column-right-column-$column'),
+            tooltip: 'Oszlop beszúrása jobbra',
+            onPressed: () => _insertColumn(column + 1),
+            icon: const Icon(Icons.add),
+          ),
+        )
+        ..add(
+          IconButton(
+            key: ValueKey('note-table-rail-delete-column-$column'),
+            tooltip: 'Oszlop törlése',
+            onPressed: () => _deleteColumn(column),
+            icon: const Icon(Icons.close),
+          ),
+        );
+    }
+    return actions;
+  }
+
+  String _tagRailKey(_TableSelection selection) {
+    return switch (selection.kind) {
+      _TableSelectionKind.row => 'note-table-rail-tag-row-${selection.rowIndex}',
+      _TableSelectionKind.column =>
+        'note-table-rail-tag-column-${selection.columnIndex}',
+      _TableSelectionKind.cell =>
+        'note-table-rail-tag-cell-${selection.rowIndex}-${selection.columnIndex}',
+    };
   }
 
   List<NoteScopedTagAssignment> _remapScopedTags(
@@ -432,160 +532,272 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
               ),
             ),
           Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-              scrollDirection: Axis.horizontal,
-              child: SingleChildScrollView(
-                child: DataTable(
-                  columns: [
-                    for (var column = 0; column < columnCount; column += 1)
-                      DataColumn(
-                        label: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            InkWell(
-                              key: ValueKey('note-table-select-column-$column'),
-                              onTap: () => setState(
-                                () => _selection = _TableSelection.column(column),
-                              ),
-                              child: Stack(
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    child: Text('Oszlop ${column + 1}'),
-                                  ),
-                                  if (_hasTags(_TableSelection.column(column)))
-                                    Positioned(
-                                      left: 0,
-                                      right: 0,
-                                      top: 0,
-                                      child: _TableTopMarker(
-                                        color: _colorForSelection(_TableSelection.column(column)),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              key: ValueKey('note-table-insert-column-$column'),
-                              tooltip: 'Oszlop beszúrása jobbra',
-                              onPressed: () => _insertColumn(column + 1),
-                              icon: const Icon(Icons.add, size: 16),
-                            ),
-                            IconButton(
-                              key: ValueKey('note-table-delete-column-$column'),
-                              tooltip: 'Oszlop törlése',
-                              onPressed: () => _deleteColumn(column),
-                              icon: const Icon(Icons.close, size: 16),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const DataColumn(label: Text('Sor')),
-                  ],
-                  rows: [
-                    for (var row = 0; row < _rows.length; row += 1)
-                      DataRow(
-                        cells: [
-                          for (var column = 0; column < columnCount; column += 1)
-                            DataCell(
-                              SizedBox(
-                                width: 150,
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    if (_selection?.isCell(row, column) == true)
-                                      Positioned.fill(
-                                        child: DecoratedBox(
-                                          key: ValueKey('note-table-selected-cell-$row-$column'),
-                                          decoration: BoxDecoration(
-                                            border: Border.all(
-                                              color: const Color(0xFF2563EB),
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                        ),
-                                      ),
-                                    TextFormField(
-                                      key: ValueKey('note-table-cell-$row-$column'),
-                                      controller: _controllerFor(row, column),
-                                      decoration: const InputDecoration(border: InputBorder.none),
-                                      onChanged: (value) => _updateCell(row, column, value),
-                                    ),
-                                    Positioned(
-                                      right: -6,
-                                      top: -4,
-                                      child: IconButton(
-                                        key: ValueKey('note-table-select-cell-$row-$column'),
-                                        tooltip: 'Cella kijelölése',
-                                        visualDensity: VisualDensity.compact,
-                                        constraints: const BoxConstraints.tightFor(width: 26, height: 26),
-                                        padding: EdgeInsets.zero,
-                                        onPressed: () => setState(
-                                          () => _selection = _TableSelection.cell(row, column),
-                                        ),
-                                        icon: const Icon(Icons.crop_square, size: 14),
-                                      ),
-                                    ),
-                                    if (_hasTags(_TableSelection.cell(row, column)))
-                                      Positioned(
-                                        key: ValueKey('note-table-cell-tag-marker-$row-$column'),
-                                        right: 2,
-                                        bottom: 2,
-                                        child: _TableCornerMarker(
-                                          color: _colorForSelection(_TableSelection.cell(row, column)),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          DataCell(
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                InkWell(
-                                  key: ValueKey('note-table-select-row-$row'),
-                                  onTap: () => setState(
-                                    () => _selection = _TableSelection.row(row),
-                                  ),
-                                  child: SizedBox(
-                                    width: 24,
-                                    height: 36,
-                                    child: _hasTags(_TableSelection.row(row))
-                                        ? _TableRowMarker(
-                                            color: _colorForSelection(_TableSelection.row(row)),
-                                          )
-                                        : const Icon(Icons.table_rows_outlined, size: 16),
-                                  ),
-                                ),
-                                IconButton(
-                                  key: ValueKey('note-table-delete-row-$row'),
-                                  tooltip: 'Sor törlése',
-                                  onPressed: () => _deleteRow(row),
-                                  icon: const Icon(Icons.delete_outline),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
+            child: _TableGrid(
+              columnCount: columnCount,
+              rowCount: _rows.length,
+              selection: _selection,
+              cellControllerFor: _controllerFor,
+              highlightColorForCell: _highlightColorForCell,
+              onCellChanged: _updateCell,
+              onSelect: _select,
+              railForSelection: _railForSelection,
             ),
           ),
-          if (_selection != null && _tagsForSelection(_selection!).isNotEmpty)
+        ],
+      ),
+    );
+  }
+}
+
+class _TableGrid extends StatelessWidget {
+  const _TableGrid({
+    required this.columnCount,
+    required this.rowCount,
+    required this.selection,
+    required this.cellControllerFor,
+    required this.highlightColorForCell,
+    required this.onCellChanged,
+    required this.onSelect,
+    required this.railForSelection,
+  });
+
+  static const double _rowHeadWidth = 64;
+  static const double _cellWidth = 150;
+  static const double _cellHeight = 52;
+
+  final int columnCount;
+  final int rowCount;
+  final _TableSelection? selection;
+  final TextEditingController Function(int row, int column) cellControllerFor;
+  final Color? Function(int row, int column) highlightColorForCell;
+  final void Function(int row, int column, String value) onCellChanged;
+  final ValueChanged<_TableSelection> onSelect;
+  final Widget Function(_TableSelection selection) railForSelection;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = selection;
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      scrollDirection: Axis.horizontal,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(context),
+            if (selected != null && selected.kind == _TableSelectionKind.column)
+              _buildColumnExpansion(selected),
+            for (var row = 0; row < rowCount; row += 1) ...[
+              _buildRow(context, row),
+              if (selected != null &&
+                  selected.rowIndex == row &&
+                  (selected.kind == _TableSelectionKind.row ||
+                      selected.kind == _TableSelectionKind.cell))
+                _buildRowExpansion(row, selected),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Row(
+      children: [
+        _HeadCell(
+          key: const ValueKey('note-table-corner-head'),
+          width: _rowHeadWidth,
+          label: '',
+          icon: Icons.grid_on_outlined,
+          selected: false,
+          onTap: null,
+        ),
+        for (var column = 0; column < columnCount; column += 1)
+          _HeadCell(
+            key: ValueKey('note-table-column-head-$column'),
+            width: _cellWidth,
+            label: 'Oszlop ${column + 1}',
+            selected: selection?.isColumn(column) == true,
+            onTap: () => onSelect(_TableSelection.column(column)),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildColumnExpansion(_TableSelection selected) {
+    return Row(
+      children: [
+        const SizedBox(width: _rowHeadWidth),
+        SizedBox(
+          key: ValueKey('note-table-column-expansion-${selected.columnIndex}'),
+          width: columnCount * _cellWidth,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(0, 6, 8, 8),
+            child: railForSelection(selected),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRow(BuildContext context, int row) {
+    return Row(
+      children: [
+        _HeadCell(
+          key: ValueKey('note-table-row-head-$row'),
+          width: _rowHeadWidth,
+          label: '${row + 1}',
+          icon: Icons.table_rows_outlined,
+          selected: selection?.isRow(row) == true,
+          onTap: () => onSelect(_TableSelection.row(row)),
+        ),
+        for (var column = 0; column < columnCount; column += 1)
+          _CellField(
+            row: row,
+            column: column,
+            width: _cellWidth,
+            height: _cellHeight,
+            controller: cellControllerFor(row, column),
+            selected: selection?.isCell(row, column) == true,
+            highlightColor: highlightColorForCell(row, column),
+            onTap: () => onSelect(_TableSelection.cell(row, column)),
+            onChanged: (value) => onCellChanged(row, column, value),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRowExpansion(int row, _TableSelection selected) {
+    return Row(
+      children: [
+        const SizedBox(width: _rowHeadWidth),
+        SizedBox(
+          key: ValueKey('note-table-row-expansion-$row'),
+          width: columnCount * _cellWidth,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(0, 6, 8, 8),
+            child: railForSelection(selected),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeadCell extends StatelessWidget {
+  const _HeadCell({
+    super.key,
+    required this.width,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
+
+  final double width;
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: width,
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? colorScheme.primary.withValues(alpha: 0.12) : const Color(0xFFF8FAFC),
+          border: Border.all(color: selected ? colorScheme.primary : const Color(0xFFE5E7EB)),
+        ),
+        child: icon != null && label.isEmpty
+            ? Icon(icon, size: 18, color: const Color(0xFF475569))
+            : Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? colorScheme.primary : const Color(0xFF475569),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _CellField extends StatelessWidget {
+  const _CellField({
+    required this.row,
+    required this.column,
+    required this.width,
+    required this.height,
+    required this.controller,
+    required this.selected,
+    required this.highlightColor,
+    required this.onTap,
+    required this.onChanged,
+  });
+
+  final int row;
+  final int column;
+  final double width;
+  final double height;
+  final TextEditingController controller;
+  final bool selected;
+  final Color? highlightColor;
+  final VoidCallback onTap;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Stack(
+          children: [
+            if (highlightColor != null)
+              Positioned.fill(
+                child: DecoratedBox(
+                  key: ValueKey('note-table-cell-highlight-$row-$column'),
+                  decoration: BoxDecoration(color: highlightColor),
+                ),
+              ),
+            if (selected)
+              Positioned.fill(
+                child: DecoratedBox(
+                  key: ValueKey('note-table-selected-cell-$row-$column'),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: const Color(0xFF2563EB),
+                      width: 2,
+                    ),
+                  ),
+                ),
+              ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: NoteSelectedTagTray(tags: _tagsForSelection(_selection!)),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: TextFormField(
+                key: ValueKey('note-table-cell-$row-$column'),
+                controller: controller,
+                decoration: const InputDecoration(border: InputBorder.none),
+                onTap: onTap,
+                onChanged: onChanged,
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -616,6 +828,14 @@ class _TableSelection {
   final int? rowIndex;
   final int? columnIndex;
 
+  bool isRow(int row) {
+    return kind == _TableSelectionKind.row && rowIndex == row;
+  }
+
+  bool isColumn(int column) {
+    return kind == _TableSelectionKind.column && columnIndex == column;
+  }
+
   bool isCell(int row, int column) {
     return kind == _TableSelectionKind.cell &&
         rowIndex == row &&
@@ -638,54 +858,6 @@ class _TableSelection {
           columnIndex: columnIndex,
         ),
     };
-  }
-}
-
-class _TableCornerMarker extends StatelessWidget {
-  const _TableCornerMarker({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: const SizedBox.square(dimension: 8),
-    );
-  }
-}
-
-class _TableTopMarker extends StatelessWidget {
-  const _TableTopMarker({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(color: color),
-      child: const SizedBox(height: 4),
-    );
-  }
-}
-
-class _TableRowMarker extends StatelessWidget {
-  const _TableRowMarker({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: DecoratedBox(
-        decoration: BoxDecoration(color: color),
-        child: const SizedBox(width: 4, height: 28),
-      ),
-    );
   }
 }
 

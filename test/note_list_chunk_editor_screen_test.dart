@@ -70,7 +70,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('note-list-item-select-item-1')));
+    await tester.tap(find.byKey(const ValueKey('note-list-row-item-1')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
     await tester.pumpAndSettle();

@@ -28,6 +28,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late final _TaggedTextEditingController _controller;
   late final FocusNode _focusNode;
   bool _selectionCanDeleteTag = false;
+  bool _selectionHasRange = false;
+  bool _syncingRangeTags = false;
 
   @override
   void initState() {
@@ -40,6 +42,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     _controller.addListener(_handleControllerChanged);
     _focusNode = FocusNode();
     _selectionCanDeleteTag = _selectionHasTag();
+    _selectionHasRange = _selectionIsTaggable();
   }
 
   @override
@@ -51,15 +54,23 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   void _handleControllerChanged() {
-    final next = _selectionHasTag();
-    if (next == _selectionCanDeleteTag) {
+    if (_syncingRangeTags) {
+      return;
+    }
+    final nextCanDelete = _selectionHasTag();
+    final nextHasRange = _selectionIsTaggable();
+    if (nextCanDelete == _selectionCanDeleteTag && nextHasRange == _selectionHasRange) {
       return;
     }
     if (!mounted) {
-      _selectionCanDeleteTag = next;
+      _selectionCanDeleteTag = nextCanDelete;
+      _selectionHasRange = nextHasRange;
       return;
     }
-    setState(() => _selectionCanDeleteTag = next);
+    setState(() {
+      _selectionCanDeleteTag = nextCanDelete;
+      _selectionHasRange = nextHasRange;
+    });
   }
 
   void _emitText(String value) {
@@ -68,7 +79,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       newText: value,
       tags: _block.rangeTags,
     );
-    _controller.rangeTags = rangeTags;
+    _setControllerRangeTags(rangeTags);
     _block = _block.copyWith(
       text: value,
       rangeTags: rangeTags,
@@ -132,11 +143,17 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     }
     setState(() {
       final rangeTags = [..._block.rangeTags, rangeTag];
-      _controller.rangeTags = rangeTags;
+      _setControllerRangeTags(rangeTags);
       _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
       _selectionCanDeleteTag = _selectionHasTag();
+      _selectionHasRange = _selectionIsTaggable();
     });
     widget.onChanged(_block);
+  }
+
+  bool _selectionIsTaggable() {
+    final selection = _controller.selection;
+    return selection.isValid && !selection.isCollapsed && _controller.text.isNotEmpty;
   }
 
   bool _selectionHasTag() {
@@ -162,11 +179,42 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       final rangeTags = _block.rangeTags
           .where((tag) => !(tag.start < end && tag.end > start))
           .toList(growable: false);
-      _controller.rangeTags = rangeTags;
+      _setControllerRangeTags(rangeTags);
       _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
       _selectionCanDeleteTag = _selectionHasTag();
+      _selectionHasRange = _selectionIsTaggable();
     });
     widget.onChanged(_block);
+  }
+
+  List<NoteKnowledgeTag> _selectionTags() {
+    final selection = _controller.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      return const [];
+    }
+    final start = selection.start < selection.end ? selection.start : selection.end;
+    final end = selection.start < selection.end ? selection.end : selection.start;
+    final tags = <NoteKnowledgeTag>[];
+    for (final rangeTag in _block.rangeTags) {
+      if (rangeTag.start >= end || rangeTag.end <= start) {
+        continue;
+      }
+      for (final tag in rangeTag.resolvedTags) {
+        if (!tags.any((current) => current.type == tag.type && current.label == tag.label)) {
+          tags.add(tag);
+        }
+      }
+    }
+    return tags;
+  }
+
+  void _setControllerRangeTags(List<NoteTextRangeTag> rangeTags) {
+    _syncingRangeTags = true;
+    try {
+      _controller.rangeTags = rangeTags;
+    } finally {
+      _syncingRangeTags = false;
+    }
   }
 
   void _deleteChunk() {
@@ -272,17 +320,29 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
             ),
           ),
           if (_block.rangeTags.isNotEmpty)
+            const SizedBox.shrink(key: ValueKey('note-text-range-highlight')),
+          if (_selectionHasRange)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: NoteTagPills(
-                  tags: [
-                    for (final rangeTag in _block.rangeTags)
-                      ...rangeTag.resolvedTags,
-                  ],
-                  prefix: 'note-local-tag-pill',
-                ),
+              child: NoteSelectionActionRail(
+                key: const ValueKey('note-text-selection-rail'),
+                tags: _selectionTags(),
+                label: 'Kijelölt szöveg',
+                pillPrefix: 'note-text-selection-rail-pill',
+                actions: [
+                  IconButton(
+                    key: const ValueKey('note-text-selection-rail-tag'),
+                    tooltip: 'Kijelölt rész tagelése',
+                    onPressed: () => unawaited(_tagSelection()),
+                    icon: const Icon(Icons.sell_outlined, size: 20),
+                  ),
+                  IconButton(
+                    key: const ValueKey('note-text-selection-rail-delete-tag'),
+                    tooltip: 'Kijelölt tag törlése',
+                    onPressed: _selectionCanDeleteTag ? _deleteSelectedTag : null,
+                    icon: const Icon(Icons.sell, size: 20),
+                  ),
+                ],
               ),
             ),
           Container(

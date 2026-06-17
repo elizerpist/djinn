@@ -102,6 +102,10 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
       (candidate) => candidate.id == selectedId,
       orElse: () => _items.first,
     );
+    await _tagItem(item);
+  }
+
+  Future<void> _tagItem(NoteListItem item) async {
     final tags = await showTagManagerSheet(
       context,
       initialTags: item.tags,
@@ -219,12 +223,13 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
               itemBuilder: (context, index) {
                 final item = _items[index];
                 return _ListItemRow(
-                  key: ValueKey('note-list-row-${item.id}'),
+                  key: ValueKey('note-list-item-shell-${item.id}'),
                   index: index,
                   item: item,
                   selected: _selectedItemId == item.id,
                   onSelect: () => setState(() => _selectedItemId = item.id),
                   onChanged: _replaceItem,
+                  onTag: () => unawaited(_tagItem(item)),
                   onDelete: () => _deleteItem(item),
                   onIndent: () => _changeIndent(item, 1),
                   onOutdent: () => _changeIndent(item, -1),
@@ -246,6 +251,7 @@ class _ListItemRow extends StatelessWidget {
     required this.selected,
     required this.onSelect,
     required this.onChanged,
+    required this.onTag,
     required this.onDelete,
     required this.onIndent,
     required this.onOutdent,
@@ -256,91 +262,109 @@ class _ListItemRow extends StatelessWidget {
   final bool selected;
   final VoidCallback onSelect;
   final ValueChanged<NoteListItem> onChanged;
+  final VoidCallback onTag;
   final VoidCallback onDelete;
   final VoidCallback onIndent;
   final VoidCallback onOutdent;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(left: 16.0 * item.level.clamp(0, 8).toDouble(), bottom: 8),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
-            width: selected ? 2 : 1,
+    final tagColor =
+        item.tags.isEmpty ? null : Color(item.tags.first.resolvedColorValue).withValues(alpha: 0.22);
+    return GestureDetector(
+      key: ValueKey('note-list-row-${item.id}'),
+      behavior: HitTestBehavior.translucent,
+      onTap: onSelect,
+      child: Padding(
+        padding: EdgeInsets.only(left: 16.0 * item.level.clamp(0, 8).toDouble(), bottom: 8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+              width: selected ? 2 : 1,
+            ),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  ReorderableDragStartListener(
-                    index: index,
-                    child: const SizedBox.square(
-                      dimension: 36,
-                      child: Icon(Icons.drag_indicator, color: Color(0xFF9CA3AF)),
-                    ),
-                  ),
-                  Checkbox(
-                    value: item.checked,
-                    onChanged: (value) => onChanged(item.copyWith(checked: value ?? false)),
-                  ),
-                  IconButton(
-                    key: ValueKey('note-list-item-select-${item.id}'),
-                    tooltip: 'Listaelem kijelölése',
-                    onPressed: onSelect,
-                    icon: Icon(
-                      selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                      size: 20,
-                    ),
-                  ),
-                  Expanded(
-                    child: TextFormField(
-                      key: ValueKey('note-list-item-${item.id}'),
-                      initialValue: item.text,
-                      decoration: const InputDecoration(
-                        hintText: 'Listaelem',
-                        border: InputBorder.none,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: const SizedBox.square(
+                        dimension: 36,
+                        child: Icon(Icons.drag_indicator, color: Color(0xFF9CA3AF)),
                       ),
-                      onChanged: (value) => onChanged(item.copyWith(text: value)),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: 'Kijjebb',
-                    onPressed: onOutdent,
-                    icon: const Icon(Icons.format_indent_decrease, size: 20),
-                  ),
-                  IconButton(
-                    tooltip: 'Beljebb',
-                    onPressed: onIndent,
-                    icon: const Icon(Icons.format_indent_increase, size: 20),
-                  ),
-                  IconButton(
-                    key: ValueKey('note-list-delete-${item.id}'),
-                    tooltip: 'Listaelem törlése',
-                    onPressed: onDelete,
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              if (item.tags.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(52, 0, 8, 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: NoteTagPills(
-                      tags: item.tags,
-                      prefix: 'note-list-item-tag-pill-${item.id}',
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    Checkbox(
+                      value: item.checked,
+                      onChanged: (value) => onChanged(item.copyWith(checked: value ?? false)),
                     ),
-                  ),
+                    Expanded(
+                      child: Container(
+                        key: item.tags.isEmpty
+                            ? null
+                            : ValueKey('note-list-item-tag-highlight-${item.id}'),
+                        decoration: BoxDecoration(
+                          color: tagColor,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: TextFormField(
+                          key: ValueKey('note-list-item-${item.id}'),
+                          initialValue: item.text,
+                          decoration: const InputDecoration(
+                            hintText: 'Listaelem',
+                            border: InputBorder.none,
+                          ),
+                          style: TextStyle(backgroundColor: tagColor),
+                          onTap: onSelect,
+                          onChanged: (value) => onChanged(item.copyWith(text: value)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-            ],
+                if (selected)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(52, 4, 8, 8),
+                    child: NoteSelectionActionRail(
+                      tags: item.tags,
+                      label: 'Listaelem',
+                      pillPrefix: 'note-list-rail-pill-${item.id}',
+                      actions: [
+                        IconButton(
+                          key: ValueKey('note-list-rail-tag-${item.id}'),
+                          tooltip: 'Listaelem tagelése',
+                          onPressed: onTag,
+                          icon: const Icon(Icons.sell_outlined, size: 20),
+                        ),
+                        IconButton(
+                          key: ValueKey('note-list-rail-outdent-${item.id}'),
+                          tooltip: 'Kijjebb',
+                          onPressed: onOutdent,
+                          icon: const Icon(Icons.format_indent_decrease, size: 20),
+                        ),
+                        IconButton(
+                          key: ValueKey('note-list-rail-indent-${item.id}'),
+                          tooltip: 'Beljebb',
+                          onPressed: onIndent,
+                          icon: const Icon(Icons.format_indent_increase, size: 20),
+                        ),
+                        IconButton(
+                          key: ValueKey('note-list-rail-delete-${item.id}'),
+                          tooltip: 'Listaelem törlése',
+                          onPressed: onDelete,
+                          icon: const Icon(Icons.close, size: 20),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

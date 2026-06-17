@@ -45,6 +45,67 @@ class NoteTagPills extends StatelessWidget {
   }
 }
 
+class NoteSelectionActionRail extends StatelessWidget {
+  const NoteSelectionActionRail({
+    super.key,
+    required this.tags,
+    required this.actions,
+    this.label,
+    this.pillPrefix = 'note-selection-rail-tag-pill',
+  });
+
+  final List<NoteKnowledgeTag> tags;
+  final List<Widget> actions;
+  final String? label;
+  final String pillPrefix;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      key: const ValueKey('note-selection-action-rail'),
+      color: Colors.white,
+      elevation: 0,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: const [
+            BoxShadow(color: Color(0x0F111827), blurRadius: 10, offset: Offset(0, 3)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: tags.isEmpty
+                  ? Text(
+                      label ?? '',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    )
+                  : NoteTagPills(
+                      tags: tags,
+                      prefix: pillPrefix,
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    ),
+            ),
+            const SizedBox(width: 8),
+            Wrap(
+              spacing: 4,
+              children: actions,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class NoteSelectedTagTray extends StatelessWidget {
   const NoteSelectedTagTray({
     super.key,
