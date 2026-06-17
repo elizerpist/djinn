@@ -265,24 +265,29 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
 
   Future<void> _openBlockEditor(NoteBlock block) async {
     Widget editorFor(NoteBlock current) {
+      final availableTags = _document.knownTags;
       return switch (current.type) {
         NoteBlockType.heading || NoteBlockType.paragraph => NoteTextChunkEditorScreen(
             block: current,
+            availableTags: availableTags,
             onChanged: _replaceBlock,
             onDelete: () => _deleteBlock(current),
           ),
         NoteBlockType.listItem => NoteListChunkEditorScreen(
             block: current,
+            availableTags: availableTags,
             onChanged: _replaceBlock,
             onDelete: () => _deleteBlock(current),
           ),
         NoteBlockType.table => NoteTableEditorScreen(
             block: current,
+            availableTags: availableTags,
             onChanged: _replaceBlock,
             onDelete: () => _deleteBlock(current),
           ),
         NoteBlockType.flowchart => NoteFlowchartEditorScreen(
             block: current,
+            availableTags: availableTags,
             onChanged: _replaceBlock,
             onDelete: () => _deleteBlock(current),
           ),
@@ -312,6 +317,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     final tags = await showTagManagerSheet(
       context,
       initialTags: block.tags,
+      availableTags: _document.knownTags,
       title: 'Chunk tagek',
     );
     if (tags == null) {
@@ -324,6 +330,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     final tags = await showTagManagerSheet(
       context,
       initialTags: _document.tags,
+      availableTags: _document.knownTags,
       title: 'Jegyzet tagek',
     );
     if (tags == null) {

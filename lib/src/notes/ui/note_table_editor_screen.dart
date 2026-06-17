@@ -9,11 +9,13 @@ class NoteTableEditorScreen extends StatefulWidget {
   const NoteTableEditorScreen({
     super.key,
     required this.block,
+    this.availableTags = const [],
     this.onChanged,
     this.onDelete,
   });
 
   final NoteBlock block;
+  final List<NoteKnowledgeTag> availableTags;
   final ValueChanged<NoteBlock>? onChanged;
   final VoidCallback? onDelete;
 
@@ -154,20 +156,34 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     setState(() {
       _normalizeRows();
       final target = index.clamp(0, _columnCount).toInt();
+      _block = _block.copyWith(
+        scopedTags: _remapScopedTags(
+          (tagTarget) => _remapTargetForColumnInsert(tagTarget, target),
+        ),
+        clearIndex: true,
+      );
       for (final row in _rows) {
         row.insert(target, '');
       }
+      _selection = null;
       _resetCellControllers();
     });
     _emitChange();
   }
 
   void _deleteRow(int index) {
-    if (_rows.length == 1) {
+    if (_rows.length == 1 || index < 0 || index >= _rows.length) {
       return;
     }
     setState(() {
+      _block = _block.copyWith(
+        scopedTags: _remapScopedTags(
+          (target) => _remapTargetForRowDelete(target, index),
+        ),
+        clearIndex: true,
+      );
       _rows.removeAt(index);
+      _selection = null;
       _resetCellControllers();
     });
     _emitChange();
@@ -179,9 +195,16 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       return;
     }
     setState(() {
+      _block = _block.copyWith(
+        scopedTags: _remapScopedTags(
+          (target) => _remapTargetForColumnDelete(target, index),
+        ),
+        clearIndex: true,
+      );
       for (final row in _rows) {
         row.removeAt(index);
       }
+      _selection = null;
       _resetCellControllers();
     });
     _emitChange();
@@ -195,6 +218,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     final tags = await showTagManagerSheet(
       context,
       initialTags: _block.tags,
+      availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Chunk tagjei',
     );
     if (tags == null) {
@@ -216,6 +240,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     final tags = await showTagManagerSheet(
       context,
       initialTags: _tagsForSelection(selection),
+      availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Kijelölt táblázatrész tagjei',
     );
     if (tags == null) {
@@ -274,6 +299,81 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   }
 
   bool _hasTags(_TableSelection selection) => _tagsForSelection(selection).isNotEmpty;
+
+  Color _colorForSelection(_TableSelection selection) {
+    final tags = _tagsForSelection(selection);
+    if (tags.isEmpty) {
+      return const Color(0xFF2563EB);
+    }
+    return Color(tags.first.resolvedColorValue);
+  }
+
+  List<NoteScopedTagAssignment> _remapScopedTags(
+    NoteTagTarget? Function(NoteTagTarget target) remap,
+  ) {
+    final next = <NoteScopedTagAssignment>[];
+    for (final assignment in _block.scopedTags) {
+      final target = remap(assignment.target);
+      if (target != null) {
+        next.add(assignment.copyWith(target: target));
+      }
+    }
+    return next;
+  }
+
+  NoteTagTarget? _remapTargetForColumnInsert(
+    NoteTagTarget target,
+    int insertIndex,
+  ) {
+    final columnIndex = target.columnIndex;
+    if (columnIndex == null || columnIndex < insertIndex) {
+      return target;
+    }
+    if (target.kind == NoteTagTargetKind.tableColumn ||
+        target.kind == NoteTagTargetKind.tableCell) {
+      return target.copyWith(columnIndex: columnIndex + 1);
+    }
+    return target;
+  }
+
+  NoteTagTarget? _remapTargetForColumnDelete(
+    NoteTagTarget target,
+    int deleteIndex,
+  ) {
+    final columnIndex = target.columnIndex;
+    if (columnIndex == null) {
+      return target;
+    }
+    if (target.kind != NoteTagTargetKind.tableColumn &&
+        target.kind != NoteTagTargetKind.tableCell) {
+      return target;
+    }
+    if (columnIndex == deleteIndex) {
+      return null;
+    }
+    if (columnIndex > deleteIndex) {
+      return target.copyWith(columnIndex: columnIndex - 1);
+    }
+    return target;
+  }
+
+  NoteTagTarget? _remapTargetForRowDelete(NoteTagTarget target, int deleteIndex) {
+    final rowIndex = target.rowIndex;
+    if (rowIndex == null) {
+      return target;
+    }
+    if (target.kind != NoteTagTargetKind.tableRow &&
+        target.kind != NoteTagTargetKind.tableCell) {
+      return target;
+    }
+    if (rowIndex == deleteIndex) {
+      return null;
+    }
+    if (rowIndex > deleteIndex) {
+      return target.copyWith(rowIndex: rowIndex - 1);
+    }
+    return target;
+  }
 
   bool _sameTarget(NoteTagTarget left, NoteTagTarget right) {
     return left.kind == right.kind &&
@@ -356,11 +456,13 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
                                     child: Text('Oszlop ${column + 1}'),
                                   ),
                                   if (_hasTags(_TableSelection.column(column)))
-                                    const Positioned(
+                                    Positioned(
                                       left: 0,
                                       right: 0,
                                       top: 0,
-                                      child: _TableTopMarker(),
+                                      child: _TableTopMarker(
+                                        color: _colorForSelection(_TableSelection.column(column)),
+                                      ),
                                     ),
                                 ],
                               ),
@@ -432,7 +534,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
                                         key: ValueKey('note-table-cell-tag-marker-$row-$column'),
                                         right: 2,
                                         bottom: 2,
-                                        child: const _TableCornerMarker(),
+                                        child: _TableCornerMarker(
+                                          color: _colorForSelection(_TableSelection.cell(row, column)),
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -451,11 +555,14 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
                                     width: 24,
                                     height: 36,
                                     child: _hasTags(_TableSelection.row(row))
-                                        ? const _TableRowMarker()
+                                        ? _TableRowMarker(
+                                            color: _colorForSelection(_TableSelection.row(row)),
+                                          )
                                         : const Icon(Icons.table_rows_outlined, size: 16),
                                   ),
                                 ),
                                 IconButton(
+                                  key: ValueKey('note-table-delete-row-$row'),
                                   tooltip: 'Sor törlése',
                                   onPressed: () => _deleteRow(row),
                                   icon: const Icon(Icons.delete_outline),
@@ -535,13 +642,15 @@ class _TableSelection {
 }
 
 class _TableCornerMarker extends StatelessWidget {
-  const _TableCornerMarker();
+  const _TableCornerMarker({required this.color});
+
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFF2563EB),
+        color: color,
         borderRadius: BorderRadius.circular(999),
       ),
       child: const SizedBox.square(dimension: 8),
@@ -550,27 +659,31 @@ class _TableCornerMarker extends StatelessWidget {
 }
 
 class _TableTopMarker extends StatelessWidget {
-  const _TableTopMarker();
+  const _TableTopMarker({required this.color});
+
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(color: Color(0xFF2563EB)),
-      child: SizedBox(height: 4),
+    return DecoratedBox(
+      decoration: BoxDecoration(color: color),
+      child: const SizedBox(height: 4),
     );
   }
 }
 
 class _TableRowMarker extends StatelessWidget {
-  const _TableRowMarker();
+  const _TableRowMarker({required this.color});
+
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return const Align(
+    return Align(
       alignment: Alignment.centerLeft,
       child: DecoratedBox(
-        decoration: BoxDecoration(color: Color(0xFF2563EB)),
-        child: SizedBox(width: 4, height: 28),
+        decoration: BoxDecoration(color: color),
+        child: const SizedBox(width: 4, height: 28),
       ),
     );
   }

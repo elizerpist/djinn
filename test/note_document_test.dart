@@ -190,7 +190,7 @@ void main() {
     expect(parsed.text, isNot(contains('state:')));
   });
 
-  test('serializes colored text range tags as searchable metadata only', () {
+  test('serializes colored text range tags without block-level metadata leakage', () {
     const block = NoteBlock(
       id: 'text-1',
       type: NoteBlockType.paragraph,
@@ -214,7 +214,7 @@ void main() {
     expect(parsed.rangeTags.single.start, 31);
     expect(parsed.rangeTags.single.end, 37);
     expect(parsed.rangeTags.single.tag.colorValue, 0xFFDC2626);
-    expect(parsed.searchMetadataText, contains('state:súlyos'));
+    expect(parsed.searchMetadataText, isNot(contains('state:súlyos')));
     expect(parsed.plainText, contains('súlyos esetben high flow'));
     expect(parsed.plainText, isNot(contains('state:')));
   });
@@ -342,8 +342,19 @@ void main() {
         NoteTagTargetKind.flowchartEdge,
       ]),
     );
-    expect(tableBlock.searchMetadataText, contains('state:súlyos'));
-    expect(flowBlock.searchMetadataText, contains('topic:légzési elégtelenség'));
+    expect(
+      parsed.knownTags.map((tag) => tag.metadataText),
+      containsAll([
+        'state:súlyos',
+        'topic:légzési elégtelenség',
+      ]),
+    );
+    expect(
+      tableBlock.knownTags.map((tag) => tag.metadataText),
+      contains('state:súlyos'),
+    );
+    expect(tableBlock.searchMetadataText, isNot(contains('state:súlyos')));
+    expect(flowBlock.searchMetadataText, isNot(contains('topic:légzési elégtelenség')));
     expect(parsed.plainText, isNot(contains('state:')));
   });
 

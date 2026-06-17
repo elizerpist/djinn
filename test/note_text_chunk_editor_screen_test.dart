@@ -107,4 +107,49 @@ void main() {
     expect(find.byKey(const ValueKey('note-text-tip-bar')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-text-tag-selection')), findsNothing);
   });
+
+  testWidgets('selected tag deletion menu updates when text selection overlaps a range tag', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Súlyos esetben high flow oxygen.',
+            rangeTags: [
+              NoteTextRangeTag(
+                id: 'range-1',
+                start: 0,
+                end: 6,
+                tag: NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.state,
+                  label: 'súlyos',
+                  colorValue: 0xFFDC2626,
+                ),
+              ),
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
+    await tester.pump();
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    field.controller!.selection = const TextSelection(baseOffset: 0, extentOffset: 6);
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
+    await tester.pumpAndSettle();
+
+    final deleteItem = tester.widget<PopupMenuItem<String>>(
+      find.byKey(const ValueKey('note-chunk-menu-delete-selected-tag')),
+    );
+    expect(deleteItem.enabled, isTrue);
+  });
 }
+
+void _ignoreBlockChange(NoteBlock block) {}

@@ -729,19 +729,22 @@ class NoteAwareLocalRetriever implements LocalRetriever {
               : 'note:${chunk.noteId}:${chunk.blockId}:part-$i',
           sourceType: EvidenceSourceType.textChunk,
           text: title == null || title.isEmpty
-              ? units[i]
-              : '$title: ${units[i]}',
+              ? units[i].text
+              : '$title: ${units[i].text}',
           label: units.length == 1
               ? baseLabel
               : '$baseLabel · részlet ${i + 1}',
           validationState: state,
           documentId: chunk.noteId,
-          searchText: chunk.searchText,
+          searchText: _joinSearchText([
+            chunk.searchText,
+            _textRangeSearchText(block, units[i]),
+          ]),
         ),
     ];
   }
 
-  List<String> _textUnits(String text) {
+  List<_TextUnit> _textUnits(String text) {
     final normalized = text.trim();
     if (normalized.isEmpty) {
       return const [];
@@ -759,9 +762,32 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         .where((part) => part.isNotEmpty)
         .toList(growable: false);
     if (parts.length <= 1) {
-      return [normalized];
+      return [_TextUnit(text: normalized, start: 0, end: normalized.length)];
     }
-    return parts;
+    var searchStart = 0;
+    return [
+      for (final part in parts)
+        () {
+          final index = normalized.indexOf(part, searchStart);
+          final start = index < 0 ? searchStart : index;
+          final end = (start + part.length).clamp(0, normalized.length).toInt();
+          searchStart = end;
+          return _TextUnit(text: part, start: start, end: end);
+        }(),
+    ];
+  }
+
+  String _textRangeSearchText(NoteBlock block, _TextUnit unit) {
+    final tags = <NoteKnowledgeTag>[];
+    for (final rangeTag in block.rangeTags) {
+      if (!rangeTag.isValid) {
+        continue;
+      }
+      if (rangeTag.start < unit.end && rangeTag.end > unit.start) {
+        tags.addAll(rangeTag.resolvedTags);
+      }
+    }
+    return _tagSearchText(tags);
   }
 
   List<SourceEvidence> _tableRowEvidence(
@@ -770,13 +796,15 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     String baseLabel,
     ValidationState state,
   ) {
-    final rows = block.rows
-        .where((row) => row.any((cell) => cell.trim().isNotEmpty))
-        .toList(growable: false);
+    final rows = [
+      for (var index = 0; index < block.rows.length; index += 1)
+        if (block.rows[index].any((cell) => cell.trim().isNotEmpty))
+          _IndexedTableRow(index: index, row: block.rows[index]),
+    ];
     if (rows.isEmpty) {
       return const [];
     }
-    final firstRow = rows.first;
+    final firstRow = rows.first.row;
     final hasHeader =
         rows.length > 1 &&
         firstRow.every((cell) => cell.trim().isNotEmpty) &&
@@ -786,7 +814,9 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     final title = block.title?.trim();
     final results = <SourceEvidence>[];
     for (var i = start; i < rows.length; i += 1) {
-      final row = rows[i];
+      final indexedRow = rows[i];
+      final row = indexedRow.row;
+      final rowIndex = indexedRow.index;
       final definitionCells = _independentDefinitionCells(row);
       if (definitionCells.isNotEmpty) {
         for (
@@ -801,31 +831,76 @@ class NoteAwareLocalRetriever implements LocalRetriever {
           final header = _headerForDefinitionCell(headers, cellIndex);
           results.add(
             SourceEvidence(
-              id: 'note:${chunk.noteId}:${chunk.blockId}:row-$i-cell-$cellIndex',
+              id: 'note:${chunk.noteId}:${chunk.blockId}:row-$rowIndex-cell-$cellIndex',
               sourceType: EvidenceSourceType.tableChunk,
               text: _tableCellText(cell: cell, header: header, title: title),
-              label: '$baseLabel · sor ${i + 1} · cella ${cellIndex + 1}',
+              label: '$baseLabel · sor ${rowIndex + 1} · cella ${cellIndex + 1}',
               validationState: state,
               documentId: chunk.noteId,
-              searchText: chunk.searchText,
+              searchText: _joinSearchText([
+                chunk.searchText,
+                _tableScopedSearchText(
+                  block,
+                  rowIndex: rowIndex,
+                  columnIndex: cellIndex,
+                ),
+              ]),
             ),
           );
         }
       } else {
         results.add(
           SourceEvidence(
-            id: 'note:${chunk.noteId}:${chunk.blockId}:row-$i',
+            id: 'note:${chunk.noteId}:${chunk.blockId}:row-$rowIndex',
             sourceType: EvidenceSourceType.tableChunk,
             text: _tableRowText(row: row, headers: headers, title: title),
-            label: '$baseLabel · sor ${i + 1}',
+            label: '$baseLabel · sor ${rowIndex + 1}',
             validationState: state,
             documentId: chunk.noteId,
-            searchText: chunk.searchText,
+            searchText: _joinSearchText([
+              chunk.searchText,
+              _tableScopedSearchText(block, rowIndex: rowIndex),
+            ]),
           ),
         );
       }
     }
     return results;
+  }
+
+  String _tableScopedSearchText(
+    NoteBlock block, {
+    required int rowIndex,
+    int? columnIndex,
+  }) {
+    final tags = <NoteKnowledgeTag>[];
+    for (final assignment in block.scopedTags) {
+      final target = assignment.target;
+      switch (target.kind) {
+        case NoteTagTargetKind.tableRow:
+          if (target.rowIndex == rowIndex) {
+            tags.addAll(assignment.tags);
+          }
+          break;
+        case NoteTagTargetKind.tableColumn:
+          if (columnIndex == null || target.columnIndex == columnIndex) {
+            tags.addAll(assignment.tags);
+          }
+          break;
+        case NoteTagTargetKind.tableCell:
+          if (target.rowIndex == rowIndex &&
+              (columnIndex == null || target.columnIndex == columnIndex)) {
+            tags.addAll(assignment.tags);
+          }
+          break;
+        case NoteTagTargetKind.textRange:
+        case NoteTagTargetKind.listItem:
+        case NoteTagTargetKind.flowchartNode:
+        case NoteTagTargetKind.flowchartEdge:
+          break;
+      }
+    }
+    return _tagSearchText(tags);
   }
 
   List<String> _independentDefinitionCells(List<String> row) {
@@ -967,7 +1042,14 @@ class NoteAwareLocalRetriever implements LocalRetriever {
           label: '$baseLabel · node',
           validationState: state,
           documentId: chunk.noteId,
-          searchText: chunk.searchText,
+          searchText: _joinSearchText([
+            chunk.searchText,
+            _flowchartScopedSearchText(
+              block,
+              kind: NoteTagTargetKind.flowchartNode,
+              elementId: node.id,
+            ),
+          ]),
         ),
       );
     }
@@ -989,7 +1071,14 @@ class NoteAwareLocalRetriever implements LocalRetriever {
           label: '$baseLabel · kapcsolat',
           validationState: state,
           documentId: chunk.noteId,
-          searchText: chunk.searchText,
+          searchText: _joinSearchText([
+            chunk.searchText,
+            _flowchartScopedSearchText(
+              block,
+              kind: NoteTagTargetKind.flowchartEdge,
+              elementId: edge.id,
+            ),
+          ]),
         ),
       );
     }
@@ -1019,6 +1108,21 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       }
     }
     return edge.label.trim();
+  }
+
+  String _flowchartScopedSearchText(
+    NoteBlock block, {
+    required NoteTagTargetKind kind,
+    required String elementId,
+  }) {
+    final tags = <NoteKnowledgeTag>[];
+    for (final assignment in block.scopedTags) {
+      final target = assignment.target;
+      if (target.kind == kind && target.elementId == elementId) {
+        tags.addAll(assignment.tags);
+      }
+    }
+    return _tagSearchText(tags);
   }
 
   List<SourceEvidence> _keywordMatches({
@@ -1110,6 +1214,17 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     return expandedLimit;
   }
 
+  String _tagSearchText(Iterable<NoteKnowledgeTag> tags) {
+    final values = <String>{};
+    for (final tag in tags) {
+      final metadata = tag.metadataText.trim();
+      if (metadata.isNotEmpty) {
+        values.add(metadata);
+      }
+    }
+    return values.join('\n').trim();
+  }
+
   String _joinSearchText(List<String?> values) {
     return values
         .map((value) => value?.trim() ?? '')
@@ -1140,6 +1255,28 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       r'\b[A-ZÁÉÍÓÖŐÚÜŰ]{2,}[0-9]*\b',
     ).allMatches(value).map((match) => match.group(0)!).toSet();
   }
+}
+
+class _TextUnit {
+  const _TextUnit({
+    required this.text,
+    required this.start,
+    required this.end,
+  });
+
+  final String text;
+  final int start;
+  final int end;
+}
+
+class _IndexedTableRow {
+  const _IndexedTableRow({
+    required this.index,
+    required this.row,
+  });
+
+  final int index;
+  final List<String> row;
 }
 
 List<_BranchSignal> _branchSignalsFromText(String text) {

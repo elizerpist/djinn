@@ -40,8 +40,7 @@ class _TagManagerSheet extends StatefulWidget {
 }
 
 class _TagManagerSheetState extends State<_TagManagerSheet> {
-  static final Map<String, NoteKnowledgeTag> _registry = <String, NoteKnowledgeTag>{};
-
+  late final Map<String, NoteKnowledgeTag> _registry;
   late List<NoteKnowledgeTag> _tags;
   late List<NoteKnowledgeTag> _availableTags;
   late final TextEditingController _labelController;
@@ -52,6 +51,7 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
   @override
   void initState() {
     super.initState();
+    _registry = <String, NoteKnowledgeTag>{};
     _tags = [...widget.initialTags];
     for (final tag in [...widget.availableTags, ...widget.initialTags]) {
       _rememberTag(tag);
@@ -61,6 +61,8 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
     if (_tags.isNotEmpty) {
       _type = NoteKnowledgeTagTypes.normalize(_tags.last.type);
       _colorValue = _tags.last.resolvedColorValue;
+    } else {
+      _colorValue = _nextUnusedColorValue();
     }
   }
 
@@ -97,6 +99,7 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
       }
       _labelController.clear();
       _editingKey = null;
+      _colorValue = _nextUnusedColorValue();
     });
   }
 
@@ -151,17 +154,30 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
     return _tags.any((selected) => selected.metadataText == tag.metadataText);
   }
 
-  static void _rememberTag(NoteKnowledgeTag tag) {
+  void _rememberTag(NoteKnowledgeTag tag) {
     if (tag.metadataText.isEmpty) {
       return;
     }
     _registry[tag.metadataText] = tag;
   }
 
-  static List<NoteKnowledgeTag> _sortedRegisteredTags() {
+  List<NoteKnowledgeTag> _sortedRegisteredTags() {
     final tags = _registry.values.toList(growable: false);
     tags.sort((a, b) => a.metadataText.compareTo(b.metadataText));
     return tags;
+  }
+
+  int _nextUnusedColorValue() {
+    final used = <int>{
+      for (final tag in _registry.values) tag.resolvedColorValue,
+      for (final tag in _tags) tag.resolvedColorValue,
+    };
+    for (final colorValue in noteTagColorSlots) {
+      if (!used.contains(colorValue)) {
+        return colorValue;
+      }
+    }
+    return noteTagColorSlots[_registry.length % noteTagColorSlots.length];
   }
 
   @override

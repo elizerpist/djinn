@@ -38,6 +38,8 @@ Date: 2026-06-17
 - [ ] Tagged text shows the tag color as a background highlight.
 - [ ] Whole chunk tags appear as full-opacity colored capsules in the editor subheader.
 - [ ] Tag metadata is searchable but does not blindly make every tagged note relevant.
+- [x] Text range and scoped table/flowchart tags are indexed only on matching granular evidence, not on the whole chunk.
+- [x] Tag manager recall uses the active document and current editor block known tags instead of process-static sheet memory.
 
 ## Shared Chunk Editor Rules
 
@@ -81,6 +83,7 @@ Date: 2026-06-17
 - [ ] Column tags use a top color rail.
 - [ ] Cell tags use a corner marker or stripe.
 - [ ] Actual pills appear in a selected-element tag tray outside the table grid.
+- [x] Row and column deletion/insertion remaps or drops scoped table tag targets so tags do not drift to the wrong row, column, or cell.
 
 ## Flowchart Chunk
 
@@ -95,6 +98,14 @@ Date: 2026-06-17
 - [ ] Zoom in/out controls replace the old top button location.
 - [ ] Pan/drag performance is smooth enough on the target phone.
 - [ ] Canvas behavior feels truly infinite for user work, not just a visibly bounded giant surface.
+- [x] Flowchart edges are selectable and taggable, with edge tags shown in the external tray rather than as canvas pills.
+- [x] Deleting flowchart nodes or edges prunes stale scoped node/edge tag assignments.
+
+## Review Follow-Up Fixes
+
+- [x] Text selected-tag deletion state updates when the text selection changes.
+- [x] Local range tags, table scoped tags, and flowchart scoped tags have targeted retriever tests proving they do not boost unrelated granular evidence.
+- [x] Root note tag menu and per-note editor tag menus both receive document-known tags for recall.
 
 ## Build And Release
 

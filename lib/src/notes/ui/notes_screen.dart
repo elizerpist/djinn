@@ -436,6 +436,7 @@ class _NotesScreenState extends State<NotesScreen> {
     final tags = await showTagManagerSheet(
       context,
       initialTags: note.document.tags,
+      availableTags: note.document.knownTags,
       title: 'Jegyzet tagek',
     );
     if (tags == null) {

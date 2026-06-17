@@ -1145,6 +1145,106 @@ Tartomány | Teendő | Áramlás
     expect(results.single.id, endsWith(':row-0-cell-1'));
   });
 
+  test('local table cell tags only boost the tagged granular evidence', () async {
+    final notes = MemoryNoteRepository();
+    await notes.createDocumentNote(
+      title: 'Oxigén szabályok',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'oxygen-table',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Enyhe', 'Célzott oxygén'],
+              ['Súlyos', 'High flow'],
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'cell-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableCell,
+                  rowIndex: 2,
+                  columnIndex: 1,
+                ),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'piros prioritás',
+                    colorValue: 0xFFDC2626,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    final retriever = NoteAwareLocalRetriever(
+      base: MemoryLocalRetriever(const []),
+      noteRepository: notes,
+    );
+
+    final results = await retriever.retrieveLocalVector(
+      query: 'piros prioritás',
+      limit: 4,
+      mode: 'onnx_multilingual_e5',
+    );
+    final joined = results.map((item) => item.text).join('\n');
+
+    expect(joined, contains('Súlyos'));
+    expect(joined, contains('High flow'));
+    expect(joined, isNot(contains('Enyhe')));
+    expect(joined, isNot(contains('Célzott oxygén')));
+  });
+
+  test('local flowchart node and edge tags only boost their matching units', () async {
+    final notes = MemoryNoteRepository();
+    await notes.createDocumentNote(
+      title: 'Flow tag teszt',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'flow-1',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(id: 'n1', label: 'Súlyos?'),
+              NoteFlowchartNode(id: 'n2', label: 'Oxigén'),
+              NoteFlowchartNode(id: 'n3', label: 'Megfigyelés'),
+            ],
+            edges: [
+              NoteFlowchartEdge(id: 'e1', fromNodeId: 'n1', toNodeId: 'n2', label: 'Igen'),
+              NoteFlowchartEdge(id: 'e2', fromNodeId: 'n1', toNodeId: 'n3', label: 'Nem'),
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'edge-tag',
+                target: NoteTagTarget(kind: NoteTagTargetKind.flowchartEdge, elementId: 'e1'),
+                tags: [
+                  NoteKnowledgeTag(type: NoteKnowledgeTagTypes.branch, label: 'piros ág'),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    final retriever = NoteAwareLocalRetriever(
+      base: MemoryLocalRetriever(const []),
+      noteRepository: notes,
+    );
+
+    final results = await retriever.retrieveLocalVector(
+      query: 'piros ág',
+      limit: 4,
+      mode: 'onnx_multilingual_e5',
+    );
+    final joined = results.map((item) => item.text).join('\n');
+
+    expect(joined, contains('Súlyos? -> Oxigén [Igen]'));
+    expect(joined, isNot(contains('Súlyos? -> Megfigyelés [Nem]')));
+  });
+
   test('granular table evidence splits pipe-packed definition cells', () async {
     final notes = MemoryNoteRepository();
     await notes.createDocumentNote(

@@ -10,11 +10,13 @@ class NoteListChunkEditorScreen extends StatefulWidget {
     super.key,
     required this.block,
     required this.onChanged,
+    this.availableTags = const [],
     this.onDelete,
   });
 
   final NoteBlock block;
   final ValueChanged<NoteBlock> onChanged;
+  final List<NoteKnowledgeTag> availableTags;
   final VoidCallback? onDelete;
 
   @override
@@ -77,6 +79,7 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
     final tags = await showTagManagerSheet(
       context,
       initialTags: _block.tags,
+      availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Chunk tagjei',
     );
     if (tags == null) {
@@ -102,6 +105,7 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
     final tags = await showTagManagerSheet(
       context,
       initialTags: item.tags,
+      availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Listaelem tagjei',
     );
     if (tags == null) {

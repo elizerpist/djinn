@@ -127,4 +127,92 @@ void main() {
     expect(find.byKey(const ValueKey('note-selected-tag-pill-súlyos')), findsOneWidget);
   });
 
+  testWidgets('table editor remaps scoped cell tags when inserting columns before them', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'cell-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableCell,
+                  rowIndex: 1,
+                  columnIndex: 1,
+                ),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'súlyos',
+                    colorValue: 0xFFDC2626,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-table-insert-column-0')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.scopedTags.single.target.rowIndex, 1);
+    expect(latest!.scopedTags.single.target.columnIndex, 2);
+    expect(find.byKey(const ValueKey('note-table-cell-tag-marker-1-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-cell-tag-marker-1-1')), findsNothing);
+  });
+
+  testWidgets('table editor remaps and drops scoped row tags when deleting rows', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Enyhe', 'Célzott'],
+              ['Súlyos', 'High flow'],
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'row-tag',
+                target: NoteTagTarget(kind: NoteTagTargetKind.tableRow, rowIndex: 2),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'súlyos',
+                    colorValue: 0xFFDC2626,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-table-delete-row-1')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.scopedTags.single.target.rowIndex, 1);
+
+    await tester.tap(find.byKey(const ValueKey('note-table-delete-row-1')));
+    await tester.pumpAndSettle();
+
+    expect(latest!.scopedTags, isEmpty);
+  });
 }

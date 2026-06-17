@@ -393,6 +393,97 @@ void main() {
     expect(find.byKey(const ValueKey('note-flowchart-canvas-tag-pill-súlyos')), findsNothing);
   });
 
+  testWidgets('flowchart selected edge tags render in tray instead of on canvas', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: const NoteBlock(
+            id: 'flow-tags',
+            type: NoteBlockType.flowchart,
+            title: 'Ellátási ág',
+            nodes: [
+              NoteFlowchartNode(id: 'node-1', label: 'Súlyos?', x: 120, y: 120),
+              NoteFlowchartNode(id: 'node-2', label: 'Oxygén', x: 340, y: 120),
+            ],
+            edges: [
+              NoteFlowchartEdge(
+                id: 'edge-1',
+                fromNodeId: 'node-1',
+                toNodeId: 'node-2',
+                label: 'Igen',
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-edge-select-edge-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-chunk-menu-tag-selection')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'igen ág');
+    await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.scopedTags.single.target.kind, NoteTagTargetKind.flowchartEdge);
+    expect(latest!.scopedTags.single.target.elementId, 'edge-1');
+    expect(find.byKey(const ValueKey('note-flowchart-edge-tag-marker-edge-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selected-tag-tray')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selected-tag-pill-igen ág')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-canvas-tag-pill-igen ág')), findsNothing);
+  });
+
+  testWidgets('flowchart deleting an edge prunes stale scoped edge tags', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteFlowchartEditorScreen(
+          block: const NoteBlock(
+            id: 'flow-tags',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(id: 'node-1', label: 'Súlyos?', x: 120, y: 120),
+              NoteFlowchartNode(id: 'node-2', label: 'Oxygén', x: 340, y: 120),
+            ],
+            edges: [
+              NoteFlowchartEdge(
+                id: 'edge-1',
+                fromNodeId: 'node-1',
+                toNodeId: 'node-2',
+                label: 'Igen',
+              ),
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'edge-tag',
+                target: NoteTagTarget(kind: NoteTagTargetKind.flowchartEdge, elementId: 'edge-1'),
+                tags: [
+                  NoteKnowledgeTag(type: NoteKnowledgeTagTypes.branch, label: 'igen ág'),
+                ],
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-flowchart-edge-delete-edge-1')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.edges, isEmpty);
+    expect(latest!.scopedTags, isEmpty);
+  });
+
   testWidgets('ports connect in tapped direction and store endpoint ids', (tester) async {
     NoteBlock? latest;
     await tester.pumpWidget(

@@ -10,11 +10,13 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
     super.key,
     required this.block,
     required this.onChanged,
+    this.availableTags = const [],
     this.onDelete,
   });
 
   final NoteBlock block;
   final ValueChanged<NoteBlock> onChanged;
+  final List<NoteKnowledgeTag> availableTags;
   final VoidCallback? onDelete;
 
   @override
@@ -25,6 +27,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late NoteBlock _block;
   late final _TaggedTextEditingController _controller;
   late final FocusNode _focusNode;
+  bool _selectionCanDeleteTag = false;
 
   @override
   void initState() {
@@ -34,14 +37,29 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       text: widget.block.text,
       rangeTags: widget.block.rangeTags,
     );
+    _controller.addListener(_handleControllerChanged);
     _focusNode = FocusNode();
+    _selectionCanDeleteTag = _selectionHasTag();
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_handleControllerChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _handleControllerChanged() {
+    final next = _selectionHasTag();
+    if (next == _selectionCanDeleteTag) {
+      return;
+    }
+    if (!mounted) {
+      _selectionCanDeleteTag = next;
+      return;
+    }
+    setState(() => _selectionCanDeleteTag = next);
   }
 
   void _emitText(String value) {
@@ -56,6 +74,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       rangeTags: rangeTags,
       clearIndex: true,
     );
+    _handleControllerChanged();
     widget.onChanged(_block);
   }
 
@@ -70,6 +89,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     final tags = await showTagManagerSheet(
       context,
       initialTags: _block.tags,
+      availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Chunk tagjei',
     );
     if (tags == null) {
@@ -94,6 +114,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     final tags = await showTagManagerSheet(
       context,
       initialTags: const [],
+      availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Kijelölt rész tagje',
     );
     if (tags == null || tags.isEmpty) {
@@ -113,6 +134,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       final rangeTags = [..._block.rangeTags, rangeTag];
       _controller.rangeTags = rangeTags;
       _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
+      _selectionCanDeleteTag = _selectionHasTag();
     });
     widget.onChanged(_block);
   }
@@ -142,6 +164,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           .toList(growable: false);
       _controller.rangeTags = rangeTags;
       _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
+      _selectionCanDeleteTag = _selectionHasTag();
     });
     widget.onChanged(_block);
   }
@@ -200,7 +223,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         onTagSelection: () => unawaited(_tagSelection()),
         onDeleteSelectedTag: _deleteSelectedTag,
         onDeleteChunk: _deleteChunk,
-        canDeleteSelectedTag: _selectionHasTag(),
+        canDeleteSelectedTag: _selectionCanDeleteTag,
         trailingActions: [
           IconButton(
             key: const ValueKey('note-text-outdent'),

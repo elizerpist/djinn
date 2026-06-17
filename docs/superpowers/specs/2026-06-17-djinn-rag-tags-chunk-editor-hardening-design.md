@@ -105,6 +105,29 @@ Assignments support multiple tags on one target. The assignment target must stor
 
 Tags are searchable metadata, but they should not by themselves make a note the best match for an unrelated query. A tag can boost a chunk when the query mentions the tag or when the user filters by tag.
 
+Whole chunk tags may be included in chunk-level search metadata. Local tag metadata is narrower:
+
+- text range tags are indexed only on text units whose character range overlaps the tag range
+- table row tags are indexed only on that row's evidence
+- table column tags are indexed only on that column's cell evidence or row evidence that represents the tagged column
+- table cell tags are indexed only on that cell, or the containing row when the row is the only emitted table evidence
+- flowchart node tags are indexed only on that node evidence
+- flowchart edge tags are indexed only on that edge evidence
+
+Local tags must not be copied into `NoteBlock.searchMetadataText`, because that makes every granular evidence item inside the block look tagged.
+
+### Scoped Target Stability
+
+Scoped tag targets must survive normal editing:
+
+- inserting a table column before a tagged column/cell increments the target column index
+- deleting a tagged table row, column, or cell drops the assignment
+- deleting a table row/column before a tagged target decrements the target index
+- deleting a flowchart node drops node tags and all edge tags attached to removed edges
+- deleting a flowchart edge drops that edge's scoped tags
+
+The tag manager must derive available tag recall from persisted document data and the current editor block state, including document tags, chunk tags, text range tags, scoped table/flowchart tags, and list item tags. It must not rely on a process-static registry as the source of truth.
+
 ## Shared Chunk Editor UX
 
 All four editors use the same header rule:
@@ -155,7 +178,7 @@ All four editors use the same header rule:
 
 - Header text is the editable flowchart title.
 - Header actions: global tag and three-dot menu.
-- Flowchart nodes/boxes are selectable.
+- Flowchart nodes/boxes and edges are selectable.
 - Do not render tag pills on the infinite canvas.
 - Tagged nodes/edges use a light outline, glow, or corner marker.
 - Tag pills for the selected node/edge appear in a tray outside the canvas.

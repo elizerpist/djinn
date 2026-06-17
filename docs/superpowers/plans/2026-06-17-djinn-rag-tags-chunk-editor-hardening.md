@@ -428,6 +428,50 @@ Expected: GitHub Actions succeeds and publishes the debug APK.
 
 Report commit SHA, branch, Actions URL, APK URL, and any tests that could not be run locally.
 
+## Task 11: Review Hardening For Scoped Tags
+
+**Files:**
+- Modify: `lib/src/notes/models/note_document.dart`
+- Modify: `lib/src/rag/retrieval/note_aware_local_retriever.dart`
+- Modify: `lib/src/notes/ui/tag_manager_sheet.dart`
+- Modify: `lib/src/notes/ui/note_text_chunk_editor_screen.dart`
+- Modify: `lib/src/notes/ui/note_table_editor_screen.dart`
+- Modify: `lib/src/notes/ui/note_flowchart_editor_screen.dart`
+- Modify tests under `test/`
+
+**Interfaces:**
+- Produces: local tag metadata that boosts only matching granular evidence.
+- Produces: stable scoped tag targets when table and flowchart structure changes.
+- Produces: document-derived tag recall in all tag entry points.
+
+- [x] **Step 1: Add failing tests for local tag leakage**
+
+Cover text range tags, table scoped tags, and flowchart edge tags. Assert that local tag metadata is absent from whole chunk search text and present only on matching granular evidence.
+
+- [x] **Step 2: Keep whole-block metadata narrow**
+
+Keep document and whole chunk tags in `searchMetadataText`; remove text range and scoped assignment metadata from that block-level search path.
+
+- [x] **Step 3: Add granular scoped metadata during evidence construction**
+
+Inject range/table/flowchart scoped tag metadata only while building matching `SourceEvidence.searchText`.
+
+- [x] **Step 4: Remap table scoped tag targets**
+
+On row/column insertion or deletion, shift affected table row/column/cell targets and drop assignments whose target was deleted.
+
+- [x] **Step 5: Support flowchart edge selection and tag pruning**
+
+Allow edge selection and edge tagging. Render edge tag indication as a small marker/outline and external tray; prune stale node/edge assignments on delete.
+
+- [x] **Step 6: Remove process-static tag recall**
+
+Build available tag recall from the active document's known tags and the current editor block state, then pass it into root note tagging plus all per-chunk tag sheets.
+
+- [x] **Step 7: Refresh selected-tag deletion state**
+
+Listen to text selection changes and recompute whether the overflow menu can delete a selected text-range tag.
+
 ## Self-Review
 
 - Spec coverage: every checklist section maps to a task above.

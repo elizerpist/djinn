@@ -289,6 +289,29 @@ class NoteTagTarget {
       if (elementId != null) 'elementId': elementId,
     };
   }
+
+  NoteTagTarget copyWith({
+    NoteTagTargetKind? kind,
+    String? rangeId,
+    String? listItemId,
+    int? rowIndex,
+    int? columnIndex,
+    String? elementId,
+    bool clearRangeId = false,
+    bool clearListItemId = false,
+    bool clearRowIndex = false,
+    bool clearColumnIndex = false,
+    bool clearElementId = false,
+  }) {
+    return NoteTagTarget(
+      kind: kind ?? this.kind,
+      rangeId: clearRangeId ? null : rangeId ?? this.rangeId,
+      listItemId: clearListItemId ? null : listItemId ?? this.listItemId,
+      rowIndex: clearRowIndex ? null : rowIndex ?? this.rowIndex,
+      columnIndex: clearColumnIndex ? null : columnIndex ?? this.columnIndex,
+      elementId: clearElementId ? null : elementId ?? this.elementId,
+    );
+  }
 }
 
 class NoteScopedTagAssignment {
@@ -318,6 +341,18 @@ class NoteScopedTagAssignment {
       'target': target.toJson(),
       'tags': tags.map((tag) => tag.toJson()).toList(),
     };
+  }
+
+  NoteScopedTagAssignment copyWith({
+    String? id,
+    NoteTagTarget? target,
+    List<NoteKnowledgeTag>? tags,
+  }) {
+    return NoteScopedTagAssignment(
+      id: id ?? this.id,
+      target: target ?? this.target,
+      tags: tags ?? this.tags,
+    );
   }
 }
 
@@ -529,6 +564,31 @@ class NoteDocument {
 
   String get searchMetadataText {
     return _metadataTextFromTags(tags);
+  }
+
+  List<NoteKnowledgeTag> get knownTags {
+    final tagsByMetadata = <String, NoteKnowledgeTag>{};
+
+    void remember(NoteKnowledgeTag tag) {
+      final key = tag.metadataText.trim();
+      if (key.isEmpty) {
+        return;
+      }
+      tagsByMetadata[key] = tag;
+    }
+
+    for (final tag in tags) {
+      remember(tag);
+    }
+    for (final block in blocks) {
+      for (final tag in block.knownTags) {
+        remember(tag);
+      }
+    }
+
+    final values = tagsByMetadata.values.toList(growable: false);
+    values.sort((a, b) => a.metadataText.compareTo(b.metadataText));
+    return values;
   }
 
   String get plainText {
@@ -788,23 +848,41 @@ class NoteBlock {
     if (tagMetadata.isNotEmpty) {
       parts.add(tagMetadata);
     }
-    final rangeTagMetadata = _metadataTextFromTags(
-      [
-        for (final rangeTag in rangeTags) ...rangeTag.resolvedTags,
-      ],
-    );
-    if (rangeTagMetadata.isNotEmpty) {
-      parts.add(rangeTagMetadata);
-    }
-    final scopedTagMetadata = _metadataTextFromTags(
-      [
-        for (final assignment in scopedTags) ...assignment.tags,
-      ],
-    );
-    if (scopedTagMetadata.isNotEmpty) {
-      parts.add(scopedTagMetadata);
-    }
     return parts.join('\n').trim();
+  }
+
+  List<NoteKnowledgeTag> get knownTags {
+    final tagsByMetadata = <String, NoteKnowledgeTag>{};
+
+    void remember(NoteKnowledgeTag tag) {
+      final key = tag.metadataText.trim();
+      if (key.isNotEmpty) {
+        tagsByMetadata[key] = tag;
+      }
+    }
+
+    for (final tag in tags) {
+      remember(tag);
+    }
+    for (final rangeTag in rangeTags) {
+      for (final tag in rangeTag.resolvedTags) {
+        remember(tag);
+      }
+    }
+    for (final assignment in scopedTags) {
+      for (final tag in assignment.tags) {
+        remember(tag);
+      }
+    }
+    for (final item in listItems) {
+      for (final tag in item.tags) {
+        remember(tag);
+      }
+    }
+
+    final values = tagsByMetadata.values.toList(growable: false);
+    values.sort((a, b) => a.metadataText.compareTo(b.metadataText));
+    return values;
   }
 
   bool get hasContent => plainTextForIndexing.trim().isNotEmpty;

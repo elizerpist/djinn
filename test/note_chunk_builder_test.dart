@@ -75,4 +75,51 @@ void main() {
     expect(chunks.every((chunk) => chunk.needsReindex), isFalse);
     expect(chunks.every((chunk) => chunk.groupId == 'note-1'), isTrue);
   });
+
+  test('keeps local range and scoped tag metadata out of whole chunk search text', () {
+    const severe = NoteKnowledgeTag(
+      type: NoteKnowledgeTagTypes.state,
+      label: 'súlyos',
+      colorValue: 0xFFDC2626,
+    );
+    final chunks = const NoteChunkBuilder().build(
+      noteId: 'note-1',
+      noteTitle: 'Tagelt jegyzet',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Enyhe eset. Súlyos eset.',
+            rangeTags: [
+              NoteTextRangeTag(id: 'range-1', start: 12, end: 18, tag: severe),
+            ],
+          ),
+          NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Enyhe', 'Célzott oxygén'],
+              ['Súlyos', 'High flow'],
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'cell-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableCell,
+                  rowIndex: 2,
+                  columnIndex: 1,
+                ),
+                tags: [severe],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    expect(chunks.singleWhere((chunk) => chunk.blockId == 'text-1').searchText, isNot(contains('state:súlyos')));
+    expect(chunks.singleWhere((chunk) => chunk.blockId == 'table-1').searchText, isNot(contains('state:súlyos')));
+  });
 }
