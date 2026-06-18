@@ -200,6 +200,75 @@ void main() {
     expect(find.byKey(const ValueKey('note-selected-tag-tray')), findsNothing);
   });
 
+  testWidgets('table cell tag color wins over row and column highlight colors', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'row-tag',
+                target: NoteTagTarget(kind: NoteTagTargetKind.tableRow, rowIndex: 1),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'sor',
+                    colorValue: 0xFFDC2626,
+                  ),
+                ],
+              ),
+              NoteScopedTagAssignment(
+                id: 'column-tag',
+                target: NoteTagTarget(kind: NoteTagTargetKind.tableColumn, columnIndex: 1),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.topic,
+                    label: 'oszlop',
+                    colorValue: 0xFF2563EB,
+                  ),
+                ],
+              ),
+              NoteScopedTagAssignment(
+                id: 'cell-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableCell,
+                  rowIndex: 1,
+                  columnIndex: 1,
+                ),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.definition,
+                    label: 'cella',
+                    colorValue: 0xFF16A34A,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    final highlightedField = tester.widget<TextFormField>(
+      find.descendant(
+        of: find.byKey(const ValueKey('note-table-cell-highlight-1-1')),
+        matching: find.byKey(const ValueKey('note-table-cell-1-1')),
+      ),
+    );
+
+    expect(
+      highlightedField.style!.backgroundColor,
+      const Color(0xFF16A34A).withValues(alpha: 0.16),
+    );
+  });
+
   testWidgets('table editor remaps scoped cell tags when inserting columns before them', (tester) async {
     NoteBlock? latest;
     await tester.pumpWidget(

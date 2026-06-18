@@ -301,21 +301,38 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   bool _hasTags(_TableSelection selection) => _tagsForSelection(selection).isNotEmpty;
 
   List<NoteKnowledgeTag> _tagsForCell(int row, int column) {
-    final tags = <NoteKnowledgeTag>[];
+    final directTags = <NoteKnowledgeTag>[];
+    final rowTags = <NoteKnowledgeTag>[];
+    final columnTags = <NoteKnowledgeTag>[];
     for (final assignment in _block.scopedTags) {
       final target = assignment.target;
-      final applies = switch (target.kind) {
-        NoteTagTargetKind.tableRow => target.rowIndex == row,
-        NoteTagTargetKind.tableColumn => target.columnIndex == column,
-        NoteTagTargetKind.tableCell =>
-          target.rowIndex == row && target.columnIndex == column,
-        _ => false,
-      };
-      if (applies) {
-        tags.addAll(assignment.tags);
+      switch (target.kind) {
+        case NoteTagTargetKind.tableCell:
+          if (target.rowIndex == row && target.columnIndex == column) {
+            directTags.addAll(assignment.tags);
+          }
+          break;
+        case NoteTagTargetKind.tableRow:
+          if (target.rowIndex == row) {
+            rowTags.addAll(assignment.tags);
+          }
+          break;
+        case NoteTagTargetKind.tableColumn:
+          if (target.columnIndex == column) {
+            columnTags.addAll(assignment.tags);
+          }
+          break;
+        default:
+          break;
       }
     }
-    return tags;
+    if (directTags.isNotEmpty) {
+      return directTags;
+    }
+    if (rowTags.isNotEmpty) {
+      return rowTags;
+    }
+    return columnTags;
   }
 
   Color? _highlightColorForCell(int row, int column) {
@@ -767,13 +784,6 @@ class _CellField extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            if (highlightColor != null)
-              Positioned.fill(
-                child: DecoratedBox(
-                  key: ValueKey('note-table-cell-highlight-$row-$column'),
-                  decoration: BoxDecoration(color: highlightColor),
-                ),
-              ),
             if (selected)
               Positioned.fill(
                 child: DecoratedBox(
@@ -788,12 +798,18 @@ class _CellField extends StatelessWidget {
               ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: TextFormField(
+              child: KeyedSubtree(
+                key: highlightColor == null
+                    ? null
+                    : ValueKey('note-table-cell-highlight-$row-$column'),
+                child: TextFormField(
                 key: ValueKey('note-table-cell-$row-$column'),
                 controller: controller,
                 decoration: const InputDecoration(border: InputBorder.none),
+                style: TextStyle(backgroundColor: highlightColor),
                 onTap: onTap,
                 onChanged: onChanged,
+              ),
               ),
             ),
           ],
