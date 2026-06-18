@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
@@ -35,7 +36,6 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   bool _railRoundedCard = false;
   bool _railTransparentBackground = false;
   bool _railBorderVisible = true;
-  bool _layoutDirty = false;
 
   static const double _defaultColumnWidth = 150;
   static const double _defaultRowHeight = 52;
@@ -344,46 +344,54 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     _emitChange();
   }
 
-  void _resizeColumn(int column, double delta) {
-    if (column < 0 || column >= _columnCount || delta == 0) {
+  void _commitColumnWidth(int column, double width) {
+    if (column < 0 || column >= _columnCount) {
       return;
     }
+    var changed = false;
+    final nextWidth = width.clamp(
+      _minimumColumnWidth,
+      _maximumColumnWidth,
+    ).toDouble();
     setState(() {
       _normalizeLayout();
-      final nextWidth = (_columnWidths[column] + delta).clamp(
-        _minimumColumnWidth,
-        _maximumColumnWidth,
-      ).toDouble();
       if ((nextWidth - _columnWidths[column]).abs() > 0.1) {
         _columnWidths[column] = nextWidth;
-        _layoutDirty = true;
+        changed = true;
       }
     });
+    DebugConsole.log(
+      '[TableResize] column commit column=$column width=${nextWidth.toStringAsFixed(1)} '
+      'changed=$changed',
+    );
+    if (changed) {
+      _emitChange();
+    }
   }
 
-  void _resizeRow(int row, double delta) {
-    if (row < 0 || row >= _rows.length || delta == 0) {
+  void _commitRowHeight(int row, double height) {
+    if (row < 0 || row >= _rows.length) {
       return;
     }
+    var changed = false;
+    final nextHeight = height.clamp(
+      _minimumRowHeight,
+      _maximumRowHeight,
+    ).toDouble();
     setState(() {
       _normalizeLayout();
-      final nextHeight = (_rowHeights[row] + delta).clamp(
-        _minimumRowHeight,
-        _maximumRowHeight,
-      ).toDouble();
       if ((nextHeight - _rowHeights[row]).abs() > 0.1) {
         _rowHeights[row] = nextHeight;
-        _layoutDirty = true;
+        changed = true;
       }
     });
-  }
-
-  void _commitLayoutChange() {
-    if (!_layoutDirty) {
-      return;
+    DebugConsole.log(
+      '[TableResize] row commit row=$row height=${nextHeight.toStringAsFixed(1)} '
+      'changed=$changed',
+    );
+    if (changed) {
+      _emitChange();
     }
-    _layoutDirty = false;
-    _emitChange();
   }
 
   void _save() {
@@ -626,6 +634,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       roundedCard: _railRoundedCard,
       transparentBackground: _railTransparentBackground,
       showBorder: _railBorderVisible,
+      debugLogPrefix: 'TableRail',
       actions: _railActions(selection),
     );
   }
@@ -1057,9 +1066,8 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
               onSelect: _select,
               onMoveRow: _moveRow,
               onMoveColumn: _moveColumn,
-              onResizeColumn: _resizeColumn,
-              onResizeRow: _resizeRow,
-              onCommitLayoutChange: _commitLayoutChange,
+              onCommitColumnWidth: _commitColumnWidth,
+              onCommitRowHeight: _commitRowHeight,
               railForSelection: _railForSelection,
             ),
           ),
@@ -1082,9 +1090,8 @@ class _TableGrid extends StatefulWidget {
     required this.onSelect,
     required this.onMoveRow,
     required this.onMoveColumn,
-    required this.onResizeColumn,
-    required this.onResizeRow,
-    required this.onCommitLayoutChange,
+    required this.onCommitColumnWidth,
+    required this.onCommitRowHeight,
     required this.railForSelection,
   });
 
@@ -1102,9 +1109,8 @@ class _TableGrid extends StatefulWidget {
   final ValueChanged<_TableSelection> onSelect;
   final void Function(int fromIndex, int toIndex) onMoveRow;
   final void Function(int fromIndex, int toIndex) onMoveColumn;
-  final void Function(int column, double delta) onResizeColumn;
-  final void Function(int row, double delta) onResizeRow;
-  final VoidCallback onCommitLayoutChange;
+  final void Function(int column, double width) onCommitColumnWidth;
+  final void Function(int row, double height) onCommitRowHeight;
   final Widget Function(_TableSelection selection) railForSelection;
 
   @override
@@ -1113,11 +1119,18 @@ class _TableGrid extends StatefulWidget {
 
 class _TableGridState extends State<_TableGrid> {
   late final ScrollController _horizontalController;
+  late List<double> _previewColumnWidths;
+  late List<double> _previewRowHeights;
   final Map<int, Offset> _activePointerPositions = <int, Offset>{};
   double _viewportWidth = 0;
   double _scale = 1;
   double _pinchStartScale = 1;
   double? _pinchStartDistance;
+  double? _lastLoggedCanvasOffset;
+  double? _lastLoggedColumnResizeWidth;
+  double? _lastLoggedRowResizeHeight;
+  int? _resizingColumn;
+  int? _resizingRow;
   bool _railPointerActive = false;
 
   static const double _minimumScale = 0.55;
@@ -1126,13 +1139,58 @@ class _TableGridState extends State<_TableGrid> {
   @override
   void initState() {
     super.initState();
+    _syncLayoutFromWidget();
     _horizontalController = ScrollController();
+    _horizontalController.addListener(_logHorizontalScroll);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TableGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_resizingColumn == null && _resizingRow == null) {
+      _syncLayoutFromWidget();
+    }
   }
 
   @override
   void dispose() {
+    _horizontalController.removeListener(_logHorizontalScroll);
     _horizontalController.dispose();
     super.dispose();
+  }
+
+  void _syncLayoutFromWidget() {
+    _previewColumnWidths = [...widget.columnWidths];
+    _previewRowHeights = [...widget.rowHeights];
+    while (_previewColumnWidths.length < widget.columnCount) {
+      _previewColumnWidths.add(_NoteTableEditorScreenState._defaultColumnWidth);
+    }
+    if (_previewColumnWidths.length > widget.columnCount) {
+      _previewColumnWidths = _previewColumnWidths.take(widget.columnCount).toList();
+    }
+    while (_previewRowHeights.length < widget.rowCount) {
+      _previewRowHeights.add(_NoteTableEditorScreenState._defaultRowHeight);
+    }
+    if (_previewRowHeights.length > widget.rowCount) {
+      _previewRowHeights = _previewRowHeights.take(widget.rowCount).toList();
+    }
+  }
+
+  void _logHorizontalScroll() {
+    if (!_horizontalController.hasClients) {
+      return;
+    }
+    final offset = _horizontalController.offset;
+    final lastOffset = _lastLoggedCanvasOffset;
+    if (lastOffset != null && (offset - lastOffset).abs() < 1) {
+      return;
+    }
+    _lastLoggedCanvasOffset = offset;
+    DebugConsole.log(
+      '[TableRail] canvas scroll offset=${offset.toStringAsFixed(1)} '
+      'viewport=${_viewportWidth.toStringAsFixed(1)} scale=${_scale.toStringAsFixed(2)} '
+      'railPointer=$_railPointerActive',
+    );
   }
 
   @override
@@ -1241,26 +1299,126 @@ class _TableGridState extends State<_TableGrid> {
     if (_railPointerActive == active) {
       return;
     }
+    DebugConsole.log(
+      '[TableRail] pointer active=$active '
+      'offset=${_horizontalController.hasClients ? _horizontalController.offset.toStringAsFixed(1) : '0.0'}',
+    );
     setState(() => _railPointerActive = active);
   }
 
   double get _tableWidth {
     return _TableGrid._rowHeadWidth +
-        widget.columnWidths.fold<double>(0, (total, width) => total + width);
+        _previewColumnWidths.fold<double>(0, (total, width) => total + width);
   }
 
   double _columnWidth(int column) {
-    if (column < 0 || column >= widget.columnWidths.length) {
+    if (column < 0 || column >= _previewColumnWidths.length) {
       return _NoteTableEditorScreenState._defaultColumnWidth;
     }
-    return widget.columnWidths[column];
+    return _previewColumnWidths[column];
   }
 
   double _rowHeight(int row) {
-    if (row < 0 || row >= widget.rowHeights.length) {
+    if (row < 0 || row >= _previewRowHeights.length) {
       return _TableGrid._cellHeight;
     }
-    return widget.rowHeights[row];
+    return _previewRowHeights[row];
+  }
+
+  void _startColumnResize(int column) {
+    if (column < 0 || column >= widget.columnCount) {
+      return;
+    }
+    _resizingColumn = column;
+    _lastLoggedColumnResizeWidth = _columnWidth(column);
+    DebugConsole.log(
+      '[TableResize] column start column=$column width=${_columnWidth(column).toStringAsFixed(1)}',
+    );
+  }
+
+  void _updateColumnResize(int column, double delta) {
+    if (column < 0 || column >= widget.columnCount || delta == 0) {
+      return;
+    }
+    final currentWidth = _columnWidth(column);
+    final nextWidth = (currentWidth + delta).clamp(
+      _NoteTableEditorScreenState._minimumColumnWidth,
+      _NoteTableEditorScreenState._maximumColumnWidth,
+    ).toDouble();
+    if ((nextWidth - currentWidth).abs() <= 0.1) {
+      return;
+    }
+    setState(() => _previewColumnWidths[column] = nextWidth);
+    final lastLoggedWidth = _lastLoggedColumnResizeWidth;
+    if (lastLoggedWidth == null || (nextWidth - lastLoggedWidth).abs() >= 8) {
+      _lastLoggedColumnResizeWidth = nextWidth;
+      DebugConsole.log(
+        '[TableResize] column update column=$column delta=${delta.toStringAsFixed(1)} '
+        'width=${nextWidth.toStringAsFixed(1)}',
+      );
+    }
+  }
+
+  void _commitColumnResize(int column) {
+    if (column < 0 || column >= widget.columnCount) {
+      _resizingColumn = null;
+      return;
+    }
+    final width = _columnWidth(column);
+    DebugConsole.log(
+      '[TableResize] column end column=$column width=${width.toStringAsFixed(1)}',
+    );
+    _resizingColumn = null;
+    _lastLoggedColumnResizeWidth = null;
+    widget.onCommitColumnWidth(column, width);
+  }
+
+  void _startRowResize(int row) {
+    if (row < 0 || row >= widget.rowCount) {
+      return;
+    }
+    _resizingRow = row;
+    _lastLoggedRowResizeHeight = _rowHeight(row);
+    DebugConsole.log(
+      '[TableResize] row start row=$row height=${_rowHeight(row).toStringAsFixed(1)}',
+    );
+  }
+
+  void _updateRowResize(int row, double delta) {
+    if (row < 0 || row >= widget.rowCount || delta == 0) {
+      return;
+    }
+    final currentHeight = _rowHeight(row);
+    final nextHeight = (currentHeight + delta).clamp(
+      _NoteTableEditorScreenState._minimumRowHeight,
+      _NoteTableEditorScreenState._maximumRowHeight,
+    ).toDouble();
+    if ((nextHeight - currentHeight).abs() <= 0.1) {
+      return;
+    }
+    setState(() => _previewRowHeights[row] = nextHeight);
+    final lastLoggedHeight = _lastLoggedRowResizeHeight;
+    if (lastLoggedHeight == null || (nextHeight - lastLoggedHeight).abs() >= 8) {
+      _lastLoggedRowResizeHeight = nextHeight;
+      DebugConsole.log(
+        '[TableResize] row update row=$row delta=${delta.toStringAsFixed(1)} '
+        'height=${nextHeight.toStringAsFixed(1)}',
+      );
+    }
+  }
+
+  void _commitRowResize(int row) {
+    if (row < 0 || row >= widget.rowCount) {
+      _resizingRow = null;
+      return;
+    }
+    final height = _rowHeight(row);
+    DebugConsole.log(
+      '[TableResize] row end row=$row height=${height.toStringAsFixed(1)}',
+    );
+    _resizingRow = null;
+    _lastLoggedRowResizeHeight = null;
+    widget.onCommitRowHeight(row, height);
   }
 
   Widget _stickyRail({
@@ -1275,13 +1433,13 @@ class _TableGridState extends State<_TableGrid> {
         final scaledViewportWidth = (viewportWidth / _scale).clamp(0, width).toDouble();
         final maxLeft = (width - scaledViewportWidth).clamp(0, width).toDouble();
         final left = _horizontalController.hasClients
-            ? _horizontalController.offset.clamp(0, maxLeft).toDouble()
+            ? (_horizontalController.offset / _scale).clamp(0, maxLeft).toDouble()
             : 0.0;
         return SizedBox(
           key: key,
           width: width,
-          child: Padding(
-            padding: EdgeInsets.only(left: left),
+          child: Transform.translate(
+            offset: Offset(left, 0),
             child: SizedBox(
               width: scaledViewportWidth,
               child: Listener(
@@ -1290,16 +1448,7 @@ class _TableGridState extends State<_TableGrid> {
                 onPointerDown: (_) => _setRailPointerActive(true),
                 onPointerUp: (_) => _setRailPointerActive(false),
                 onPointerCancel: (_) => _setRailPointerActive(false),
-                child: ClipRect(
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    widthFactor: width <= 0 ? 1 : scaledViewportWidth / width,
-                    child: SizedBox(
-                      width: width,
-                      child: child,
-                    ),
-                  ),
-                ),
+                child: child,
               ),
             ),
           ),
@@ -1334,8 +1483,9 @@ class _TableGridState extends State<_TableGrid> {
                   selected: widget.selection?.isColumn(column) == true,
                   onSelect: widget.onSelect,
                   onMoveColumn: widget.onMoveColumn,
-                  onResizeColumn: widget.onResizeColumn,
-                  onCommitResize: widget.onCommitLayoutChange,
+                  onResizeColumnStart: _startColumnResize,
+                  onResizeColumnUpdate: _updateColumnResize,
+                  onResizeColumnEnd: _commitColumnResize,
                 ),
             ],
           ),
@@ -1370,8 +1520,9 @@ class _TableGridState extends State<_TableGrid> {
                 selected: widget.selection?.isRow(row) == true,
                 onSelect: widget.onSelect,
                 onMoveRow: widget.onMoveRow,
-                onResizeRow: widget.onResizeRow,
-                onCommitResize: widget.onCommitLayoutChange,
+                onResizeRowStart: _startRowResize,
+                onResizeRowUpdate: _updateRowResize,
+                onResizeRowEnd: _commitRowResize,
               ),
               for (var column = 0; column < widget.columnCount; column += 1)
                 _CellSlot(
@@ -1412,8 +1563,9 @@ class _ColumnHeadSlot extends StatelessWidget {
     required this.selected,
     required this.onSelect,
     required this.onMoveColumn,
-    required this.onResizeColumn,
-    required this.onCommitResize,
+    required this.onResizeColumnStart,
+    required this.onResizeColumnUpdate,
+    required this.onResizeColumnEnd,
   });
 
   final int column;
@@ -1421,8 +1573,9 @@ class _ColumnHeadSlot extends StatelessWidget {
   final bool selected;
   final ValueChanged<_TableSelection> onSelect;
   final void Function(int fromIndex, int toIndex) onMoveColumn;
-  final void Function(int column, double delta) onResizeColumn;
-  final VoidCallback onCommitResize;
+  final ValueChanged<int> onResizeColumnStart;
+  final void Function(int column, double delta) onResizeColumnUpdate;
+  final ValueChanged<int> onResizeColumnEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -1455,8 +1608,9 @@ class _ColumnHeadSlot extends StatelessWidget {
                 selected: selected,
                 resizeEnabled: selected,
                 onSelect: onSelect,
-                onResizeColumn: onResizeColumn,
-                onCommitResize: onCommitResize,
+                onResizeColumnStart: onResizeColumnStart,
+                onResizeColumnUpdate: onResizeColumnUpdate,
+                onResizeColumnEnd: onResizeColumnEnd,
               ),
             ),
             child: _ColumnHeadContent(
@@ -1465,8 +1619,9 @@ class _ColumnHeadSlot extends StatelessWidget {
               selected: selected || candidateData.isNotEmpty,
               resizeEnabled: selected,
               onSelect: onSelect,
-              onResizeColumn: onResizeColumn,
-              onCommitResize: onCommitResize,
+              onResizeColumnStart: onResizeColumnStart,
+              onResizeColumnUpdate: onResizeColumnUpdate,
+              onResizeColumnEnd: onResizeColumnEnd,
             ),
           );
         },
@@ -1482,8 +1637,9 @@ class _ColumnHeadContent extends StatelessWidget {
     required this.selected,
     required this.resizeEnabled,
     required this.onSelect,
-    required this.onResizeColumn,
-    required this.onCommitResize,
+    required this.onResizeColumnStart,
+    required this.onResizeColumnUpdate,
+    required this.onResizeColumnEnd,
   });
 
   final int column;
@@ -1491,8 +1647,9 @@ class _ColumnHeadContent extends StatelessWidget {
   final bool selected;
   final bool resizeEnabled;
   final ValueChanged<_TableSelection> onSelect;
-  final void Function(int column, double delta) onResizeColumn;
-  final VoidCallback onCommitResize;
+  final ValueChanged<int> onResizeColumnStart;
+  final void Function(int column, double delta) onResizeColumnUpdate;
+  final ValueChanged<int> onResizeColumnEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -1517,9 +1674,11 @@ class _ColumnHeadContent extends StatelessWidget {
             child: GestureDetector(
               key: ValueKey('note-table-column-resize-$column'),
               behavior: HitTestBehavior.opaque,
-              onHorizontalDragUpdate: (details) => onResizeColumn(column, details.delta.dx),
-              onHorizontalDragEnd: (_) => onCommitResize(),
-              onHorizontalDragCancel: onCommitResize,
+              onHorizontalDragStart: (_) => onResizeColumnStart(column),
+              onHorizontalDragUpdate: (details) =>
+                  onResizeColumnUpdate(column, details.delta.dx),
+              onHorizontalDragEnd: (_) => onResizeColumnEnd(column),
+              onHorizontalDragCancel: () => onResizeColumnEnd(column),
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Icon(
@@ -1544,8 +1703,9 @@ class _RowHeadSlot extends StatelessWidget {
     required this.selected,
     required this.onSelect,
     required this.onMoveRow,
-    required this.onResizeRow,
-    required this.onCommitResize,
+    required this.onResizeRowStart,
+    required this.onResizeRowUpdate,
+    required this.onResizeRowEnd,
   });
 
   final int row;
@@ -1554,8 +1714,9 @@ class _RowHeadSlot extends StatelessWidget {
   final bool selected;
   final ValueChanged<_TableSelection> onSelect;
   final void Function(int fromIndex, int toIndex) onMoveRow;
-  final void Function(int row, double delta) onResizeRow;
-  final VoidCallback onCommitResize;
+  final ValueChanged<int> onResizeRowStart;
+  final void Function(int row, double delta) onResizeRowUpdate;
+  final ValueChanged<int> onResizeRowEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -1590,8 +1751,9 @@ class _RowHeadSlot extends StatelessWidget {
                 selected: selected,
                 resizeEnabled: selected,
                 onSelect: onSelect,
-                onResizeRow: onResizeRow,
-                onCommitResize: onCommitResize,
+                onResizeRowStart: onResizeRowStart,
+                onResizeRowUpdate: onResizeRowUpdate,
+                onResizeRowEnd: onResizeRowEnd,
               ),
             ),
             child: _RowHeadContent(
@@ -1601,8 +1763,9 @@ class _RowHeadSlot extends StatelessWidget {
               selected: selected || candidateData.isNotEmpty,
               resizeEnabled: selected,
               onSelect: onSelect,
-              onResizeRow: onResizeRow,
-              onCommitResize: onCommitResize,
+              onResizeRowStart: onResizeRowStart,
+              onResizeRowUpdate: onResizeRowUpdate,
+              onResizeRowEnd: onResizeRowEnd,
             ),
           );
         },
@@ -1619,8 +1782,9 @@ class _RowHeadContent extends StatelessWidget {
     required this.selected,
     required this.resizeEnabled,
     required this.onSelect,
-    required this.onResizeRow,
-    required this.onCommitResize,
+    required this.onResizeRowStart,
+    required this.onResizeRowUpdate,
+    required this.onResizeRowEnd,
   });
 
   final int row;
@@ -1629,8 +1793,9 @@ class _RowHeadContent extends StatelessWidget {
   final bool selected;
   final bool resizeEnabled;
   final ValueChanged<_TableSelection> onSelect;
-  final void Function(int row, double delta) onResizeRow;
-  final VoidCallback onCommitResize;
+  final ValueChanged<int> onResizeRowStart;
+  final void Function(int row, double delta) onResizeRowUpdate;
+  final ValueChanged<int> onResizeRowEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -1656,9 +1821,11 @@ class _RowHeadContent extends StatelessWidget {
             child: GestureDetector(
               key: ValueKey('note-table-row-resize-$row'),
               behavior: HitTestBehavior.opaque,
-              onVerticalDragUpdate: (details) => onResizeRow(row, details.delta.dy),
-              onVerticalDragEnd: (_) => onCommitResize(),
-              onVerticalDragCancel: onCommitResize,
+              onVerticalDragStart: (_) => onResizeRowStart(row),
+              onVerticalDragUpdate: (details) =>
+                  onResizeRowUpdate(row, details.delta.dy),
+              onVerticalDragEnd: (_) => onResizeRowEnd(row),
+              onVerticalDragCancel: () => onResizeRowEnd(row),
               child: Align(
                 alignment: Alignment.bottomCenter,
                 child: RotatedBox(

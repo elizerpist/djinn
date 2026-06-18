@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/ui/note_table_editor_screen.dart';
 
@@ -666,6 +667,7 @@ void main() {
   });
 
   testWidgets('table resize commits only once per continuous drag', (tester) async {
+    DebugConsole.clear();
     NoteBlock? latest;
     var changeCount = 0;
     await tester.pumpWidget(
@@ -701,6 +703,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(changeCount, 1);
     expect(latest!.tableColumnWidths.first, greaterThan(initialColumnWidth));
+    expect(DebugConsole.allText, contains('[TableResize] column start column=0'));
+    expect(DebugConsole.allText, contains('[TableResize] column update column=0'));
+    expect(DebugConsole.allText, contains('[TableResize] column commit column=0'));
 
     await tester.tap(find.byKey(const ValueKey('note-table-row-head-1')));
     await tester.pumpAndSettle();
@@ -716,6 +721,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(changeCount, 2);
     expect(latest!.tableRowHeights[1], greaterThan(initialRowHeight));
+    expect(DebugConsole.allText, contains('[TableResize] row start row=1'));
+    expect(DebugConsole.allText, contains('[TableResize] row update row=1'));
+    expect(DebugConsole.allText, contains('[TableResize] row commit row=1'));
   });
 
   testWidgets('table pinch gesture zooms out but does not zoom in past default scale', (tester) async {
@@ -801,7 +809,8 @@ void main() {
     expect(find.byKey(const ValueKey('note-selection-action-rail-borderless')), findsOneWidget);
   });
 
-  testWidgets('table rail keeps table-width card and scrolls independently from canvas', (tester) async {
+  testWidgets('table rail is screen-sticky and scrolls independently from canvas', (tester) async {
+    DebugConsole.clear();
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -831,13 +840,20 @@ void main() {
     final tableWidth = tester.getSize(
       find.byKey(const ValueKey('note-table-zoomable-content')),
     ).width;
+    final railWidth = tester.getSize(
+      find.byKey(const ValueKey('note-selection-action-rail')),
+    ).width;
+    expect(railWidth, lessThan(tableWidth));
     expect(
-      tester.getSize(find.byKey(const ValueKey('note-selection-action-rail'))).width,
-      tableWidth,
+      railWidth,
+      moreOrLessEquals(tester.view.physicalSize.width, epsilon: 0.1),
     );
 
     final headerLeftBefore = tester.getTopLeft(
       find.byKey(const ValueKey('note-table-column-head-0')),
+    ).dx;
+    final railLeftBefore = tester.getTopLeft(
+      find.byKey(const ValueKey('note-selection-action-rail')),
     ).dx;
     final railViewportStart = tester.getTopLeft(
       find.byKey(const ValueKey('note-table-rail-pointer-shield')),
@@ -851,6 +867,7 @@ void main() {
       tester.getTopLeft(find.byKey(const ValueKey('note-table-column-head-0'))).dx,
       headerLeftBefore,
     );
+    expect(DebugConsole.allText, contains('[TableRail] row scroll row=actions'));
 
     await tester.dragFrom(
       railViewportStart + const Offset(80, 74),
@@ -861,6 +878,30 @@ void main() {
       tester.getTopLeft(find.byKey(const ValueKey('note-table-column-head-0'))).dx,
       headerLeftBefore,
     );
+    expect(DebugConsole.allText, contains('[TableRail] row scroll row=tags'));
+    final railToggleLeftBeforeCanvasScroll = tester.getTopLeft(
+      find.byKey(const ValueKey('note-selection-rail-toggle-tags')),
+    ).dx;
+
+    await tester.dragFrom(
+      tester.getTopLeft(find.byKey(const ValueKey('note-table-column-head-1'))) +
+          const Offset(80, 20),
+      const Offset(-220, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('note-table-column-head-0'))).dx,
+      lessThan(headerLeftBefore),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('note-selection-action-rail'))).dx,
+      moreOrLessEquals(railLeftBefore, epsilon: 0.1),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('note-selection-rail-toggle-tags'))).dx,
+      moreOrLessEquals(railToggleLeftBeforeCanvasScroll, epsilon: 0.1),
+    );
+    expect(DebugConsole.allText, contains('[TableRail] canvas scroll offset='));
   });
 
   testWidgets('table horizontal overscroll uses the same stretch rubber band wrapper', (tester) async {

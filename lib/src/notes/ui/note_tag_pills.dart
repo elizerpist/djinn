@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
 
 class NoteTagPills extends StatelessWidget {
@@ -90,6 +91,7 @@ class NoteSelectionActionRail extends StatefulWidget {
     this.roundedCard = false,
     this.transparentBackground = false,
     this.showBorder = true,
+    this.debugLogPrefix = 'SelectionRail',
   });
 
   final List<NoteKnowledgeTag> tags;
@@ -103,6 +105,7 @@ class NoteSelectionActionRail extends StatefulWidget {
   final bool roundedCard;
   final bool transparentBackground;
   final bool showBorder;
+  final String debugLogPrefix;
 
   @override
   State<NoteSelectionActionRail> createState() => _NoteSelectionActionRailState();
@@ -119,14 +122,29 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
     super.dispose();
   }
 
-  void _scrollRailRow(ScrollController controller, double delta) {
+  void _scrollRailRow(
+    ScrollController controller,
+    double delta,
+    String rowName,
+  ) {
     if (!controller.hasClients) {
+      DebugConsole.log(
+        '[${widget.debugLogPrefix}] row scroll row=$rowName '
+        'skipped=no_clients delta=${delta.toStringAsFixed(1)}',
+      );
       return;
     }
     final position = controller.position;
     final nextOffset = (position.pixels - delta)
         .clamp(position.minScrollExtent, position.maxScrollExtent)
         .toDouble();
+    DebugConsole.log(
+      '[${widget.debugLogPrefix}] row scroll row=$rowName delta=${delta.toStringAsFixed(1)} '
+      'from=${position.pixels.toStringAsFixed(1)} to=${nextOffset.toStringAsFixed(1)} '
+      'min=${position.minScrollExtent.toStringAsFixed(1)} '
+      'max=${position.maxScrollExtent.toStringAsFixed(1)} '
+      'moved=${nextOffset != position.pixels}',
+    );
     if (nextOffset != position.pixels) {
       controller.jumpTo(nextOffset);
     }
@@ -187,7 +205,7 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onHorizontalDragUpdate: (details) =>
-                          _scrollRailRow(_actionController, details.delta.dx),
+                          _scrollRailRow(_actionController, details.delta.dx, 'actions'),
                       child: SingleChildScrollView(
                         key: const ValueKey('note-selection-action-row'),
                         controller: _actionController,
@@ -231,7 +249,7 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onHorizontalDragUpdate: (details) =>
-                            _scrollRailRow(_pillController, details.delta.dx),
+                            _scrollRailRow(_pillController, details.delta.dx, 'tags'),
                         child: SingleChildScrollView(
                           key: const ValueKey('note-selection-pill-row'),
                           controller: _pillController,
