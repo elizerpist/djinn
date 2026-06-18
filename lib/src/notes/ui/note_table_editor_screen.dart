@@ -1505,12 +1505,10 @@ class _TableGridState extends State<_TableGrid> {
         return SizedBox(
           key: key,
           width: width,
-          child: Transform.translate(
-            offset: Offset(left, 0),
-            child: OverflowBox(
-              alignment: Alignment.topLeft,
-              minWidth: scaledViewportWidth,
-              maxWidth: scaledViewportWidth,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Transform.translate(
+              offset: Offset(left, 0),
               child: SizedBox(
                 width: scaledViewportWidth,
                 child: Listener(
