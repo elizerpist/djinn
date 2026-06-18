@@ -96,14 +96,14 @@ void main() {
     );
     final highlightDecoration = highlightWrapper.decoration as BoxDecoration?;
     expect(highlightDecoration?.color, isNull);
-    final highlightedField = tester.widget<TextFormField>(
+    final highlightedField = tester.widget<EditableText>(
       find.descendant(
         of: find.byKey(const ValueKey('note-list-item-tag-highlight-item-1')),
-        matching: find.byKey(const ValueKey('note-list-item-item-1')),
+        matching: find.byType(EditableText),
       ),
     );
     expect(
-      highlightedField.style!.backgroundColor,
+      highlightedField.style.backgroundColor,
       const Color(0xFF2563EB).withValues(alpha: 0.22),
     );
     expect(find.byKey(const ValueKey('note-list-item-tag-pill-item-1-súlyos')), findsNothing);
