@@ -34,6 +34,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   bool _railBottomExpanded = true;
   bool _railRoundedCard = false;
   bool _railTransparentBackground = false;
+  bool _railBorderVisible = true;
 
   static const double _defaultColumnWidth = 150;
   static const double _defaultRowHeight = 52;
@@ -609,6 +610,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       onDeleteTag: _deleteSingleSelectedTag,
       roundedCard: _railRoundedCard,
       transparentBackground: _railTransparentBackground,
+      showBorder: _railBorderVisible,
       actions: _railActions(selection),
     );
   }
@@ -718,6 +720,14 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
         constraints: compactConstraints,
         padding: compactPadding,
         icon: const Icon(Icons.opacity, size: 18),
+      ),
+      IconButton(
+        key: const ValueKey('note-table-rail-toggle-border'),
+        tooltip: _railBorderVisible ? 'Rail border nélkül' : 'Rail borderrel',
+        onPressed: () => setState(() => _railBorderVisible = !_railBorderVisible),
+        constraints: compactConstraints,
+        padding: compactPadding,
+        icon: const Icon(Icons.border_outer, size: 18),
       ),
     ]);
     return actions;
@@ -1119,26 +1129,30 @@ class _TableGridState extends State<_TableGrid> {
           onPointerMove: _handlePointerMove,
           onPointerUp: _handlePointerEnd,
           onPointerCancel: _handlePointerEnd,
-          child: SingleChildScrollView(
-            controller: _horizontalController,
-            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-            scrollDirection: Axis.horizontal,
+          child: StretchingOverscrollIndicator(
+            key: const ValueKey('note-table-horizontal-rubber-band'),
+            axisDirection: AxisDirection.right,
             child: SingleChildScrollView(
-              child: Transform.scale(
-                key: const ValueKey('note-table-zoom-transform'),
-                alignment: Alignment.topLeft,
-                scale: _scale,
-                child: SizedBox(
-                  key: const ValueKey('note-table-zoomable-content'),
-                  width: tableWidth,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeader(context),
-                      for (var row = 0; row < widget.rowCount; row += 1)
-                        _buildRow(context, row),
-                    ],
+              controller: _horizontalController,
+              physics: const ClampingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              scrollDirection: Axis.horizontal,
+              child: SingleChildScrollView(
+                child: Transform.scale(
+                  key: const ValueKey('note-table-zoom-transform'),
+                  alignment: Alignment.topLeft,
+                  scale: _scale,
+                  child: SizedBox(
+                    key: const ValueKey('note-table-zoomable-content'),
+                    width: tableWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeader(context),
+                        for (var row = 0; row < widget.rowCount; row += 1)
+                          _buildRow(context, row),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1325,8 +1339,6 @@ class _TableGridState extends State<_TableGrid> {
                   highlightColor: widget.highlightColorForCell(row, column),
                   onTap: () => widget.onSelect(_TableSelection.cell(row, column)),
                   onChanged: (value) => widget.onCellChanged(row, column, value),
-                  onResizeColumn: widget.onResizeColumn,
-                  onResizeRow: widget.onResizeRow,
                 ),
             ],
           ),
@@ -1394,6 +1406,7 @@ class _ColumnHeadSlot extends StatelessWidget {
                 column: column,
                 width: width,
                 selected: selected,
+                resizeEnabled: selected,
                 onSelect: onSelect,
                 onResizeColumn: onResizeColumn,
               ),
@@ -1402,6 +1415,7 @@ class _ColumnHeadSlot extends StatelessWidget {
               column: column,
               width: width,
               selected: selected || candidateData.isNotEmpty,
+              resizeEnabled: selected,
               onSelect: onSelect,
               onResizeColumn: onResizeColumn,
             ),
@@ -1417,6 +1431,7 @@ class _ColumnHeadContent extends StatelessWidget {
     required this.column,
     required this.width,
     required this.selected,
+    required this.resizeEnabled,
     required this.onSelect,
     required this.onResizeColumn,
   });
@@ -1424,6 +1439,7 @@ class _ColumnHeadContent extends StatelessWidget {
   final int column;
   final double width;
   final bool selected;
+  final bool resizeEnabled;
   final ValueChanged<_TableSelection> onSelect;
   final void Function(int column, double delta) onResizeColumn;
 
@@ -1441,25 +1457,27 @@ class _ColumnHeadContent extends StatelessWidget {
             onTap: () => onSelect(_TableSelection.column(column)),
           ),
         ),
-        Positioned(
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: 16,
-          child: GestureDetector(
-            key: ValueKey('note-table-column-resize-$column'),
-            behavior: HitTestBehavior.opaque,
-            onHorizontalDragUpdate: (details) => onResizeColumn(column, details.delta.dx),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                width: 2,
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                color: const Color(0xFFCBD5E1),
+        if (resizeEnabled)
+          Positioned(
+            top: 4,
+            right: 3,
+            bottom: 4,
+            width: 24,
+            child: GestureDetector(
+              key: ValueKey('note-table-column-resize-$column'),
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: (details) => onResizeColumn(column, details.delta.dx),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Icon(
+                  Icons.drag_indicator,
+                  key: ValueKey('note-table-column-resize-icon-$column'),
+                  size: 18,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -1515,6 +1533,7 @@ class _RowHeadSlot extends StatelessWidget {
                 width: width,
                 height: height,
                 selected: selected,
+                resizeEnabled: selected,
                 onSelect: onSelect,
                 onResizeRow: onResizeRow,
               ),
@@ -1524,6 +1543,7 @@ class _RowHeadSlot extends StatelessWidget {
               width: width,
               height: height,
               selected: selected || candidateData.isNotEmpty,
+              resizeEnabled: selected,
               onSelect: onSelect,
               onResizeRow: onResizeRow,
             ),
@@ -1540,6 +1560,7 @@ class _RowHeadContent extends StatelessWidget {
     required this.width,
     required this.height,
     required this.selected,
+    required this.resizeEnabled,
     required this.onSelect,
     required this.onResizeRow,
   });
@@ -1548,6 +1569,7 @@ class _RowHeadContent extends StatelessWidget {
   final double width;
   final double height;
   final bool selected;
+  final bool resizeEnabled;
   final ValueChanged<_TableSelection> onSelect;
   final void Function(int row, double delta) onResizeRow;
 
@@ -1566,25 +1588,30 @@ class _RowHeadContent extends StatelessWidget {
             onTap: () => onSelect(_TableSelection.row(row)),
           ),
         ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: 16,
-          child: GestureDetector(
-            key: ValueKey('note-table-row-resize-$row'),
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragUpdate: (details) => onResizeRow(row, details.delta.dy),
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: Container(
-                height: 2,
-                margin: const EdgeInsets.symmetric(horizontal: 12),
-                color: const Color(0xFFCBD5E1),
+        if (resizeEnabled)
+          Positioned(
+            left: 4,
+            right: 4,
+            bottom: 3,
+            height: 24,
+            child: GestureDetector(
+              key: ValueKey('note-table-row-resize-$row'),
+              behavior: HitTestBehavior.opaque,
+              onVerticalDragUpdate: (details) => onResizeRow(row, details.delta.dy),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: RotatedBox(
+                  quarterTurns: 1,
+                  child: Icon(
+                    Icons.drag_indicator,
+                    key: ValueKey('note-table-row-resize-icon-$row'),
+                    size: 18,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -1601,8 +1628,6 @@ class _CellSlot extends StatelessWidget {
     required this.highlightColor,
     required this.onTap,
     required this.onChanged,
-    required this.onResizeColumn,
-    required this.onResizeRow,
   });
 
   final int row;
@@ -1614,8 +1639,6 @@ class _CellSlot extends StatelessWidget {
   final Color? highlightColor;
   final VoidCallback onTap;
   final ValueChanged<String> onChanged;
-  final void Function(int column, double delta) onResizeColumn;
-  final void Function(int row, double delta) onResizeRow;
 
   @override
   Widget build(BuildContext context) {
@@ -1631,8 +1654,6 @@ class _CellSlot extends StatelessWidget {
         highlightColor: highlightColor,
         onTap: onTap,
         onChanged: onChanged,
-        onResizeColumn: onResizeColumn,
-        onResizeRow: onResizeRow,
       ),
     );
   }
@@ -1695,8 +1716,6 @@ class _CellField extends StatelessWidget {
     required this.highlightColor,
     required this.onTap,
     required this.onChanged,
-    required this.onResizeColumn,
-    required this.onResizeRow,
   });
 
   final int row;
@@ -1708,8 +1727,6 @@ class _CellField extends StatelessWidget {
   final Color? highlightColor;
   final VoidCallback onTap;
   final ValueChanged<String> onChanged;
-  final void Function(int column, double delta) onResizeColumn;
-  final void Function(int row, double delta) onResizeRow;
 
   @override
   Widget build(BuildContext context) {
@@ -1755,46 +1772,6 @@ class _CellField extends StatelessWidget {
                   style: TextStyle(backgroundColor: highlightColor),
                   onTap: onTap,
                   onChanged: onChanged,
-                ),
-              ),
-            ),
-            Positioned(
-              top: 0,
-              right: 0,
-              bottom: 0,
-              width: 16,
-              child: GestureDetector(
-                key: ValueKey('note-table-cell-column-resize-$row-$column'),
-                behavior: HitTestBehavior.opaque,
-                onHorizontalDragUpdate: (details) =>
-                    onResizeColumn(column, details.delta.dx),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Container(
-                    width: 2,
-                    margin: const EdgeInsets.symmetric(vertical: 12),
-                    color: const Color(0x00CBD5E1),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 16,
-              child: GestureDetector(
-                key: ValueKey('note-table-cell-row-resize-$row-$column'),
-                behavior: HitTestBehavior.opaque,
-                onVerticalDragUpdate: (details) =>
-                    onResizeRow(row, details.delta.dy),
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    height: 2,
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                    color: const Color(0x00CBD5E1),
-                  ),
                 ),
               ),
             ),
