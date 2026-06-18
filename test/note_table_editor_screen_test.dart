@@ -166,6 +166,48 @@ void main() {
     expect(find.byKey(const ValueKey('note-table-rail-tag-column-1')), findsOneWidget);
   });
 
+  testWidgets('table column tagging writes tags onto the affected cells', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-table-column-head-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-table-rail-tag-column-1')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'oxigén');
+    await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.scopedTags, hasLength(2));
+    expect(
+      latest!.scopedTags.map((assignment) => assignment.target.kind),
+      everyElement(NoteTagTargetKind.tableCell),
+    );
+    expect(
+      latest!.scopedTags.map((assignment) => assignment.target.columnIndex),
+      everyElement(1),
+    );
+    expect(find.byKey(const ValueKey('note-table-cell-highlight-0-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-cell-highlight-1-1')), findsOneWidget);
+  });
+
   testWidgets('table row and column tags highlight affected cell text instead of markers', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

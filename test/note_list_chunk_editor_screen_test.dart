@@ -132,12 +132,44 @@ void main() {
     final rail = tester.widget<Material>(
       find.byKey(const ValueKey('note-selection-action-rail')),
     );
-    expect(rail.color, const Color(0xFFF3F4F6));
+    expect(rail.color, Colors.white);
     expect(rail.elevation, 0);
+    expect(find.byKey(const ValueKey('note-selection-action-row')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selection-pill-row')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selection-empty-tags')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-list-rail-tag-item-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-list-rail-clear-tags-item-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-list-rail-prev-item-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-list-rail-next-item-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-list-rail-outdent-item-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-list-rail-indent-item-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-list-rail-delete-item-1')), findsOneWidget);
+  });
+
+  testWidgets('list item submit creates and focuses a new row below', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteListChunkEditorScreen(
+          block: const NoteBlock(
+            id: 'list-1',
+            type: NoteBlockType.listItem,
+            listItems: [NoteListItem(id: 'item-1', text: 'High flow oxygen')],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-list-item-item-1')));
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.next);
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.listItems, hasLength(2));
+    expect(latest!.listItems.last.text, isEmpty);
+    expect(find.byKey(ValueKey('note-list-item-${latest!.listItems.last.id}')), findsOneWidget);
   });
 }
 

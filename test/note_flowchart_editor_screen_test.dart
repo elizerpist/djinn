@@ -354,10 +354,10 @@ void main() {
     expect(find.text('Forma'), findsNothing);
     expect(find.text('Rombusz'), findsNothing);
     expect(find.text('Ovális'), findsNothing);
-    expect(find.byKey(const ValueKey('note-flowchart-node-popup-add-port-right')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-node-popup-add-port')), findsOneWidget);
   });
 
-  testWidgets('flowchart selected node tags render in tray instead of on canvas', (tester) async {
+  testWidgets('flowchart selected node tags render as canvas outline without tray', (tester) async {
     NoteBlock? latest;
     await tester.pumpWidget(
       MaterialApp(
@@ -390,13 +390,13 @@ void main() {
     expect(latest, isNotNull);
     expect(latest!.scopedTags.single.target.kind, NoteTagTargetKind.flowchartNode);
     expect(latest!.scopedTags.single.target.elementId, 'node-1');
-    expect(find.byKey(const ValueKey('note-flowchart-node-tag-marker-node-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-selected-tag-tray')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-selected-tag-pill-súlyos')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-node-tag-marker-node-1')), findsNothing);
+    expect(find.byKey(const ValueKey('note-flowchart-node-tag-outline-node-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selected-tag-tray')), findsNothing);
     expect(find.byKey(const ValueKey('note-flowchart-canvas-tag-pill-súlyos')), findsNothing);
   });
 
-  testWidgets('flowchart selected edge tags render in tray instead of on canvas', (tester) async {
+  testWidgets('flowchart selected edge tags render as edge line without tray', (tester) async {
     NoteBlock? latest;
     await tester.pumpWidget(
       MaterialApp(
@@ -438,9 +438,9 @@ void main() {
     expect(latest, isNotNull);
     expect(latest!.scopedTags.single.target.kind, NoteTagTargetKind.flowchartEdge);
     expect(latest!.scopedTags.single.target.elementId, 'edge-1');
-    expect(find.byKey(const ValueKey('note-flowchart-edge-tag-marker-edge-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-selected-tag-tray')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-selected-tag-pill-igen ág')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-flowchart-edge-tag-marker-edge-1')), findsNothing);
+    expect(find.byKey(const ValueKey('note-flowchart-edge-tag-line-edge-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selected-tag-tray')), findsNothing);
     expect(find.byKey(const ValueKey('note-flowchart-canvas-tag-pill-igen ág')), findsNothing);
   });
 

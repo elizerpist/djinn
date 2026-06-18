@@ -131,6 +131,18 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     widget.onChanged?.call(_block);
   }
 
+  void _deleteChunkTag(NoteKnowledgeTag tag) {
+    setState(() {
+      _block = _block.copyWith(
+        tags: _block.tags
+            .where((current) => current.metadataText != tag.metadataText)
+            .toList(growable: false),
+        clearIndex: true,
+      );
+    });
+    widget.onChanged?.call(_block);
+  }
+
   Future<void> _tagSelection() async {
     final target = _selectedTarget;
     if (target == null) {
@@ -232,18 +244,6 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     return _tagsForTarget(
       NoteTagTarget(kind: NoteTagTargetKind.flowchartEdge, elementId: edgeId),
     );
-  }
-
-  bool _nodeHasTags(String nodeId) => _tagsForNode(nodeId).isNotEmpty;
-
-  bool _edgeHasTags(String edgeId) => _tagsForEdge(edgeId).isNotEmpty;
-
-  Color _tagColorForTarget(NoteTagTarget target) {
-    final tags = _tagsForTarget(target);
-    if (tags.isEmpty) {
-      return const Color(0xFF2563EB);
-    }
-    return Color(tags.first.resolvedColorValue);
   }
 
   bool get _selectedTargetHasTags {
@@ -750,22 +750,6 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                         ],
                       ),
                       _NodeConfigSection(
-                        title: 'Szerep',
-                        children: [
-                          Wrap(
-                            spacing: 8,
-                            children: [
-                              for (final role in NoteFlowchartNodeRole.values)
-                                ChoiceChip(
-                                  selected: draft.role == role,
-                                  label: Text(_roleLabel(role)),
-                                  onSelected: (_) => update(draft.copyWith(role: role), 'role'),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      _NodeConfigSection(
                         title: 'Portok',
                         children: [
                           for (final port in _portsForNode(draft))
@@ -784,20 +768,16 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                               onDelete: _isMandatoryPort(draft, port)
                                   ? null
                                   : () => update(_removePortFromNode(draft, port.id), 'port_delete_${port.id}'),
-                            ),
+                          ),
                           const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (final side in NoteFlowchartPortSide.values)
-                                IconButton.filledTonal(
-                                  key: ValueKey('note-flowchart-node-popup-add-port-${side.wireName}'),
-                                  tooltip: 'Port hozzáadása: ${_sideLabel(side)}',
-                                  onPressed: () => update(_addPortToNode(draft, side), 'port_add_${side.wireName}'),
-                                  icon: Icon(_sideIcon(side), size: 18),
-                                ),
-                            ],
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: IconButton.filledTonal(
+                              key: const ValueKey('note-flowchart-node-popup-add-port'),
+                              tooltip: 'Port hozzáadása',
+                              onPressed: () => update(_addPortToNode(draft, NoteFlowchartPortSide.top), 'port_add_top'),
+                              icon: const Icon(Icons.add, size: 18),
+                            ),
                           ),
                         ],
                       ),
@@ -860,8 +840,11 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
 
   NoteFlowchartNode _addPortToNode(NoteFlowchartNode node, NoteFlowchartPortSide side) {
     final ports = _portsForNode(node);
-    final countOnSide = ports.where((port) => port.side == side).length + 1;
-    final idBase = '${side.wireName}-$countOnSide';
+    final targetSide = node.kind == NoteFlowchartNodeKind.binaryDecision
+        ? NoteFlowchartPortSide.top
+        : side;
+    final countOnSide = ports.where((port) => port.side == targetSide).length + 1;
+    final idBase = '${targetSide.wireName}-$countOnSide';
     var id = idBase;
     var suffix = 2;
     while (ports.any((port) => port.id == id)) {
@@ -869,9 +852,13 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
       suffix += 1;
     }
     final semantic = node.kind == NoteFlowchartNodeKind.multiDecision ? NoteFlowchartPortSemantic.custom : NoteFlowchartPortSemantic.normal;
-    final label = node.kind == NoteFlowchartNodeKind.multiDecision ? 'Ág ${ports.length + 1}' : _sideLabel(side);
-    final port = NoteFlowchartPort(id: id, side: side, label: label, semantic: semantic);
-    _log('port add node=${node.id} port=${port.id} side=${side.wireName}');
+    final label = node.kind == NoteFlowchartNodeKind.multiDecision
+        ? 'Ág ${ports.length + 1}'
+        : node.kind == NoteFlowchartNodeKind.binaryDecision
+            ? 'Bemenet'
+            : _sideLabel(targetSide);
+    final port = NoteFlowchartPort(id: id, side: targetSide, label: label, semantic: semantic);
+    _log('port add node=${node.id} port=${port.id} side=${targetSide.wireName}');
     return node.copyWith(ports: [...ports, port]);
   }
 
@@ -945,6 +932,10 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
   void _handleConnectorTap(NoteFlowchartNode node, _ConnectorSpec connector) {
     final source = _linkSource;
     if (source == null) {
+      if (!_canUseConnectorAsOutput(node, connector)) {
+        _log('connector source rejected node=${node.id} connector=${connector.id} reason=input_only_or_binary_input');
+        return;
+      }
       setState(() => _linkSource = _LinkEndpoint(
             nodeId: node.id,
             connectorId: connector.id,
@@ -963,6 +954,11 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
       _log('connector cancelled same_node node=${node.id}');
       return;
     }
+    if (!_canUseConnectorAsInput(node, connector)) {
+      setState(() => _linkSource = null);
+      _log('connector target rejected node=${node.id} connector=${connector.id} reason=output_only_binary_branch');
+      return;
+    }
     final edge = NoteFlowchartEdge(
       id: _nextEdgeId(),
       fromNodeId: source.nodeId,
@@ -979,6 +975,25 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     _logEdgeRouteFromCallback(_log, edge, _positionedNodes, _nodeSizesFor(_positionedNodes));
     _emit(_block.copyWith(edges: [..._block.edges, edge]));
     setState(() => _linkSource = null);
+  }
+
+  bool _canUseConnectorAsOutput(NoteFlowchartNode node, _ConnectorSpec connector) {
+    if (connector.usage == _ConnectorUsageState.inputOnly) {
+      return false;
+    }
+    if (node.kind == NoteFlowchartNodeKind.binaryDecision) {
+      return connector.semantic == NoteFlowchartPortSemantic.yes ||
+          connector.semantic == NoteFlowchartPortSemantic.no;
+    }
+    return true;
+  }
+
+  bool _canUseConnectorAsInput(NoteFlowchartNode _, _ConnectorSpec connector) {
+    if (connector.semantic == NoteFlowchartPortSemantic.yes ||
+        connector.semantic == NoteFlowchartPortSemantic.no) {
+      return false;
+    }
+    return true;
   }
 
   void _editEdgeLabel(NoteFlowchartEdge edge) {
@@ -1077,9 +1092,9 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     final visibleRect = _visibleCanvasRect(geometry.size);
     final visibleNodes = _visibleNodes(canvasNodes, nodeSizes, visibleRect);
     final visibleEdges = _visibleEdges(_block.edges, canvasNodesById, nodeSizes, visibleRect.inflate(240));
-    final loopEdgeIds = {
-      for (final edge in _block.edges)
-        if (_isLoopClosingNoteEdge(_block.edges, edge)) edge.id,
+    final loopEdgeIds = _lastLoopClosingEdgeIds(_block.edges);
+    final edgeTagsById = {
+      for (final edge in visibleEdges) edge.id: _tagsForEdge(edge.id),
     };
     if (_viewportLogTick == 0) {
       _log(
@@ -1107,13 +1122,27 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
               )
             : null,
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final nextViewport = Size(constraints.maxWidth, constraints.maxHeight);
-          if (_viewportSize != nextViewport) {
-            _viewportSize = nextViewport;
-          }
-          return Stack(
+      body: Column(
+        children: [
+          if (_block.tags.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: NoteTagPills(
+                  tags: _block.tags,
+                  onDeleted: _deleteChunkTag,
+                ),
+              ),
+            ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final nextViewport = Size(constraints.maxWidth, constraints.maxHeight);
+                if (_viewportSize != nextViewport) {
+                  _viewportSize = nextViewport;
+                }
+                return Stack(
             key: _bodyStackKey,
             children: [
               InteractiveViewer(
@@ -1145,6 +1174,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                                     nodes: canvasNodes,
                                     edges: visibleEdges,
                                     loopEdgeIds: loopEdgeIds,
+                                    edgeTagsById: edgeTagsById,
                                     nodeSizes: nodeSizes,
                                   ),
                                 ),
@@ -1188,7 +1218,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                                         inlineController: _editingNodeId == canvasNode.id ? _inlineNodeController : null,
                                         editing: _editingNodeId == canvasNode.id,
                                         selected: _selectedNodeId == canvasNode.id,
-                                        tagged: _nodeHasTags(canvasNode.id),
+                                        tags: _tagsForNode(canvasNode.id),
                                         connectModeActive: _linkSource != null,
                                         onSelect: () => setState(() {
                                           _selectedNodeId = canvasNode.id;
@@ -1206,13 +1236,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                                   nodeSizes: nodeSizes,
                                   editing: _editingEdgeId == edge.id,
                                   selected: _selectedEdgeId == edge.id,
-                                  tagged: _edgeHasTags(edge.id),
-                                  tagColor: _tagColorForTarget(
-                                    NoteTagTarget(
-                                      kind: NoteTagTargetKind.flowchartEdge,
-                                      elementId: edge.id,
-                                    ),
-                                  ),
+                                  tags: _tagsForEdge(edge.id),
                                   inlineController: _editingEdgeId == edge.id ? _inlineEdgeController : null,
                                   onSelect: () => setState(() {
                                     _selectedEdgeId = edge.id;
@@ -1238,12 +1262,6 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                   onZoomOut: () => _zoomCanvas(1 / 1.18),
                 ),
               ),
-              if (_selectedTarget != null && _tagsForTarget(_selectedTarget!).isNotEmpty)
-                Positioned(
-                  left: 12,
-                  top: 68,
-                  child: NoteSelectedTagTray(tags: _tagsForTarget(_selectedTarget!)),
-                ),
               Positioned(
                 right: 16,
                 bottom: 24,
@@ -1265,8 +1283,11 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                   ),
                 ),
             ],
-          );
-        },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1298,7 +1319,7 @@ class _CanvasNodeCard extends StatelessWidget {
     required this.inlineController,
     required this.editing,
     required this.selected,
-    required this.tagged,
+    required this.tags,
     required this.connectModeActive,
     required this.onSelect,
     required this.onDelete,
@@ -1319,7 +1340,7 @@ class _CanvasNodeCard extends StatelessWidget {
   final TextEditingController? inlineController;
   final bool editing;
   final bool selected;
-  final bool tagged;
+  final List<NoteKnowledgeTag> tags;
   final bool connectModeActive;
   final VoidCallback onSelect;
   final VoidCallback onDelete;
@@ -1328,6 +1349,20 @@ class _CanvasNodeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedForLink = linkSource?.nodeId == node.id;
+    final borderColor = selectedForLink || selected
+        ? const Color(0xFF2563EB)
+        : tags.isNotEmpty
+            ? Color(tags.first.resolvedColorValue)
+            : const Color(0xFFE5E7EB);
+    final tagShadows = <BoxShadow>[
+      const BoxShadow(color: Color(0x1A111827), blurRadius: 10, offset: Offset(0, 3)),
+      for (var i = 0; i < tags.length; i += 1)
+        BoxShadow(
+          color: Color(tags[i].resolvedColorValue).withValues(alpha: 0.55),
+          spreadRadius: 1.4 + i * 2.0,
+          blurRadius: 0,
+        ),
+    ];
     return AnimatedScale(
       key: ValueKey('note-flowchart-source-scale-${node.id}'),
       duration: const Duration(milliseconds: 140),
@@ -1359,12 +1394,10 @@ class _CanvasNodeCard extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: selectedForLink || selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+                        color: borderColor,
                         width: selectedForLink || selected ? 2 : 1,
                       ),
-                      boxShadow: const [
-                        BoxShadow(color: Color(0x1A111827), blurRadius: 10, offset: Offset(0, 3)),
-                      ],
+                      boxShadow: tagShadows,
                     ),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
@@ -1445,11 +1478,11 @@ class _CanvasNodeCard extends StatelessWidget {
                               size: 17,
                             ),
                           ),
-                          if (tagged)
-                            Padding(
-                              key: ValueKey('note-flowchart-node-tag-marker-${node.id}'),
-                              padding: const EdgeInsets.only(top: 9, right: 2),
-                              child: const _FlowchartTagMarker(),
+                          if (tags.isNotEmpty)
+                            SizedBox(
+                              key: ValueKey('note-flowchart-node-tag-outline-${node.id}'),
+                              width: 1,
+                              height: 1,
                             ),
                           IconButton(
                             tooltip: 'Törlés',
@@ -1484,24 +1517,6 @@ class _CanvasNodeCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _FlowchartTagMarker extends StatelessWidget {
-  const _FlowchartTagMarker();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFF2563EB),
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: const [
-          BoxShadow(color: Color(0x332563EB), blurRadius: 8),
-        ],
-      ),
-      child: const SizedBox.square(dimension: 10),
     );
   }
 }
@@ -1732,8 +1747,7 @@ class _EdgeLabel extends StatelessWidget {
     required this.nodeSizes,
     required this.editing,
     required this.selected,
-    required this.tagged,
-    required this.tagColor,
+    required this.tags,
     required this.inlineController,
     required this.onSelect,
     required this.onEdit,
@@ -1747,8 +1761,7 @@ class _EdgeLabel extends StatelessWidget {
   final Map<String, Size> nodeSizes;
   final bool editing;
   final bool selected;
-  final bool tagged;
-  final Color tagColor;
+  final List<NoteKnowledgeTag> tags;
   final TextEditingController? inlineController;
   final VoidCallback onSelect;
   final VoidCallback onEdit;
@@ -1767,6 +1780,7 @@ class _EdgeLabel extends StatelessWidget {
     final points = route.points;
     final middle = points[points.length ~/ 2];
     final display = _edgeDisplayLabel(edge, from);
+    final tagColor = tags.isEmpty ? const Color(0xFFE9D5FF) : Color(tags.first.resolvedColorValue);
     return Positioned(
       left: middle.dx - 44,
       top: middle.dy - 18,
@@ -1778,7 +1792,7 @@ class _EdgeLabel extends StatelessWidget {
           border: Border.all(
             color: selected
                 ? const Color(0xFF2563EB)
-                : tagged
+                : tags.isNotEmpty
                     ? tagColor
                     : const Color(0xFFE9D5FF),
             width: selected ? 2 : 1,
@@ -1802,18 +1816,11 @@ class _EdgeLabel extends StatelessWidget {
                       size: 16,
                       color: selected ? const Color(0xFF2563EB) : const Color(0xFF64748B),
                     ),
-                    if (tagged)
-                      Positioned(
-                        key: ValueKey('note-flowchart-edge-tag-marker-${edge.id}'),
-                        right: 4,
-                        top: 4,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: tagColor,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const SizedBox.square(dimension: 7),
-                        ),
+                    if (tags.isNotEmpty)
+                      SizedBox(
+                        key: ValueKey('note-flowchart-edge-tag-line-${edge.id}'),
+                        width: 1,
+                        height: 1,
                       ),
                   ],
                 ),
@@ -1956,12 +1963,14 @@ class _FlowchartEdgePainter extends CustomPainter {
     required this.nodes,
     required this.edges,
     required this.loopEdgeIds,
+    required this.edgeTagsById,
     required this.nodeSizes,
   });
 
   final List<NoteFlowchartNode> nodes;
   final List<NoteFlowchartEdge> edges;
   final Set<String> loopEdgeIds;
+  final Map<String, List<NoteKnowledgeTag>> edgeTagsById;
   final Map<String, Size> nodeSizes;
 
   @override
@@ -1978,6 +1987,7 @@ class _FlowchartEdgePainter extends CustomPainter {
         continue;
       }
       final loop = loopEdgeIds.contains(edge.id);
+      final tags = edgeTagsById[edge.id] ?? const <NoteKnowledgeTag>[];
       final color = loop ? const Color(0xFFEA580C) : const Color(0xFF7C3AED);
       final paint = Paint()
         ..color = color
@@ -1993,7 +2003,18 @@ class _FlowchartEdgePainter extends CustomPainter {
       if (loop) {
         _drawDashedPath(canvas, path, paint);
       } else {
-        canvas.drawPath(path, paint);
+        if (tags.isEmpty) {
+          canvas.drawPath(path, paint);
+        } else {
+          for (var i = tags.length - 1; i >= 0; i -= 1) {
+            final tagPaint = Paint()
+              ..color = Color(tags[i].resolvedColorValue)
+              ..strokeWidth = 2.0 + i * 3.0
+              ..style = PaintingStyle.stroke
+              ..strokeCap = StrokeCap.round;
+            canvas.drawPath(path, tagPaint);
+          }
+        }
       }
       _drawArrow(canvas, route.points[route.points.length - 2], route.points.last, arrowPaint);
     }
@@ -2028,6 +2049,7 @@ class _FlowchartEdgePainter extends CustomPainter {
     return oldDelegate.nodes != nodes ||
         oldDelegate.edges != edges ||
         oldDelegate.loopEdgeIds != loopEdgeIds ||
+        oldDelegate.edgeTagsById != edgeTagsById ||
         oldDelegate.nodeSizes != nodeSizes;
   }
 }
@@ -2444,6 +2466,19 @@ bool _isLoopClosingNoteEdge(
   );
 }
 
+Set<String> _lastLoopClosingEdgeIds(List<NoteFlowchartEdge> edges) {
+  NoteFlowchartEdge? latest;
+  for (final edge in edges) {
+    if (!_isLoopClosingNoteEdge(edges, edge)) {
+      continue;
+    }
+    if (latest == null || edge.order > latest.order) {
+      latest = edge;
+    }
+  }
+  return latest == null ? const <String>{} : {latest.id};
+}
+
 bool _hasNotePathBetween(
   List<NoteFlowchartEdge> edges, {
   required String startNodeId,
@@ -2799,14 +2834,6 @@ String _nodeTypeLabel(NoteFlowchartNode node) {
     return 'Vége';
   }
   return _kindLabel(_effectiveKind(node));
-}
-
-String _roleLabel(NoteFlowchartNodeRole role) {
-  return switch (role) {
-    NoteFlowchartNodeRole.normal => 'Normál',
-    NoteFlowchartNodeRole.start => 'Kezdés',
-    NoteFlowchartNodeRole.end => 'Vége',
-  };
 }
 
 String _sideLabel(NoteFlowchartPortSide side) {

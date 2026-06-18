@@ -28,6 +28,7 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
   late List<NoteListItem> _items;
   late final TextEditingController _titleController;
   String? _selectedItemId;
+  bool _railBottomExpanded = true;
 
   @override
   void initState() {
@@ -89,6 +90,18 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
     widget.onChanged(_block);
   }
 
+  void _deleteChunkTag(NoteKnowledgeTag tag) {
+    setState(() {
+      _block = _block.copyWith(
+        tags: _block.tags
+            .where((current) => current.metadataText != tag.metadataText)
+            .toList(growable: false),
+        clearIndex: true,
+      );
+    });
+    widget.onChanged(_block);
+  }
+
   Future<void> _tagSelection() async {
     final selectedId = _selectedItemId;
     if (selectedId == null) {
@@ -140,6 +153,24 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
     _replaceItem(item.copyWith(tags: const []));
   }
 
+  void _deleteSingleSelectedTag(NoteKnowledgeTag tag) {
+    final selectedId = _selectedItemId;
+    if (selectedId == null) {
+      return;
+    }
+    final item = _items.firstWhere(
+      (candidate) => candidate.id == selectedId,
+      orElse: () => _items.first,
+    );
+    _replaceItem(
+      item.copyWith(
+        tags: item.tags
+            .where((current) => current.metadataText != tag.metadataText)
+            .toList(growable: false),
+      ),
+    );
+  }
+
   void _deleteChunk() {
     widget.onDelete?.call();
     Navigator.of(context).maybePop();
@@ -147,6 +178,18 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
 
   void _addItem() {
     setState(() => _items = [..._items, NoteListItem(id: _nextItemId(), text: '')]);
+    _emit();
+  }
+
+  void _insertItemAfter(NoteListItem item) {
+    final newItem = NoteListItem(id: _nextItemId(), text: '', level: item.level);
+    final index = _items.indexWhere((candidate) => candidate.id == item.id);
+    setState(() {
+      final next = [..._items];
+      next.insert(index < 0 ? next.length : index + 1, newItem);
+      _items = next;
+      _selectedItemId = newItem.id;
+    });
     _emit();
   }
 
@@ -163,6 +206,18 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
 
   void _changeIndent(NoteListItem item, int delta) {
     _replaceItem(item.copyWith(level: (item.level + delta).clamp(0, 8).toInt()));
+  }
+
+  void _focusTaggedItem(int direction) {
+    final taggedItems = _items.where((item) => item.tags.isNotEmpty).toList(growable: false);
+    if (taggedItems.isEmpty) {
+      return;
+    }
+    final currentIndex = taggedItems.indexWhere((item) => item.id == _selectedItemId);
+    final nextIndex = direction >= 0
+        ? (currentIndex < 0 ? 0 : (currentIndex + 1) % taggedItems.length)
+        : (currentIndex <= 0 ? taggedItems.length - 1 : currentIndex - 1);
+    setState(() => _selectedItemId = taggedItems[nextIndex].id);
   }
 
   void _reorder(int oldIndex, int newIndex) {
@@ -205,7 +260,10 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: NoteTagPills(tags: _block.tags),
+                child: NoteTagPills(
+                  tags: _block.tags,
+                  onDeleted: _deleteChunkTag,
+                ),
               ),
             ),
           Expanded(
@@ -230,6 +288,19 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
                   onSelect: () => setState(() => _selectedItemId = item.id),
                   onChanged: _replaceItem,
                   onTag: () => unawaited(_tagItem(item)),
+                  onClearTags: _selectedItemHasTags ? _deleteSelectedTag : null,
+                  onDeleteTag: _deleteSingleSelectedTag,
+                  onPreviousTagged: _items.any((candidate) => candidate.tags.isNotEmpty)
+                      ? () => _focusTaggedItem(-1)
+                      : null,
+                  onNextTagged: _items.any((candidate) => candidate.tags.isNotEmpty)
+                      ? () => _focusTaggedItem(1)
+                      : null,
+                  railBottomExpanded: _railBottomExpanded,
+                  onToggleRailBottom: () => setState(
+                    () => _railBottomExpanded = !_railBottomExpanded,
+                  ),
+                  onSubmit: () => _insertItemAfter(item),
                   onDelete: () => _deleteItem(item),
                   onIndent: () => _changeIndent(item, 1),
                   onOutdent: () => _changeIndent(item, -1),
@@ -252,6 +323,13 @@ class _ListItemRow extends StatelessWidget {
     required this.onSelect,
     required this.onChanged,
     required this.onTag,
+    required this.onClearTags,
+    required this.onDeleteTag,
+    required this.onPreviousTagged,
+    required this.onNextTagged,
+    required this.railBottomExpanded,
+    required this.onToggleRailBottom,
+    required this.onSubmit,
     required this.onDelete,
     required this.onIndent,
     required this.onOutdent,
@@ -263,6 +341,13 @@ class _ListItemRow extends StatelessWidget {
   final VoidCallback onSelect;
   final ValueChanged<NoteListItem> onChanged;
   final VoidCallback onTag;
+  final VoidCallback? onClearTags;
+  final ValueChanged<NoteKnowledgeTag> onDeleteTag;
+  final VoidCallback? onPreviousTagged;
+  final VoidCallback? onNextTagged;
+  final bool railBottomExpanded;
+  final VoidCallback onToggleRailBottom;
+  final VoidCallback onSubmit;
   final VoidCallback onDelete;
   final VoidCallback onIndent;
   final VoidCallback onOutdent;
@@ -312,6 +397,11 @@ class _ListItemRow extends StatelessWidget {
                         child: TextFormField(
                           key: ValueKey('note-list-item-${item.id}'),
                           initialValue: item.text,
+                          autofocus: selected && item.text.isEmpty,
+                          minLines: 1,
+                          maxLines: null,
+                          keyboardType: TextInputType.text,
+                          textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
                             hintText: 'Listaelem',
                             border: InputBorder.none,
@@ -319,6 +409,7 @@ class _ListItemRow extends StatelessWidget {
                           style: TextStyle(backgroundColor: tagColor),
                           onTap: onSelect,
                           onChanged: (value) => onChanged(item.copyWith(text: value)),
+                          onFieldSubmitted: (_) => onSubmit(),
                         ),
                       ),
                     ),
@@ -329,6 +420,9 @@ class _ListItemRow extends StatelessWidget {
                     tags: item.tags,
                     label: 'Listaelem',
                     pillPrefix: 'note-list-rail-pill-${item.id}',
+                    bottomRowExpanded: railBottomExpanded,
+                    onToggleBottomRow: onToggleRailBottom,
+                    onDeleteTag: onDeleteTag,
                     contentPadding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
                     actions: [
                       IconButton(
@@ -336,6 +430,24 @@ class _ListItemRow extends StatelessWidget {
                         tooltip: 'Listaelem tagelése',
                         onPressed: onTag,
                         icon: const Icon(Icons.sell_outlined, size: 20),
+                      ),
+                      IconButton(
+                        key: ValueKey('note-list-rail-clear-tags-${item.id}'),
+                        tooltip: 'Listaelem összes tagjének törlése',
+                        onPressed: onClearTags,
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                      ),
+                      IconButton(
+                        key: ValueKey('note-list-rail-prev-${item.id}'),
+                        tooltip: 'Előző tag',
+                        onPressed: onPreviousTagged,
+                        icon: const Icon(Icons.chevron_left, size: 20),
+                      ),
+                      IconButton(
+                        key: ValueKey('note-list-rail-next-${item.id}'),
+                        tooltip: 'Következő tag',
+                        onPressed: onNextTagged,
+                        icon: const Icon(Icons.chevron_right, size: 20),
                       ),
                       IconButton(
                         key: ValueKey('note-list-rail-outdent-${item.id}'),

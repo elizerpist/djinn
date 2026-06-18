@@ -30,6 +30,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   bool _selectionCanDeleteTag = false;
   bool _selectionHasRange = false;
   bool _syncingRangeTags = false;
+  bool _railBottomExpanded = true;
 
   @override
   void initState() {
@@ -110,6 +111,18 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     widget.onChanged(_block);
   }
 
+  void _deleteChunkTag(NoteKnowledgeTag tag) {
+    setState(() {
+      _block = _block.copyWith(
+        tags: _block.tags
+            .where((current) => current.metadataText != tag.metadataText)
+            .toList(growable: false),
+        clearIndex: true,
+      );
+    });
+    widget.onChanged(_block);
+  }
+
   Future<void> _tagSelection() async {
     final text = _controller.text;
     final selection = _controller.selection;
@@ -185,6 +198,77 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _selectionHasRange = _selectionIsTaggable();
     });
     widget.onChanged(_block);
+  }
+
+  void _deleteSingleSelectedTag(NoteKnowledgeTag tag) {
+    final selection = _controller.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      return;
+    }
+    final start = selection.start < selection.end ? selection.start : selection.end;
+    final end = selection.start < selection.end ? selection.end : selection.start;
+    setState(() {
+      final rangeTags = <NoteTextRangeTag>[];
+      for (final rangeTag in _block.rangeTags) {
+        if (rangeTag.start >= end || rangeTag.end <= start) {
+          rangeTags.add(rangeTag);
+          continue;
+        }
+        final nextTags = rangeTag.resolvedTags
+            .where((current) => current.metadataText != tag.metadataText)
+            .toList(growable: false);
+        if (nextTags.isNotEmpty) {
+          rangeTags.add(
+            NoteTextRangeTag(
+              id: rangeTag.id,
+              start: rangeTag.start,
+              end: rangeTag.end,
+              tag: nextTags.first,
+              tags: nextTags,
+            ),
+          );
+        }
+      }
+      _setControllerRangeTags(rangeTags);
+      _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
+      _selectionCanDeleteTag = _selectionHasTag();
+      _selectionHasRange = _selectionIsTaggable();
+    });
+    widget.onChanged(_block);
+  }
+
+  void _focusTaggedRange(int direction) {
+    if (_block.rangeTags.isEmpty) {
+      return;
+    }
+    final ranges = [
+      for (final range in _block.rangeTags)
+        range.clampToTextLength(_controller.text.length),
+    ].where((range) => range.isValid).toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
+    if (ranges.isEmpty) {
+      return;
+    }
+    final currentOffset = _controller.selection.isValid
+        ? (_controller.selection.baseOffset < _controller.selection.extentOffset
+            ? _controller.selection.baseOffset
+            : _controller.selection.extentOffset)
+        : -1;
+    NoteTextRangeTag target;
+    if (direction >= 0) {
+      target = ranges.firstWhere(
+        (range) => range.start > currentOffset,
+        orElse: () => ranges.first,
+      );
+    } else {
+      target = ranges.reversed.firstWhere(
+        (range) => range.start < currentOffset,
+        orElse: () => ranges.last,
+      );
+    }
+    _controller.selection = TextSelection(baseOffset: target.start, extentOffset: target.end);
+    _focusNode.requestFocus();
+    _handleControllerChanged();
   }
 
   List<NoteKnowledgeTag> _selectionTags() {
@@ -294,7 +378,10 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: NoteTagPills(tags: _block.tags),
+                child: NoteTagPills(
+                  tags: _block.tags,
+                  onDeleted: _deleteChunkTag,
+                ),
               ),
             ),
           Expanded(
@@ -329,6 +416,11 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 tags: _selectionTags(),
                 label: 'Kijelölt szöveg',
                 pillPrefix: 'note-text-selection-rail-pill',
+                bottomRowExpanded: _railBottomExpanded,
+                onToggleBottomRow: () => setState(
+                  () => _railBottomExpanded = !_railBottomExpanded,
+                ),
+                onDeleteTag: _deleteSingleSelectedTag,
                 actions: [
                   IconButton(
                     key: const ValueKey('note-text-selection-rail-tag'),
@@ -337,10 +429,22 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                     icon: const Icon(Icons.sell_outlined, size: 20),
                   ),
                   IconButton(
-                    key: const ValueKey('note-text-selection-rail-delete-tag'),
-                    tooltip: 'Kijelölt tag törlése',
+                    key: const ValueKey('note-text-selection-rail-clear-tags'),
+                    tooltip: 'Minden tag törlése',
                     onPressed: _selectionCanDeleteTag ? _deleteSelectedTag : null,
-                    icon: const Icon(Icons.sell, size: 20),
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                  ),
+                  IconButton(
+                    key: const ValueKey('note-text-selection-rail-prev'),
+                    tooltip: 'Előző tag',
+                    onPressed: _block.rangeTags.isEmpty ? null : () => _focusTaggedRange(-1),
+                    icon: const Icon(Icons.chevron_left, size: 20),
+                  ),
+                  IconButton(
+                    key: const ValueKey('note-text-selection-rail-next'),
+                    tooltip: 'Következő tag',
+                    onPressed: _block.rangeTags.isEmpty ? null : () => _focusTaggedRange(1),
+                    icon: const Icon(Icons.chevron_right, size: 20),
                   ),
                 ],
               ),
