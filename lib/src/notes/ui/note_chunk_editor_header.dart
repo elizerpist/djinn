@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-class NoteChunkEditorHeader extends StatelessWidget implements PreferredSizeWidget {
+class NoteChunkEditorHeader extends StatelessWidget
+    implements PreferredSizeWidget {
   const NoteChunkEditorHeader({
     super.key,
     required this.title,
@@ -12,6 +13,8 @@ class NoteChunkEditorHeader extends StatelessWidget implements PreferredSizeWidg
     required this.onDeleteChunk,
     this.canDeleteSelectedTag = false,
     this.trailingActions = const [],
+    this.extraMenuItems = const [],
+    this.onExtraMenuSelected,
     this.saveAction,
   });
 
@@ -24,6 +27,8 @@ class NoteChunkEditorHeader extends StatelessWidget implements PreferredSizeWidg
   final VoidCallback onDeleteChunk;
   final bool canDeleteSelectedTag;
   final List<Widget> trailingActions;
+  final List<PopupMenuEntry<String>> extraMenuItems;
+  final ValueChanged<String>? onExtraMenuSelected;
   final Widget? saveAction;
 
   @override
@@ -35,14 +40,16 @@ class NoteChunkEditorHeader extends StatelessWidget implements PreferredSizeWidg
       titleSpacing: 12,
       title: TextFormField(
         key: const ValueKey('note-chunk-title-field'),
-        initialValue: title?.trim().isNotEmpty == true ? title!.trim() : fallbackTitle,
+        initialValue: title?.trim().isNotEmpty == true
+            ? title!.trim()
+            : fallbackTitle,
         decoration: const InputDecoration(
           border: InputBorder.none,
           isDense: true,
         ),
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
         textInputAction: TextInputAction.done,
         onChanged: onTitleChanged,
       ),
@@ -68,6 +75,9 @@ class NoteChunkEditorHeader extends StatelessWidget implements PreferredSizeWidg
               case 'delete-chunk':
                 onDeleteChunk();
                 break;
+              default:
+                onExtraMenuSelected?.call(value);
+                break;
             }
           },
           itemBuilder: (context) => [
@@ -82,6 +92,7 @@ class NoteChunkEditorHeader extends StatelessWidget implements PreferredSizeWidg
               enabled: canDeleteSelectedTag,
               child: const Text('Kijelölt tag törlése'),
             ),
+            ...extraMenuItems,
             const PopupMenuDivider(),
             const PopupMenuItem(
               key: ValueKey('note-chunk-menu-delete-chunk'),

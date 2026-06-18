@@ -70,15 +70,7 @@ class NoteKnowledgeTagTypes {
   static const branch = 'branch';
   static const custom = 'custom';
 
-  static const values = [
-    topic,
-    type,
-    state,
-    symbol,
-    node,
-    branch,
-    custom,
-  ];
+  static const values = [topic, type, state, symbol, node, branch, custom];
 
   static String normalize(String? value) {
     final normalized = value?.trim().toLowerCase().replaceAll(' ', '_') ?? '';
@@ -274,7 +266,9 @@ class NoteTagTarget {
       rangeId: value['rangeId']?.toString(),
       listItemId: value['listItemId']?.toString(),
       rowIndex: value['rowIndex'] is int ? value['rowIndex'] as int : null,
-      columnIndex: value['columnIndex'] is int ? value['columnIndex'] as int : null,
+      columnIndex: value['columnIndex'] is int
+          ? value['columnIndex'] as int
+          : null,
       elementId: value['elementId']?.toString(),
     );
   }
@@ -433,9 +427,8 @@ List<NoteScopedTagAssignment> _scopedTagsFromJson(Object? value) {
   return value
       .whereType<Map>()
       .map(
-        (item) => NoteScopedTagAssignment.fromJson(
-          Map<String, Object?>.from(item),
-        ),
+        (item) =>
+            NoteScopedTagAssignment.fromJson(Map<String, Object?>.from(item)),
       )
       .where((assignment) => assignment.isValid)
       .toList(growable: false);
@@ -464,9 +457,11 @@ class NoteDocument {
   final List<NoteBlock> blocks;
 
   factory NoteDocument.empty() {
-    return const NoteDocument(blocks: [
-      NoteBlock(id: 'block-1', type: NoteBlockType.paragraph, text: ''),
-    ]);
+    return const NoteDocument(
+      blocks: [
+        NoteBlock(id: 'block-1', type: NoteBlockType.paragraph, text: ''),
+      ],
+    );
   }
 
   factory NoteDocument.fromPayload(
@@ -483,7 +478,9 @@ class NoteDocument {
         if (type == 'document' && blocks is List) {
           final parsedBlocks = blocks
               .whereType<Map>()
-              .map((item) => NoteBlock.fromJson(Map<String, Object?>.from(item)))
+              .map(
+                (item) => NoteBlock.fromJson(Map<String, Object?>.from(item)),
+              )
               .toList(growable: false);
           return NoteDocument(
             schemaVersion: decoded['schemaVersion'] is int
@@ -522,35 +519,37 @@ class NoteDocument {
     if (normalized == 'table') {
       final rows = _rowsFromLegacyPayload(legacyPayload);
       if (rows.isNotEmpty) {
-        return NoteDocument(blocks: [
-          NoteBlock(
-            id: 'block-1',
-            type: NoteBlockType.table,
-            title: title,
-            rows: rows,
-          ),
-        ]);
+        return NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'block-1',
+              type: NoteBlockType.table,
+              title: title,
+              rows: rows,
+            ),
+          ],
+        );
       }
     }
     if (normalized == 'flowchart') {
       final text = _legacyText(legacyText, legacyPayload);
-      return NoteDocument(blocks: [
-        NoteBlock(
-          id: 'block-1',
-          type: NoteBlockType.flowchart,
-          title: title,
-          text: text,
-        ),
-      ]);
+      return NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'block-1',
+            type: NoteBlockType.flowchart,
+            title: title,
+            text: text,
+          ),
+        ],
+      );
     }
     final text = _legacyText(legacyText, legacyPayload);
-    return NoteDocument(blocks: [
-      NoteBlock(
-        id: 'block-1',
-        type: NoteBlockType.paragraph,
-        text: text,
-      ),
-    ]);
+    return NoteDocument(
+      blocks: [
+        NoteBlock(id: 'block-1', type: NoteBlockType.paragraph, text: text),
+      ],
+    );
   }
 
   String toPayloadJson() {
@@ -647,12 +646,27 @@ class NoteDocument {
     return rows
         .whereType<List>()
         .map(
-          (row) => row
-              .map((cell) => cell.toString().trim())
-              .toList(growable: false),
+          (row) =>
+              row.map((cell) => cell.toString().trim()).toList(growable: false),
         )
         .where((row) => row.any((cell) => cell.isNotEmpty))
         .toList(growable: false);
+  }
+}
+
+enum NoteListLayoutMode {
+  checkbox('checkbox'),
+  hierarchy('hierarchy');
+
+  const NoteListLayoutMode(this.wireName);
+
+  final String wireName;
+
+  static NoteListLayoutMode fromWireName(String? value) {
+    return switch (value) {
+      'hierarchy' => NoteListLayoutMode.hierarchy,
+      _ => NoteListLayoutMode.checkbox,
+    };
   }
 }
 
@@ -731,6 +745,7 @@ class NoteBlock {
     this.nodes = const [],
     this.edges = const [],
     this.listItems = const [],
+    this.listLayoutMode = NoteListLayoutMode.checkbox,
     this.indexedContentHash,
     this.indexedAt,
   });
@@ -752,6 +767,7 @@ class NoteBlock {
   final List<NoteFlowchartNode> nodes;
   final List<NoteFlowchartEdge> edges;
   final List<NoteListItem> listItems;
+  final NoteListLayoutMode listLayoutMode;
   final String? indexedContentHash;
   final DateTime? indexedAt;
 
@@ -774,6 +790,9 @@ class NoteBlock {
       nodes: _nodesFromJson(json['nodes']),
       edges: _edgesFromJson(json['edges']),
       listItems: _listItemsFromJson(json['listItems']),
+      listLayoutMode: NoteListLayoutMode.fromWireName(
+        json['listLayoutMode']?.toString(),
+      ),
       indexedContentHash: json['indexedContentHash']?.toString(),
       indexedAt: DateTime.tryParse(json['indexedAt']?.toString() ?? ''),
     );
@@ -798,14 +817,21 @@ class NoteBlock {
       if (rangeTags.isNotEmpty)
         'rangeTags': rangeTags.map((tag) => tag.toJson()).toList(),
       if (scopedTags.isNotEmpty)
-        'scopedTags': scopedTags.map((assignment) => assignment.toJson()).toList(),
+        'scopedTags': scopedTags
+            .map((assignment) => assignment.toJson())
+            .toList(),
       if (level != 0) 'level': level,
       if (rows.isNotEmpty) 'rows': rows,
       if (tableColumnWidths.isNotEmpty) 'tableColumnWidths': tableColumnWidths,
       if (tableRowHeights.isNotEmpty) 'tableRowHeights': tableRowHeights,
-      if (nodes.isNotEmpty) 'nodes': nodes.map((node) => node.toJson()).toList(),
-      if (edges.isNotEmpty) 'edges': edges.map((edge) => edge.toJson()).toList(),
-      if (listItems.isNotEmpty) 'listItems': listItems.map((item) => item.toJson()).toList(),
+      if (nodes.isNotEmpty)
+        'nodes': nodes.map((node) => node.toJson()).toList(),
+      if (edges.isNotEmpty)
+        'edges': edges.map((edge) => edge.toJson()).toList(),
+      if (listItems.isNotEmpty)
+        'listItems': listItems.map((item) => item.toJson()).toList(),
+      if (listLayoutMode != NoteListLayoutMode.checkbox)
+        'listLayoutMode': listLayoutMode.wireName,
       if (indexedContentHash != null) 'indexedContentHash': indexedContentHash,
       if (indexedAt != null) 'indexedAt': indexedAt!.toIso8601String(),
     };
@@ -849,9 +875,11 @@ class NoteBlock {
     if (role != NoteSearchRoles.none && role != NoteSearchRoles.ignore) {
       parts.add(role.replaceAll('_', ' '));
     }
-    parts.addAll(searchAliases.map((alias) => alias.trim()).where(
-      (alias) => alias.isNotEmpty,
-    ));
+    parts.addAll(
+      searchAliases
+          .map((alias) => alias.trim())
+          .where((alias) => alias.isNotEmpty),
+    );
     final tagMetadata = _metadataTextFromTags(tags);
     if (tagMetadata.isNotEmpty) {
       parts.add(tagMetadata);
@@ -897,9 +925,11 @@ class NoteBlock {
 
   String get contentHash => stableNoteContentHash(plainTextForIndexing);
 
-  bool get isIndexFresh => indexedContentHash != null && indexedContentHash == contentHash;
+  bool get isIndexFresh =>
+      indexedContentHash != null && indexedContentHash == contentHash;
 
-  bool get needsReindex => hasContent && indexedContentHash != null && !isIndexFresh;
+  bool get needsReindex =>
+      hasContent && indexedContentHash != null && !isIndexFresh;
 
   String get _listText {
     final lines = <String>[];
@@ -921,7 +951,8 @@ class NoteBlock {
     return lines.join('\n').trimRight();
   }
 
-  String _indent(int level) => List.filled(level.clamp(0, 8).toInt(), '  ').join();
+  String _indent(int level) =>
+      List.filled(level.clamp(0, 8).toInt(), '  ').join();
 
   String get _tableText {
     final lines = <String>[];
@@ -929,7 +960,10 @@ class NoteBlock {
       lines.add(title!.trim());
     }
     for (final row in rows) {
-      final line = row.map((cell) => cell.trim()).where((cell) => cell.isNotEmpty).join(' | ');
+      final line = row
+          .map((cell) => cell.trim())
+          .where((cell) => cell.isNotEmpty)
+          .join(' | ');
       if (line.isNotEmpty) {
         lines.add(line);
       }
@@ -976,6 +1010,7 @@ class NoteBlock {
     List<NoteFlowchartNode>? nodes,
     List<NoteFlowchartEdge>? edges,
     List<NoteListItem>? listItems,
+    NoteListLayoutMode? listLayoutMode,
     String? indexedContentHash,
     DateTime? indexedAt,
     bool clearIndex = false,
@@ -998,7 +1033,10 @@ class NoteBlock {
       nodes: nodes ?? this.nodes,
       edges: edges ?? this.edges,
       listItems: listItems ?? this.listItems,
-      indexedContentHash: clearIndex ? null : indexedContentHash ?? this.indexedContentHash,
+      listLayoutMode: listLayoutMode ?? this.listLayoutMode,
+      indexedContentHash: clearIndex
+          ? null
+          : indexedContentHash ?? this.indexedContentHash,
       indexedAt: clearIndex ? null : indexedAt ?? this.indexedAt,
     );
   }
@@ -1009,7 +1047,9 @@ class NoteBlock {
     }
     return value
         .whereType<List>()
-        .map((row) => row.map((cell) => cell.toString()).toList(growable: false))
+        .map(
+          (row) => row.map((cell) => cell.toString()).toList(growable: false),
+        )
         .toList(growable: false);
   }
 
@@ -1035,7 +1075,9 @@ class NoteBlock {
     }
     return value
         .whereType<Map>()
-        .map((item) => NoteFlowchartNode.fromJson(Map<String, Object?>.from(item)))
+        .map(
+          (item) => NoteFlowchartNode.fromJson(Map<String, Object?>.from(item)),
+        )
         .toList(growable: false);
   }
 
@@ -1045,7 +1087,9 @@ class NoteBlock {
     }
     return value
         .whereType<Map>()
-        .map((item) => NoteFlowchartEdge.fromJson(Map<String, Object?>.from(item)))
+        .map(
+          (item) => NoteFlowchartEdge.fromJson(Map<String, Object?>.from(item)),
+        )
         .toList(growable: false);
   }
 
@@ -1203,7 +1247,9 @@ class NoteFlowchartPort {
       id: json['id']?.toString() ?? 'port-1',
       side: NoteFlowchartPortSide.fromWireName(json['side']?.toString()),
       label: json['label']?.toString() ?? '',
-      semantic: NoteFlowchartPortSemantic.fromWireName(json['semantic']?.toString()),
+      semantic: NoteFlowchartPortSemantic.fromWireName(
+        json['semantic']?.toString(),
+      ),
     );
   }
 
@@ -1212,7 +1258,8 @@ class NoteFlowchartPort {
       'id': id,
       'side': side.wireName,
       if (label.trim().isNotEmpty) 'label': label,
-      if (semantic != NoteFlowchartPortSemantic.normal) 'semantic': semantic.wireName,
+      if (semantic != NoteFlowchartPortSemantic.normal)
+        'semantic': semantic.wireName,
     };
   }
 
@@ -1239,10 +1286,16 @@ class NoteFlowchartWaypoint {
 
   factory NoteFlowchartWaypoint.fromJson(Object? value) {
     if (value is List && value.length >= 2) {
-      return NoteFlowchartWaypoint(_doubleFromAny(value[0]), _doubleFromAny(value[1]));
+      return NoteFlowchartWaypoint(
+        _doubleFromAny(value[0]),
+        _doubleFromAny(value[1]),
+      );
     }
     if (value is Map) {
-      return NoteFlowchartWaypoint(_doubleFromAny(value['x']), _doubleFromAny(value['y']));
+      return NoteFlowchartWaypoint(
+        _doubleFromAny(value['x']),
+        _doubleFromAny(value['y']),
+      );
     }
     return const NoteFlowchartWaypoint(0, 0);
   }
@@ -1278,9 +1331,17 @@ class NoteFlowchartNode {
   factory NoteFlowchartNode.fromJson(Map<String, Object?> json) {
     final shape = AiFlowchartNodeShape.fromWireName(json['shape']?.toString());
     final label = json['label']?.toString() ?? '';
-    final kind = NoteFlowchartNodeKind.maybeFromWireName(json['kind']?.toString()) ?? _legacyKindForShape(shape);
-    final role = NoteFlowchartNodeRole.maybeFromWireName(json['role']?.toString()) ?? _legacyRoleForShape(shape, label);
-    final visualShape = NoteFlowchartVisualShape.maybeFromWireName(json['visualShape']?.toString()) ?? _legacyVisualShapeForShape(shape);
+    final kind =
+        NoteFlowchartNodeKind.maybeFromWireName(json['kind']?.toString()) ??
+        _legacyKindForShape(shape);
+    final role =
+        NoteFlowchartNodeRole.maybeFromWireName(json['role']?.toString()) ??
+        _legacyRoleForShape(shape, label);
+    final visualShape =
+        NoteFlowchartVisualShape.maybeFromWireName(
+          json['visualShape']?.toString(),
+        ) ??
+        _legacyVisualShapeForShape(shape);
     final ports = _portsFromJson(json['ports']);
     return NoteFlowchartNode(
       id: json['id']?.toString() ?? 'node-1',
@@ -1289,7 +1350,9 @@ class NoteFlowchartNode {
       kind: kind,
       role: role,
       visualShape: visualShape,
-      ports: ports.isEmpty ? _defaultPortsFor(kind: kind, role: role, shape: shape) : ports,
+      ports: ports.isEmpty
+          ? _defaultPortsFor(kind: kind, role: role, shape: shape)
+          : ports,
       order: json['order'] is int ? json['order'] as int : 0,
       x: _doubleFromAny(json['x']),
       y: _doubleFromAny(json['y']),
@@ -1303,8 +1366,10 @@ class NoteFlowchartNode {
       'shape': shape.wireName,
       if (kind != NoteFlowchartNodeKind.universal) 'kind': kind.wireName,
       if (role != NoteFlowchartNodeRole.normal) 'role': role.wireName,
-      if (visualShape != NoteFlowchartVisualShape.rectangle) 'visualShape': visualShape.wireName,
-      if (ports.isNotEmpty) 'ports': ports.map((port) => port.toJson()).toList(),
+      if (visualShape != NoteFlowchartVisualShape.rectangle)
+        'visualShape': visualShape.wireName,
+      if (ports.isNotEmpty)
+        'ports': ports.map((port) => port.toJson()).toList(),
       'order': order,
       if (x != 0) 'x': x,
       if (y != 0) 'y': y,
@@ -1343,15 +1408,22 @@ class NoteFlowchartNode {
     }
     return value
         .whereType<Map>()
-        .map((item) => NoteFlowchartPort.fromJson(Map<String, Object?>.from(item)))
+        .map(
+          (item) => NoteFlowchartPort.fromJson(Map<String, Object?>.from(item)),
+        )
         .toList(growable: false);
   }
 
   static NoteFlowchartNodeKind _legacyKindForShape(AiFlowchartNodeShape shape) {
-    return shape == AiFlowchartNodeShape.decision ? NoteFlowchartNodeKind.binaryDecision : NoteFlowchartNodeKind.universal;
+    return shape == AiFlowchartNodeShape.decision
+        ? NoteFlowchartNodeKind.binaryDecision
+        : NoteFlowchartNodeKind.universal;
   }
 
-  static NoteFlowchartNodeRole _legacyRoleForShape(AiFlowchartNodeShape shape, String label) {
+  static NoteFlowchartNodeRole _legacyRoleForShape(
+    AiFlowchartNodeShape shape,
+    String label,
+  ) {
     if (shape != AiFlowchartNodeShape.startEnd) {
       return NoteFlowchartNodeRole.normal;
     }
@@ -1362,7 +1434,9 @@ class NoteFlowchartNode {
     return NoteFlowchartNodeRole.start;
   }
 
-  static NoteFlowchartVisualShape _legacyVisualShapeForShape(AiFlowchartNodeShape shape) {
+  static NoteFlowchartVisualShape _legacyVisualShapeForShape(
+    AiFlowchartNodeShape shape,
+  ) {
     return switch (shape) {
       AiFlowchartNodeShape.startEnd => NoteFlowchartVisualShape.oval,
       AiFlowchartNodeShape.decision => NoteFlowchartVisualShape.diamond,
@@ -1375,29 +1449,78 @@ class NoteFlowchartNode {
     required NoteFlowchartNodeRole role,
     required AiFlowchartNodeShape shape,
   }) {
-    if (kind == NoteFlowchartNodeKind.binaryDecision || shape == AiFlowchartNodeShape.decision) {
+    if (kind == NoteFlowchartNodeKind.binaryDecision ||
+        shape == AiFlowchartNodeShape.decision) {
       return const [
-        NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet'),
-        NoteFlowchartPort(id: 'yes', side: NoteFlowchartPortSide.bottom, label: 'Igen', semantic: NoteFlowchartPortSemantic.yes),
-        NoteFlowchartPort(id: 'no', side: NoteFlowchartPortSide.bottom, label: 'Nem', semantic: NoteFlowchartPortSemantic.no),
+        NoteFlowchartPort(
+          id: 'in',
+          side: NoteFlowchartPortSide.top,
+          label: 'Bemenet',
+        ),
+        NoteFlowchartPort(
+          id: 'yes',
+          side: NoteFlowchartPortSide.bottom,
+          label: 'Igen',
+          semantic: NoteFlowchartPortSemantic.yes,
+        ),
+        NoteFlowchartPort(
+          id: 'no',
+          side: NoteFlowchartPortSide.bottom,
+          label: 'Nem',
+          semantic: NoteFlowchartPortSemantic.no,
+        ),
       ];
     }
     if (kind == NoteFlowchartNodeKind.multiDecision) {
       return const [
-        NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet'),
-        NoteFlowchartPort(id: 'branch-1', side: NoteFlowchartPortSide.right, label: 'Ág 1', semantic: NoteFlowchartPortSemantic.custom),
-        NoteFlowchartPort(id: 'branch-2', side: NoteFlowchartPortSide.bottom, label: 'Ág 2', semantic: NoteFlowchartPortSemantic.custom),
+        NoteFlowchartPort(
+          id: 'in',
+          side: NoteFlowchartPortSide.top,
+          label: 'Bemenet',
+        ),
+        NoteFlowchartPort(
+          id: 'branch-1',
+          side: NoteFlowchartPortSide.right,
+          label: 'Ág 1',
+          semantic: NoteFlowchartPortSemantic.custom,
+        ),
+        NoteFlowchartPort(
+          id: 'branch-2',
+          side: NoteFlowchartPortSide.bottom,
+          label: 'Ág 2',
+          semantic: NoteFlowchartPortSemantic.custom,
+        ),
       ];
     }
     if (role == NoteFlowchartNodeRole.start) {
-      return const [NoteFlowchartPort(id: 'out', side: NoteFlowchartPortSide.bottom, label: 'Kimenet')];
+      return const [
+        NoteFlowchartPort(
+          id: 'out',
+          side: NoteFlowchartPortSide.bottom,
+          label: 'Kimenet',
+        ),
+      ];
     }
     if (role == NoteFlowchartNodeRole.end) {
-      return const [NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet')];
+      return const [
+        NoteFlowchartPort(
+          id: 'in',
+          side: NoteFlowchartPortSide.top,
+          label: 'Bemenet',
+        ),
+      ];
     }
     return const [
-      NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet'),
-      NoteFlowchartPort(id: 'out', side: NoteFlowchartPortSide.bottom, label: 'Kimenet'),
+      NoteFlowchartPort(
+        id: 'in',
+        side: NoteFlowchartPortSide.top,
+        label: 'Bemenet',
+      ),
+      NoteFlowchartPort(
+        id: 'out',
+        side: NoteFlowchartPortSide.bottom,
+        label: 'Kimenet',
+      ),
     ];
   }
 }
@@ -1433,7 +1556,9 @@ class NoteFlowchartEdge {
       label: json['label']?.toString() ?? '',
       fromPortId: json['fromPortId']?.toString(),
       toPortId: json['toPortId']?.toString(),
-      routingMode: NoteFlowchartRoutingMode.fromWireName(json['routingMode']?.toString()),
+      routingMode: NoteFlowchartRoutingMode.fromWireName(
+        json['routingMode']?.toString(),
+      ),
       manualWaypoints: _waypointsFromJson(json['manualWaypoints']),
       order: json['order'] is int ? json['order'] as int : 0,
     );
@@ -1447,8 +1572,12 @@ class NoteFlowchartEdge {
       'label': label,
       if (fromPortId != null) 'fromPortId': fromPortId,
       if (toPortId != null) 'toPortId': toPortId,
-      if (routingMode != NoteFlowchartRoutingMode.auto) 'routingMode': routingMode.wireName,
-      if (manualWaypoints.isNotEmpty) 'manualWaypoints': manualWaypoints.map((point) => point.toJson()).toList(),
+      if (routingMode != NoteFlowchartRoutingMode.auto)
+        'routingMode': routingMode.wireName,
+      if (manualWaypoints.isNotEmpty)
+        'manualWaypoints': manualWaypoints
+            .map((point) => point.toJson())
+            .toList(),
       'order': order,
     };
   }

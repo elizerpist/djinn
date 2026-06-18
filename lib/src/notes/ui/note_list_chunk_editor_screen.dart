@@ -20,7 +20,8 @@ class NoteListChunkEditorScreen extends StatefulWidget {
   final VoidCallback? onDelete;
 
   @override
-  State<NoteListChunkEditorScreen> createState() => _NoteListChunkEditorScreenState();
+  State<NoteListChunkEditorScreen> createState() =>
+      _NoteListChunkEditorScreenState();
 }
 
 class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
@@ -59,6 +60,27 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
       clearIndex: true,
     );
     widget.onChanged(_block);
+  }
+
+  void _setListLayoutMode(NoteListLayoutMode mode) {
+    if (_block.listLayoutMode == mode) {
+      return;
+    }
+    setState(() {
+      _block = _block.copyWith(listLayoutMode: mode, clearIndex: true);
+    });
+    widget.onChanged(_block);
+  }
+
+  void _handleExtraMenuSelection(String value) {
+    switch (value) {
+      case 'list-layout-checkbox':
+        _setListLayoutMode(NoteListLayoutMode.checkbox);
+        break;
+      case 'list-layout-hierarchy':
+        _setListLayoutMode(NoteListLayoutMode.hierarchy);
+        break;
+    }
   }
 
   void _emitTitle(String value) {
@@ -107,7 +129,9 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
     if (selectedId == null) {
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Válassz ki egy listaelemet a tageléshez')),
+        const SnackBar(
+          content: Text('Válassz ki egy listaelemet a tageléshez'),
+        ),
       );
       return;
     }
@@ -136,9 +160,7 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
     if (selectedId == null) {
       return false;
     }
-    return _items.any(
-      (item) => item.id == selectedId && item.tags.isNotEmpty,
-    );
+    return _items.any((item) => item.id == selectedId && item.tags.isNotEmpty);
   }
 
   void _deleteSelectedTag() {
@@ -177,12 +199,18 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
   }
 
   void _addItem() {
-    setState(() => _items = [..._items, NoteListItem(id: _nextItemId(), text: '')]);
+    setState(
+      () => _items = [..._items, NoteListItem(id: _nextItemId(), text: '')],
+    );
     _emit();
   }
 
   void _insertItemAfter(NoteListItem item) {
-    final newItem = NoteListItem(id: _nextItemId(), text: '', level: item.level);
+    final newItem = NoteListItem(
+      id: _nextItemId(),
+      text: '',
+      level: item.level,
+    );
     final index = _items.indexWhere((candidate) => candidate.id == item.id);
     setState(() {
       final next = [..._items];
@@ -200,20 +228,30 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
       );
       return;
     }
-    setState(() => _items = _items.where((candidate) => candidate.id != item.id).toList());
+    setState(
+      () => _items = _items
+          .where((candidate) => candidate.id != item.id)
+          .toList(),
+    );
     _emit();
   }
 
   void _changeIndent(NoteListItem item, int delta) {
-    _replaceItem(item.copyWith(level: (item.level + delta).clamp(0, 8).toInt()));
+    _replaceItem(
+      item.copyWith(level: (item.level + delta).clamp(0, 8).toInt()),
+    );
   }
 
   void _focusTaggedItem(int direction) {
-    final taggedItems = _items.where((item) => item.tags.isNotEmpty).toList(growable: false);
+    final taggedItems = _items
+        .where((item) => item.tags.isNotEmpty)
+        .toList(growable: false);
     if (taggedItems.isEmpty) {
       return;
     }
-    final currentIndex = taggedItems.indexWhere((item) => item.id == _selectedItemId);
+    final currentIndex = taggedItems.indexWhere(
+      (item) => item.id == _selectedItemId,
+    );
     final nextIndex = direction >= 0
         ? (currentIndex < 0 ? 0 : (currentIndex + 1) % taggedItems.length)
         : (currentIndex <= 0 ? taggedItems.length - 1 : currentIndex - 1);
@@ -231,8 +269,19 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
     _emit();
   }
 
+  Map<String, String> _hierarchyMarkers() {
+    var motherIndex = 0;
+    return {
+      for (final item in _items)
+        item.id: item.level <= 0 ? '${++motherIndex}.' : '-',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
+    final markers = _block.listLayoutMode == NoteListLayoutMode.hierarchy
+        ? _hierarchyMarkers()
+        : const <String, String>{};
     return Scaffold(
       key: const ValueKey('note-list-chunk-editor'),
       appBar: NoteChunkEditorHeader(
@@ -244,6 +293,26 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
         onDeleteSelectedTag: _deleteSelectedTag,
         onDeleteChunk: _deleteChunk,
         canDeleteSelectedTag: _selectedItemHasTags,
+        onExtraMenuSelected: _handleExtraMenuSelection,
+        extraMenuItems: [
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            key: const ValueKey('note-list-menu-layout-checkbox'),
+            value: 'list-layout-checkbox',
+            child: _ListLayoutMenuItem(
+              selected: _block.listLayoutMode == NoteListLayoutMode.checkbox,
+              label: 'Checkbox lista',
+            ),
+          ),
+          PopupMenuItem(
+            key: const ValueKey('note-list-menu-layout-hierarchy'),
+            value: 'list-layout-hierarchy',
+            child: _ListLayoutMenuItem(
+              selected: _block.listLayoutMode == NoteListLayoutMode.hierarchy,
+              label: 'Hierarchikus számozás',
+            ),
+          ),
+        ],
         trailingActions: [
           IconButton(
             key: const ValueKey('note-list-header-add-item'),
@@ -268,7 +337,9 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
             ),
           Expanded(
             child: ReorderableListView.builder(
-              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
               itemCount: _items.length,
               // ignore: deprecated_member_use
@@ -285,15 +356,19 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
                   index: index,
                   item: item,
                   selected: _selectedItemId == item.id,
+                  layoutMode: _block.listLayoutMode,
+                  hierarchyMarker: markers[item.id],
                   onSelect: () => setState(() => _selectedItemId = item.id),
                   onChanged: _replaceItem,
                   onTag: () => unawaited(_tagItem(item)),
                   onClearTags: _selectedItemHasTags ? _deleteSelectedTag : null,
                   onDeleteTag: _deleteSingleSelectedTag,
-                  onPreviousTagged: _items.any((candidate) => candidate.tags.isNotEmpty)
+                  onPreviousTagged:
+                      _items.any((candidate) => candidate.tags.isNotEmpty)
                       ? () => _focusTaggedItem(-1)
                       : null,
-                  onNextTagged: _items.any((candidate) => candidate.tags.isNotEmpty)
+                  onNextTagged:
+                      _items.any((candidate) => candidate.tags.isNotEmpty)
                       ? () => _focusTaggedItem(1)
                       : null,
                   railBottomExpanded: _railBottomExpanded,
@@ -314,12 +389,37 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
   }
 }
 
+class _ListLayoutMenuItem extends StatelessWidget {
+  const _ListLayoutMenuItem({required this.selected, required this.label});
+
+  final bool selected;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 24,
+          child: selected
+              ? const Icon(Icons.check, size: 18)
+              : const SizedBox.shrink(),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
+      ],
+    );
+  }
+}
+
 class _ListItemRow extends StatelessWidget {
   const _ListItemRow({
     super.key,
     required this.index,
     required this.item,
     required this.selected,
+    required this.layoutMode,
+    required this.hierarchyMarker,
     required this.onSelect,
     required this.onChanged,
     required this.onTag,
@@ -338,6 +438,8 @@ class _ListItemRow extends StatelessWidget {
   final int index;
   final NoteListItem item;
   final bool selected;
+  final NoteListLayoutMode layoutMode;
+  final String? hierarchyMarker;
   final VoidCallback onSelect;
   final ValueChanged<NoteListItem> onChanged;
   final VoidCallback onTag;
@@ -354,22 +456,24 @@ class _ListItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tagColor =
-        item.tags.isEmpty ? null : Color(item.tags.first.resolvedColorValue).withValues(alpha: 0.22);
+    final tagColor = item.tags.isEmpty
+        ? null
+        : Color(item.tags.first.resolvedColorValue).withValues(alpha: 0.22);
     return GestureDetector(
       key: ValueKey('note-list-row-${item.id}'),
       behavior: HitTestBehavior.translucent,
       onTap: onSelect,
       child: Padding(
-        padding: EdgeInsets.only(left: 16.0 * item.level.clamp(0, 8).toDouble(), bottom: 8),
+        padding: EdgeInsets.only(
+          left: 16.0 * item.level.clamp(0, 8).toDouble(),
+          bottom: 8,
+        ),
         child: DecoratedBox(
+          key: ValueKey('note-list-item-card-${item.id}'),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
-              width: selected ? 2 : 1,
-            ),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
@@ -381,18 +485,40 @@ class _ListItemRow extends StatelessWidget {
                       index: index,
                       child: const SizedBox.square(
                         dimension: 36,
-                        child: Icon(Icons.drag_indicator, color: Color(0xFF9CA3AF)),
+                        child: Icon(
+                          Icons.drag_indicator,
+                          color: Color(0xFF9CA3AF),
+                        ),
                       ),
                     ),
-                    Checkbox(
-                      value: item.checked,
-                      onChanged: (value) => onChanged(item.copyWith(checked: value ?? false)),
-                    ),
+                    if (layoutMode == NoteListLayoutMode.checkbox)
+                      Checkbox(
+                        value: item.checked,
+                        onChanged: (value) =>
+                            onChanged(item.copyWith(checked: value ?? false)),
+                      )
+                    else
+                      SizedBox(
+                        width: 48,
+                        child: Center(
+                          child: Text(
+                            hierarchyMarker ?? '',
+                            key: ValueKey('note-list-marker-${item.id}'),
+                            style: const TextStyle(
+                              color: Color(0xFF475569),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
                     Expanded(
                       child: Container(
                         key: item.tags.isEmpty
                             ? null
-                            : ValueKey('note-list-item-tag-highlight-${item.id}'),
+                            : ValueKey(
+                                'note-list-item-tag-highlight-${item.id}',
+                              ),
                         padding: const EdgeInsets.symmetric(horizontal: 6),
                         child: TextFormField(
                           key: ValueKey('note-list-item-${item.id}'),
@@ -408,7 +534,8 @@ class _ListItemRow extends StatelessWidget {
                           ),
                           style: TextStyle(backgroundColor: tagColor),
                           onTap: onSelect,
-                          onChanged: (value) => onChanged(item.copyWith(text: value)),
+                          onChanged: (value) =>
+                              onChanged(item.copyWith(text: value)),
                           onFieldSubmitted: (_) => onSubmit(),
                         ),
                       ),
@@ -453,13 +580,19 @@ class _ListItemRow extends StatelessWidget {
                         key: ValueKey('note-list-rail-outdent-${item.id}'),
                         tooltip: 'Kijjebb',
                         onPressed: onOutdent,
-                        icon: const Icon(Icons.format_indent_decrease, size: 20),
+                        icon: const Icon(
+                          Icons.format_indent_decrease,
+                          size: 20,
+                        ),
                       ),
                       IconButton(
                         key: ValueKey('note-list-rail-indent-${item.id}'),
                         tooltip: 'Beljebb',
                         onPressed: onIndent,
-                        icon: const Icon(Icons.format_indent_increase, size: 20),
+                        icon: const Icon(
+                          Icons.format_indent_increase,
+                          size: 20,
+                        ),
                       ),
                       IconButton(
                         key: ValueKey('note-list-rail-delete-${item.id}'),

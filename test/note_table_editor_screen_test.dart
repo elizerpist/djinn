@@ -946,6 +946,45 @@ void main() {
     );
   });
 
+  testWidgets('table row grows immediately while editing multiline cell', (
+    tester,
+  ) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    final initialRowHeight = tester
+        .getSize(find.byKey(const ValueKey('note-table-row-head-1')))
+        .height;
+
+    await tester.enterText(
+      find.byKey(const ValueKey('note-table-cell-1-0')),
+      'Első sor\nMásodik sor\nHarmadik sor\nNegyedik sor',
+    );
+    await tester.pump();
+
+    expect(latest!.rows[1][0], contains('\n'));
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('note-table-row-head-1')))
+          .height,
+      greaterThan(initialRowHeight),
+    );
+  });
+
   testWidgets('table cell tap selects but horizontal drag scrolls the table', (
     tester,
   ) async {
@@ -1006,54 +1045,33 @@ void main() {
     );
   });
 
-  testWidgets(
-    'table pinch gesture zooms out but does not zoom in past default scale',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: NoteTableEditorScreen(
-            block: const NoteBlock(
-              id: 'table-1',
-              type: NoteBlockType.table,
-              rows: [
-                ['Állapot', 'Teendő'],
-                ['Súlyos', 'High flow'],
-              ],
-            ),
-            onChanged: _ignoreBlockChange,
+  testWidgets('table does not expose pinch zoom wrappers', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
           ),
+          onChanged: _ignoreBlockChange,
         ),
-      );
+      ),
+    );
 
-      await _pinch(
-        tester,
-        center: tester.getCenter(
-          find.byKey(const ValueKey('note-table-zoomable-content')),
-        ),
-        startDistance: 180,
-        endDistance: 80,
-      );
-
-      final zoomedOut = tester.widget<Transform>(
-        find.byKey(const ValueKey('note-table-zoom-transform')),
-      );
-      expect(zoomedOut.transform.storage[0], lessThan(1));
-
-      await _pinch(
-        tester,
-        center: tester.getCenter(
-          find.byKey(const ValueKey('note-table-zoomable-content')),
-        ),
-        startDistance: 80,
-        endDistance: 260,
-      );
-
-      final zoomedIn = tester.widget<Transform>(
-        find.byKey(const ValueKey('note-table-zoom-transform')),
-      );
-      expect(zoomedIn.transform.storage[0], 1);
-    },
-  );
+    expect(
+      find.byKey(const ValueKey('note-table-zoomable-content')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('note-table-zoom-gesture')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('note-table-zoom-transform')),
+      findsNothing,
+    );
+  });
 
   testWidgets(
     'table rail exposes rounded, transparent, and border style toggles',
@@ -1221,43 +1239,6 @@ void main() {
           )
           .dx;
 
-      await _pinch(
-        tester,
-        center: tester.getCenter(
-          find.byKey(const ValueKey('note-table-zoomable-content')),
-        ),
-        startDistance: 180,
-        endDistance: 90,
-      );
-      await tester.pumpAndSettle();
-      expect(
-        tester.getSize(railFinder).width,
-        moreOrLessEquals(tableWidth, epsilon: 0.1),
-      );
-      railVisualWidth =
-          tester.getBottomRight(railFinder).dx -
-          tester.getTopLeft(railFinder).dx;
-      tableVisualWidth =
-          tester
-              .getBottomRight(
-                find.byKey(const ValueKey('note-table-zoomable-content')),
-              )
-              .dx -
-          tester
-              .getTopLeft(
-                find.byKey(const ValueKey('note-table-zoomable-content')),
-              )
-              .dx;
-      expect(railVisualWidth, moreOrLessEquals(tableVisualWidth, epsilon: 0.1));
-      expect(
-        tester
-            .getTopLeft(
-              find.byKey(const ValueKey('note-selection-rail-toggle-tags')),
-            )
-            .dx,
-        moreOrLessEquals(railToggleLeftBeforeCanvasScroll, epsilon: 0.1),
-      );
-
       await tester.dragFrom(
         tester.getTopLeft(
               find.byKey(const ValueKey('note-table-column-head-1')),
@@ -1335,25 +1316,6 @@ Future<void> _longPressDrag(
   await gesture.moveTo(tester.getCenter(to));
   await tester.pump();
   await gesture.up();
-  await tester.pumpAndSettle();
-}
-
-Future<void> _pinch(
-  WidgetTester tester, {
-  required Offset center,
-  required double startDistance,
-  required double endDistance,
-}) async {
-  final first = await tester.createGesture(pointer: 41);
-  final second = await tester.createGesture(pointer: 42);
-  await first.down(center + Offset(-startDistance / 2, 0));
-  await second.down(center + Offset(startDistance / 2, 0));
-  await tester.pump();
-  await first.moveTo(center + Offset(-endDistance / 2, 0));
-  await second.moveTo(center + Offset(endDistance / 2, 0));
-  await tester.pump();
-  await first.up();
-  await second.up();
   await tester.pumpAndSettle();
 }
 

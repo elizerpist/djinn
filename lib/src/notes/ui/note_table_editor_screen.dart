@@ -162,8 +162,15 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   }
 
   void _updateCell(int row, int column, String value) {
-    _ensureCell(row, column);
-    _rows[row][column] = value;
+    if (row < _rows.length &&
+        column < _rows[row].length &&
+        _rows[row][column] == value) {
+      return;
+    }
+    setState(() {
+      _ensureCell(row, column);
+      _rows[row][column] = value;
+    });
     _emitChange();
   }
 
@@ -1235,11 +1242,7 @@ class _TableGridState extends State<_TableGrid> {
   late final ScrollController _horizontalController;
   late List<double> _previewColumnWidths;
   late List<double> _previewRowHeights;
-  final Map<int, Offset> _activePointerPositions = <int, Offset>{};
   double _viewportWidth = 0;
-  double _scale = 1;
-  double _pinchStartScale = 1;
-  double? _pinchStartDistance;
   double? _lastLoggedCanvasOffset;
   int? _resizingColumn;
   int? _resizingRow;
@@ -1252,8 +1255,6 @@ class _TableGridState extends State<_TableGrid> {
   bool _columnResizeFrameScheduled = false;
   bool _rowResizeFrameScheduled = false;
 
-  static const double _minimumScale = 0.55;
-  static const double _maximumScale = 1;
   static const double _horizontalPadding = _TableGrid._horizontalPadding;
 
   @override
@@ -1311,10 +1312,10 @@ class _TableGridState extends State<_TableGrid> {
       return;
     }
     _lastLoggedCanvasOffset = offset;
-    final railLocalLeft = ((offset - _horizontalPadding) / _scale).toDouble();
+    final railLocalLeft = (offset - _horizontalPadding).toDouble();
     DebugConsole.log(
       '[TableRail] canvas scroll offset=${offset.toStringAsFixed(1)} '
-      'viewport=${_viewportWidth.toStringAsFixed(1)} scale=${_scale.toStringAsFixed(2)} '
+      'viewport=${_viewportWidth.toStringAsFixed(1)} '
       'railLocalLeft=${railLocalLeft.toStringAsFixed(1)}',
     );
   }
@@ -1325,45 +1326,32 @@ class _TableGridState extends State<_TableGrid> {
       builder: (context, constraints) {
         _viewportWidth = constraints.maxWidth;
         final tableWidth = _tableWidth;
-        return Listener(
-          key: const ValueKey('note-table-zoom-gesture'),
-          behavior: HitTestBehavior.translucent,
-          onPointerDown: _handlePointerDown,
-          onPointerMove: _handlePointerMove,
-          onPointerUp: _handlePointerEnd,
-          onPointerCancel: _handlePointerEnd,
-          child: StretchingOverscrollIndicator(
-            key: const ValueKey('note-table-horizontal-rubber-band'),
-            axisDirection: AxisDirection.right,
+        return StretchingOverscrollIndicator(
+          key: const ValueKey('note-table-horizontal-rubber-band'),
+          axisDirection: AxisDirection.right,
+          child: SingleChildScrollView(
+            controller: _horizontalController,
+            physics: const ClampingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            padding: const EdgeInsets.fromLTRB(
+              _horizontalPadding,
+              12,
+              _horizontalPadding,
+              24,
+            ),
+            scrollDirection: Axis.horizontal,
             child: SingleChildScrollView(
-              controller: _horizontalController,
-              physics: const ClampingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
-              padding: const EdgeInsets.fromLTRB(
-                _horizontalPadding,
-                12,
-                _horizontalPadding,
-                24,
-              ),
-              scrollDirection: Axis.horizontal,
-              child: SingleChildScrollView(
-                child: Transform.scale(
-                  key: const ValueKey('note-table-zoom-transform'),
-                  alignment: Alignment.topLeft,
-                  scale: _scale,
-                  child: SizedBox(
-                    key: const ValueKey('note-table-zoomable-content'),
-                    width: tableWidth,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHeader(context),
-                        for (var row = 0; row < widget.rowCount; row += 1)
-                          _buildRow(context, row),
-                      ],
-                    ),
-                  ),
+              child: SizedBox(
+                key: const ValueKey('note-table-zoomable-content'),
+                width: tableWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(context),
+                    for (var row = 0; row < widget.rowCount; row += 1)
+                      _buildRow(context, row),
+                  ],
                 ),
               ),
             ),
@@ -1371,61 +1359,6 @@ class _TableGridState extends State<_TableGrid> {
         );
       },
     );
-  }
-
-  void _handlePointerDown(PointerDownEvent event) {
-    _activePointerPositions[event.pointer] = event.localPosition;
-    if (_activePointerPositions.length == 2) {
-      _pinchStartScale = _scale;
-      _pinchStartDistance = _currentPointerDistance;
-    }
-  }
-
-  void _handlePointerMove(PointerMoveEvent event) {
-    if (!_activePointerPositions.containsKey(event.pointer)) {
-      return;
-    }
-    _activePointerPositions[event.pointer] = event.localPosition;
-    if (_activePointerPositions.length != 2) {
-      return;
-    }
-    final startDistance = _pinchStartDistance;
-    final currentDistance = _currentPointerDistance;
-    if (startDistance == null ||
-        currentDistance == null ||
-        startDistance <= 0 ||
-        currentDistance <= 0) {
-      _pinchStartScale = _scale;
-      _pinchStartDistance = currentDistance;
-      return;
-    }
-    final nextScale = (_pinchStartScale * currentDistance / startDistance)
-        .clamp(_minimumScale, _maximumScale)
-        .toDouble();
-    if ((nextScale - _scale).abs() < 0.001) {
-      return;
-    }
-    setState(() => _scale = nextScale);
-  }
-
-  void _handlePointerEnd(PointerEvent event) {
-    _activePointerPositions.remove(event.pointer);
-    if (_activePointerPositions.length == 2) {
-      _pinchStartScale = _scale;
-      _pinchStartDistance = _currentPointerDistance;
-    } else {
-      _pinchStartDistance = null;
-    }
-  }
-
-  double? get _currentPointerDistance {
-    if (_activePointerPositions.length < 2) {
-      return null;
-    }
-    final positions = _activePointerPositions.values
-        .take(2)
-        .toList(growable: false);
-    return (positions.first - positions.last).distance;
   }
 
   void _scrollFromCellDrag(double deltaDx) {
@@ -1621,11 +1554,10 @@ class _TableGridState extends State<_TableGrid> {
       animation: _horizontalController,
       builder: (context, _) {
         final viewportWidth = _viewportWidth <= 0 ? width : _viewportWidth;
-        final scale = _scale <= 0 ? 1.0 : _scale;
         final left = _horizontalController.hasClients
-            ? (_horizontalController.offset / scale).clamp(0, width).toDouble()
+            ? _horizontalController.offset.clamp(0, width).toDouble()
             : 0.0;
-        final visibleWidth = (viewportWidth / scale).clamp(0, width).toDouble();
+        final visibleWidth = viewportWidth.clamp(0, width).toDouble();
         return SizedBox(
           key: key,
           width: width,
