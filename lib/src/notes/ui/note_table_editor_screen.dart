@@ -839,7 +839,7 @@ class _TableGridState extends State<_TableGrid> {
               child: child,
             ),
           ),
-        ),
+        );
       },
     );
   }
