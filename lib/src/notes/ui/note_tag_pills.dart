@@ -143,7 +143,7 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
     final atBoundary = nextOffset == position.minScrollExtent ||
         nextOffset == position.maxScrollExtent;
     final shouldLog = lastLoggedOffset == null ||
-        (nextOffset - lastLoggedOffset).abs() >= 48 ||
+        (nextOffset - lastLoggedOffset).abs() >= 96 ||
         (atBoundary && nextOffset != lastLoggedOffset);
     if (shouldLog) {
       _lastLoggedRowOffsets[rowName] = nextOffset;

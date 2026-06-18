@@ -920,6 +920,26 @@ void main() {
       find.byKey(const ValueKey('note-selection-rail-toggle-tags')),
     ).dx;
 
+    await _pinch(
+      tester,
+      center: tester.getCenter(find.byKey(const ValueKey('note-table-zoomable-content'))),
+      startDistance: 180,
+      endDistance: 90,
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const ValueKey('note-selection-action-rail'))).width,
+      moreOrLessEquals(tester.view.physicalSize.width, epsilon: 0.1),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('note-selection-action-rail'))).dx,
+      moreOrLessEquals(railLeftBefore, epsilon: 0.1),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('note-selection-rail-toggle-tags'))).dx,
+      moreOrLessEquals(railToggleLeftBeforeCanvasScroll, epsilon: 0.1),
+    );
+
     await tester.dragFrom(
       tester.getTopLeft(find.byKey(const ValueKey('note-table-column-head-1'))) +
           const Offset(80, 20),

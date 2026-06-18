@@ -529,49 +529,6 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
 
   bool _hasTags(_TableSelection selection) => _tagsForSelection(selection).isNotEmpty;
 
-  List<NoteKnowledgeTag> _tagsForCell(int row, int column) {
-    final directTags = <NoteKnowledgeTag>[];
-    final rowTags = <NoteKnowledgeTag>[];
-    final columnTags = <NoteKnowledgeTag>[];
-    for (final assignment in _block.scopedTags) {
-      final target = assignment.target;
-      switch (target.kind) {
-        case NoteTagTargetKind.tableCell:
-          if (target.rowIndex == row && target.columnIndex == column) {
-            directTags.addAll(assignment.tags);
-          }
-          break;
-        case NoteTagTargetKind.tableRow:
-          if (target.rowIndex == row) {
-            rowTags.addAll(assignment.tags);
-          }
-          break;
-        case NoteTagTargetKind.tableColumn:
-          if (target.columnIndex == column) {
-            columnTags.addAll(assignment.tags);
-          }
-          break;
-        default:
-          break;
-      }
-    }
-    if (directTags.isNotEmpty) {
-      return directTags;
-    }
-    if (rowTags.isNotEmpty) {
-      return rowTags;
-    }
-    return columnTags;
-  }
-
-  Color? _highlightColorForCell(int row, int column) {
-    final tags = _tagsForCell(row, column);
-    if (tags.isEmpty) {
-      return null;
-    }
-    return Color(tags.first.resolvedColorValue).withValues(alpha: 0.16);
-  }
-
   void _select(_TableSelection selection) {
     if (_sameSelection(_selection, selection)) {
       return;
@@ -1010,6 +967,8 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     _normalizeRows();
     _normalizeLayout();
     final columnCount = _columnCount;
+    final tableTagLookup = _TableTagLookup(_block.scopedTags);
+    final intrinsicRows = _intrinsicRowsForLayout();
     return Scaffold(
       appBar: NoteChunkEditorHeader(
         title: _block.title,
@@ -1062,9 +1021,10 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
               rowCount: _rows.length,
               columnWidths: _columnWidths,
               rowHeights: _rowHeights,
+              intrinsicRows: intrinsicRows,
               selection: _selection,
               cellControllerFor: _controllerFor,
-              highlightColorForCell: _highlightColorForCell,
+              highlightColorForCell: tableTagLookup.highlightColorForCell,
               onCellChanged: _updateCell,
               onSelect: _select,
               onMoveRow: _moveRow,
@@ -1078,6 +1038,88 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       ),
     );
   }
+
+  Set<int> _intrinsicRowsForLayout() {
+    final rows = <int>{};
+    for (var row = 0; row < _rows.length; row += 1) {
+      final cells = _rows[row];
+      for (var column = 0; column < _columnCount; column += 1) {
+        final text = column < cells.length ? cells[column] : '';
+        if (text.contains('\n')) {
+          rows.add(row);
+          break;
+        }
+        final availableWidth = (_columnWidths[column] - 20).clamp(
+          1,
+          double.infinity,
+        );
+        if (text.length * 7 > availableWidth) {
+          rows.add(row);
+          break;
+        }
+      }
+    }
+    return rows;
+  }
+}
+
+class _TableTagLookup {
+  _TableTagLookup(List<NoteScopedTagAssignment> assignments) {
+    for (final assignment in assignments) {
+      final target = assignment.target;
+      switch (target.kind) {
+        case NoteTagTargetKind.tableCell:
+          final row = target.rowIndex;
+          final column = target.columnIndex;
+          if (row != null && column != null) {
+            final tags = _cellTags.putIfAbsent(
+              _cellKey(row, column),
+              () => <NoteKnowledgeTag>[],
+            );
+            tags.addAll(assignment.tags);
+          }
+          break;
+        case NoteTagTargetKind.tableRow:
+          final row = target.rowIndex;
+          if (row != null) {
+            final tags = _rowTags.putIfAbsent(row, () => <NoteKnowledgeTag>[]);
+            tags.addAll(assignment.tags);
+          }
+          break;
+        case NoteTagTargetKind.tableColumn:
+          final column = target.columnIndex;
+          if (column != null) {
+            final tags = _columnTags.putIfAbsent(
+              column,
+              () => <NoteKnowledgeTag>[],
+            );
+            tags.addAll(assignment.tags);
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  final Map<String, List<NoteKnowledgeTag>> _cellTags =
+      <String, List<NoteKnowledgeTag>>{};
+  final Map<int, List<NoteKnowledgeTag>> _rowTags = <int, List<NoteKnowledgeTag>>{};
+  final Map<int, List<NoteKnowledgeTag>> _columnTags =
+      <int, List<NoteKnowledgeTag>>{};
+
+  static String _cellKey(int row, int column) => '$row:$column';
+
+  Color? highlightColorForCell(int row, int column) {
+    final tags = _cellTags[_cellKey(row, column)] ??
+        _rowTags[row] ??
+        _columnTags[column] ??
+        const <NoteKnowledgeTag>[];
+    if (tags.isEmpty) {
+      return null;
+    }
+    return Color(tags.first.resolvedColorValue).withValues(alpha: 0.16);
+  }
 }
 
 class _TableGrid extends StatefulWidget {
@@ -1086,6 +1128,7 @@ class _TableGrid extends StatefulWidget {
     required this.rowCount,
     required this.columnWidths,
     required this.rowHeights,
+    required this.intrinsicRows,
     required this.selection,
     required this.cellControllerFor,
     required this.highlightColorForCell,
@@ -1106,6 +1149,7 @@ class _TableGrid extends StatefulWidget {
   final int rowCount;
   final List<double> columnWidths;
   final List<double> rowHeights;
+  final Set<int> intrinsicRows;
   final _TableSelection? selection;
   final TextEditingController Function(int row, int column) cellControllerFor;
   final Color? Function(int row, int column) highlightColorForCell;
@@ -1193,7 +1237,10 @@ class _TableGridState extends State<_TableGrid> {
     }
     final offset = _horizontalController.offset;
     final lastOffset = _lastLoggedCanvasOffset;
-    if (lastOffset != null && (offset - lastOffset).abs() < 96) {
+    if (widget.selection == null) {
+      return;
+    }
+    if (lastOffset != null && (offset - lastOffset).abs() < 160) {
       return;
     }
     _lastLoggedCanvasOffset = offset;
@@ -1497,11 +1544,11 @@ class _TableGridState extends State<_TableGrid> {
       animation: _horizontalController,
       builder: (context, _) {
         final viewportWidth = _viewportWidth <= 0 ? width : _viewportWidth;
-        final scaledViewportWidth = (viewportWidth / _scale).toDouble();
+        final scale = _scale <= 0 ? 1.0 : _scale;
         final left = _horizontalController.hasClients
-            ? ((_horizontalController.offset - _horizontalPadding) / _scale)
+            ? ((_horizontalController.offset - _horizontalPadding) / scale)
                 .toDouble()
-            : -_horizontalPadding / _scale;
+            : -_horizontalPadding / scale;
         return SizedBox(
           key: key,
           width: width,
@@ -1509,15 +1556,20 @@ class _TableGridState extends State<_TableGrid> {
             alignment: Alignment.topLeft,
             child: Transform.translate(
               offset: Offset(left, 0),
-              child: SizedBox(
-                width: scaledViewportWidth,
-                child: Listener(
-                  key: const ValueKey('note-table-rail-pointer-shield'),
-                  behavior: HitTestBehavior.opaque,
-                  onPointerDown: (_) => _setRailPointerActive(true),
-                  onPointerUp: (_) => _setRailPointerActive(false),
-                  onPointerCancel: (_) => _setRailPointerActive(false),
-                  child: child,
+              child: Transform.scale(
+                key: const ValueKey('note-table-rail-unscaled-transform'),
+                alignment: Alignment.topLeft,
+                scale: 1 / scale,
+                child: SizedBox(
+                  width: viewportWidth,
+                  child: Listener(
+                    key: const ValueKey('note-table-rail-pointer-shield'),
+                    behavior: HitTestBehavior.opaque,
+                    onPointerDown: (_) => _setRailPointerActive(true),
+                    onPointerUp: (_) => _setRailPointerActive(false),
+                    onPointerCancel: (_) => _setRailPointerActive(false),
+                    child: child,
+                  ),
                 ),
               ),
             ),
@@ -1632,20 +1684,7 @@ class _TableGridState extends State<_TableGrid> {
     if (_resizingColumn != null || _resizingRow != null) {
       return false;
     }
-    for (var column = 0; column < widget.columnCount; column += 1) {
-      final text = widget.cellControllerFor(row, column).text;
-      if (text.contains('\n')) {
-        return true;
-      }
-      final availableWidth = (_columnWidth(column) - 20).clamp(
-        1,
-        double.infinity,
-      );
-      if (text.length * 7 > availableWidth) {
-        return true;
-      }
-    }
-    return false;
+    return widget.intrinsicRows.contains(row);
   }
 }
 
