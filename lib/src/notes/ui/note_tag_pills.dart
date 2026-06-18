@@ -61,8 +61,9 @@ class NoteTagPills extends StatelessWidget {
                     ),
                   ],
                 ],
-                      ),
-                    ),
+              ),
+            ),
+          ),
       ],
     );
     if (!scrollable) {
@@ -237,7 +238,6 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
                               ),
                         ),
                       ),
-                    ),
                   ],
                 ],
               ),
