@@ -1045,6 +1045,51 @@ void main() {
     );
   });
 
+  testWidgets('table vertical drag over a cell does not select the cell', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 420);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['A', 'B', 'C'],
+              ['1', '2', '3'],
+              ['4', '5', '6'],
+              ['7', '8', '9'],
+              ['10', '11', '12'],
+              ['13', '14', '15'],
+              ['16', '17', '18'],
+              ['19', '20', '21'],
+              ['22', '23', '24'],
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('note-table-cell-container-1-1')),
+      const Offset(0, -180),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-table-selected-cell-1-1')),
+      findsNothing,
+    );
+  });
+
   testWidgets('table does not expose pinch zoom wrappers', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

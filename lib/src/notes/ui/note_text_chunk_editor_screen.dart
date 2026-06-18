@@ -20,7 +20,8 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
   final VoidCallback? onDelete;
 
   @override
-  State<NoteTextChunkEditorScreen> createState() => _NoteTextChunkEditorScreenState();
+  State<NoteTextChunkEditorScreen> createState() =>
+      _NoteTextChunkEditorScreenState();
 }
 
 class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
@@ -60,7 +61,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     }
     final nextCanDelete = _selectionHasTag();
     final nextHasRange = _selectionIsTaggable();
-    if (nextCanDelete == _selectionCanDeleteTag && nextHasRange == _selectionHasRange) {
+    if (nextCanDelete == _selectionCanDeleteTag &&
+        nextHasRange == _selectionHasRange) {
       return;
     }
     if (!mounted) {
@@ -125,19 +127,18 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
 
   Future<void> _tagSelection() async {
     final text = _controller.text;
-    final selection = _controller.selection;
-    if (!selection.isValid || selection.isCollapsed || text.isEmpty) {
+    final targetRange = _selectionTargetRange();
+    if (targetRange == null || text.isEmpty) {
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Jelölj ki egy szövegrészt a tageléshez')),
       );
       return;
     }
-    final start = selection.start < selection.end ? selection.start : selection.end;
-    final end = selection.start < selection.end ? selection.end : selection.start;
+    final selectedExistingRange = _collapsedTaggedRange();
     final tags = await showTagManagerSheet(
       context,
-      initialTags: const [],
+      initialTags: selectedExistingRange?.resolvedTags ?? const [],
       availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Kijelölt rész tagje',
     );
@@ -145,9 +146,11 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       return;
     }
     final rangeTag = NoteTextRangeTag(
-      id: 'range-${DateTime.now().microsecondsSinceEpoch}',
-      start: start.clamp(0, text.length).toInt(),
-      end: end.clamp(0, text.length).toInt(),
+      id:
+          selectedExistingRange?.id ??
+          'range-${DateTime.now().microsecondsSinceEpoch}',
+      start: targetRange.start.clamp(0, text.length).toInt(),
+      end: targetRange.end.clamp(0, text.length).toInt(),
       tag: tags.first,
       tags: tags,
     );
@@ -155,7 +158,15 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       return;
     }
     setState(() {
-      final rangeTags = [..._block.rangeTags, rangeTag];
+      final rangeTags = selectedExistingRange == null
+          ? [..._block.rangeTags, rangeTag]
+          : [
+              for (final current in _block.rangeTags)
+                if (current.id == selectedExistingRange.id)
+                  rangeTag
+                else
+                  current,
+            ];
       _setControllerRangeTags(rangeTags);
       _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
       _selectionCanDeleteTag = _selectionHasTag();
@@ -165,32 +176,74 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   bool _selectionIsTaggable() {
+    return _selectionTargetRange() != null;
+  }
+
+  TextRange? _selectionTargetRange() {
     final selection = _controller.selection;
-    return selection.isValid && !selection.isCollapsed && _controller.text.isNotEmpty;
+    if (!selection.isValid || _controller.text.isEmpty) {
+      return null;
+    }
+    if (!selection.isCollapsed) {
+      final start = selection.start < selection.end
+          ? selection.start
+          : selection.end;
+      final end = selection.start < selection.end
+          ? selection.end
+          : selection.start;
+      return TextRange(
+        start: start.clamp(0, _controller.text.length).toInt(),
+        end: end.clamp(0, _controller.text.length).toInt(),
+      );
+    }
+    final collapsedRange = _collapsedTaggedRange();
+    if (collapsedRange == null) {
+      return null;
+    }
+    return TextRange(start: collapsedRange.start, end: collapsedRange.end);
+  }
+
+  NoteTextRangeTag? _collapsedTaggedRange() {
+    final selection = _controller.selection;
+    if (!selection.isValid || !selection.isCollapsed) {
+      return null;
+    }
+    final offset = selection.extentOffset
+        .clamp(0, _controller.text.length)
+        .toInt();
+    for (final tag in _block.rangeTags) {
+      final range = tag.clampToTextLength(_controller.text.length);
+      if (!range.isValid) {
+        continue;
+      }
+      if (offset >= range.start && offset <= range.end) {
+        return range;
+      }
+    }
+    return null;
   }
 
   bool _selectionHasTag() {
-    final selection = _controller.selection;
-    if (!selection.isValid || selection.isCollapsed) {
+    final targetRange = _selectionTargetRange();
+    if (targetRange == null) {
       return false;
     }
-    final start = selection.start < selection.end ? selection.start : selection.end;
-    final end = selection.start < selection.end ? selection.end : selection.start;
     return _block.rangeTags.any(
-      (tag) => tag.start < end && tag.end > start,
+      (tag) => tag.start < targetRange.end && tag.end > targetRange.start,
     );
   }
 
   void _deleteSelectedTag() {
-    final selection = _controller.selection;
-    if (!selection.isValid || selection.isCollapsed) {
+    final targetRange = _selectionTargetRange();
+    if (targetRange == null) {
       return;
     }
-    final start = selection.start < selection.end ? selection.start : selection.end;
-    final end = selection.start < selection.end ? selection.end : selection.start;
     setState(() {
       final rangeTags = _block.rangeTags
-          .where((tag) => !(tag.start < end && tag.end > start))
+          .where(
+            (tag) =>
+                !(tag.start < targetRange.end && tag.end > targetRange.start),
+          )
           .toList(growable: false);
       _setControllerRangeTags(rangeTags);
       _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
@@ -201,16 +254,15 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   void _deleteSingleSelectedTag(NoteKnowledgeTag tag) {
-    final selection = _controller.selection;
-    if (!selection.isValid || selection.isCollapsed) {
+    final targetRange = _selectionTargetRange();
+    if (targetRange == null) {
       return;
     }
-    final start = selection.start < selection.end ? selection.start : selection.end;
-    final end = selection.start < selection.end ? selection.end : selection.start;
     setState(() {
       final rangeTags = <NoteTextRangeTag>[];
       for (final rangeTag in _block.rangeTags) {
-        if (rangeTag.start >= end || rangeTag.end <= start) {
+        if (rangeTag.start >= targetRange.end ||
+            rangeTag.end <= targetRange.start) {
           rangeTags.add(rangeTag);
           continue;
         }
@@ -241,18 +293,19 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     if (_block.rangeTags.isEmpty) {
       return;
     }
-    final ranges = [
-      for (final range in _block.rangeTags)
-        range.clampToTextLength(_controller.text.length),
-    ].where((range) => range.isValid).toList()
-      ..sort((a, b) => a.start.compareTo(b.start));
+    final ranges =
+        [
+            for (final range in _block.rangeTags)
+              range.clampToTextLength(_controller.text.length),
+          ].where((range) => range.isValid).toList()
+          ..sort((a, b) => a.start.compareTo(b.start));
     if (ranges.isEmpty) {
       return;
     }
     final currentOffset = _controller.selection.isValid
         ? (_controller.selection.baseOffset < _controller.selection.extentOffset
-            ? _controller.selection.baseOffset
-            : _controller.selection.extentOffset)
+              ? _controller.selection.baseOffset
+              : _controller.selection.extentOffset)
         : -1;
     NoteTextRangeTag target;
     if (direction >= 0) {
@@ -266,25 +319,29 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         orElse: () => ranges.last,
       );
     }
-    _controller.selection = TextSelection(baseOffset: target.start, extentOffset: target.end);
+    _controller.selection = TextSelection(
+      baseOffset: target.start,
+      extentOffset: target.end,
+    );
     _focusNode.requestFocus();
     _handleControllerChanged();
   }
 
   List<NoteKnowledgeTag> _selectionTags() {
-    final selection = _controller.selection;
-    if (!selection.isValid || selection.isCollapsed) {
+    final targetRange = _selectionTargetRange();
+    if (targetRange == null) {
       return const [];
     }
-    final start = selection.start < selection.end ? selection.start : selection.end;
-    final end = selection.start < selection.end ? selection.end : selection.start;
     final tags = <NoteKnowledgeTag>[];
     for (final rangeTag in _block.rangeTags) {
-      if (rangeTag.start >= end || rangeTag.end <= start) {
+      if (rangeTag.start >= targetRange.end ||
+          rangeTag.end <= targetRange.start) {
         continue;
       }
       for (final tag in rangeTag.resolvedTags) {
-        if (!tags.any((current) => current.type == tag.type && current.label == tag.label)) {
+        if (!tags.any(
+          (current) => current.type == tag.type && current.label == tag.label,
+        )) {
           tags.add(tag);
         }
       }
@@ -349,7 +406,9 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       key: const ValueKey('note-text-chunk-editor'),
       appBar: NoteChunkEditorHeader(
         title: _block.title,
-        fallbackTitle: _block.type == NoteBlockType.heading ? 'Címsor' : 'Szöveg',
+        fallbackTitle: _block.type == NoteBlockType.heading
+            ? 'Címsor'
+            : 'Szöveg',
         onTitleChanged: _emitTitle,
         onTagChunk: () => unawaited(_tagChunk()),
         onTagSelection: () => unawaited(_tagSelection()),
@@ -417,9 +476,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 label: 'Kijelölt szöveg',
                 pillPrefix: 'note-text-selection-rail-pill',
                 bottomRowExpanded: _railBottomExpanded,
-                onToggleBottomRow: () => setState(
-                  () => _railBottomExpanded = !_railBottomExpanded,
-                ),
+                onToggleBottomRow: () =>
+                    setState(() => _railBottomExpanded = !_railBottomExpanded),
                 onDeleteTag: _deleteSingleSelectedTag,
                 actions: [
                   IconButton(
@@ -431,19 +489,25 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                   IconButton(
                     key: const ValueKey('note-text-selection-rail-clear-tags'),
                     tooltip: 'Minden tag törlése',
-                    onPressed: _selectionCanDeleteTag ? _deleteSelectedTag : null,
+                    onPressed: _selectionCanDeleteTag
+                        ? _deleteSelectedTag
+                        : null,
                     icon: const Icon(Icons.delete_outline, size: 20),
                   ),
                   IconButton(
                     key: const ValueKey('note-text-selection-rail-prev'),
                     tooltip: 'Előző tag',
-                    onPressed: _block.rangeTags.isEmpty ? null : () => _focusTaggedRange(-1),
+                    onPressed: _block.rangeTags.isEmpty
+                        ? null
+                        : () => _focusTaggedRange(-1),
                     icon: const Icon(Icons.chevron_left, size: 20),
                   ),
                   IconButton(
                     key: const ValueKey('note-text-selection-rail-next'),
                     tooltip: 'Következő tag',
-                    onPressed: _block.rangeTags.isEmpty ? null : () => _focusTaggedRange(1),
+                    onPressed: _block.rangeTags.isEmpty
+                        ? null
+                        : () => _focusTaggedRange(1),
                     icon: const Icon(Icons.chevron_right, size: 20),
                   ),
                 ],
@@ -538,8 +602,8 @@ class _TaggedTextEditingController extends TextEditingController {
   _TaggedTextEditingController({
     required String text,
     required List<NoteTextRangeTag> rangeTags,
-  })  : _rangeTags = rangeTags,
-        super(text: text);
+  }) : _rangeTags = rangeTags,
+       super(text: text);
 
   List<NoteTextRangeTag> _rangeTags;
 
@@ -555,11 +619,12 @@ class _TaggedTextEditingController extends TextEditingController {
     required bool withComposing,
   }) {
     final textValue = text;
-    final validTags = _rangeTags
-        .map((tag) => tag.clampToTextLength(textValue.length))
-        .where((tag) => tag.isValid)
-        .toList()
-      ..sort((a, b) => a.start.compareTo(b.start));
+    final validTags =
+        _rangeTags
+            .map((tag) => tag.clampToTextLength(textValue.length))
+            .where((tag) => tag.isValid)
+            .toList()
+          ..sort((a, b) => a.start.compareTo(b.start));
     if (validTags.isEmpty) {
       return TextSpan(style: style, text: textValue);
     }
@@ -572,15 +637,17 @@ class _TaggedTextEditingController extends TextEditingController {
       if (rangeTag.start > cursor) {
         spans.add(TextSpan(text: textValue.substring(cursor, rangeTag.start)));
       }
-      spans.add(TextSpan(
-        text: textValue.substring(rangeTag.start, rangeTag.end),
-        style: TextStyle(
-          backgroundColor: Color(
-            rangeTag.resolvedTags.first.resolvedColorValue,
-          ).withValues(alpha: 0.22),
-          fontWeight: FontWeight.w600,
+      spans.add(
+        TextSpan(
+          text: textValue.substring(rangeTag.start, rangeTag.end),
+          style: TextStyle(
+            backgroundColor: Color(
+              rangeTag.resolvedTags.first.resolvedColorValue,
+            ).withValues(alpha: 0.22),
+            fontWeight: FontWeight.w600,
+          ),
         ),
-      ));
+      );
       cursor = rangeTag.end;
     }
     if (cursor < textValue.length) {

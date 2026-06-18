@@ -162,6 +162,12 @@ void main() {
         find.byKey(const ValueKey('note-selection-action-rail')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(
+          const ValueKey('note-selection-action-rail-bottom-borderless'),
+        ),
+        findsOneWidget,
+      );
       final card = tester.widget<DecoratedBox>(
         find.byKey(const ValueKey('note-list-item-card-item-1')),
       );
@@ -246,6 +252,13 @@ void main() {
       find.byKey(ValueKey('note-list-item-${latest!.listItems.last.id}')),
       findsOneWidget,
     );
+    final newItemEditor = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byKey(ValueKey('note-list-item-${latest!.listItems.last.id}')),
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(newItemEditor.focusNode.hasFocus, isTrue);
   });
 
   testWidgets(

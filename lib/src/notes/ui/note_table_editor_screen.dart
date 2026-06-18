@@ -2107,6 +2107,7 @@ class _CellField extends StatefulWidget {
 class _CellFieldState extends State<_CellField> {
   int? _activePointer;
   Offset? _pointerStart;
+  bool _dragExceededSlop = false;
   bool _horizontalDrag = false;
 
   void _handlePointerDown(PointerDownEvent event) {
@@ -2115,6 +2116,7 @@ class _CellFieldState extends State<_CellField> {
     }
     _activePointer = event.pointer;
     _pointerStart = event.localPosition;
+    _dragExceededSlop = false;
     _horizontalDrag = false;
   }
 
@@ -2127,8 +2129,11 @@ class _CellFieldState extends State<_CellField> {
       return;
     }
     final totalDelta = event.localPosition - start;
+    if (!_dragExceededSlop && totalDelta.distance > kTouchSlop) {
+      _dragExceededSlop = true;
+    }
     if (!_horizontalDrag &&
-        totalDelta.distance > kTouchSlop &&
+        _dragExceededSlop &&
         totalDelta.dx.abs() > totalDelta.dy.abs()) {
       _horizontalDrag = true;
     }
@@ -2141,11 +2146,23 @@ class _CellFieldState extends State<_CellField> {
     if (_activePointer != event.pointer) {
       return;
     }
-    if (!_horizontalDrag) {
+    if (!_dragExceededSlop) {
       widget.onTap();
     }
+    _resetPointer();
+  }
+
+  void _handlePointerCancel(PointerEvent event) {
+    if (_activePointer != event.pointer) {
+      return;
+    }
+    _resetPointer();
+  }
+
+  void _resetPointer() {
     _activePointer = null;
     _pointerStart = null;
+    _dragExceededSlop = false;
     _horizontalDrag = false;
   }
 
@@ -2156,7 +2173,7 @@ class _CellFieldState extends State<_CellField> {
       onPointerDown: _handlePointerDown,
       onPointerMove: _handlePointerMove,
       onPointerUp: _handlePointerEnd,
-      onPointerCancel: _handlePointerEnd,
+      onPointerCancel: _handlePointerCancel,
       child: Container(
         key: ValueKey(
           'note-table-cell-container-${widget.row}-${widget.column}',

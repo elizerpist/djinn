@@ -28,6 +28,7 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
   late NoteBlock _block;
   late List<NoteListItem> _items;
   late final TextEditingController _titleController;
+  final Map<String, FocusNode> _itemFocusNodes = <String, FocusNode>{};
   String? _selectedItemId;
   bool _railBottomExpanded = true;
 
@@ -47,8 +48,28 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
 
   @override
   void dispose() {
+    for (final focusNode in _itemFocusNodes.values) {
+      focusNode.dispose();
+    }
     _titleController.dispose();
     super.dispose();
+  }
+
+  FocusNode _focusNodeForItem(String itemId) {
+    return _itemFocusNodes.putIfAbsent(itemId, FocusNode.new);
+  }
+
+  void _disposeItemFocusNode(String itemId) {
+    _itemFocusNodes.remove(itemId)?.dispose();
+  }
+
+  void _requestItemFocus(String itemId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _itemFocusNodes[itemId]?.requestFocus();
+    });
   }
 
   void _emit() {
@@ -199,10 +220,13 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
   }
 
   void _addItem() {
-    setState(
-      () => _items = [..._items, NoteListItem(id: _nextItemId(), text: '')],
-    );
+    final newItem = NoteListItem(id: _nextItemId(), text: '');
+    setState(() {
+      _items = [..._items, newItem];
+      _selectedItemId = newItem.id;
+    });
     _emit();
+    _requestItemFocus(newItem.id);
   }
 
   void _insertItemAfter(NoteListItem item) {
@@ -219,6 +243,7 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
       _selectedItemId = newItem.id;
     });
     _emit();
+    _requestItemFocus(newItem.id);
   }
 
   void _deleteItem(NoteListItem item) {
@@ -228,11 +253,13 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
       );
       return;
     }
-    setState(
-      () => _items = _items
-          .where((candidate) => candidate.id != item.id)
-          .toList(),
-    );
+    setState(() {
+      _items = _items.where((candidate) => candidate.id != item.id).toList();
+      if (_selectedItemId == item.id) {
+        _selectedItemId = null;
+      }
+    });
+    _disposeItemFocusNode(item.id);
     _emit();
   }
 
@@ -358,6 +385,7 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
                   selected: _selectedItemId == item.id,
                   layoutMode: _block.listLayoutMode,
                   hierarchyMarker: markers[item.id],
+                  focusNode: _focusNodeForItem(item.id),
                   onSelect: () => setState(() => _selectedItemId = item.id),
                   onChanged: _replaceItem,
                   onTag: () => unawaited(_tagItem(item)),
@@ -420,6 +448,7 @@ class _ListItemRow extends StatelessWidget {
     required this.selected,
     required this.layoutMode,
     required this.hierarchyMarker,
+    required this.focusNode,
     required this.onSelect,
     required this.onChanged,
     required this.onTag,
@@ -440,6 +469,7 @@ class _ListItemRow extends StatelessWidget {
   final bool selected;
   final NoteListLayoutMode layoutMode;
   final String? hierarchyMarker;
+  final FocusNode focusNode;
   final VoidCallback onSelect;
   final ValueChanged<NoteListItem> onChanged;
   final VoidCallback onTag;
@@ -522,6 +552,7 @@ class _ListItemRow extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 6),
                         child: TextFormField(
                           key: ValueKey('note-list-item-${item.id}'),
+                          focusNode: focusNode,
                           initialValue: item.text,
                           autofocus: selected && item.text.isEmpty,
                           minLines: 1,
@@ -551,6 +582,7 @@ class _ListItemRow extends StatelessWidget {
                     onToggleBottomRow: onToggleRailBottom,
                     onDeleteTag: onDeleteTag,
                     contentPadding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+                    showBottomBorder: false,
                     actions: [
                       IconButton(
                         key: ValueKey('note-list-rail-tag-${item.id}'),
