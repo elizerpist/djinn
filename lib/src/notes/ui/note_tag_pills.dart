@@ -119,6 +119,19 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
     super.dispose();
   }
 
+  void _scrollRailRow(ScrollController controller, double delta) {
+    if (!controller.hasClients) {
+      return;
+    }
+    final position = controller.position;
+    final nextOffset = (position.pixels - delta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    if (nextOffset != position.pixels) {
+      controller.jumpTo(nextOffset);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final backgroundColor = widget.transparentBackground
@@ -171,38 +184,43 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
                 children: [
                   Padding(
                     padding: widget.contentPadding,
-                    child: SingleChildScrollView(
-                      key: const ValueKey('note-selection-action-row'),
-                      controller: _actionController,
-                      primary: false,
-                      physics: const ClampingScrollPhysics(),
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (widget.onToggleBottomRow != null)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: IconButton(
-                                key: const ValueKey('note-selection-rail-toggle-tags'),
-                                tooltip: widget.bottomRowExpanded
-                                    ? 'Tagek bezárása'
-                                    : 'Tagek megnyitása',
-                                onPressed: widget.onToggleBottomRow,
-                                icon: Icon(
-                                  widget.bottomRowExpanded
-                                      ? Icons.keyboard_arrow_up
-                                      : Icons.keyboard_arrow_down,
-                                  size: 20,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onHorizontalDragUpdate: (details) =>
+                          _scrollRailRow(_actionController, details.delta.dx),
+                      child: SingleChildScrollView(
+                        key: const ValueKey('note-selection-action-row'),
+                        controller: _actionController,
+                        primary: false,
+                        physics: const NeverScrollableScrollPhysics(),
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (widget.onToggleBottomRow != null)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: IconButton(
+                                  key: const ValueKey('note-selection-rail-toggle-tags'),
+                                  tooltip: widget.bottomRowExpanded
+                                      ? 'Tagek bezárása'
+                                      : 'Tagek megnyitása',
+                                  onPressed: widget.onToggleBottomRow,
+                                  icon: Icon(
+                                    widget.bottomRowExpanded
+                                        ? Icons.keyboard_arrow_up
+                                        : Icons.keyboard_arrow_down,
+                                    size: 20,
+                                  ),
                                 ),
                               ),
-                            ),
-                          for (final action in widget.actions)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: action,
-                            ),
-                        ],
+                            for (final action in widget.actions)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: action,
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -210,34 +228,39 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
                     const Divider(height: 1, color: Color(0xFFE5E7EB)),
                     Padding(
                       padding: widget.contentPadding,
-                      child: SingleChildScrollView(
-                        key: const ValueKey('note-selection-pill-row'),
-                        controller: _pillController,
-                        primary: false,
-                        physics: const ClampingScrollPhysics(),
-                        scrollDirection: Axis.horizontal,
-                        child: widget.tags.isEmpty
-                            ? Text(
-                                'Nincs tag',
-                                key: const ValueKey('note-selection-empty-tags'),
-                                style: const TextStyle(
-                                  color: Color(0xFF6B7280),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onHorizontalDragUpdate: (details) =>
+                            _scrollRailRow(_pillController, details.delta.dx),
+                        child: SingleChildScrollView(
+                          key: const ValueKey('note-selection-pill-row'),
+                          controller: _pillController,
+                          primary: false,
+                          physics: const NeverScrollableScrollPhysics(),
+                          scrollDirection: Axis.horizontal,
+                          child: widget.tags.isEmpty
+                              ? Text(
+                                  'Nincs tag',
+                                  key: const ValueKey('note-selection-empty-tags'),
+                                  style: const TextStyle(
+                                    color: Color(0xFF6B7280),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                )
+                              : NoteTagPills(
+                                  tags: widget.tags,
+                                  prefix: widget.pillPrefix,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 9,
+                                    vertical: 5,
+                                  ),
+                                  onDeleted: widget.onDeleteTag,
+                                  scrollable: false,
                                 ),
-                              )
-                            : NoteTagPills(
-                                tags: widget.tags,
-                                prefix: widget.pillPrefix,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 9,
-                                  vertical: 5,
-                                ),
-                                onDeleted: widget.onDeleteTag,
-                                scrollable: false,
-                              ),
                         ),
                       ),
+                    ),
                   ],
                 ],
               ),

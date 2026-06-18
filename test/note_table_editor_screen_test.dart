@@ -851,6 +851,16 @@ void main() {
       tester.getTopLeft(find.byKey(const ValueKey('note-table-column-head-0'))).dx,
       headerLeftBefore,
     );
+
+    await tester.dragFrom(
+      railViewportStart + const Offset(80, 74),
+      const Offset(-160, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('note-table-column-head-0'))).dx,
+      headerLeftBefore,
+    );
   });
 
   testWidgets('table horizontal overscroll uses the same stretch rubber band wrapper', (tester) async {
