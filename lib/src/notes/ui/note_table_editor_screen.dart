@@ -652,7 +652,7 @@ class _TableGrid extends StatelessWidget {
           SizedBox(
             key: ValueKey('note-table-column-head-expansion-${selectedColumn!.columnIndex}'),
             width: tableWidth,
-            child: railForSelection(selectedColumn!),
+            child: railForSelection(selectedColumn),
           ),
       ],
     );
@@ -698,7 +698,7 @@ class _TableGrid extends StatelessWidget {
           SizedBox(
             key: ValueKey('note-table-cell-expansion-$row-${selectedRow!.columnIndex}'),
             width: tableWidth,
-            child: railForSelection(selectedRow!),
+            child: railForSelection(selectedRow),
           ),
       ],
     );
