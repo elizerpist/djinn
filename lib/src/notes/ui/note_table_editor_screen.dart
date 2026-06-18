@@ -2019,53 +2019,56 @@ class _CellField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Listener(
       behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => onTap(),
-      onTap: onTap,
-      child: Container(
-        key: ValueKey('note-table-cell-container-$row-$column'),
-        width: width,
-        constraints: BoxConstraints(minHeight: height),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-        ),
-        child: Stack(
-          children: [
-            if (selected)
-              Positioned.fill(
-                child: DecoratedBox(
-                  key: ValueKey('note-table-selected-cell-$row-$column'),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: const Color(0xFF2563EB),
-                      width: 2,
+      onPointerDown: (_) => onTap(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          key: ValueKey('note-table-cell-container-$row-$column'),
+          width: width,
+          constraints: BoxConstraints(minHeight: height),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Stack(
+            children: [
+              if (selected)
+                Positioned.fill(
+                  child: DecoratedBox(
+                    key: ValueKey('note-table-selected-cell-$row-$column'),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: const Color(0xFF2563EB),
+                        width: 2,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: KeyedSubtree(
-                key: highlightColor == null
-                    ? null
-                    : ValueKey('note-table-cell-highlight-$row-$column'),
-                child: TextFormField(
-                  key: ValueKey('note-table-cell-$row-$column'),
-                  controller: controller,
-                  minLines: 1,
-                  maxLines: null,
-                  keyboardType: TextInputType.multiline,
-                  decoration: const InputDecoration(border: InputBorder.none),
-                  style: TextStyle(backgroundColor: highlightColor),
-                  onTap: onTap,
-                  onChanged: onChanged,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: KeyedSubtree(
+                  key: highlightColor == null
+                      ? null
+                      : ValueKey('note-table-cell-highlight-$row-$column'),
+                  child: TextFormField(
+                    key: ValueKey('note-table-cell-$row-$column'),
+                    controller: controller,
+                    minLines: 1,
+                    maxLines: null,
+                    keyboardType: TextInputType.multiline,
+                    decoration: const InputDecoration(border: InputBorder.none),
+                    style: TextStyle(backgroundColor: highlightColor),
+                    onTap: onTap,
+                    onChanged: onChanged,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
