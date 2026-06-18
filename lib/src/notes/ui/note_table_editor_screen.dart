@@ -1034,7 +1034,6 @@ class _HeadCell extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.icon,
-    this.height = 52,
   });
 
   final double width;
@@ -1042,7 +1041,6 @@ class _HeadCell extends StatelessWidget {
   final bool selected;
   final VoidCallback? onTap;
   final IconData? icon;
-  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -1051,7 +1049,7 @@ class _HeadCell extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: width,
-        height: height,
+        height: 52,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? colorScheme.primary.withValues(alpha: 0.12) : const Color(0xFFF8FAFC),
