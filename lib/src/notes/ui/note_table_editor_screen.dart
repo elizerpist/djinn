@@ -1438,17 +1438,20 @@ class _TableGridState extends State<_TableGrid> {
         return SizedBox(
           key: key,
           width: width,
-          child: Transform.translate(
-            offset: Offset(left, 0),
-            child: SizedBox(
-              width: scaledViewportWidth,
-              child: Listener(
-                key: const ValueKey('note-table-rail-pointer-shield'),
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: (_) => _setRailPointerActive(true),
-                onPointerUp: (_) => _setRailPointerActive(false),
-                onPointerCancel: (_) => _setRailPointerActive(false),
-                child: child,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Transform.translate(
+              offset: Offset(left, 0),
+              child: SizedBox(
+                width: scaledViewportWidth,
+                child: Listener(
+                  key: const ValueKey('note-table-rail-pointer-shield'),
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: (_) => _setRailPointerActive(true),
+                  onPointerUp: (_) => _setRailPointerActive(false),
+                  onPointerCancel: (_) => _setRailPointerActive(false),
+                  child: child,
+                ),
               ),
             ),
           ),
