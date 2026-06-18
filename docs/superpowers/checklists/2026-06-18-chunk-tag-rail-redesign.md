@@ -71,10 +71,10 @@ Date: 2026-06-18
 ## Verification
 
 - [x] Add failing tests before production UI changes.
-- [ ] Verify RED/GREEN on GitHub Actions because local Flutter/Dart is not runnable on Termux ARM64.
+- [x] Verify RED/GREEN on GitHub Actions because local Flutter/Dart is not runnable on Termux ARM64.
 - [x] Implement minimal production changes.
-- [ ] Verify GREEN on GitHub Actions.
-- [ ] Commit and push final branch.
+- [x] Verify GREEN on GitHub Actions.
+- [x] Commit and push final branch.
 
 ## Follow-Up
 
