@@ -1577,40 +1577,41 @@ class _TableGridState extends State<_TableGrid> {
     final showCellRail = selectedRow?.kind == _TableSelectionKind.cell && selectedRow?.rowIndex == row;
     final tableWidth = _tableWidth;
     final rowHeight = _rowHeight(row);
+    final rowContent = Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RowHeadSlot(
+          row: row,
+          width: _TableGrid._rowHeadWidth,
+          height: rowHeight,
+          selected: widget.selection?.isRow(row) == true,
+          onSelect: widget.onSelect,
+          onMoveRow: widget.onMoveRow,
+          onResizeRowStart: _startRowResize,
+          onResizeRowUpdate: _updateRowResize,
+          onResizeRowEnd: _commitRowResize,
+        ),
+        for (var column = 0; column < widget.columnCount; column += 1)
+          _CellSlot(
+            row: row,
+            column: column,
+            width: _columnWidth(column),
+            height: rowHeight,
+            controller: widget.cellControllerFor(row, column),
+            selected: widget.selection?.isCell(row, column) == true,
+            highlightColor: widget.highlightColorForCell(row, column),
+            onTap: () => widget.onSelect(_TableSelection.cell(row, column)),
+            onChanged: (value) => widget.onCellChanged(row, column, value),
+          ),
+      ],
+    );
+    final rowBody = _usesIntrinsicHeightForRow(row)
+        ? IntrinsicHeight(child: rowContent)
+        : SizedBox(height: rowHeight, child: rowContent);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          height: rowHeight,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _RowHeadSlot(
-                row: row,
-                width: _TableGrid._rowHeadWidth,
-                height: rowHeight,
-                selected: widget.selection?.isRow(row) == true,
-                onSelect: widget.onSelect,
-                onMoveRow: widget.onMoveRow,
-                onResizeRowStart: _startRowResize,
-                onResizeRowUpdate: _updateRowResize,
-                onResizeRowEnd: _commitRowResize,
-              ),
-              for (var column = 0; column < widget.columnCount; column += 1)
-                _CellSlot(
-                  row: row,
-                  column: column,
-                  width: _columnWidth(column),
-                  height: rowHeight,
-                  controller: widget.cellControllerFor(row, column),
-                  selected: widget.selection?.isCell(row, column) == true,
-                  highlightColor: widget.highlightColorForCell(row, column),
-                  onTap: () => widget.onSelect(_TableSelection.cell(row, column)),
-                  onChanged: (value) => widget.onCellChanged(row, column, value),
-                ),
-            ],
-          ),
-        ),
+        rowBody,
         if (showRowRail)
           _stickyRail(
             key: ValueKey('note-table-row-head-expansion-$row'),
@@ -1625,6 +1626,26 @@ class _TableGridState extends State<_TableGrid> {
           ),
       ],
     );
+  }
+
+  bool _usesIntrinsicHeightForRow(int row) {
+    if (_resizingColumn != null || _resizingRow != null) {
+      return false;
+    }
+    for (var column = 0; column < widget.columnCount; column += 1) {
+      final text = widget.cellControllerFor(row, column).text;
+      if (text.contains('\n')) {
+        return true;
+      }
+      final availableWidth = (_columnWidth(column) - 20).clamp(
+        1,
+        double.infinity,
+      );
+      if (text.length * 7 > availableWidth) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 
