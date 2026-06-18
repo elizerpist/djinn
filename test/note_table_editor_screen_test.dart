@@ -411,6 +411,82 @@ void main() {
 
     expect(latest!.scopedTags, isEmpty);
   });
+
+  testWidgets('table editor inserts rows from the rail and remaps cell tags below insertion', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Enyhe', 'Célzott'],
+              ['Súlyos', 'High flow'],
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'cell-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableCell,
+                  rowIndex: 2,
+                  columnIndex: 0,
+                ),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'súlyos',
+                    colorValue: 0xFFDC2626,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-table-row-head-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-table-rail-insert-row-below-0')));
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.rows, hasLength(4));
+    expect(latest!.scopedTags.single.target.rowIndex, 3);
+    expect(latest!.scopedTags.single.target.columnIndex, 0);
+    expect(find.byKey(const ValueKey('note-table-cell-highlight-3-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-cell-highlight-2-0')), findsNothing);
+  });
+
+  testWidgets('table row heads stretch to match wrapped cell height', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot'],
+              [
+                'Nagyon hosszú cellaszöveg, ami több sorba törik a fix táblázatcellában, '
+                    'ezért a sor fejének ugyanakkora magasnak kell lennie.',
+              ],
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    final rowHeadHeight = tester.getSize(find.byKey(const ValueKey('note-table-row-head-1'))).height;
+    final cellHeight = tester.getSize(find.byKey(const ValueKey('note-table-cell-container-1-0'))).height;
+
+    expect(rowHeadHeight, cellHeight);
+    expect(cellHeight, greaterThan(52));
+  });
 }
 
 void _ignoreBlockChange(NoteBlock block) {}

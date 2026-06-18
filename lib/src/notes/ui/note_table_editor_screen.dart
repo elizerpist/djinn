@@ -141,16 +141,28 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   }
 
   void _addRow() {
-    setState(() {
-      _normalizeRows();
-      _rows.add(List.filled(_columnCount, ''));
-      _resetCellControllers();
-    });
-    _emitChange();
+    _insertRow(_rows.length);
   }
 
   void _addColumn() {
     _insertColumn(_columnCount);
+  }
+
+  void _insertRow(int index) {
+    setState(() {
+      _normalizeRows();
+      final target = index.clamp(0, _rows.length).toInt();
+      _block = _block.copyWith(
+        scopedTags: _remapScopedTags(
+          (tagTarget) => _remapTargetForRowInsert(tagTarget, target),
+        ),
+        clearIndex: true,
+      );
+      _rows.insert(target, List.filled(_columnCount, ''));
+      _selection = null;
+      _resetCellControllers();
+    });
+    _emitChange();
   }
 
   void _insertColumn(int index) {
@@ -492,16 +504,27 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     if (selection.kind == _TableSelectionKind.row ||
         selection.kind == _TableSelectionKind.cell) {
       final row = selection.rowIndex!;
-      actions.add(
-        IconButton(
-          key: ValueKey('note-table-rail-delete-row-$row'),
-          tooltip: 'Sor törlése',
-          onPressed: () => _deleteRow(row),
-          constraints: compactConstraints,
-          padding: compactPadding,
-          icon: const Icon(Icons.delete_outline, size: 18),
-        ),
-      );
+      actions
+        ..add(
+          IconButton(
+            key: ValueKey('note-table-rail-insert-row-below-$row'),
+            tooltip: 'Sor beszúrása alá',
+            onPressed: () => _insertRow(row + 1),
+            constraints: compactConstraints,
+            padding: compactPadding,
+            icon: const Icon(Icons.add, size: 18),
+          ),
+        )
+        ..add(
+          IconButton(
+            key: ValueKey('note-table-rail-delete-row-$row'),
+            tooltip: 'Sor törlése',
+            onPressed: () => _deleteRow(row),
+            constraints: compactConstraints,
+            padding: compactPadding,
+            icon: const Icon(Icons.delete_outline, size: 18),
+          ),
+        );
     }
     if (selection.kind == _TableSelectionKind.column ||
         selection.kind == _TableSelectionKind.cell) {
@@ -565,6 +588,21 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     if (target.kind == NoteTagTargetKind.tableColumn ||
         target.kind == NoteTagTargetKind.tableCell) {
       return target.copyWith(columnIndex: columnIndex + 1);
+    }
+    return target;
+  }
+
+  NoteTagTarget? _remapTargetForRowInsert(
+    NoteTagTarget target,
+    int insertIndex,
+  ) {
+    final rowIndex = target.rowIndex;
+    if (rowIndex == null || rowIndex < insertIndex) {
+      return target;
+    }
+    if (target.kind == NoteTagTargetKind.tableRow ||
+        target.kind == NoteTagTargetKind.tableCell) {
+      return target.copyWith(rowIndex: rowIndex + 1);
     }
     return target;
   }
@@ -851,24 +889,27 @@ class _TableGridState extends State<_TableGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            _HeadCell(
-              key: const ValueKey('note-table-corner-head'),
-              width: _TableGrid._rowHeadWidth,
-              label: '',
-              icon: Icons.grid_on_outlined,
-              selected: false,
-              onTap: null,
-            ),
-            for (var column = 0; column < widget.columnCount; column += 1)
-              _ColumnHeadSlot(
-                column: column,
-                width: _TableGrid._cellWidth,
-                selected: widget.selection?.isColumn(column) == true,
-                onSelect: widget.onSelect,
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _HeadCell(
+                key: const ValueKey('note-table-corner-head'),
+                width: _TableGrid._rowHeadWidth,
+                label: '',
+                icon: Icons.grid_on_outlined,
+                selected: false,
+                onTap: null,
               ),
-          ],
+              for (var column = 0; column < widget.columnCount; column += 1)
+                _ColumnHeadSlot(
+                  column: column,
+                  width: _TableGrid._cellWidth,
+                  selected: widget.selection?.isColumn(column) == true,
+                  onSelect: widget.onSelect,
+                ),
+            ],
+          ),
         ),
         if (showColumnRail)
           _stickyRail(
@@ -888,27 +929,30 @@ class _TableGridState extends State<_TableGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            _RowHeadSlot(
-              row: row,
-              width: _TableGrid._rowHeadWidth,
-              selected: widget.selection?.isRow(row) == true,
-              onSelect: widget.onSelect,
-            ),
-            for (var column = 0; column < widget.columnCount; column += 1)
-              _CellSlot(
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _RowHeadSlot(
                 row: row,
-                column: column,
-                width: _TableGrid._cellWidth,
-                height: _TableGrid._cellHeight,
-                controller: widget.cellControllerFor(row, column),
-                selected: widget.selection?.isCell(row, column) == true,
-                highlightColor: widget.highlightColorForCell(row, column),
-                onTap: () => widget.onSelect(_TableSelection.cell(row, column)),
-                onChanged: (value) => widget.onCellChanged(row, column, value),
+                width: _TableGrid._rowHeadWidth,
+                selected: widget.selection?.isRow(row) == true,
+                onSelect: widget.onSelect,
               ),
-          ],
+              for (var column = 0; column < widget.columnCount; column += 1)
+                _CellSlot(
+                  row: row,
+                  column: column,
+                  width: _TableGrid._cellWidth,
+                  height: _TableGrid._cellHeight,
+                  controller: widget.cellControllerFor(row, column),
+                  selected: widget.selection?.isCell(row, column) == true,
+                  highlightColor: widget.highlightColorForCell(row, column),
+                  onTap: () => widget.onSelect(_TableSelection.cell(row, column)),
+                  onChanged: (value) => widget.onCellChanged(row, column, value),
+                ),
+            ],
+          ),
         ),
         if (showRowRail)
           _stickyRail(
@@ -1049,7 +1093,7 @@ class _HeadCell extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: width,
-        height: 52,
+        constraints: const BoxConstraints(minHeight: 52),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? colorScheme.primary.withValues(alpha: 0.12) : const Color(0xFFF8FAFC),
@@ -1101,6 +1145,7 @@ class _CellField extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
+        key: ValueKey('note-table-cell-container-$row-$column'),
         width: width,
         constraints: BoxConstraints(minHeight: height),
         decoration: BoxDecoration(
