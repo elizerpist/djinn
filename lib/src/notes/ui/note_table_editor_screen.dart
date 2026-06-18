@@ -1145,6 +1145,7 @@ class _TableGridState extends State<_TableGrid> {
 
   static const double _minimumScale = 0.55;
   static const double _maximumScale = 1;
+  static const double _horizontalPadding = _TableGrid._horizontalPadding;
 
   @override
   void initState() {
