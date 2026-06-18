@@ -61,9 +61,8 @@ class NoteTagPills extends StatelessWidget {
                     ),
                   ],
                 ],
-              ),
-            ),
-          ),
+                      ),
+                    ),
       ],
     );
     if (!scrollable) {
