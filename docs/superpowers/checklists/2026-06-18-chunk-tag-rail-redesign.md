@@ -47,9 +47,9 @@ Date: 2026-06-18
 - [x] Tapping a cell selects the cell and keeps editing available.
 - [x] Remove tiny cell selector icons.
 - [x] Remove visible top-cell plus/x controls from the grid.
-- [x] Column selection expands the column head downward.
-- [x] Row selection expands the row downward.
-- [x] Cell selection expands the whole row downward.
+- [x] Column selection expands below the header row at full table width.
+- [x] Row selection expands below the row at full table width.
+- [x] Cell selection expands below the whole row at full table width.
 - [x] Table rail design matches the list rail design.
 - [x] Row tags highlight every cell in the row.
 - [x] Column tags highlight every cell in the column.

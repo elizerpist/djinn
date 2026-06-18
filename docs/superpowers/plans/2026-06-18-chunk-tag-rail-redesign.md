@@ -264,7 +264,7 @@ Replace `DataTable` with a `Column` containing a header row and body rows made o
 - row head keys: `note-table-row-head-$row`
 - cell field keys remain `note-table-cell-$row-$column`
 
-Use horizontal and vertical `SingleChildScrollView` like today. Selecting a column inserts `note-table-column-head-expansion-$column` as the selected column head's own appendix and pushes all table cells downward. Selecting a row inserts `note-table-row-head-expansion-$row` under the row head. Selecting a cell inserts `note-table-cell-expansion-$row-$column` under that cell and expands the row downward.
+Use horizontal and vertical `SingleChildScrollView` like today. Selecting a column inserts `note-table-column-head-expansion-$column` below the header row at full table width and pushes all table cells downward. Selecting a row inserts `note-table-row-head-expansion-$row` below that row at full table width. Selecting a cell inserts `note-table-cell-expansion-$row-$column` below that row at full table width.
 
 - [ ] **Step 5: Implement rail actions**
 

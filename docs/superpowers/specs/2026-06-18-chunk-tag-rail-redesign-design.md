@@ -102,9 +102,9 @@ The table editor moves away from the broken split DataTable layout. It should be
 
 Expansion behavior is physical, not floating:
 
-- selecting a column expands the column head downward and pushes all table cells down;
-- selecting a row expands that row downward;
-- selecting a cell also expands the whole row downward;
+- selecting a column expands below the header row, full table width, and pushes all table cells down;
+- selecting a row expands below that row, full table width;
+- selecting a cell also expands below the whole row, full table width;
 - the rail design must match the list rail design;
 - header add-row and add-column actions remain and must work.
 

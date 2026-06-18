@@ -623,53 +623,82 @@ class _TableGrid extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    return Row(
+    final selectedColumn = selection;
+    final showColumnRail = selectedColumn?.kind == _TableSelectionKind.column;
+    final tableWidth = _rowHeadWidth + columnCount * _cellWidth;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _HeadCell(
-          key: const ValueKey('note-table-corner-head'),
-          width: _rowHeadWidth,
-          label: '',
-          icon: Icons.grid_on_outlined,
-          selected: false,
-          onTap: null,
+        Row(
+          children: [
+            _HeadCell(
+              key: const ValueKey('note-table-corner-head'),
+              width: _rowHeadWidth,
+              label: '',
+              icon: Icons.grid_on_outlined,
+              selected: false,
+              onTap: null,
+            ),
+            for (var column = 0; column < columnCount; column += 1)
+              _ColumnHeadSlot(
+                column: column,
+                width: _cellWidth,
+                selected: selection?.isColumn(column) == true,
+                onSelect: onSelect,
+              ),
+          ],
         ),
-        for (var column = 0; column < columnCount; column += 1)
-          _ColumnHeadSlot(
-            column: column,
-            width: _cellWidth,
-            selected: selection?.isColumn(column) == true,
-            selection: selection,
-            onSelect: onSelect,
-            railForSelection: railForSelection,
+        if (showColumnRail)
+          SizedBox(
+            key: ValueKey('note-table-column-head-expansion-${selectedColumn!.columnIndex}'),
+            width: tableWidth,
+            child: railForSelection(selectedColumn!),
           ),
       ],
     );
   }
 
   Widget _buildRow(BuildContext context, int row) {
-    return Row(
+    final selectedRow = selection;
+    final showRowRail = selectedRow?.kind == _TableSelectionKind.row && selectedRow?.rowIndex == row;
+    final showCellRail = selectedRow?.kind == _TableSelectionKind.cell && selectedRow?.rowIndex == row;
+    final tableWidth = _rowHeadWidth + columnCount * _cellWidth;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _RowHeadSlot(
-          row: row,
-          width: _rowHeadWidth,
-          selected: selection?.isRow(row) == true,
-          selection: selection,
-          onSelect: onSelect,
-          railForSelection: railForSelection,
+        Row(
+          children: [
+            _RowHeadSlot(
+              row: row,
+              width: _rowHeadWidth,
+              selected: selection?.isRow(row) == true,
+              onSelect: onSelect,
+            ),
+            for (var column = 0; column < columnCount; column += 1)
+              _CellSlot(
+                row: row,
+                column: column,
+                width: _cellWidth,
+                height: _cellHeight,
+                controller: cellControllerFor(row, column),
+                selected: selection?.isCell(row, column) == true,
+                highlightColor: highlightColorForCell(row, column),
+                onTap: () => onSelect(_TableSelection.cell(row, column)),
+                onChanged: (value) => onCellChanged(row, column, value),
+              ),
+          ],
         ),
-        for (var column = 0; column < columnCount; column += 1)
-          _CellSlot(
-            row: row,
-            column: column,
-            width: _cellWidth,
-            height: _cellHeight,
-            controller: cellControllerFor(row, column),
-            selected: selection?.isCell(row, column) == true,
-            highlightColor: highlightColorForCell(row, column),
-            onTap: () => onSelect(_TableSelection.cell(row, column)),
-            onChanged: (value) => onCellChanged(row, column, value),
-            selection: selection,
-            railForSelection: railForSelection,
+        if (showRowRail)
+          SizedBox(
+            key: ValueKey('note-table-row-head-expansion-$row'),
+            width: tableWidth,
+            child: railForSelection(selectedRow!),
+          )
+        else if (showCellRail)
+          SizedBox(
+            key: ValueKey('note-table-cell-expansion-$row-${selectedRow!.columnIndex}'),
+            width: tableWidth,
+            child: railForSelection(selectedRow!),
           ),
       ],
     );
@@ -681,41 +710,24 @@ class _ColumnHeadSlot extends StatelessWidget {
     required this.column,
     required this.width,
     required this.selected,
-    required this.selection,
     required this.onSelect,
-    required this.railForSelection,
   });
 
   final int column;
   final double width;
   final bool selected;
-  final _TableSelection? selection;
   final ValueChanged<_TableSelection> onSelect;
-  final Widget Function(_TableSelection selection) railForSelection;
 
   @override
   Widget build(BuildContext context) {
-    final selectedColumn =
-        selection?.kind == _TableSelectionKind.column && selection?.columnIndex == column;
     return SizedBox(
       width: width,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _HeadCell(
-            key: ValueKey('note-table-column-head-$column'),
-            width: width,
-            label: 'Oszlop ${column + 1}',
-            selected: selected,
-            onTap: () => onSelect(_TableSelection.column(column)),
-          ),
-          if (selectedColumn)
-            SizedBox(
-              key: ValueKey('note-table-column-head-expansion-$column'),
-              width: width,
-              child: railForSelection(selection!),
-            ),
-        ],
+      child: _HeadCell(
+        key: ValueKey('note-table-column-head-$column'),
+        width: width,
+        label: 'Oszlop ${column + 1}',
+        selected: selected,
+        onTap: () => onSelect(_TableSelection.column(column)),
       ),
     );
   }
@@ -726,42 +738,25 @@ class _RowHeadSlot extends StatelessWidget {
     required this.row,
     required this.width,
     required this.selected,
-    required this.selection,
     required this.onSelect,
-    required this.railForSelection,
   });
 
   final int row;
   final double width;
   final bool selected;
-  final _TableSelection? selection;
   final ValueChanged<_TableSelection> onSelect;
-  final Widget Function(_TableSelection selection) railForSelection;
 
   @override
   Widget build(BuildContext context) {
-    final selectedRow =
-        selection?.kind == _TableSelectionKind.row && selection?.rowIndex == row;
     return SizedBox(
       width: width,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _HeadCell(
-            key: ValueKey('note-table-row-head-$row'),
-            width: width,
-            label: '${row + 1}',
-            icon: Icons.table_rows_outlined,
-            selected: selected,
-            onTap: () => onSelect(_TableSelection.row(row)),
-          ),
-          if (selectedRow)
-            SizedBox(
-              key: ValueKey('note-table-row-head-expansion-$row'),
-              width: width,
-              child: railForSelection(selection!),
-            ),
-        ],
+      child: _HeadCell(
+        key: ValueKey('note-table-row-head-$row'),
+        width: width,
+        label: '${row + 1}',
+        icon: Icons.table_rows_outlined,
+        selected: selected,
+        onTap: () => onSelect(_TableSelection.row(row)),
       ),
     );
   }
@@ -778,8 +773,6 @@ class _CellSlot extends StatelessWidget {
     required this.highlightColor,
     required this.onTap,
     required this.onChanged,
-    required this.selection,
-    required this.railForSelection,
   });
 
   final int row;
@@ -791,35 +784,21 @@ class _CellSlot extends StatelessWidget {
   final Color? highlightColor;
   final VoidCallback onTap;
   final ValueChanged<String> onChanged;
-  final _TableSelection? selection;
-  final Widget Function(_TableSelection selection) railForSelection;
 
   @override
   Widget build(BuildContext context) {
-    final selectedCell = selection?.isCell(row, column) == true;
     return SizedBox(
       width: width,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _CellField(
-            row: row,
-            column: column,
-            width: width,
-            height: height,
-            controller: controller,
-            selected: selected,
-            highlightColor: highlightColor,
-            onTap: onTap,
-            onChanged: onChanged,
-          ),
-          if (selectedCell)
-            SizedBox(
-              key: ValueKey('note-table-cell-expansion-$row-$column'),
-              width: width,
-              child: railForSelection(selection!),
-            ),
-        ],
+      child: _CellField(
+        row: row,
+        column: column,
+        width: width,
+        height: height,
+        controller: controller,
+        selected: selected,
+        highlightColor: highlightColor,
+        onTap: onTap,
+        onChanged: onChanged,
       ),
     );
   }

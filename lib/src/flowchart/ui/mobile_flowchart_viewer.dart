@@ -941,7 +941,7 @@ void _fitCanvasToViewport(
   final dy = (viewportSize.height - contentSize.height * scale) / 2;
   controller.value = Matrix4.identity()
     ..translateByDouble(dx, dy, 0, 1)
-    ..scaleByDouble(scale, scale, 1, 1);
+    ..scaleByDouble(scale, scale, scale, 1);
 }
 
 class _CanvasNodePreview extends StatelessWidget {
