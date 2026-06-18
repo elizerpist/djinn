@@ -1291,10 +1291,9 @@ class _TableGridState extends State<_TableGrid> {
                 onPointerUp: (_) => _setRailPointerActive(false),
                 onPointerCancel: (_) => _setRailPointerActive(false),
                 child: ClipRect(
-                  child: OverflowBox(
+                  child: Align(
                     alignment: Alignment.topLeft,
-                    minWidth: width,
-                    maxWidth: width,
+                    widthFactor: width <= 0 ? 1 : scaledViewportWidth / width,
                     child: SizedBox(
                       width: width,
                       child: child,

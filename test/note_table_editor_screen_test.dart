@@ -839,8 +839,11 @@ void main() {
     final headerLeftBefore = tester.getTopLeft(
       find.byKey(const ValueKey('note-table-column-head-0')),
     ).dx;
-    await tester.drag(
-      find.byKey(const ValueKey('note-selection-action-row')),
+    final railViewportStart = tester.getTopLeft(
+      find.byKey(const ValueKey('note-table-rail-pointer-shield')),
+    );
+    await tester.dragFrom(
+      railViewportStart + const Offset(80, 24),
       const Offset(-160, 0),
     );
     await tester.pumpAndSettle();
