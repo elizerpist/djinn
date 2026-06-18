@@ -70,10 +70,7 @@ class NoteTagPills extends StatelessWidget {
     if (!scrollable) {
       return row;
     }
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: row,
-    );
+    return SingleChildScrollView(scrollDirection: Axis.horizontal, child: row);
   }
 }
 
@@ -84,13 +81,18 @@ class NoteSelectionActionRail extends StatefulWidget {
     required this.actions,
     this.label,
     this.pillPrefix = 'note-selection-rail-tag-pill',
-    this.contentPadding = const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    this.contentPadding = const EdgeInsets.symmetric(
+      horizontal: 10,
+      vertical: 8,
+    ),
     this.bottomRowExpanded = true,
     this.onToggleBottomRow,
     this.onDeleteTag,
     this.roundedCard = false,
     this.transparentBackground = false,
     this.showBorder = true,
+    this.stickyViewportLeft,
+    this.stickyViewportWidth,
     this.debugLogPrefix = 'SelectionRail',
   });
 
@@ -105,10 +107,13 @@ class NoteSelectionActionRail extends StatefulWidget {
   final bool roundedCard;
   final bool transparentBackground;
   final bool showBorder;
+  final double? stickyViewportLeft;
+  final double? stickyViewportWidth;
   final String debugLogPrefix;
 
   @override
-  State<NoteSelectionActionRail> createState() => _NoteSelectionActionRailState();
+  State<NoteSelectionActionRail> createState() =>
+      _NoteSelectionActionRailState();
 }
 
 class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
@@ -129,21 +134,22 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
     String rowName,
   ) {
     if (!controller.hasClients) {
-      DebugConsole.log(
-        '[${widget.debugLogPrefix}] row scroll row=$rowName '
-        'skipped=no_clients delta=${delta.toStringAsFixed(1)}',
-      );
       return;
     }
     final position = controller.position;
     final nextOffset = (position.pixels - delta)
         .clamp(position.minScrollExtent, position.maxScrollExtent)
         .toDouble();
+    if (nextOffset == position.pixels) {
+      return;
+    }
     final lastLoggedOffset = _lastLoggedRowOffsets[rowName];
-    final atBoundary = nextOffset == position.minScrollExtent ||
+    final atBoundary =
+        nextOffset == position.minScrollExtent ||
         nextOffset == position.maxScrollExtent;
-    final shouldLog = lastLoggedOffset == null ||
-        (nextOffset - lastLoggedOffset).abs() >= 96 ||
+    final shouldLog =
+        lastLoggedOffset == null ||
+        (nextOffset - lastLoggedOffset).abs() >= 160 ||
         (atBoundary && nextOffset != lastLoggedOffset);
     if (shouldLog) {
       _lastLoggedRowOffsets[rowName] = nextOffset;
@@ -151,13 +157,35 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
         '[${widget.debugLogPrefix}] row scroll row=$rowName '
         'from=${position.pixels.toStringAsFixed(1)} '
         'to=${nextOffset.toStringAsFixed(1)} '
-        'max=${position.maxScrollExtent.toStringAsFixed(1)} '
-        'moved=${nextOffset != position.pixels}',
+        'max=${position.maxScrollExtent.toStringAsFixed(1)}',
       );
     }
-    if (nextOffset != position.pixels) {
-      controller.jumpTo(nextOffset);
+    controller.jumpTo(nextOffset);
+  }
+
+  Widget _stickyViewport({required double height, required Widget child}) {
+    final left = widget.stickyViewportLeft;
+    final width = widget.stickyViewportWidth;
+    if (left == null || width == null) {
+      return child;
     }
+    return SizedBox(
+      height: height,
+      child: ClipRect(
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            Positioned(
+              top: 0,
+              bottom: 0,
+              left: left,
+              width: width,
+              child: child,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -210,82 +238,98 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Padding(
-                    padding: widget.contentPadding,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onHorizontalDragUpdate: (details) =>
-                          _scrollRailRow(_actionController, details.delta.dx, 'actions'),
-                      child: SingleChildScrollView(
-                        key: const ValueKey('note-selection-action-row'),
-                        controller: _actionController,
-                        primary: false,
-                        physics: const NeverScrollableScrollPhysics(),
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (widget.onToggleBottomRow != null)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 4),
-                                child: IconButton(
-                                  key: const ValueKey('note-selection-rail-toggle-tags'),
-                                  tooltip: widget.bottomRowExpanded
-                                      ? 'Tagek bezárása'
-                                      : 'Tagek megnyitása',
-                                  onPressed: widget.onToggleBottomRow,
-                                  icon: Icon(
-                                    widget.bottomRowExpanded
-                                        ? Icons.keyboard_arrow_up
-                                        : Icons.keyboard_arrow_down,
-                                    size: 20,
+                  _stickyViewport(
+                    height: 64,
+                    child: Padding(
+                      padding: widget.contentPadding,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onHorizontalDragUpdate: (details) => _scrollRailRow(
+                          _actionController,
+                          details.delta.dx,
+                          'actions',
+                        ),
+                        child: SingleChildScrollView(
+                          key: const ValueKey('note-selection-action-row'),
+                          controller: _actionController,
+                          primary: false,
+                          physics: const NeverScrollableScrollPhysics(),
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (widget.onToggleBottomRow != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: IconButton(
+                                    key: const ValueKey(
+                                      'note-selection-rail-toggle-tags',
+                                    ),
+                                    tooltip: widget.bottomRowExpanded
+                                        ? 'Tagek bezárása'
+                                        : 'Tagek megnyitása',
+                                    onPressed: widget.onToggleBottomRow,
+                                    icon: Icon(
+                                      widget.bottomRowExpanded
+                                          ? Icons.keyboard_arrow_up
+                                          : Icons.keyboard_arrow_down,
+                                      size: 20,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            for (final action in widget.actions)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 4),
-                                child: action,
-                              ),
-                          ],
+                              for (final action in widget.actions)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: action,
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                   if (widget.bottomRowExpanded) ...[
                     const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                    Padding(
-                      padding: widget.contentPadding,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onHorizontalDragUpdate: (details) =>
-                            _scrollRailRow(_pillController, details.delta.dx, 'tags'),
-                        child: SingleChildScrollView(
-                          key: const ValueKey('note-selection-pill-row'),
-                          controller: _pillController,
-                          primary: false,
-                          physics: const NeverScrollableScrollPhysics(),
-                          scrollDirection: Axis.horizontal,
-                          child: widget.tags.isEmpty
-                              ? Text(
-                                  'Nincs tag',
-                                  key: const ValueKey('note-selection-empty-tags'),
-                                  style: const TextStyle(
-                                    color: Color(0xFF6B7280),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
+                    _stickyViewport(
+                      height: 48,
+                      child: Padding(
+                        padding: widget.contentPadding,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onHorizontalDragUpdate: (details) => _scrollRailRow(
+                            _pillController,
+                            details.delta.dx,
+                            'tags',
+                          ),
+                          child: SingleChildScrollView(
+                            key: const ValueKey('note-selection-pill-row'),
+                            controller: _pillController,
+                            primary: false,
+                            physics: const NeverScrollableScrollPhysics(),
+                            scrollDirection: Axis.horizontal,
+                            child: widget.tags.isEmpty
+                                ? Text(
+                                    'Nincs tag',
+                                    key: const ValueKey(
+                                      'note-selection-empty-tags',
+                                    ),
+                                    style: const TextStyle(
+                                      color: Color(0xFF6B7280),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  )
+                                : NoteTagPills(
+                                    tags: widget.tags,
+                                    prefix: widget.pillPrefix,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 9,
+                                      vertical: 5,
+                                    ),
+                                    onDeleted: widget.onDeleteTag,
+                                    scrollable: false,
                                   ),
-                                )
-                              : NoteTagPills(
-                                  tags: widget.tags,
-                                  prefix: widget.pillPrefix,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 9,
-                                    vertical: 5,
-                                  ),
-                                  onDeleted: widget.onDeleteTag,
-                                  scrollable: false,
-                                ),
+                          ),
                         ),
                       ),
                     ),

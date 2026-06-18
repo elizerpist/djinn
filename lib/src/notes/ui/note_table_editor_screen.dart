@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
@@ -30,7 +32,8 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   late List<double> _columnWidths;
   late List<double> _rowHeights;
   late final TextEditingController _titleController;
-  final Map<String, TextEditingController> _cellControllers = <String, TextEditingController>{};
+  final Map<String, TextEditingController> _cellControllers =
+      <String, TextEditingController>{};
   _TableSelection? _selection;
   bool _railBottomExpanded = true;
   bool _railRoundedCard = false;
@@ -106,10 +109,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       _columnWidths = _columnWidths.take(width).toList(growable: true);
     }
     for (var i = 0; i < _columnWidths.length; i += 1) {
-      _columnWidths[i] = _columnWidths[i].clamp(
-        _minimumColumnWidth,
-        _maximumColumnWidth,
-      ).toDouble();
+      _columnWidths[i] = _columnWidths[i]
+          .clamp(_minimumColumnWidth, _maximumColumnWidth)
+          .toDouble();
     }
 
     while (_rowHeights.length < _rows.length) {
@@ -119,10 +121,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       _rowHeights = _rowHeights.take(_rows.length).toList(growable: true);
     }
     for (var i = 0; i < _rowHeights.length; i += 1) {
-      _rowHeights[i] = _rowHeights[i].clamp(
-        _minimumRowHeight,
-        _maximumRowHeight,
-      ).toDouble();
+      _rowHeights[i] = _rowHeights[i]
+          .clamp(_minimumRowHeight, _maximumRowHeight)
+          .toDouble();
     }
   }
 
@@ -140,7 +141,10 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   TextEditingController _controllerFor(int row, int column) {
     final key = _cellControllerKey(row, column);
     final value = _rows[row][column];
-    final controller = _cellControllers.putIfAbsent(key, () => TextEditingController(text: value));
+    final controller = _cellControllers.putIfAbsent(
+      key,
+      () => TextEditingController(text: value),
+    );
     if (controller.text != value && !controller.selection.isValid) {
       controller.text = value;
     }
@@ -178,11 +182,15 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   }
 
   bool get _hasCustomColumnWidths {
-    return _columnWidths.any((width) => (width - _defaultColumnWidth).abs() > 0.1);
+    return _columnWidths.any(
+      (width) => (width - _defaultColumnWidth).abs() > 0.1,
+    );
   }
 
   bool get _hasCustomRowHeights {
-    return _rowHeights.any((height) => (height - _defaultRowHeight).abs() > 0.1);
+    return _rowHeights.any(
+      (height) => (height - _defaultRowHeight).abs() > 0.1,
+    );
   }
 
   void _emitChange() {
@@ -192,7 +200,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
 
   void _emitTitle(String value) {
     _titleController.text = value;
-    setState(() => _block = _block.copyWith(title: value.trim(), clearIndex: true));
+    setState(
+      () => _block = _block.copyWith(title: value.trim(), clearIndex: true),
+    );
     widget.onChanged?.call(_block);
   }
 
@@ -266,7 +276,10 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
 
   void _deleteColumn(int index) {
     _normalizeRows();
-    if (_rows.isEmpty || _columnCount == 1 || index < 0 || index >= _columnCount) {
+    if (_rows.isEmpty ||
+        _columnCount == 1 ||
+        index < 0 ||
+        index >= _columnCount) {
       return;
     }
     setState(() {
@@ -349,10 +362,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       return;
     }
     var changed = false;
-    final nextWidth = width.clamp(
-      _minimumColumnWidth,
-      _maximumColumnWidth,
-    ).toDouble();
+    final nextWidth = width
+        .clamp(_minimumColumnWidth, _maximumColumnWidth)
+        .toDouble();
     setState(() {
       _normalizeLayout();
       if ((nextWidth - _columnWidths[column]).abs() > 0.1) {
@@ -374,10 +386,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       return;
     }
     var changed = false;
-    final nextHeight = height.clamp(
-      _minimumRowHeight,
-      _maximumRowHeight,
-    ).toDouble();
+    final nextHeight = height
+        .clamp(_minimumRowHeight, _maximumRowHeight)
+        .toDouble();
     setState(() {
       _normalizeLayout();
       if ((nextHeight - _rowHeights[row]).abs() > 0.1) {
@@ -429,7 +440,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     if (selection == null) {
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Válassz ki sort, oszlopot vagy cellát a tageléshez')),
+        const SnackBar(
+          content: Text('Válassz ki sort, oszlopot vagy cellát a tageléshez'),
+        ),
       );
       return;
     }
@@ -448,7 +461,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       _block = _block.copyWith(
         scopedTags: [
           for (final assignment in _block.scopedTags)
-            if (!affectedTargets.any((target) => _sameTarget(assignment.target, target)))
+            if (!affectedTargets.any(
+              (target) => _sameTarget(assignment.target, target),
+            ))
               assignment,
           if (tags.isNotEmpty)
             for (final target in targetsToWrite)
@@ -474,7 +489,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       _block = _block.copyWith(
         scopedTags: [
           for (final assignment in _block.scopedTags)
-            if (!affectedTargets.any((target) => _sameTarget(assignment.target, target)))
+            if (!affectedTargets.any(
+              (target) => _sameTarget(assignment.target, target),
+            ))
               assignment,
         ],
         clearIndex: true,
@@ -493,7 +510,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       _block = _block.copyWith(
         scopedTags: [
           for (final assignment in _block.scopedTags)
-            if (!affectedTargets.any((target) => _sameTarget(assignment.target, target)))
+            if (!affectedTargets.any(
+              (target) => _sameTarget(assignment.target, target),
+            ))
               assignment
             else
               ..._assignmentWithoutTag(assignment, tag),
@@ -518,16 +537,20 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
         }
       }
     }
+
     final affectedTargets = _affectedTargetsForSelection(selection);
     for (final assignment in _block.scopedTags) {
-      if (affectedTargets.any((target) => _sameTarget(assignment.target, target))) {
+      if (affectedTargets.any(
+        (target) => _sameTarget(assignment.target, target),
+      )) {
         addAll(assignment.tags);
       }
     }
     return tags;
   }
 
-  bool _hasTags(_TableSelection selection) => _tagsForSelection(selection).isNotEmpty;
+  bool _hasTags(_TableSelection selection) =>
+      _tagsForSelection(selection).isNotEmpty;
 
   void _select(_TableSelection selection) {
     if (_sameSelection(_selection, selection)) {
@@ -543,7 +566,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       switch (target.kind) {
         case NoteTagTargetKind.tableCell:
           if (target.rowIndex != null && target.columnIndex != null) {
-            selections.add(_TableSelection.cell(target.rowIndex!, target.columnIndex!));
+            selections.add(
+              _TableSelection.cell(target.rowIndex!, target.columnIndex!),
+            );
           }
           break;
         case NoteTagTargetKind.tableRow:
@@ -570,14 +595,20 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       }
       return (a.columnIndex ?? -1).compareTo(b.columnIndex ?? -1);
     });
-    final currentIndex = selections.indexWhere((candidate) => _sameSelection(candidate, _selection));
+    final currentIndex = selections.indexWhere(
+      (candidate) => _sameSelection(candidate, _selection),
+    );
     final nextIndex = direction >= 0
         ? (currentIndex < 0 ? 0 : (currentIndex + 1) % selections.length)
         : (currentIndex <= 0 ? selections.length - 1 : currentIndex - 1);
     setState(() => _selection = selections[nextIndex]);
   }
 
-  Widget _railForSelection(_TableSelection selection) {
+  Widget _railForSelection(
+    _TableSelection selection, {
+    double? stickyViewportLeft,
+    double? stickyViewportWidth,
+  }) {
     return NoteSelectionActionRail(
       tags: _tagsForSelection(selection),
       label: switch (selection.kind) {
@@ -587,13 +618,14 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
           'Cella ${selection.rowIndex! + 1}:${selection.columnIndex! + 1}',
       },
       bottomRowExpanded: _railBottomExpanded,
-      onToggleBottomRow: () => setState(
-        () => _railBottomExpanded = !_railBottomExpanded,
-      ),
+      onToggleBottomRow: () =>
+          setState(() => _railBottomExpanded = !_railBottomExpanded),
       onDeleteTag: _deleteSingleSelectedTag,
       roundedCard: _railRoundedCard,
       transparentBackground: _railTransparentBackground,
       showBorder: _railBorderVisible,
+      stickyViewportLeft: stickyViewportLeft,
+      stickyViewportWidth: stickyViewportWidth,
       debugLogPrefix: 'TableRail',
       actions: _railActions(selection),
     );
@@ -674,7 +706,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       IconButton(
         key: ValueKey('${_tagRailKey(selection)}-prev'),
         tooltip: 'Előző tag',
-        onPressed: _block.scopedTags.isEmpty ? null : () => _focusTaggedSelection(-1),
+        onPressed: _block.scopedTags.isEmpty
+            ? null
+            : () => _focusTaggedSelection(-1),
         constraints: compactConstraints,
         padding: compactPadding,
         icon: const Icon(Icons.chevron_left, size: 18),
@@ -682,7 +716,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       IconButton(
         key: ValueKey('${_tagRailKey(selection)}-next'),
         tooltip: 'Következő tag',
-        onPressed: _block.scopedTags.isEmpty ? null : () => _focusTaggedSelection(1),
+        onPressed: _block.scopedTags.isEmpty
+            ? null
+            : () => _focusTaggedSelection(1),
         constraints: compactConstraints,
         padding: compactPadding,
         icon: const Icon(Icons.chevron_right, size: 18),
@@ -697,7 +733,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       ),
       IconButton(
         key: const ValueKey('note-table-rail-toggle-transparent'),
-        tooltip: _railTransparentBackground ? 'Fehér rail háttér' : 'Átlátszó rail háttér',
+        tooltip: _railTransparentBackground
+            ? 'Fehér rail háttér'
+            : 'Átlátszó rail háttér',
         onPressed: () => setState(
           () => _railTransparentBackground = !_railTransparentBackground,
         ),
@@ -708,7 +746,8 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       IconButton(
         key: const ValueKey('note-table-rail-toggle-border'),
         tooltip: _railBorderVisible ? 'Rail border nélkül' : 'Rail borderrel',
-        onPressed: () => setState(() => _railBorderVisible = !_railBorderVisible),
+        onPressed: () =>
+            setState(() => _railBorderVisible = !_railBorderVisible),
         constraints: compactConstraints,
         padding: compactPadding,
         icon: const Icon(Icons.border_outer, size: 18),
@@ -719,7 +758,8 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
 
   String _tagRailKey(_TableSelection selection) {
     return switch (selection.kind) {
-      _TableSelectionKind.row => 'note-table-rail-tag-row-${selection.rowIndex}',
+      _TableSelectionKind.row =>
+        'note-table-rail-tag-row-${selection.rowIndex}',
       _TableSelectionKind.column =>
         'note-table-rail-tag-column-${selection.columnIndex}',
       _TableSelectionKind.cell =>
@@ -791,7 +831,10 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     return target;
   }
 
-  NoteTagTarget? _remapTargetForRowDelete(NoteTagTarget target, int deleteIndex) {
+  NoteTagTarget? _remapTargetForRowDelete(
+    NoteTagTarget target,
+    int deleteIndex,
+  ) {
     final rowIndex = target.rowIndex;
     if (rowIndex == null) {
       return target;
@@ -820,7 +863,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     }
     final rowIndex = target.rowIndex;
     final nextIndex = _remapMovedIndex(rowIndex, fromIndex, toIndex);
-    return nextIndex == rowIndex ? target : target.copyWith(rowIndex: nextIndex);
+    return nextIndex == rowIndex
+        ? target
+        : target.copyWith(rowIndex: nextIndex);
   }
 
   NoteTagTarget? _remapTargetForColumnMove(
@@ -869,7 +914,10 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     }
     return switch (selection.kind) {
       _TableSelectionKind.row => _TableSelection.row(nextRow),
-      _TableSelectionKind.cell => _TableSelection.cell(nextRow, selection.columnIndex!),
+      _TableSelectionKind.cell => _TableSelection.cell(
+        nextRow,
+        selection.columnIndex!,
+      ),
       _TableSelectionKind.column => selection,
     };
   }
@@ -882,13 +930,20 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     if (selection == null || selection.columnIndex == null) {
       return selection;
     }
-    final nextColumn = _remapMovedIndex(selection.columnIndex, fromIndex, toIndex);
+    final nextColumn = _remapMovedIndex(
+      selection.columnIndex,
+      fromIndex,
+      toIndex,
+    );
     if (nextColumn == null || nextColumn == selection.columnIndex) {
       return selection;
     }
     return switch (selection.kind) {
       _TableSelectionKind.column => _TableSelection.column(nextColumn),
-      _TableSelectionKind.cell => _TableSelection.cell(selection.rowIndex!, nextColumn),
+      _TableSelectionKind.cell => _TableSelection.cell(
+        selection.rowIndex!,
+        nextColumn,
+      ),
       _TableSelectionKind.row => selection,
     };
   }
@@ -927,21 +982,25 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       case _TableSelectionKind.row:
         final row = selection.rowIndex!;
         for (var column = 0; column < _columnCount; column += 1) {
-          targets.add(NoteTagTarget(
-            kind: NoteTagTargetKind.tableCell,
-            rowIndex: row,
-            columnIndex: column,
-          ));
+          targets.add(
+            NoteTagTarget(
+              kind: NoteTagTargetKind.tableCell,
+              rowIndex: row,
+              columnIndex: column,
+            ),
+          );
         }
         break;
       case _TableSelectionKind.column:
         final column = selection.columnIndex!;
         for (var row = 0; row < _rows.length; row += 1) {
-          targets.add(NoteTagTarget(
-            kind: NoteTagTargetKind.tableCell,
-            rowIndex: row,
-            columnIndex: column,
-          ));
+          targets.add(
+            NoteTagTarget(
+              kind: NoteTagTargetKind.tableCell,
+              rowIndex: row,
+              columnIndex: column,
+            ),
+          );
         }
         break;
       case _TableSelectionKind.cell:
@@ -1104,14 +1163,16 @@ class _TableTagLookup {
 
   final Map<String, List<NoteKnowledgeTag>> _cellTags =
       <String, List<NoteKnowledgeTag>>{};
-  final Map<int, List<NoteKnowledgeTag>> _rowTags = <int, List<NoteKnowledgeTag>>{};
+  final Map<int, List<NoteKnowledgeTag>> _rowTags =
+      <int, List<NoteKnowledgeTag>>{};
   final Map<int, List<NoteKnowledgeTag>> _columnTags =
       <int, List<NoteKnowledgeTag>>{};
 
   static String _cellKey(int row, int column) => '$row:$column';
 
   Color? highlightColorForCell(int row, int column) {
-    final tags = _cellTags[_cellKey(row, column)] ??
+    final tags =
+        _cellTags[_cellKey(row, column)] ??
         _rowTags[row] ??
         _columnTags[column] ??
         const <NoteKnowledgeTag>[];
@@ -1159,7 +1220,12 @@ class _TableGrid extends StatefulWidget {
   final void Function(int fromIndex, int toIndex) onMoveColumn;
   final void Function(int column, double width) onCommitColumnWidth;
   final void Function(int row, double height) onCommitRowHeight;
-  final Widget Function(_TableSelection selection) railForSelection;
+  final Widget Function(
+    _TableSelection selection, {
+    double? stickyViewportLeft,
+    double? stickyViewportWidth,
+  })
+  railForSelection;
 
   @override
   State<_TableGrid> createState() => _TableGridState();
@@ -1185,7 +1251,6 @@ class _TableGridState extends State<_TableGrid> {
   int _rowResizeFrameCount = 0;
   bool _columnResizeFrameScheduled = false;
   bool _rowResizeFrameScheduled = false;
-  bool _railPointerActive = false;
 
   static const double _minimumScale = 0.55;
   static const double _maximumScale = 1;
@@ -1221,7 +1286,9 @@ class _TableGridState extends State<_TableGrid> {
       _previewColumnWidths.add(_NoteTableEditorScreenState._defaultColumnWidth);
     }
     if (_previewColumnWidths.length > widget.columnCount) {
-      _previewColumnWidths = _previewColumnWidths.take(widget.columnCount).toList();
+      _previewColumnWidths = _previewColumnWidths
+          .take(widget.columnCount)
+          .toList();
     }
     while (_previewRowHeights.length < widget.rowCount) {
       _previewRowHeights.add(_NoteTableEditorScreenState._defaultRowHeight);
@@ -1248,7 +1315,7 @@ class _TableGridState extends State<_TableGrid> {
     DebugConsole.log(
       '[TableRail] canvas scroll offset=${offset.toStringAsFixed(1)} '
       'viewport=${_viewportWidth.toStringAsFixed(1)} scale=${_scale.toStringAsFixed(2)} '
-      'railLocalLeft=${railLocalLeft.toStringAsFixed(1)} railPointer=$_railPointerActive',
+      'railLocalLeft=${railLocalLeft.toStringAsFixed(1)}',
     );
   }
 
@@ -1270,9 +1337,9 @@ class _TableGridState extends State<_TableGrid> {
             axisDirection: AxisDirection.right,
             child: SingleChildScrollView(
               controller: _horizontalController,
-              physics: _railPointerActive
-                  ? const NeverScrollableScrollPhysics()
-                  : const ClampingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              physics: const ClampingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
               padding: const EdgeInsets.fromLTRB(
                 _horizontalPadding,
                 12,
@@ -1355,19 +1422,24 @@ class _TableGridState extends State<_TableGrid> {
     if (_activePointerPositions.length < 2) {
       return null;
     }
-    final positions = _activePointerPositions.values.take(2).toList(growable: false);
+    final positions = _activePointerPositions.values
+        .take(2)
+        .toList(growable: false);
     return (positions.first - positions.last).distance;
   }
 
-  void _setRailPointerActive(bool active) {
-    if (_railPointerActive == active) {
+  void _scrollFromCellDrag(double deltaDx) {
+    if (!_horizontalController.hasClients || deltaDx == 0) {
       return;
     }
-    DebugConsole.log(
-      '[TableRail] pointer active=$active '
-      'offset=${_horizontalController.hasClients ? _horizontalController.offset.toStringAsFixed(1) : '0.0'}',
-    );
-    setState(() => _railPointerActive = active);
+    final position = _horizontalController.position;
+    final nextOffset = (position.pixels - deltaDx)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    if (nextOffset == position.pixels) {
+      return;
+    }
+    _horizontalController.jumpTo(nextOffset);
   }
 
   double get _tableWidth {
@@ -1406,7 +1478,8 @@ class _TableGridState extends State<_TableGrid> {
     if (column < 0 || column >= widget.columnCount || delta == 0) {
       return;
     }
-    if (_pendingColumnResizeColumn != null && _pendingColumnResizeColumn != column) {
+    if (_pendingColumnResizeColumn != null &&
+        _pendingColumnResizeColumn != column) {
       _flushPendingColumnResize();
     }
     _pendingColumnResizeColumn = column;
@@ -1415,7 +1488,7 @@ class _TableGridState extends State<_TableGrid> {
       return;
     }
     _columnResizeFrameScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
       if (mounted) {
         _flushPendingColumnResize();
       }
@@ -1435,10 +1508,12 @@ class _TableGridState extends State<_TableGrid> {
       return;
     }
     final currentWidth = _columnWidth(column);
-    final nextWidth = (currentWidth + delta).clamp(
-      _NoteTableEditorScreenState._minimumColumnWidth,
-      _NoteTableEditorScreenState._maximumColumnWidth,
-    ).toDouble();
+    final nextWidth = (currentWidth + delta)
+        .clamp(
+          _NoteTableEditorScreenState._minimumColumnWidth,
+          _NoteTableEditorScreenState._maximumColumnWidth,
+        )
+        .toDouble();
     if ((nextWidth - currentWidth).abs() <= 0.1) {
       return;
     }
@@ -1488,7 +1563,7 @@ class _TableGridState extends State<_TableGrid> {
       return;
     }
     _rowResizeFrameScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
       if (mounted) {
         _flushPendingRowResize();
       }
@@ -1508,10 +1583,12 @@ class _TableGridState extends State<_TableGrid> {
       return;
     }
     final currentHeight = _rowHeight(row);
-    final nextHeight = (currentHeight + delta).clamp(
-      _NoteTableEditorScreenState._minimumRowHeight,
-      _NoteTableEditorScreenState._maximumRowHeight,
-    ).toDouble();
+    final nextHeight = (currentHeight + delta)
+        .clamp(
+          _NoteTableEditorScreenState._minimumRowHeight,
+          _NoteTableEditorScreenState._maximumRowHeight,
+        )
+        .toDouble();
     if ((nextHeight - currentHeight).abs() <= 0.1) {
       return;
     }
@@ -1538,7 +1615,7 @@ class _TableGridState extends State<_TableGrid> {
   Widget _stickyRail({
     required Key key,
     required double width,
-    required Widget child,
+    required _TableSelection selection,
   }) {
     return AnimatedBuilder(
       animation: _horizontalController,
@@ -1546,33 +1623,16 @@ class _TableGridState extends State<_TableGrid> {
         final viewportWidth = _viewportWidth <= 0 ? width : _viewportWidth;
         final scale = _scale <= 0 ? 1.0 : _scale;
         final left = _horizontalController.hasClients
-            ? ((_horizontalController.offset - _horizontalPadding) / scale)
-                .toDouble()
-            : -_horizontalPadding / scale;
+            ? (_horizontalController.offset / scale).clamp(0, width).toDouble()
+            : 0.0;
+        final visibleWidth = (viewportWidth / scale).clamp(0, width).toDouble();
         return SizedBox(
           key: key,
           width: width,
-          child: Align(
-            alignment: Alignment.topLeft,
-            child: Transform.translate(
-              offset: Offset(left, 0),
-              child: Transform.scale(
-                key: const ValueKey('note-table-rail-unscaled-transform'),
-                alignment: Alignment.topLeft,
-                scale: 1 / scale,
-                child: SizedBox(
-                  width: viewportWidth,
-                  child: Listener(
-                    key: const ValueKey('note-table-rail-pointer-shield'),
-                    behavior: HitTestBehavior.opaque,
-                    onPointerDown: (_) => _setRailPointerActive(true),
-                    onPointerUp: (_) => _setRailPointerActive(false),
-                    onPointerCancel: (_) => _setRailPointerActive(false),
-                    child: child,
-                  ),
-                ),
-              ),
-            ),
+          child: widget.railForSelection(
+            selection,
+            stickyViewportLeft: left,
+            stickyViewportWidth: visibleWidth,
           ),
         );
       },
@@ -1615,9 +1675,11 @@ class _TableGridState extends State<_TableGrid> {
         ),
         if (showColumnRail)
           _stickyRail(
-            key: ValueKey('note-table-column-head-expansion-${selectedColumn!.columnIndex}'),
+            key: ValueKey(
+              'note-table-column-head-expansion-${selectedColumn!.columnIndex}',
+            ),
             width: tableWidth,
-            child: widget.railForSelection(selectedColumn),
+            selection: selectedColumn,
           ),
       ],
     );
@@ -1625,8 +1687,12 @@ class _TableGridState extends State<_TableGrid> {
 
   Widget _buildRow(BuildContext context, int row) {
     final selectedRow = widget.selection;
-    final showRowRail = selectedRow?.kind == _TableSelectionKind.row && selectedRow?.rowIndex == row;
-    final showCellRail = selectedRow?.kind == _TableSelectionKind.cell && selectedRow?.rowIndex == row;
+    final showRowRail =
+        selectedRow?.kind == _TableSelectionKind.row &&
+        selectedRow?.rowIndex == row;
+    final showCellRail =
+        selectedRow?.kind == _TableSelectionKind.cell &&
+        selectedRow?.rowIndex == row;
     final tableWidth = _tableWidth;
     final rowHeight = _rowHeight(row);
     final rowContent = Row(
@@ -1653,6 +1719,7 @@ class _TableGridState extends State<_TableGrid> {
             selected: widget.selection?.isCell(row, column) == true,
             highlightColor: widget.highlightColorForCell(row, column),
             onTap: () => widget.onSelect(_TableSelection.cell(row, column)),
+            onHorizontalDragUpdate: _scrollFromCellDrag,
             onChanged: (value) => widget.onCellChanged(row, column, value),
           ),
       ],
@@ -1668,13 +1735,15 @@ class _TableGridState extends State<_TableGrid> {
           _stickyRail(
             key: ValueKey('note-table-row-head-expansion-$row'),
             width: tableWidth,
-            child: widget.railForSelection(selectedRow!),
+            selection: selectedRow!,
           )
         else if (showCellRail)
           _stickyRail(
-            key: ValueKey('note-table-cell-expansion-$row-${selectedRow!.columnIndex}'),
+            key: ValueKey(
+              'note-table-cell-expansion-$row-${selectedRow!.columnIndex}',
+            ),
             width: tableWidth,
-            child: widget.railForSelection(selectedRow),
+            selection: selectedRow,
           ),
       ],
     );
@@ -1987,6 +2056,7 @@ class _CellSlot extends StatelessWidget {
     required this.selected,
     required this.highlightColor,
     required this.onTap,
+    required this.onHorizontalDragUpdate,
     required this.onChanged,
   });
 
@@ -1998,6 +2068,7 @@ class _CellSlot extends StatelessWidget {
   final bool selected;
   final Color? highlightColor;
   final VoidCallback onTap;
+  final ValueChanged<double> onHorizontalDragUpdate;
   final ValueChanged<String> onChanged;
 
   @override
@@ -2013,6 +2084,7 @@ class _CellSlot extends StatelessWidget {
         selected: selected,
         highlightColor: highlightColor,
         onTap: onTap,
+        onHorizontalDragUpdate: onHorizontalDragUpdate,
         onChanged: onChanged,
       ),
     );
@@ -2045,9 +2117,13 @@ class _HeadCell extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 52),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? colorScheme.primary.withValues(alpha: 0.12) : const Color(0xFFF8FAFC),
+          color: selected
+              ? colorScheme.primary.withValues(alpha: 0.12)
+              : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: selected ? colorScheme.primary : const Color(0xFFE5E7EB)),
+          border: Border.all(
+            color: selected ? colorScheme.primary : const Color(0xFFE5E7EB),
+          ),
         ),
         child: icon != null && label.isEmpty
             ? Icon(icon, size: 18, color: const Color(0xFF475569))
@@ -2055,7 +2131,9 @@ class _HeadCell extends StatelessWidget {
                 label,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: selected ? colorScheme.primary : const Color(0xFF475569),
+                  color: selected
+                      ? colorScheme.primary
+                      : const Color(0xFF475569),
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),
@@ -2065,7 +2143,7 @@ class _HeadCell extends StatelessWidget {
   }
 }
 
-class _CellField extends StatelessWidget {
+class _CellField extends StatefulWidget {
   const _CellField({
     required this.row,
     required this.column,
@@ -2075,6 +2153,7 @@ class _CellField extends StatelessWidget {
     required this.selected,
     required this.highlightColor,
     required this.onTap,
+    required this.onHorizontalDragUpdate,
     required this.onChanged,
   });
 
@@ -2086,60 +2165,117 @@ class _CellField extends StatelessWidget {
   final bool selected;
   final Color? highlightColor;
   final VoidCallback onTap;
+  final ValueChanged<double> onHorizontalDragUpdate;
   final ValueChanged<String> onChanged;
+
+  @override
+  State<_CellField> createState() => _CellFieldState();
+}
+
+class _CellFieldState extends State<_CellField> {
+  int? _activePointer;
+  Offset? _pointerStart;
+  bool _horizontalDrag = false;
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (_activePointer != null) {
+      return;
+    }
+    _activePointer = event.pointer;
+    _pointerStart = event.localPosition;
+    _horizontalDrag = false;
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (_activePointer != event.pointer) {
+      return;
+    }
+    final start = _pointerStart;
+    if (start == null) {
+      return;
+    }
+    final totalDelta = event.localPosition - start;
+    if (!_horizontalDrag &&
+        totalDelta.distance > kTouchSlop &&
+        totalDelta.dx.abs() > totalDelta.dy.abs()) {
+      _horizontalDrag = true;
+    }
+    if (_horizontalDrag) {
+      widget.onHorizontalDragUpdate(event.delta.dx);
+    }
+  }
+
+  void _handlePointerEnd(PointerEvent event) {
+    if (_activePointer != event.pointer) {
+      return;
+    }
+    if (!_horizontalDrag) {
+      widget.onTap();
+    }
+    _activePointer = null;
+    _pointerStart = null;
+    _horizontalDrag = false;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Listener(
       behavior: HitTestBehavior.opaque,
-      onPointerDown: (_) => onTap(),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          key: ValueKey('note-table-cell-container-$row-$column'),
-          width: width,
-          constraints: BoxConstraints(minHeight: height),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
-          ),
-          child: Stack(
-            children: [
-              if (selected)
-                Positioned.fill(
-                  child: DecoratedBox(
-                    key: ValueKey('note-table-selected-cell-$row-$column'),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: const Color(0xFF2563EB),
-                        width: 2,
-                      ),
+      onPointerDown: _handlePointerDown,
+      onPointerMove: _handlePointerMove,
+      onPointerUp: _handlePointerEnd,
+      onPointerCancel: _handlePointerEnd,
+      child: Container(
+        key: ValueKey(
+          'note-table-cell-container-${widget.row}-${widget.column}',
+        ),
+        width: widget.width,
+        constraints: BoxConstraints(minHeight: widget.height),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Stack(
+          children: [
+            if (widget.selected)
+              Positioned.fill(
+                child: DecoratedBox(
+                  key: ValueKey(
+                    'note-table-selected-cell-${widget.row}-${widget.column}',
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: const Color(0xFF2563EB),
+                      width: 2,
                     ),
                   ),
                 ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: KeyedSubtree(
-                  key: highlightColor == null
-                      ? null
-                      : ValueKey('note-table-cell-highlight-$row-$column'),
-                  child: TextFormField(
-                    key: ValueKey('note-table-cell-$row-$column'),
-                    controller: controller,
-                    minLines: 1,
-                    maxLines: null,
-                    keyboardType: TextInputType.multiline,
-                    decoration: const InputDecoration(border: InputBorder.none),
-                    style: TextStyle(backgroundColor: highlightColor),
-                    onTap: onTap,
-                    onChanged: onChanged,
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: KeyedSubtree(
+                key: widget.highlightColor == null
+                    ? null
+                    : ValueKey(
+                        'note-table-cell-highlight-${widget.row}-${widget.column}',
+                      ),
+                child: TextFormField(
+                  key: ValueKey(
+                    'note-table-cell-${widget.row}-${widget.column}',
                   ),
+                  controller: widget.controller,
+                  minLines: 1,
+                  maxLines: null,
+                  keyboardType: TextInputType.multiline,
+                  decoration: const InputDecoration(border: InputBorder.none),
+                  style: TextStyle(backgroundColor: widget.highlightColor),
+                  onTap: widget.onTap,
+                  onChanged: widget.onChanged,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -2156,7 +2292,10 @@ class _TableSelection {
   }
 
   factory _TableSelection.column(int columnIndex) {
-    return _TableSelection._(_TableSelectionKind.column, columnIndex: columnIndex);
+    return _TableSelection._(
+      _TableSelectionKind.column,
+      columnIndex: columnIndex,
+    );
   }
 
   factory _TableSelection.cell(int rowIndex, int columnIndex) {
@@ -2188,18 +2327,18 @@ class _TableSelection {
   NoteTagTarget toTagTarget() {
     return switch (kind) {
       _TableSelectionKind.row => NoteTagTarget(
-          kind: NoteTagTargetKind.tableRow,
-          rowIndex: rowIndex,
-        ),
+        kind: NoteTagTargetKind.tableRow,
+        rowIndex: rowIndex,
+      ),
       _TableSelectionKind.column => NoteTagTarget(
-          kind: NoteTagTargetKind.tableColumn,
-          columnIndex: columnIndex,
-        ),
+        kind: NoteTagTargetKind.tableColumn,
+        columnIndex: columnIndex,
+      ),
       _TableSelectionKind.cell => NoteTagTarget(
-          kind: NoteTagTargetKind.tableCell,
-          rowIndex: rowIndex,
-          columnIndex: columnIndex,
-        ),
+        kind: NoteTagTargetKind.tableCell,
+        rowIndex: rowIndex,
+        columnIndex: columnIndex,
+      ),
     };
   }
 }
