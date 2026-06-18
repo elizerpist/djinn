@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/src/notes/models/note_document.dart';
@@ -487,6 +488,281 @@ void main() {
     expect(rowHeadHeight, cellHeight);
     expect(cellHeight, greaterThan(52));
   });
+
+  testWidgets('table row head long-press drag reorders rows and remaps tags', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Enyhe', 'Célzott'],
+              ['Súlyos', 'High flow'],
+            ],
+            tableRowHeights: [52, 62, 72],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'cell-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableCell,
+                  rowIndex: 2,
+                  columnIndex: 1,
+                ),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'súlyos',
+                    colorValue: 0xFFDC2626,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await _longPressDrag(
+      tester,
+      from: find.byKey(const ValueKey('note-table-row-head-2')),
+      to: find.byKey(const ValueKey('note-table-row-head-0')),
+    );
+
+    expect(latest, isNotNull);
+    expect(latest!.rows.first, ['Súlyos', 'High flow']);
+    expect(latest!.rows[1], ['Állapot', 'Teendő']);
+    expect(latest!.tableRowHeights, [72, 52, 62]);
+    expect(latest!.scopedTags.single.target.rowIndex, 0);
+    expect(latest!.scopedTags.single.target.columnIndex, 1);
+  });
+
+  testWidgets('table column head long-press drag reorders columns and remaps tags', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő', 'Megjegyzés'],
+              ['Súlyos', 'High flow', 'ABCDE'],
+            ],
+            tableColumnWidths: [140, 160, 190],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'cell-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableCell,
+                  rowIndex: 1,
+                  columnIndex: 2,
+                ),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.topic,
+                    label: 'abcde',
+                    colorValue: 0xFF2563EB,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await _longPressDrag(
+      tester,
+      from: find.byKey(const ValueKey('note-table-column-head-2')),
+      to: find.byKey(const ValueKey('note-table-column-head-0')),
+    );
+
+    expect(latest, isNotNull);
+    expect(latest!.rows.first, ['Megjegyzés', 'Állapot', 'Teendő']);
+    expect(latest!.rows[1], ['ABCDE', 'Súlyos', 'High flow']);
+    expect(latest!.tableColumnWidths, [190, 140, 160]);
+    expect(latest!.scopedTags.single.target.rowIndex, 1);
+    expect(latest!.scopedTags.single.target.columnIndex, 0);
+  });
+
+  testWidgets('table column and row resize handles persist layout dimensions', (tester) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    final initialColumnWidth = tester.getSize(
+      find.byKey(const ValueKey('note-table-column-head-0')),
+    ).width;
+    await tester.drag(
+      find.byKey(const ValueKey('note-table-column-resize-0')),
+      const Offset(42, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.tableColumnWidths.first, greaterThan(initialColumnWidth));
+    expect(
+      tester.getSize(find.byKey(const ValueKey('note-table-column-head-0'))).width,
+      greaterThan(initialColumnWidth),
+    );
+    final widthAfterHeaderResize = latest!.tableColumnWidths.first;
+    await tester.drag(
+      find.byKey(const ValueKey('note-table-cell-column-resize-1-0')),
+      const Offset(28, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(latest!.tableColumnWidths.first, greaterThan(widthAfterHeaderResize));
+
+    final initialRowHeight = tester.getSize(
+      find.byKey(const ValueKey('note-table-row-head-1')),
+    ).height;
+    await tester.drag(
+      find.byKey(const ValueKey('note-table-row-resize-1')),
+      const Offset(0, 36),
+    );
+    await tester.pumpAndSettle();
+
+    expect(latest!.tableRowHeights[1], greaterThan(initialRowHeight));
+    expect(
+      tester.getSize(find.byKey(const ValueKey('note-table-row-head-1'))).height,
+      greaterThan(initialRowHeight),
+    );
+    final heightAfterHeaderResize = latest!.tableRowHeights[1];
+    await tester.drag(
+      find.byKey(const ValueKey('note-table-cell-row-resize-1-1')),
+      const Offset(0, 24),
+    );
+    await tester.pumpAndSettle();
+
+    expect(latest!.tableRowHeights[1], greaterThan(heightAfterHeaderResize));
+  });
+
+  testWidgets('table pinch gesture zooms out but does not zoom in past default scale', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    await _pinch(
+      tester,
+      center: tester.getCenter(find.byKey(const ValueKey('note-table-zoomable-content'))),
+      startDistance: 180,
+      endDistance: 80,
+    );
+
+    final zoomedOut = tester.widget<Transform>(
+      find.byKey(const ValueKey('note-table-zoom-transform')),
+    );
+    expect(zoomedOut.transform.storage[0], lessThan(1));
+
+    await _pinch(
+      tester,
+      center: tester.getCenter(find.byKey(const ValueKey('note-table-zoomable-content'))),
+      startDistance: 80,
+      endDistance: 260,
+    );
+
+    final zoomedIn = tester.widget<Transform>(
+      find.byKey(const ValueKey('note-table-zoom-transform')),
+    );
+    expect(zoomedIn.transform.storage[0], 1);
+  });
+
+  testWidgets('table rail exposes rounded and transparent style toggles', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-table-cell-1-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-selection-action-rail-separator')), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('note-table-rail-toggle-rounded')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-table-rail-toggle-rounded')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-selection-action-rail-rounded')), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('note-table-rail-toggle-transparent')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-table-rail-toggle-transparent')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-selection-action-rail-transparent')), findsOneWidget);
+  });
+}
+
+Future<void> _longPressDrag(
+  WidgetTester tester, {
+  required Finder from,
+  required Finder to,
+}) async {
+  final gesture = await tester.startGesture(tester.getCenter(from));
+  await tester.pump(kLongPressTimeout + const Duration(milliseconds: 100));
+  await gesture.moveTo(tester.getCenter(to));
+  await tester.pump();
+  await gesture.up();
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pinch(
+  WidgetTester tester, {
+  required Offset center,
+  required double startDistance,
+  required double endDistance,
+}) async {
+  final first = await tester.createGesture(pointer: 41);
+  final second = await tester.createGesture(pointer: 42);
+  await first.down(center + Offset(-startDistance / 2, 0));
+  await second.down(center + Offset(startDistance / 2, 0));
+  await tester.pump();
+  await first.moveTo(center + Offset(-endDistance / 2, 0));
+  await second.moveTo(center + Offset(endDistance / 2, 0));
+  await tester.pump();
+  await first.up();
+  await second.up();
+  await tester.pumpAndSettle();
 }
 
 void _ignoreBlockChange(NoteBlock block) {}

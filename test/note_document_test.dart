@@ -79,6 +79,27 @@ void main() {
     expect(document.plainText, contains('ASA | 250 mg'));
   });
 
+  test('serializes table layout dimensions without affecting searchable text', () {
+    const block = NoteBlock(
+      id: 'table-layout',
+      type: NoteBlockType.table,
+      rows: [
+        ['Állapot', 'Teendő'],
+        ['Súlyos', 'High flow'],
+      ],
+      tableColumnWidths: [180, 220],
+      tableRowHeights: [60, 88],
+    );
+
+    final parsed = NoteBlock.fromJson(block.toJson());
+
+    expect(parsed.tableColumnWidths, [180, 220]);
+    expect(parsed.tableRowHeights, [60, 88]);
+    expect(parsed.plainText, contains('Súlyos | High flow'));
+    expect(parsed.plainText, isNot(contains('180')));
+    expect(parsed.plainText, isNot(contains('88')));
+  });
+
   test('migrates legacy text into one paragraph block', () {
     final document = NoteDocument.fromPayload(
       '{}',

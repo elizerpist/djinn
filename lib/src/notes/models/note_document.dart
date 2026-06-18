@@ -726,6 +726,8 @@ class NoteBlock {
     this.scopedTags = const [],
     this.level = 0,
     this.rows = const [],
+    this.tableColumnWidths = const [],
+    this.tableRowHeights = const [],
     this.nodes = const [],
     this.edges = const [],
     this.listItems = const [],
@@ -745,6 +747,8 @@ class NoteBlock {
   final List<NoteScopedTagAssignment> scopedTags;
   final int level;
   final List<List<String>> rows;
+  final List<double> tableColumnWidths;
+  final List<double> tableRowHeights;
   final List<NoteFlowchartNode> nodes;
   final List<NoteFlowchartEdge> edges;
   final List<NoteListItem> listItems;
@@ -765,6 +769,8 @@ class NoteBlock {
       scopedTags: _scopedTagsFromJson(json['scopedTags']),
       level: json['level'] is int ? json['level'] as int : 0,
       rows: _rowsFromJson(json['rows']),
+      tableColumnWidths: _doublesFromJson(json['tableColumnWidths']),
+      tableRowHeights: _doublesFromJson(json['tableRowHeights']),
       nodes: _nodesFromJson(json['nodes']),
       edges: _edgesFromJson(json['edges']),
       listItems: _listItemsFromJson(json['listItems']),
@@ -795,6 +801,8 @@ class NoteBlock {
         'scopedTags': scopedTags.map((assignment) => assignment.toJson()).toList(),
       if (level != 0) 'level': level,
       if (rows.isNotEmpty) 'rows': rows,
+      if (tableColumnWidths.isNotEmpty) 'tableColumnWidths': tableColumnWidths,
+      if (tableRowHeights.isNotEmpty) 'tableRowHeights': tableRowHeights,
       if (nodes.isNotEmpty) 'nodes': nodes.map((node) => node.toJson()).toList(),
       if (edges.isNotEmpty) 'edges': edges.map((edge) => edge.toJson()).toList(),
       if (listItems.isNotEmpty) 'listItems': listItems.map((item) => item.toJson()).toList(),
@@ -963,6 +971,8 @@ class NoteBlock {
     List<NoteScopedTagAssignment>? scopedTags,
     int? level,
     List<List<String>>? rows,
+    List<double>? tableColumnWidths,
+    List<double>? tableRowHeights,
     List<NoteFlowchartNode>? nodes,
     List<NoteFlowchartEdge>? edges,
     List<NoteListItem>? listItems,
@@ -983,6 +993,8 @@ class NoteBlock {
       scopedTags: scopedTags ?? this.scopedTags,
       level: level ?? this.level,
       rows: rows ?? this.rows,
+      tableColumnWidths: tableColumnWidths ?? this.tableColumnWidths,
+      tableRowHeights: tableRowHeights ?? this.tableRowHeights,
       nodes: nodes ?? this.nodes,
       edges: edges ?? this.edges,
       listItems: listItems ?? this.listItems,
@@ -998,6 +1010,22 @@ class NoteBlock {
     return value
         .whereType<List>()
         .map((row) => row.map((cell) => cell.toString()).toList(growable: false))
+        .toList(growable: false);
+  }
+
+  static List<double> _doublesFromJson(Object? value) {
+    if (value is! List) {
+      return const [];
+    }
+    return value
+        .map((item) {
+          if (item is num) {
+            return item.toDouble();
+          }
+          return double.tryParse(item.toString());
+        })
+        .whereType<double>()
+        .where((item) => item.isFinite && item > 0)
         .toList(growable: false);
   }
 

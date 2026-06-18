@@ -26,10 +26,21 @@ class NoteTableEditorScreen extends StatefulWidget {
 class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   late NoteBlock _block;
   late List<List<String>> _rows;
+  late List<double> _columnWidths;
+  late List<double> _rowHeights;
   late final TextEditingController _titleController;
   final Map<String, TextEditingController> _cellControllers = <String, TextEditingController>{};
   _TableSelection? _selection;
   bool _railBottomExpanded = true;
+  bool _railRoundedCard = false;
+  bool _railTransparentBackground = false;
+
+  static const double _defaultColumnWidth = 150;
+  static const double _defaultRowHeight = 52;
+  static const double _minimumColumnWidth = 92;
+  static const double _maximumColumnWidth = 360;
+  static const double _minimumRowHeight = 52;
+  static const double _maximumRowHeight = 260;
 
   @override
   void initState() {
@@ -44,6 +55,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
             for (final row in widget.block.rows) [...row],
           ];
     _normalizeRows();
+    _columnWidths = [...widget.block.tableColumnWidths];
+    _rowHeights = [...widget.block.tableRowHeights];
+    _normalizeLayout();
   }
 
   @override
@@ -78,6 +92,35 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       if (row.isEmpty) {
         row.add('');
       }
+    }
+  }
+
+  void _normalizeLayout() {
+    final width = _columnCount;
+    while (_columnWidths.length < width) {
+      _columnWidths.add(_defaultColumnWidth);
+    }
+    if (_columnWidths.length > width) {
+      _columnWidths = _columnWidths.take(width).toList(growable: true);
+    }
+    for (var i = 0; i < _columnWidths.length; i += 1) {
+      _columnWidths[i] = _columnWidths[i].clamp(
+        _minimumColumnWidth,
+        _maximumColumnWidth,
+      ).toDouble();
+    }
+
+    while (_rowHeights.length < _rows.length) {
+      _rowHeights.add(_defaultRowHeight);
+    }
+    if (_rowHeights.length > _rows.length) {
+      _rowHeights = _rowHeights.take(_rows.length).toList(growable: true);
+    }
+    for (var i = 0; i < _rowHeights.length; i += 1) {
+      _rowHeights[i] = _rowHeights[i].clamp(
+        _minimumRowHeight,
+        _maximumRowHeight,
+      ).toDouble();
     }
   }
 
@@ -120,13 +163,24 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
 
   NoteBlock _currentBlock() {
     _normalizeRows();
+    _normalizeLayout();
     return _block.copyWith(
       rows: [
         for (final row in _rows)
           row.map((cell) => cell.trim()).toList(growable: false),
       ],
+      tableColumnWidths: _hasCustomColumnWidths ? [..._columnWidths] : const [],
+      tableRowHeights: _hasCustomRowHeights ? [..._rowHeights] : const [],
       clearIndex: true,
     );
+  }
+
+  bool get _hasCustomColumnWidths {
+    return _columnWidths.any((width) => (width - _defaultColumnWidth).abs() > 0.1);
+  }
+
+  bool get _hasCustomRowHeights {
+    return _rowHeights.any((height) => (height - _defaultRowHeight).abs() > 0.1);
   }
 
   void _emitChange() {
@@ -151,6 +205,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   void _insertRow(int index) {
     setState(() {
       _normalizeRows();
+      _normalizeLayout();
       final target = index.clamp(0, _rows.length).toInt();
       _block = _block.copyWith(
         scopedTags: _remapScopedTags(
@@ -159,6 +214,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
         clearIndex: true,
       );
       _rows.insert(target, List.filled(_columnCount, ''));
+      _rowHeights.insert(target, _defaultRowHeight);
       _selection = null;
       _resetCellControllers();
     });
@@ -168,6 +224,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   void _insertColumn(int index) {
     setState(() {
       _normalizeRows();
+      _normalizeLayout();
       final target = index.clamp(0, _columnCount).toInt();
       _block = _block.copyWith(
         scopedTags: _remapScopedTags(
@@ -178,6 +235,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       for (final row in _rows) {
         row.insert(target, '');
       }
+      _columnWidths.insert(target, _defaultColumnWidth);
       _selection = null;
       _resetCellControllers();
     });
@@ -189,6 +247,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       return;
     }
     setState(() {
+      _normalizeLayout();
       _block = _block.copyWith(
         scopedTags: _remapScopedTags(
           (target) => _remapTargetForRowDelete(target, index),
@@ -196,6 +255,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
         clearIndex: true,
       );
       _rows.removeAt(index);
+      _rowHeights.removeAt(index);
       _selection = null;
       _resetCellControllers();
     });
@@ -208,6 +268,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       return;
     }
     setState(() {
+      _normalizeLayout();
       _block = _block.copyWith(
         scopedTags: _remapScopedTags(
           (target) => _remapTargetForColumnDelete(target, index),
@@ -217,8 +278,94 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       for (final row in _rows) {
         row.removeAt(index);
       }
+      _columnWidths.removeAt(index);
       _selection = null;
       _resetCellControllers();
+    });
+    _emitChange();
+  }
+
+  void _moveRow(int fromIndex, int toIndex) {
+    if (fromIndex == toIndex ||
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= _rows.length ||
+        toIndex >= _rows.length) {
+      return;
+    }
+    setState(() {
+      _normalizeRows();
+      _normalizeLayout();
+      final row = _rows.removeAt(fromIndex);
+      _rows.insert(toIndex, row);
+      final height = _rowHeights.removeAt(fromIndex);
+      _rowHeights.insert(toIndex, height);
+      _selection = _remapSelectionForRowMove(_selection, fromIndex, toIndex);
+      _block = _block.copyWith(
+        scopedTags: _remapScopedTags(
+          (target) => _remapTargetForRowMove(target, fromIndex, toIndex),
+        ),
+        clearIndex: true,
+      );
+      _resetCellControllers();
+    });
+    _emitChange();
+  }
+
+  void _moveColumn(int fromIndex, int toIndex) {
+    _normalizeRows();
+    if (fromIndex == toIndex ||
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= _columnCount ||
+        toIndex >= _columnCount) {
+      return;
+    }
+    setState(() {
+      _normalizeRows();
+      _normalizeLayout();
+      for (final row in _rows) {
+        final cell = row.removeAt(fromIndex);
+        row.insert(toIndex, cell);
+      }
+      final width = _columnWidths.removeAt(fromIndex);
+      _columnWidths.insert(toIndex, width);
+      _selection = _remapSelectionForColumnMove(_selection, fromIndex, toIndex);
+      _block = _block.copyWith(
+        scopedTags: _remapScopedTags(
+          (target) => _remapTargetForColumnMove(target, fromIndex, toIndex),
+        ),
+        clearIndex: true,
+      );
+      _resetCellControllers();
+    });
+    _emitChange();
+  }
+
+  void _resizeColumn(int column, double delta) {
+    if (column < 0 || column >= _columnCount || delta == 0) {
+      return;
+    }
+    setState(() {
+      _normalizeLayout();
+      _columnWidths[column] = (_columnWidths[column] + delta).clamp(
+        _minimumColumnWidth,
+        _maximumColumnWidth,
+      ).toDouble();
+    });
+    _emitChange();
+  }
+
+  void _resizeRow(int row, double delta) {
+    if (row < 0 || row >= _rows.length || delta == 0) {
+      return;
+    }
+    setState(() {
+      _normalizeLayout();
+      _rowHeights[row] = (_rowHeights[row] + delta).clamp(
+        _minimumRowHeight,
+        _maximumRowHeight,
+      ).toDouble();
     });
     _emitChange();
   }
@@ -460,6 +607,8 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
         () => _railBottomExpanded = !_railBottomExpanded,
       ),
       onDeleteTag: _deleteSingleSelectedTag,
+      roundedCard: _railRoundedCard,
+      transparentBackground: _railTransparentBackground,
       actions: _railActions(selection),
     );
   }
@@ -475,30 +624,6 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
         constraints: compactConstraints,
         padding: compactPadding,
         icon: const Icon(Icons.sell_outlined, size: 18),
-      ),
-      IconButton(
-        key: ValueKey('${_tagRailKey(selection)}-clear-tags'),
-        tooltip: 'Összes tag törlése',
-        onPressed: _hasTags(selection) ? _deleteSelectedTag : null,
-        constraints: compactConstraints,
-        padding: compactPadding,
-        icon: const Icon(Icons.delete_outline, size: 18),
-      ),
-      IconButton(
-        key: ValueKey('${_tagRailKey(selection)}-prev'),
-        tooltip: 'Előző tag',
-        onPressed: _block.scopedTags.isEmpty ? null : () => _focusTaggedSelection(-1),
-        constraints: compactConstraints,
-        padding: compactPadding,
-        icon: const Icon(Icons.chevron_left, size: 18),
-      ),
-      IconButton(
-        key: ValueKey('${_tagRailKey(selection)}-next'),
-        tooltip: 'Következő tag',
-        onPressed: _block.scopedTags.isEmpty ? null : () => _focusTaggedSelection(1),
-        constraints: compactConstraints,
-        padding: compactPadding,
-        icon: const Icon(Icons.chevron_right, size: 18),
       ),
     ];
     if (selection.kind == _TableSelectionKind.row ||
@@ -551,6 +676,50 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
           ),
         );
     }
+    actions.addAll([
+      IconButton(
+        key: ValueKey('${_tagRailKey(selection)}-clear-tags'),
+        tooltip: 'Összes tag törlése',
+        onPressed: _hasTags(selection) ? _deleteSelectedTag : null,
+        constraints: compactConstraints,
+        padding: compactPadding,
+        icon: const Icon(Icons.delete_outline, size: 18),
+      ),
+      IconButton(
+        key: ValueKey('${_tagRailKey(selection)}-prev'),
+        tooltip: 'Előző tag',
+        onPressed: _block.scopedTags.isEmpty ? null : () => _focusTaggedSelection(-1),
+        constraints: compactConstraints,
+        padding: compactPadding,
+        icon: const Icon(Icons.chevron_left, size: 18),
+      ),
+      IconButton(
+        key: ValueKey('${_tagRailKey(selection)}-next'),
+        tooltip: 'Következő tag',
+        onPressed: _block.scopedTags.isEmpty ? null : () => _focusTaggedSelection(1),
+        constraints: compactConstraints,
+        padding: compactPadding,
+        icon: const Icon(Icons.chevron_right, size: 18),
+      ),
+      IconButton(
+        key: const ValueKey('note-table-rail-toggle-rounded'),
+        tooltip: _railRoundedCard ? 'Vonalas rail' : 'Cellaszerű rail',
+        onPressed: () => setState(() => _railRoundedCard = !_railRoundedCard),
+        constraints: compactConstraints,
+        padding: compactPadding,
+        icon: const Icon(Icons.crop_square_outlined, size: 18),
+      ),
+      IconButton(
+        key: const ValueKey('note-table-rail-toggle-transparent'),
+        tooltip: _railTransparentBackground ? 'Fehér rail háttér' : 'Átlátszó rail háttér',
+        onPressed: () => setState(
+          () => _railTransparentBackground = !_railTransparentBackground,
+        ),
+        constraints: compactConstraints,
+        padding: compactPadding,
+        icon: const Icon(Icons.opacity, size: 18),
+      ),
+    ]);
     return actions;
   }
 
@@ -646,6 +815,90 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     return target;
   }
 
+  NoteTagTarget? _remapTargetForRowMove(
+    NoteTagTarget target,
+    int fromIndex,
+    int toIndex,
+  ) {
+    if (target.kind != NoteTagTargetKind.tableRow &&
+        target.kind != NoteTagTargetKind.tableCell) {
+      return target;
+    }
+    final rowIndex = target.rowIndex;
+    final nextIndex = _remapMovedIndex(rowIndex, fromIndex, toIndex);
+    return nextIndex == rowIndex ? target : target.copyWith(rowIndex: nextIndex);
+  }
+
+  NoteTagTarget? _remapTargetForColumnMove(
+    NoteTagTarget target,
+    int fromIndex,
+    int toIndex,
+  ) {
+    if (target.kind != NoteTagTargetKind.tableColumn &&
+        target.kind != NoteTagTargetKind.tableCell) {
+      return target;
+    }
+    final columnIndex = target.columnIndex;
+    final nextIndex = _remapMovedIndex(columnIndex, fromIndex, toIndex);
+    return nextIndex == columnIndex
+        ? target
+        : target.copyWith(columnIndex: nextIndex);
+  }
+
+  int? _remapMovedIndex(int? index, int fromIndex, int toIndex) {
+    if (index == null || fromIndex == toIndex) {
+      return index;
+    }
+    if (index == fromIndex) {
+      return toIndex;
+    }
+    if (fromIndex < toIndex && index > fromIndex && index <= toIndex) {
+      return index - 1;
+    }
+    if (fromIndex > toIndex && index >= toIndex && index < fromIndex) {
+      return index + 1;
+    }
+    return index;
+  }
+
+  _TableSelection? _remapSelectionForRowMove(
+    _TableSelection? selection,
+    int fromIndex,
+    int toIndex,
+  ) {
+    if (selection == null || selection.rowIndex == null) {
+      return selection;
+    }
+    final nextRow = _remapMovedIndex(selection.rowIndex, fromIndex, toIndex);
+    if (nextRow == null || nextRow == selection.rowIndex) {
+      return selection;
+    }
+    return switch (selection.kind) {
+      _TableSelectionKind.row => _TableSelection.row(nextRow),
+      _TableSelectionKind.cell => _TableSelection.cell(nextRow, selection.columnIndex!),
+      _TableSelectionKind.column => selection,
+    };
+  }
+
+  _TableSelection? _remapSelectionForColumnMove(
+    _TableSelection? selection,
+    int fromIndex,
+    int toIndex,
+  ) {
+    if (selection == null || selection.columnIndex == null) {
+      return selection;
+    }
+    final nextColumn = _remapMovedIndex(selection.columnIndex, fromIndex, toIndex);
+    if (nextColumn == null || nextColumn == selection.columnIndex) {
+      return selection;
+    }
+    return switch (selection.kind) {
+      _TableSelectionKind.column => _TableSelection.column(nextColumn),
+      _TableSelectionKind.cell => _TableSelection.cell(selection.rowIndex!, nextColumn),
+      _TableSelectionKind.row => selection,
+    };
+  }
+
   bool _sameTarget(NoteTagTarget left, NoteTagTarget right) {
     return left.kind == right.kind &&
         left.rowIndex == right.rowIndex &&
@@ -718,6 +971,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   @override
   Widget build(BuildContext context) {
     _normalizeRows();
+    _normalizeLayout();
     final columnCount = _columnCount;
     return Scaffold(
       appBar: NoteChunkEditorHeader(
@@ -769,11 +1023,17 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
             child: _TableGrid(
               columnCount: columnCount,
               rowCount: _rows.length,
+              columnWidths: _columnWidths,
+              rowHeights: _rowHeights,
               selection: _selection,
               cellControllerFor: _controllerFor,
               highlightColorForCell: _highlightColorForCell,
               onCellChanged: _updateCell,
               onSelect: _select,
+              onMoveRow: _moveRow,
+              onMoveColumn: _moveColumn,
+              onResizeColumn: _resizeColumn,
+              onResizeRow: _resizeRow,
               railForSelection: _railForSelection,
             ),
           ),
@@ -787,25 +1047,36 @@ class _TableGrid extends StatefulWidget {
   const _TableGrid({
     required this.columnCount,
     required this.rowCount,
+    required this.columnWidths,
+    required this.rowHeights,
     required this.selection,
     required this.cellControllerFor,
     required this.highlightColorForCell,
     required this.onCellChanged,
     required this.onSelect,
+    required this.onMoveRow,
+    required this.onMoveColumn,
+    required this.onResizeColumn,
+    required this.onResizeRow,
     required this.railForSelection,
   });
 
   static const double _rowHeadWidth = 64;
-  static const double _cellWidth = 150;
   static const double _cellHeight = 52;
 
   final int columnCount;
   final int rowCount;
+  final List<double> columnWidths;
+  final List<double> rowHeights;
   final _TableSelection? selection;
   final TextEditingController Function(int row, int column) cellControllerFor;
   final Color? Function(int row, int column) highlightColorForCell;
   final void Function(int row, int column, String value) onCellChanged;
   final ValueChanged<_TableSelection> onSelect;
+  final void Function(int fromIndex, int toIndex) onMoveRow;
+  final void Function(int fromIndex, int toIndex) onMoveColumn;
+  final void Function(int column, double delta) onResizeColumn;
+  final void Function(int row, double delta) onResizeRow;
   final Widget Function(_TableSelection selection) railForSelection;
 
   @override
@@ -814,7 +1085,14 @@ class _TableGrid extends StatefulWidget {
 
 class _TableGridState extends State<_TableGrid> {
   late final ScrollController _horizontalController;
+  final Map<int, Offset> _activePointerPositions = <int, Offset>{};
   double _viewportWidth = 0;
+  double _scale = 1;
+  double _pinchStartScale = 1;
+  double? _pinchStartDistance;
+
+  static const double _minimumScale = 0.55;
+  static const double _maximumScale = 1;
 
   @override
   void initState() {
@@ -833,24 +1111,114 @@ class _TableGridState extends State<_TableGrid> {
     return LayoutBuilder(
       builder: (context, constraints) {
         _viewportWidth = constraints.maxWidth;
-        return SingleChildScrollView(
-          controller: _horizontalController,
-          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-          scrollDirection: Axis.horizontal,
+        final tableWidth = _tableWidth;
+        return Listener(
+          key: const ValueKey('note-table-zoom-gesture'),
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: _handlePointerDown,
+          onPointerMove: _handlePointerMove,
+          onPointerUp: _handlePointerEnd,
+          onPointerCancel: _handlePointerEnd,
           child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(context),
-                for (var row = 0; row < widget.rowCount; row += 1)
-                  _buildRow(context, row),
-              ],
+            controller: _horizontalController,
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+            scrollDirection: Axis.horizontal,
+            child: SingleChildScrollView(
+              child: Transform.scale(
+                key: const ValueKey('note-table-zoom-transform'),
+                alignment: Alignment.topLeft,
+                scale: _scale,
+                child: SizedBox(
+                  key: const ValueKey('note-table-zoomable-content'),
+                  width: tableWidth,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(context),
+                      for (var row = 0; row < widget.rowCount; row += 1)
+                        _buildRow(context, row),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         );
       },
     );
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    _activePointerPositions[event.pointer] = event.localPosition;
+    if (_activePointerPositions.length == 2) {
+      _pinchStartScale = _scale;
+      _pinchStartDistance = _currentPointerDistance;
+    }
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (!_activePointerPositions.containsKey(event.pointer)) {
+      return;
+    }
+    _activePointerPositions[event.pointer] = event.localPosition;
+    if (_activePointerPositions.length != 2) {
+      return;
+    }
+    final startDistance = _pinchStartDistance;
+    final currentDistance = _currentPointerDistance;
+    if (startDistance == null ||
+        currentDistance == null ||
+        startDistance <= 0 ||
+        currentDistance <= 0) {
+      _pinchStartScale = _scale;
+      _pinchStartDistance = currentDistance;
+      return;
+    }
+    final nextScale = (_pinchStartScale * currentDistance / startDistance)
+        .clamp(_minimumScale, _maximumScale)
+        .toDouble();
+    if ((nextScale - _scale).abs() < 0.001) {
+      return;
+    }
+    setState(() => _scale = nextScale);
+  }
+
+  void _handlePointerEnd(PointerEvent event) {
+    _activePointerPositions.remove(event.pointer);
+    if (_activePointerPositions.length == 2) {
+      _pinchStartScale = _scale;
+      _pinchStartDistance = _currentPointerDistance;
+    } else {
+      _pinchStartDistance = null;
+    }
+  }
+
+  double? get _currentPointerDistance {
+    if (_activePointerPositions.length < 2) {
+      return null;
+    }
+    final positions = _activePointerPositions.values.take(2).toList(growable: false);
+    return (positions.first - positions.last).distance;
+  }
+
+  double get _tableWidth {
+    return _TableGrid._rowHeadWidth +
+        widget.columnWidths.fold<double>(0, (total, width) => total + width);
+  }
+
+  double _columnWidth(int column) {
+    if (column < 0 || column >= widget.columnWidths.length) {
+      return _NoteTableEditorScreenState._defaultColumnWidth;
+    }
+    return widget.columnWidths[column];
+  }
+
+  double _rowHeight(int row) {
+    if (row < 0 || row >= widget.rowHeights.length) {
+      return _TableGrid._cellHeight;
+    }
+    return widget.rowHeights[row];
   }
 
   Widget _stickyRail({
@@ -862,7 +1230,8 @@ class _TableGridState extends State<_TableGrid> {
       animation: _horizontalController,
       builder: (context, _) {
         final viewportWidth = _viewportWidth <= 0 ? width : _viewportWidth;
-        final railWidth = viewportWidth.clamp(0, width).toDouble();
+        final scaledViewportWidth = (viewportWidth / _scale).clamp(0, width).toDouble();
+        final railWidth = scaledViewportWidth;
         final maxLeft = (width - railWidth).clamp(0, width).toDouble();
         final left = _horizontalController.hasClients
             ? _horizontalController.offset.clamp(0, maxLeft).toDouble()
@@ -885,7 +1254,7 @@ class _TableGridState extends State<_TableGrid> {
   Widget _buildHeader(BuildContext context) {
     final selectedColumn = widget.selection;
     final showColumnRail = selectedColumn?.kind == _TableSelectionKind.column;
-    final tableWidth = _TableGrid._rowHeadWidth + widget.columnCount * _TableGrid._cellWidth;
+    final tableWidth = _tableWidth;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -904,9 +1273,11 @@ class _TableGridState extends State<_TableGrid> {
               for (var column = 0; column < widget.columnCount; column += 1)
                 _ColumnHeadSlot(
                   column: column,
-                  width: _TableGrid._cellWidth,
+                  width: _columnWidth(column),
                   selected: widget.selection?.isColumn(column) == true,
                   onSelect: widget.onSelect,
+                  onMoveColumn: widget.onMoveColumn,
+                  onResizeColumn: widget.onResizeColumn,
                 ),
             ],
           ),
@@ -925,7 +1296,8 @@ class _TableGridState extends State<_TableGrid> {
     final selectedRow = widget.selection;
     final showRowRail = selectedRow?.kind == _TableSelectionKind.row && selectedRow?.rowIndex == row;
     final showCellRail = selectedRow?.kind == _TableSelectionKind.cell && selectedRow?.rowIndex == row;
-    final tableWidth = _TableGrid._rowHeadWidth + widget.columnCount * _TableGrid._cellWidth;
+    final tableWidth = _tableWidth;
+    final rowHeight = _rowHeight(row);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -936,20 +1308,25 @@ class _TableGridState extends State<_TableGrid> {
               _RowHeadSlot(
                 row: row,
                 width: _TableGrid._rowHeadWidth,
+                height: rowHeight,
                 selected: widget.selection?.isRow(row) == true,
                 onSelect: widget.onSelect,
+                onMoveRow: widget.onMoveRow,
+                onResizeRow: widget.onResizeRow,
               ),
               for (var column = 0; column < widget.columnCount; column += 1)
                 _CellSlot(
                   row: row,
                   column: column,
-                  width: _TableGrid._cellWidth,
-                  height: _TableGrid._cellHeight,
+                  width: _columnWidth(column),
+                  height: rowHeight,
                   controller: widget.cellControllerFor(row, column),
                   selected: widget.selection?.isCell(row, column) == true,
                   highlightColor: widget.highlightColorForCell(row, column),
                   onTap: () => widget.onSelect(_TableSelection.cell(row, column)),
                   onChanged: (value) => widget.onCellChanged(row, column, value),
+                  onResizeColumn: widget.onResizeColumn,
+                  onResizeRow: widget.onResizeRow,
                 ),
             ],
           ),
@@ -977,24 +1354,113 @@ class _ColumnHeadSlot extends StatelessWidget {
     required this.width,
     required this.selected,
     required this.onSelect,
+    required this.onMoveColumn,
+    required this.onResizeColumn,
   });
 
   final int column;
   final double width;
   final bool selected;
   final ValueChanged<_TableSelection> onSelect;
+  final void Function(int fromIndex, int toIndex) onMoveColumn;
+  final void Function(int column, double delta) onResizeColumn;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      child: _HeadCell(
-        key: ValueKey('note-table-column-head-$column'),
-        width: width,
-        label: 'Oszlop ${column + 1}',
-        selected: selected,
-        onTap: () => onSelect(_TableSelection.column(column)),
+      child: DragTarget<int>(
+        onWillAcceptWithDetails: (details) => details.data != column,
+        onAcceptWithDetails: (details) => onMoveColumn(details.data, column),
+        builder: (context, candidateData, rejectedData) {
+          return LongPressDraggable<int>(
+            data: column,
+            feedback: Material(
+              color: Colors.transparent,
+              child: SizedBox(
+                width: width,
+                height: _TableGrid._cellHeight,
+                child: _HeadCell(
+                  width: width,
+                  label: 'Oszlop ${column + 1}',
+                  selected: true,
+                  onTap: null,
+                ),
+              ),
+            ),
+            childWhenDragging: Opacity(
+              opacity: 0.25,
+              child: _ColumnHeadContent(
+                column: column,
+                width: width,
+                selected: selected,
+                onSelect: onSelect,
+                onResizeColumn: onResizeColumn,
+              ),
+            ),
+            child: _ColumnHeadContent(
+              column: column,
+              width: width,
+              selected: selected || candidateData.isNotEmpty,
+              onSelect: onSelect,
+              onResizeColumn: onResizeColumn,
+            ),
+          );
+        },
       ),
+    );
+  }
+}
+
+class _ColumnHeadContent extends StatelessWidget {
+  const _ColumnHeadContent({
+    required this.column,
+    required this.width,
+    required this.selected,
+    required this.onSelect,
+    required this.onResizeColumn,
+  });
+
+  final int column;
+  final double width;
+  final bool selected;
+  final ValueChanged<_TableSelection> onSelect;
+  final void Function(int column, double delta) onResizeColumn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        SizedBox(width: width, height: _TableGrid._cellHeight),
+        Positioned.fill(
+          child: _HeadCell(
+            key: ValueKey('note-table-column-head-$column'),
+            width: width,
+            label: 'Oszlop ${column + 1}',
+            selected: selected,
+            onTap: () => onSelect(_TableSelection.column(column)),
+          ),
+        ),
+        Positioned(
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: 16,
+          child: GestureDetector(
+            key: ValueKey('note-table-column-resize-$column'),
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragUpdate: (details) => onResizeColumn(column, details.delta.dx),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                width: 2,
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                color: const Color(0xFFCBD5E1),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1003,27 +1469,123 @@ class _RowHeadSlot extends StatelessWidget {
   const _RowHeadSlot({
     required this.row,
     required this.width,
+    required this.height,
     required this.selected,
     required this.onSelect,
+    required this.onMoveRow,
+    required this.onResizeRow,
   });
 
   final int row;
   final double width;
+  final double height;
   final bool selected;
   final ValueChanged<_TableSelection> onSelect;
+  final void Function(int fromIndex, int toIndex) onMoveRow;
+  final void Function(int row, double delta) onResizeRow;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      child: _HeadCell(
-        key: ValueKey('note-table-row-head-$row'),
-        width: width,
-        label: '${row + 1}',
-        icon: Icons.table_rows_outlined,
-        selected: selected,
-        onTap: () => onSelect(_TableSelection.row(row)),
+      child: DragTarget<int>(
+        onWillAcceptWithDetails: (details) => details.data != row,
+        onAcceptWithDetails: (details) => onMoveRow(details.data, row),
+        builder: (context, candidateData, rejectedData) {
+          return LongPressDraggable<int>(
+            data: row,
+            feedback: Material(
+              color: Colors.transparent,
+              child: SizedBox(
+                width: width,
+                height: height,
+                child: _HeadCell(
+                  width: width,
+                  label: '${row + 1}',
+                  icon: Icons.table_rows_outlined,
+                  selected: true,
+                  onTap: null,
+                ),
+              ),
+            ),
+            childWhenDragging: Opacity(
+              opacity: 0.25,
+              child: _RowHeadContent(
+                row: row,
+                width: width,
+                height: height,
+                selected: selected,
+                onSelect: onSelect,
+                onResizeRow: onResizeRow,
+              ),
+            ),
+            child: _RowHeadContent(
+              row: row,
+              width: width,
+              height: height,
+              selected: selected || candidateData.isNotEmpty,
+              onSelect: onSelect,
+              onResizeRow: onResizeRow,
+            ),
+          );
+        },
       ),
+    );
+  }
+}
+
+class _RowHeadContent extends StatelessWidget {
+  const _RowHeadContent({
+    required this.row,
+    required this.width,
+    required this.height,
+    required this.selected,
+    required this.onSelect,
+    required this.onResizeRow,
+  });
+
+  final int row;
+  final double width;
+  final double height;
+  final bool selected;
+  final ValueChanged<_TableSelection> onSelect;
+  final void Function(int row, double delta) onResizeRow;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        SizedBox(width: width, height: height),
+        Positioned.fill(
+          child: _HeadCell(
+            key: ValueKey('note-table-row-head-$row'),
+            width: width,
+            label: '${row + 1}',
+            icon: Icons.table_rows_outlined,
+            selected: selected,
+            onTap: () => onSelect(_TableSelection.row(row)),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 16,
+          child: GestureDetector(
+            key: ValueKey('note-table-row-resize-$row'),
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: (details) => onResizeRow(row, details.delta.dy),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                height: 2,
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                color: const Color(0xFFCBD5E1),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1039,6 +1601,8 @@ class _CellSlot extends StatelessWidget {
     required this.highlightColor,
     required this.onTap,
     required this.onChanged,
+    required this.onResizeColumn,
+    required this.onResizeRow,
   });
 
   final int row;
@@ -1050,6 +1614,8 @@ class _CellSlot extends StatelessWidget {
   final Color? highlightColor;
   final VoidCallback onTap;
   final ValueChanged<String> onChanged;
+  final void Function(int column, double delta) onResizeColumn;
+  final void Function(int row, double delta) onResizeRow;
 
   @override
   Widget build(BuildContext context) {
@@ -1065,6 +1631,8 @@ class _CellSlot extends StatelessWidget {
         highlightColor: highlightColor,
         onTap: onTap,
         onChanged: onChanged,
+        onResizeColumn: onResizeColumn,
+        onResizeRow: onResizeRow,
       ),
     );
   }
@@ -1127,6 +1695,8 @@ class _CellField extends StatelessWidget {
     required this.highlightColor,
     required this.onTap,
     required this.onChanged,
+    required this.onResizeColumn,
+    required this.onResizeRow,
   });
 
   final int row;
@@ -1138,6 +1708,8 @@ class _CellField extends StatelessWidget {
   final Color? highlightColor;
   final VoidCallback onTap;
   final ValueChanged<String> onChanged;
+  final void Function(int column, double delta) onResizeColumn;
+  final void Function(int row, double delta) onResizeRow;
 
   @override
   Widget build(BuildContext context) {
@@ -1183,6 +1755,46 @@ class _CellField extends StatelessWidget {
                   style: TextStyle(backgroundColor: highlightColor),
                   onTap: onTap,
                   onChanged: onChanged,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: 16,
+              child: GestureDetector(
+                key: ValueKey('note-table-cell-column-resize-$row-$column'),
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragUpdate: (details) =>
+                    onResizeColumn(column, details.delta.dx),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Container(
+                    width: 2,
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    color: const Color(0x00CBD5E1),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 16,
+              child: GestureDetector(
+                key: ValueKey('note-table-cell-row-resize-$row-$column'),
+                behavior: HitTestBehavior.opaque,
+                onVerticalDragUpdate: (details) =>
+                    onResizeRow(row, details.delta.dy),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    height: 2,
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    color: const Color(0x00CBD5E1),
+                  ),
                 ),
               ),
             ),
