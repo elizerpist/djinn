@@ -590,7 +590,7 @@ void main() {
     expect(latest!.scopedTags.single.target.columnIndex, 0);
   });
 
-  testWidgets('table column and row resize handles persist layout dimensions', (tester) async {
+  testWidgets('table resize handles are available only on selected headers', (tester) async {
     NoteBlock? latest;
     await tester.pumpWidget(
       MaterialApp(
@@ -608,6 +608,16 @@ void main() {
       ),
     );
 
+    expect(find.byKey(const ValueKey('note-table-column-resize-0')), findsNothing);
+    expect(find.byKey(const ValueKey('note-table-row-resize-1')), findsNothing);
+    expect(find.byKey(const ValueKey('note-table-cell-column-resize-1-0')), findsNothing);
+    expect(find.byKey(const ValueKey('note-table-cell-row-resize-1-1')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('note-table-column-head-0')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-table-column-resize-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-column-resize-icon-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-column-resize-1')), findsNothing);
     final initialColumnWidth = tester.getSize(
       find.byKey(const ValueKey('note-table-column-head-0')),
     ).width;
@@ -623,15 +633,17 @@ void main() {
       tester.getSize(find.byKey(const ValueKey('note-table-column-head-0'))).width,
       greaterThan(initialColumnWidth),
     );
-    final widthAfterHeaderResize = latest!.tableColumnWidths.first;
-    await tester.drag(
-      find.byKey(const ValueKey('note-table-cell-column-resize-1-0')),
-      const Offset(28, 0),
-    );
+
+    await tester.tap(find.byKey(const ValueKey('note-table-cell-1-1')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-table-cell-column-resize-1-1')), findsNothing);
+    expect(find.byKey(const ValueKey('note-table-cell-row-resize-1-1')), findsNothing);
 
-    expect(latest!.tableColumnWidths.first, greaterThan(widthAfterHeaderResize));
-
+    await tester.tap(find.byKey(const ValueKey('note-table-row-head-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-table-row-resize-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-row-resize-icon-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-row-resize-0')), findsNothing);
     final initialRowHeight = tester.getSize(
       find.byKey(const ValueKey('note-table-row-head-1')),
     ).height;
@@ -646,14 +658,6 @@ void main() {
       tester.getSize(find.byKey(const ValueKey('note-table-row-head-1'))).height,
       greaterThan(initialRowHeight),
     );
-    final heightAfterHeaderResize = latest!.tableRowHeights[1];
-    await tester.drag(
-      find.byKey(const ValueKey('note-table-cell-row-resize-1-1')),
-      const Offset(0, 24),
-    );
-    await tester.pumpAndSettle();
-
-    expect(latest!.tableRowHeights[1], greaterThan(heightAfterHeaderResize));
   });
 
   testWidgets('table pinch gesture zooms out but does not zoom in past default scale', (tester) async {
@@ -698,7 +702,7 @@ void main() {
     expect(zoomedIn.transform.storage[0], 1);
   });
 
-  testWidgets('table rail exposes rounded and transparent style toggles', (tester) async {
+  testWidgets('table rail exposes rounded, transparent, and border style toggles', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: NoteTableEditorScreen(
@@ -718,6 +722,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('note-table-cell-1-1')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('note-selection-action-rail-separator')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-selection-action-rail-border')), findsOneWidget);
 
     await tester.ensureVisible(find.byKey(const ValueKey('note-table-rail-toggle-rounded')));
     await tester.pumpAndSettle();
@@ -730,6 +735,32 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('note-table-rail-toggle-transparent')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('note-selection-action-rail-transparent')), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('note-table-rail-toggle-border')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-table-rail-toggle-border')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-selection-action-rail-borderless')), findsOneWidget);
+  });
+
+  testWidgets('table horizontal overscroll uses the same stretch rubber band wrapper', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['A', 'B', 'C', 'D'],
+              ['1', '2', '3', '4'],
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('note-table-horizontal-rubber-band')), findsOneWidget);
   });
 }
 
