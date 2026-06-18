@@ -2472,7 +2472,7 @@ Set<String> _lastLoopClosingEdgeIds(List<NoteFlowchartEdge> edges) {
     if (!_isLoopClosingNoteEdge(edges, edge)) {
       continue;
     }
-    if (latest == null || edge.order > latest.order) {
+    if (latest == null || edge.order >= latest.order) {
       latest = edge;
     }
   }
