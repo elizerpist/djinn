@@ -151,6 +151,42 @@ void main() {
     expect(find.text('Folyamat'), findsNothing);
   });
 
+  testWidgets('canvas preview starts fit to view and reserves one finger for parent scroll', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: MobileFlowchartViewer(data: portAwareData))));
+
+    await tester.tap(find.byKey(const ValueKey('mobile-flowchart-selector-canvas')));
+    await tester.pumpAndSettle();
+
+    final canvasFinder = find.byKey(const ValueKey('mobile-flowchart-view-canvas-flow-port-aware'));
+    final interactiveFinder = find.descendant(
+      of: canvasFinder,
+      matching: find.byType(InteractiveViewer),
+    );
+
+    var interactiveViewer = tester.widget<InteractiveViewer>(interactiveFinder);
+
+    expect(interactiveViewer.panEnabled, isFalse);
+    expect(interactiveViewer.scaleEnabled, isTrue);
+    expect(
+      interactiveViewer.transformationController!.value.getMaxScaleOnAxis(),
+      lessThan(1),
+    );
+
+    final center = tester.getCenter(interactiveFinder);
+    final firstTouch = await tester.startGesture(center);
+    await tester.pump();
+    interactiveViewer = tester.widget<InteractiveViewer>(interactiveFinder);
+    expect(interactiveViewer.panEnabled, isFalse);
+
+    final secondTouch = await tester.startGesture(center + const Offset(18, 18), pointer: 2);
+    await tester.pump();
+    interactiveViewer = tester.widget<InteractiveViewer>(interactiveFinder);
+    expect(interactiveViewer.panEnabled, isTrue);
+
+    await secondTouch.up();
+    await firstTouch.up();
+  });
+
   testWidgets('canvas preview has no grid and marks loop and reused ports', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

@@ -361,12 +361,16 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   }
 
   List<Widget> _railActions(_TableSelection selection) {
+    const compactConstraints = BoxConstraints.tightFor(width: 34, height: 34);
+    const compactPadding = EdgeInsets.zero;
     final actions = <Widget>[
       IconButton(
         key: ValueKey(_tagRailKey(selection)),
         tooltip: 'Tagelés',
         onPressed: () => unawaited(_tagSelection()),
-        icon: const Icon(Icons.sell_outlined),
+        constraints: compactConstraints,
+        padding: compactPadding,
+        icon: const Icon(Icons.sell_outlined, size: 18),
       ),
     ];
     if (_hasTags(selection)) {
@@ -375,7 +379,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
           key: ValueKey('${_tagRailKey(selection)}-delete-tag'),
           tooltip: 'Tag törlése',
           onPressed: _deleteSelectedTag,
-          icon: const Icon(Icons.label_off_outlined),
+          constraints: compactConstraints,
+          padding: compactPadding,
+          icon: const Icon(Icons.label_off_outlined, size: 18),
         ),
       );
     }
@@ -387,7 +393,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
           key: ValueKey('note-table-rail-delete-row-$row'),
           tooltip: 'Sor törlése',
           onPressed: () => _deleteRow(row),
-          icon: const Icon(Icons.delete_outline),
+          constraints: compactConstraints,
+          padding: compactPadding,
+          icon: const Icon(Icons.delete_outline, size: 18),
         ),
       );
     }
@@ -400,7 +408,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
             key: ValueKey('note-table-rail-insert-column-right-column-$column'),
             tooltip: 'Oszlop beszúrása jobbra',
             onPressed: () => _insertColumn(column + 1),
-            icon: const Icon(Icons.add),
+            constraints: compactConstraints,
+            padding: compactPadding,
+            icon: const Icon(Icons.add, size: 18),
           ),
         )
         ..add(
@@ -408,7 +418,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
             key: ValueKey('note-table-rail-delete-column-$column'),
             tooltip: 'Oszlop törlése',
             onPressed: () => _deleteColumn(column),
-            icon: const Icon(Icons.close),
+            constraints: compactConstraints,
+            padding: compactPadding,
+            icon: const Icon(Icons.close, size: 18),
           ),
         );
     }
@@ -593,7 +605,6 @@ class _TableGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selected = selection;
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
@@ -603,16 +614,8 @@ class _TableGrid extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeader(context),
-            if (selected != null && selected.kind == _TableSelectionKind.column)
-              _buildColumnExpansion(selected),
-            for (var row = 0; row < rowCount; row += 1) ...[
+            for (var row = 0; row < rowCount; row += 1)
               _buildRow(context, row),
-              if (selected != null &&
-                  selected.rowIndex == row &&
-                  (selected.kind == _TableSelectionKind.row ||
-                      selected.kind == _TableSelectionKind.cell))
-                _buildRowExpansion(row, selected),
-            ],
           ],
         ),
       ),
@@ -631,29 +634,14 @@ class _TableGrid extends StatelessWidget {
           onTap: null,
         ),
         for (var column = 0; column < columnCount; column += 1)
-          _HeadCell(
-            key: ValueKey('note-table-column-head-$column'),
+          _ColumnHeadSlot(
+            column: column,
             width: _cellWidth,
-            label: 'Oszlop ${column + 1}',
             selected: selection?.isColumn(column) == true,
-            onTap: () => onSelect(_TableSelection.column(column)),
+            selection: selection,
+            onSelect: onSelect,
+            railForSelection: railForSelection,
           ),
-      ],
-    );
-  }
-
-  Widget _buildColumnExpansion(_TableSelection selected) {
-    return Row(
-      children: [
-        const SizedBox(width: _rowHeadWidth),
-        SizedBox(
-          key: ValueKey('note-table-column-expansion-${selected.columnIndex}'),
-          width: columnCount * _cellWidth,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(0, 6, 8, 8),
-            child: railForSelection(selected),
-          ),
-        ),
       ],
     );
   }
@@ -661,16 +649,16 @@ class _TableGrid extends StatelessWidget {
   Widget _buildRow(BuildContext context, int row) {
     return Row(
       children: [
-        _HeadCell(
-          key: ValueKey('note-table-row-head-$row'),
+        _RowHeadSlot(
+          row: row,
           width: _rowHeadWidth,
-          label: '${row + 1}',
-          icon: Icons.table_rows_outlined,
           selected: selection?.isRow(row) == true,
-          onTap: () => onSelect(_TableSelection.row(row)),
+          selection: selection,
+          onSelect: onSelect,
+          railForSelection: railForSelection,
         ),
         for (var column = 0; column < columnCount; column += 1)
-          _CellField(
+          _CellSlot(
             row: row,
             column: column,
             width: _cellWidth,
@@ -680,24 +668,159 @@ class _TableGrid extends StatelessWidget {
             highlightColor: highlightColorForCell(row, column),
             onTap: () => onSelect(_TableSelection.cell(row, column)),
             onChanged: (value) => onCellChanged(row, column, value),
+            selection: selection,
+            railForSelection: railForSelection,
           ),
       ],
     );
   }
+}
 
-  Widget _buildRowExpansion(int row, _TableSelection selected) {
-    return Row(
-      children: [
-        const SizedBox(width: _rowHeadWidth),
-        SizedBox(
-          key: ValueKey('note-table-row-expansion-$row'),
-          width: columnCount * _cellWidth,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(0, 6, 8, 8),
-            child: railForSelection(selected),
+class _ColumnHeadSlot extends StatelessWidget {
+  const _ColumnHeadSlot({
+    required this.column,
+    required this.width,
+    required this.selected,
+    required this.selection,
+    required this.onSelect,
+    required this.railForSelection,
+  });
+
+  final int column;
+  final double width;
+  final bool selected;
+  final _TableSelection? selection;
+  final ValueChanged<_TableSelection> onSelect;
+  final Widget Function(_TableSelection selection) railForSelection;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedColumn =
+        selection?.kind == _TableSelectionKind.column && selection?.columnIndex == column;
+    return SizedBox(
+      width: width,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _HeadCell(
+            key: ValueKey('note-table-column-head-$column'),
+            width: width,
+            label: 'Oszlop ${column + 1}',
+            selected: selected,
+            onTap: () => onSelect(_TableSelection.column(column)),
           ),
-        ),
-      ],
+          if (selectedColumn)
+            SizedBox(
+              key: ValueKey('note-table-column-head-expansion-$column'),
+              width: width,
+              child: railForSelection(selection!),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RowHeadSlot extends StatelessWidget {
+  const _RowHeadSlot({
+    required this.row,
+    required this.width,
+    required this.selected,
+    required this.selection,
+    required this.onSelect,
+    required this.railForSelection,
+  });
+
+  final int row;
+  final double width;
+  final bool selected;
+  final _TableSelection? selection;
+  final ValueChanged<_TableSelection> onSelect;
+  final Widget Function(_TableSelection selection) railForSelection;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedRow =
+        selection?.kind == _TableSelectionKind.row && selection?.rowIndex == row;
+    return SizedBox(
+      width: width,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _HeadCell(
+            key: ValueKey('note-table-row-head-$row'),
+            width: width,
+            label: '${row + 1}',
+            icon: Icons.table_rows_outlined,
+            selected: selected,
+            onTap: () => onSelect(_TableSelection.row(row)),
+          ),
+          if (selectedRow)
+            SizedBox(
+              key: ValueKey('note-table-row-head-expansion-$row'),
+              width: width,
+              child: railForSelection(selection!),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CellSlot extends StatelessWidget {
+  const _CellSlot({
+    required this.row,
+    required this.column,
+    required this.width,
+    required this.height,
+    required this.controller,
+    required this.selected,
+    required this.highlightColor,
+    required this.onTap,
+    required this.onChanged,
+    required this.selection,
+    required this.railForSelection,
+  });
+
+  final int row;
+  final int column;
+  final double width;
+  final double height;
+  final TextEditingController controller;
+  final bool selected;
+  final Color? highlightColor;
+  final VoidCallback onTap;
+  final ValueChanged<String> onChanged;
+  final _TableSelection? selection;
+  final Widget Function(_TableSelection selection) railForSelection;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedCell = selection?.isCell(row, column) == true;
+    return SizedBox(
+      width: width,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _CellField(
+            row: row,
+            column: column,
+            width: width,
+            height: height,
+            controller: controller,
+            selected: selected,
+            highlightColor: highlightColor,
+            onTap: onTap,
+            onChanged: onChanged,
+          ),
+          if (selectedCell)
+            SizedBox(
+              key: ValueKey('note-table-cell-expansion-$row-$column'),
+              width: width,
+              child: railForSelection(selection!),
+            ),
+        ],
+      ),
     );
   }
 }

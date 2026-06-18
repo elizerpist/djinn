@@ -351,6 +351,9 @@ void main() {
 
     expect(find.byKey(const ValueKey('note-flowchart-node-popup')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-flowchart-node-popup-type-universal')), findsOneWidget);
+    expect(find.text('Forma'), findsNothing);
+    expect(find.text('Rombusz'), findsNothing);
+    expect(find.text('Ovális'), findsNothing);
     expect(find.byKey(const ValueKey('note-flowchart-node-popup-add-port-right')), findsOneWidget);
   });
 

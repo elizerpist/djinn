@@ -782,7 +782,7 @@ class _SiblingDivider extends StatelessWidget {
   }
 }
 
-class _FlowchartCanvasView extends StatelessWidget {
+class _FlowchartCanvasView extends StatefulWidget {
   const _FlowchartCanvasView({super.key, required this.data, required this.controller, required this.onZoom});
 
   final MobileFlowchartData data;
@@ -790,77 +790,158 @@ class _FlowchartCanvasView extends StatelessWidget {
   final ValueChanged<double> onZoom;
 
   @override
+  State<_FlowchartCanvasView> createState() => _FlowchartCanvasViewState();
+}
+
+class _FlowchartCanvasViewState extends State<_FlowchartCanvasView> {
+  String? _lastFitSignature;
+  int _activePointers = 0;
+
+  @override
   Widget build(BuildContext context) {
+    final data = widget.data;
     final layout = _canvasLayout(data);
     final bounds = _canvasBounds(data, layout).inflate(120);
     final size = Size(math.max(640, bounds.width), math.max(520, bounds.height));
     final nodes = {for (final node in data.nodes) node.id: node};
     return SizedBox(
       height: 360,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: DecoratedBox(
-                decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFE5E7EB))),
-                child: InteractiveViewer(
-                  transformationController: controller,
-                  constrained: false,
-                  minScale: 0.35,
-                  maxScale: 2.8,
-                  boundaryMargin: const EdgeInsets.all(700),
-                  child: SizedBox(
-                    width: size.width,
-                    height: size.height,
-                    child: Stack(
-                      children: [
-                        Positioned.fill(child: CustomPaint(painter: _CanvasEdgePainter(data: data, layout: layout, bounds: bounds))),
-                        for (final edge in data.edges)
-                          if (nodes[edge.fromNodeId] != null && nodes[edge.toNodeId] != null)
-                            _CanvasEdgeAnchor(edge: edge, data: data, layout: layout, bounds: bounds),
-                        for (final edge in data.edges)
-                          if (nodes[edge.fromNodeId] != null &&
-                              nodes[edge.toNodeId] != null &&
-                              _isLoopClosingEdge(data, edge))
-                            _CanvasLoopEdgeAnchor(edge: edge, data: data, layout: layout, bounds: bounds),
-                        for (final edge in data.edges)
-                          if (nodes[edge.fromNodeId] != null && nodes[edge.toNodeId] != null)
-                            _CanvasEdgeLabel(edge: edge, data: data, layout: layout, bounds: bounds),
-                        for (final node in data.nodes)
-                          _CanvasNodePreview(data: data, node: node, offset: layout[node.id]! - bounds.topLeft),
-                      ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewport = Size(
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 430,
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 360,
+          );
+          final signature = _canvasFitSignature(data, size, viewport);
+          if (_lastFitSignature != signature) {
+            _lastFitSignature = signature;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted || _lastFitSignature != signature) {
+                return;
+              }
+              _fitCanvasToViewport(widget.controller, contentSize: size, viewportSize: viewport);
+            });
+          }
+          final previewGesturesEnabled = _activePointers >= 2;
+          return Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => _setActivePointers(_activePointers + 1),
+            onPointerUp: (_) => _setActivePointers(_activePointers - 1),
+            onPointerCancel: (_) => _setActivePointers(_activePointers - 1),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFE5E7EB))),
+                      child: InteractiveViewer(
+                        transformationController: widget.controller,
+                        constrained: false,
+                        panEnabled: previewGesturesEnabled,
+                        scaleEnabled: true,
+                        minScale: 0.08,
+                        maxScale: 2.8,
+                        boundaryMargin: const EdgeInsets.all(700),
+                        child: SizedBox(
+                          width: size.width,
+                          height: size.height,
+                          child: Stack(
+                            children: [
+                              Positioned.fill(child: CustomPaint(painter: _CanvasEdgePainter(data: data, layout: layout, bounds: bounds))),
+                              for (final edge in data.edges)
+                                if (nodes[edge.fromNodeId] != null && nodes[edge.toNodeId] != null)
+                                  _CanvasEdgeAnchor(edge: edge, data: data, layout: layout, bounds: bounds),
+                              for (final edge in data.edges)
+                                if (nodes[edge.fromNodeId] != null &&
+                                    nodes[edge.toNodeId] != null &&
+                                    _isLoopClosingEdge(data, edge))
+                                  _CanvasLoopEdgeAnchor(edge: edge, data: data, layout: layout, bounds: bounds),
+                              for (final edge in data.edges)
+                                if (nodes[edge.fromNodeId] != null && nodes[edge.toNodeId] != null)
+                                  _CanvasEdgeLabel(edge: edge, data: data, layout: layout, bounds: bounds),
+                              for (final node in data.nodes)
+                                _CanvasNodePreview(data: data, node: node, offset: layout[node.id]! - bounds.topLeft),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 8,
-            top: 8,
-            child: Column(
-              children: [
-                IconButton.filledTonal(
-                  key: const ValueKey('mobile-flowchart-canvas-zoom-in'),
-                  tooltip: 'Nagyítás',
-                  onPressed: () => onZoom(1.18),
-                  icon: const Icon(Icons.add),
-                ),
-                const SizedBox(height: 6),
-                IconButton.filledTonal(
-                  key: const ValueKey('mobile-flowchart-canvas-zoom-out'),
-                  tooltip: 'Kicsinyítés',
-                  onPressed: () => onZoom(0.84),
-                  icon: const Icon(Icons.remove),
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Column(
+                    children: [
+                      IconButton.filledTonal(
+                        key: const ValueKey('mobile-flowchart-canvas-zoom-in'),
+                        tooltip: 'Nagyítás',
+                        onPressed: () => widget.onZoom(1.18),
+                        icon: const Icon(Icons.add),
+                      ),
+                      const SizedBox(height: 6),
+                      IconButton.filledTonal(
+                        key: const ValueKey('mobile-flowchart-canvas-zoom-out'),
+                        tooltip: 'Kicsinyítés',
+                        onPressed: () => widget.onZoom(0.84),
+                        icon: const Icon(Icons.remove),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
+
+  void _setActivePointers(int next) {
+    final normalized = next < 0 ? 0 : next;
+    if (_activePointers == normalized) {
+      return;
+    }
+    setState(() => _activePointers = normalized);
+  }
+}
+
+String _canvasFitSignature(MobileFlowchartData data, Size contentSize, Size viewportSize) {
+  return [
+    data.id,
+    contentSize.width.toStringAsFixed(1),
+    contentSize.height.toStringAsFixed(1),
+    viewportSize.width.toStringAsFixed(1),
+    viewportSize.height.toStringAsFixed(1),
+    for (final node in data.nodes)
+      '${node.id}:${node.label}:${node.x?.toStringAsFixed(1)}:${node.y?.toStringAsFixed(1)}:${node.ports.length}',
+    for (final edge in data.edges)
+      '${edge.id}:${edge.fromNodeId}:${edge.toNodeId}:${edge.fromPortId}:${edge.toPortId}:${edge.label}',
+  ].join('|');
+}
+
+void _fitCanvasToViewport(
+  TransformationController controller, {
+  required Size contentSize,
+  required Size viewportSize,
+}) {
+  if (contentSize.width <= 0 ||
+      contentSize.height <= 0 ||
+      viewportSize.width <= 0 ||
+      viewportSize.height <= 0) {
+    controller.value = Matrix4.identity();
+    return;
+  }
+  final scale = math.min(
+    viewportSize.width / contentSize.width,
+    viewportSize.height / contentSize.height,
+  ).clamp(0.08, 1.0).toDouble();
+  final dx = (viewportSize.width - contentSize.width * scale) / 2;
+  final dy = (viewportSize.height - contentSize.height * scale) / 2;
+  controller.value = Matrix4.identity()
+    ..translate(dx, dy)
+    ..scale(scale);
 }
 
 class _CanvasNodePreview extends StatelessWidget {
@@ -885,19 +966,19 @@ class _CanvasNodePreview extends StatelessWidget {
         children: [
           Positioned.fill(
             child: CustomPaint(
-              painter: _CanvasNodeShapePainter(shape: _visualShape(node)),
-              child: Padding(
-                padding: _visualShape(node) == 'diamond'
-                    ? const EdgeInsets.symmetric(horizontal: 34, vertical: 20)
-                    : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Center(
-                  child: Text(
-                    node.label.trim().isEmpty ? 'Névtelen' : node.label.trim(),
-                    textAlign: TextAlign.center,
-                    maxLines: 5,
-                    overflow: TextOverflow.fade,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, height: 1.16, color: Color(0xFF263747)),
-                  ),
+              painter: const _CanvasNodeShapePainter(),
+            ),
+          ),
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Center(
+                child: Text(
+                  node.label.trim().isEmpty ? 'Névtelen' : node.label.trim(),
+                  textAlign: TextAlign.center,
+                  maxLines: 5,
+                  overflow: TextOverflow.fade,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, height: 1.16, color: Color(0xFF263747)),
                 ),
               ),
             ),
@@ -918,9 +999,7 @@ class _CanvasNodePreview extends StatelessWidget {
 }
 
 class _CanvasNodeShapePainter extends CustomPainter {
-  const _CanvasNodeShapePainter({required this.shape});
-
-  final String shape;
+  const _CanvasNodeShapePainter();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -936,27 +1015,6 @@ class _CanvasNodeShapePainter extends CustomPainter {
       ..color = const Color(0x12111827)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
 
-    if (shape == 'diamond') {
-      final path = Path()
-        ..moveTo(rect.center.dx, rect.top + 2)
-        ..lineTo(rect.right - 2, rect.center.dy)
-        ..lineTo(rect.center.dx, rect.bottom - 2)
-        ..lineTo(rect.left + 2, rect.center.dy)
-        ..close();
-      canvas.drawPath(path.shift(const Offset(0, 2)), shadow);
-      canvas.drawPath(path, fill);
-      canvas.drawPath(path, stroke);
-      return;
-    }
-
-    if (shape == 'oval') {
-      final oval = rect.deflate(2);
-      canvas.drawOval(oval.shift(const Offset(0, 2)), shadow);
-      canvas.drawOval(oval, fill);
-      canvas.drawOval(oval, stroke);
-      return;
-    }
-
     final rrect = RRect.fromRectAndRadius(rect.deflate(2), const Radius.circular(10));
     canvas.drawRRect(rrect.shift(const Offset(0, 2)), shadow);
     canvas.drawRRect(rrect, fill);
@@ -964,7 +1022,7 @@ class _CanvasNodeShapePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _CanvasNodeShapePainter oldDelegate) => oldDelegate.shape != shape;
+  bool shouldRepaint(covariant _CanvasNodeShapePainter oldDelegate) => false;
 }
 
 class _CanvasPortDot extends StatelessWidget {
@@ -1712,23 +1770,6 @@ bool _hasPathBetween(
   }
 
   return visit(startNodeId);
-}
-
-String _visualShape(MobileFlowchartNode node) {
-  final visual = node.visualShape.trim().toLowerCase();
-  if (visual == 'diamond' || visual == 'oval' || visual == 'rectangle') {
-    return visual;
-  }
-  final kind = node.kind.trim().toLowerCase();
-  final role = node.role.trim().toLowerCase();
-  final shape = node.shape.trim().toLowerCase();
-  if (kind == 'multi_decision' || kind == 'binary_decision' || shape == 'decision') {
-    return 'diamond';
-  }
-  if (role == 'start' || role == 'end' || shape == 'start_end') {
-    return 'oval';
-  }
-  return 'rectangle';
 }
 
 Map<String, Offset> _canvasLayout(MobileFlowchartData data) {

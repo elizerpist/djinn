@@ -46,15 +46,17 @@ Local scoped tags follow one rule everywhere:
 
 ## Shared Rail
 
-The rail is an inline expansion, not a floating overlay. It appears directly under the selected scope, moves content downward, and uses the same visual language in list, table, and text:
+The rail is an inline expansion, not a floating overlay. It appears as the selected component's own appendix, moves the surrounding content downward, and uses the same visual language in list, table, flowchart, and text:
 
-- white surface;
-- thin border;
+- very light grey surface;
+- a thin top separator line;
 - compact vertical padding;
 - full-opacity colored tag pills on the left;
 - icon actions on the right;
 - available actions: tag, indent/outdent where relevant, delete selected tag when relevant, delete item/row/column/cell where relevant;
 - no explanatory feature text inside the rail.
+
+The rail must not recolor the selected component. Tag feedback is applied only to the affected text background. Selected components may use an outline to show focus, but never a filled tag-colored card background.
 
 ## Text Chunk
 
@@ -77,9 +79,10 @@ List item selection uses the accepted "action rail" design:
 - tapping the text field also selects the item and keeps text editing available;
 - the old selector dot/radio icon is removed;
 - the checkbox remains next to the drag handle;
-- the selected item expands downward and shows the rail;
+- the selected item expands downward and shows the rail as a footer with a thin separator;
 - rail actions are tag, outdent, indent, and delete;
 - tagged list item content uses tag-colored text background;
+- the list item card itself is never tag-colored;
 - local tag pills appear in the selected item rail only.
 
 The list card must stay dense: no permanent tag manager button, no bottom add button, and no local tag pills below every item.
@@ -124,11 +127,27 @@ Deletion and insertion:
 The flowchart canvas remains visually sparse:
 
 - no tag pills on the canvas;
-- selected/tagged nodes and edges use outline/glow/marker feedback;
+- selected/tagged nodes and edges use outline/glow/marker feedback only;
 - tag pills live in the selected element rail/tray outside the canvas;
 - creation buttons remain three separate vertical FAB-height buttons on the right;
 - zoom controls remain in the old top button area;
 - drag/pan work must avoid unnecessary full-editor rebuilds during pointer movement.
+
+Flowchart shape selection is removed from the editor:
+
+- all flowchart nodes render as rounded boxes, including decisions and start/end nodes;
+- logical node kinds remain for ports, routing, labels, and answer semantics;
+- the node popup has no visual "Forma" chooser;
+- the mini popup preview uses the same rounded-box design as the editor canvas;
+- note-menu previews also use rounded boxes, regardless of legacy saved `visualShape` values.
+
+Inline flowchart previews inside note/chunk menus must behave like an embedded map:
+
+- one-finger vertical gestures belong to the outer note menu scroll;
+- two-finger gestures pan/zoom the preview chart;
+- the preview initially fits all nodes and routes into the preview viewport;
+- default zoom and translation are recomputed when chart data changes;
+- the preview design always matches the editor design.
 
 ## Acceptance Criteria
 
@@ -138,4 +157,6 @@ The flowchart canvas remains visually sparse:
 - A selected table column/head/cell physically expands the grid and shows a rail, with no floating control cluster.
 - Table row/column/cell tag feedback is visible as text background highlights in affected cells.
 - Flowchart tags never render as pills on the canvas.
+- Flowchart shape controls are absent and all editor/preview nodes are rounded boxes.
+- Inline flowchart previews open fit-to-view and no longer require manual scrolling to find the chart.
 - Existing scoped tag persistence and retrieval tests remain valid.

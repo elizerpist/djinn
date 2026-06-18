@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:djinn/src/ai/ai_client.dart';
+import 'package:djinn/src/flowchart/ui/mobile_flowchart_viewer.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/ui/note_chunk_card.dart';
 
@@ -62,6 +64,41 @@ void main() {
 
     final padding = tester.widget<Padding>(find.byKey(const ValueKey('note-chunk-expanded-body-flowchart')));
     expect(padding.padding, const EdgeInsets.fromLTRB(8, 10, 8, 2));
+  });
+
+  testWidgets('expanded flowchart preview normalizes legacy node shapes to rounded boxes', (tester) async {
+    const block = NoteBlock(
+      id: 'flow-1',
+      type: NoteBlockType.flowchart,
+      nodes: [
+        NoteFlowchartNode(
+          id: 'decision',
+          label: 'Súlyos?',
+          shape: AiFlowchartNodeShape.decision,
+          visualShape: NoteFlowchartVisualShape.diamond,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NoteChunkCard(
+            block: block,
+            expanded: true,
+            dragHandle: const Icon(Icons.drag_indicator),
+            onToggleExpanded: () {},
+            onOpenEditor: () {},
+            onDelete: () {},
+          ),
+        ),
+      ),
+    );
+
+    final viewer = tester.widget<MobileFlowchartViewer>(
+      find.byType(MobileFlowchartViewer),
+    );
+    expect(viewer.data.nodes.single.visualShape, 'rectangle');
   });
 
   testWidgets('chunk card exposes direct inherited tags and edit action', (tester) async {

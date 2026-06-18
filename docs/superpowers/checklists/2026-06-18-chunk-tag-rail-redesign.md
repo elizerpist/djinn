@@ -13,9 +13,12 @@ Date: 2026-06-18
 ## Shared Rail
 
 - [x] Build/reuse one compact selected-scope rail component.
+- [x] Rail appears as the selected component's own downward appendix.
+- [x] Rail uses a very light grey surface with a thin top separator.
 - [x] Rail renders local tag pills with full-opacity tag colors.
 - [x] Rail action buttons are icon-first and dense.
 - [x] Local pills are removed from dense content below list items and table cells.
+- [x] Tag feedback colors only the affected text background, never the whole component card.
 
 ## Text Chunk
 
@@ -60,14 +63,18 @@ Date: 2026-06-18
 - [x] Selected/tagged nodes and edges keep outline/marker feedback.
 - [x] Flowchart local tag pills remain outside the canvas.
 - [x] Vertical create FABs remain three separate buttons.
+- [x] Remove the node visual shape chooser from the flowchart editor.
+- [x] Render editor nodes, popup previews, and note-menu previews as rounded boxes only.
+- [x] Inline note-menu flowchart previews start fit-to-view.
+- [x] Inline note-menu flowchart previews reserve one-finger gestures for parent scroll and use two fingers for chart pan/zoom.
 
 ## Verification
 
 - [x] Add failing tests before production UI changes.
-- [x] Verify RED on GitHub Actions because local Flutter/Dart is not runnable on Termux ARM64.
+- [ ] Verify RED/GREEN on GitHub Actions because local Flutter/Dart is not runnable on Termux ARM64.
 - [x] Implement minimal production changes.
-- [x] Verify GREEN on GitHub Actions.
-- [x] Commit and push final branch.
+- [ ] Verify GREEN on GitHub Actions.
+- [ ] Commit and push final branch.
 
 ## Follow-Up
 

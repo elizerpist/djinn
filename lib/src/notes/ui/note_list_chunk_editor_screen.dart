@@ -308,10 +308,6 @@ class _ListItemRow extends StatelessWidget {
                         key: item.tags.isEmpty
                             ? null
                             : ValueKey('note-list-item-tag-highlight-${item.id}'),
-                        decoration: BoxDecoration(
-                          color: tagColor,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
                         padding: const EdgeInsets.symmetric(horizontal: 6),
                         child: TextFormField(
                           key: ValueKey('note-list-item-${item.id}'),
@@ -329,39 +325,37 @@ class _ListItemRow extends StatelessWidget {
                   ],
                 ),
                 if (selected)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(52, 4, 8, 8),
-                    child: NoteSelectionActionRail(
-                      tags: item.tags,
-                      label: 'Listaelem',
-                      pillPrefix: 'note-list-rail-pill-${item.id}',
-                      actions: [
-                        IconButton(
-                          key: ValueKey('note-list-rail-tag-${item.id}'),
-                          tooltip: 'Listaelem tagelése',
-                          onPressed: onTag,
-                          icon: const Icon(Icons.sell_outlined, size: 20),
-                        ),
-                        IconButton(
-                          key: ValueKey('note-list-rail-outdent-${item.id}'),
-                          tooltip: 'Kijjebb',
-                          onPressed: onOutdent,
-                          icon: const Icon(Icons.format_indent_decrease, size: 20),
-                        ),
-                        IconButton(
-                          key: ValueKey('note-list-rail-indent-${item.id}'),
-                          tooltip: 'Beljebb',
-                          onPressed: onIndent,
-                          icon: const Icon(Icons.format_indent_increase, size: 20),
-                        ),
-                        IconButton(
-                          key: ValueKey('note-list-rail-delete-${item.id}'),
-                          tooltip: 'Listaelem törlése',
-                          onPressed: onDelete,
-                          icon: const Icon(Icons.close, size: 20),
-                        ),
-                      ],
-                    ),
+                  NoteSelectionActionRail(
+                    tags: item.tags,
+                    label: 'Listaelem',
+                    pillPrefix: 'note-list-rail-pill-${item.id}',
+                    contentPadding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+                    actions: [
+                      IconButton(
+                        key: ValueKey('note-list-rail-tag-${item.id}'),
+                        tooltip: 'Listaelem tagelése',
+                        onPressed: onTag,
+                        icon: const Icon(Icons.sell_outlined, size: 20),
+                      ),
+                      IconButton(
+                        key: ValueKey('note-list-rail-outdent-${item.id}'),
+                        tooltip: 'Kijjebb',
+                        onPressed: onOutdent,
+                        icon: const Icon(Icons.format_indent_decrease, size: 20),
+                      ),
+                      IconButton(
+                        key: ValueKey('note-list-rail-indent-${item.id}'),
+                        tooltip: 'Beljebb',
+                        onPressed: onIndent,
+                        icon: const Icon(Icons.format_indent_increase, size: 20),
+                      ),
+                      IconButton(
+                        key: ValueKey('note-list-rail-delete-${item.id}'),
+                        tooltip: 'Listaelem törlése',
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.close, size: 20),
+                      ),
+                    ],
                   ),
               ],
             ),

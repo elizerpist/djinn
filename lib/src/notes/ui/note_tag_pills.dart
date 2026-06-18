@@ -52,28 +52,25 @@ class NoteSelectionActionRail extends StatelessWidget {
     required this.actions,
     this.label,
     this.pillPrefix = 'note-selection-rail-tag-pill',
+    this.contentPadding = const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
   });
 
   final List<NoteKnowledgeTag> tags;
   final List<Widget> actions;
   final String? label;
   final String pillPrefix;
+  final EdgeInsetsGeometry contentPadding;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       key: const ValueKey('note-selection-action-rail'),
-      color: Colors.white,
+      color: const Color(0xFFF3F4F6),
       elevation: 0,
-      borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: const [
-            BoxShadow(color: Color(0x0F111827), blurRadius: 10, offset: Offset(0, 3)),
-          ],
+        padding: contentPadding,
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
         ),
         child: Row(
           children: [
@@ -95,9 +92,20 @@ class NoteSelectionActionRail extends StatelessWidget {
                     ),
             ),
             const SizedBox(width: 8),
-            Wrap(
-              spacing: 4,
-              children: actions,
+            Flexible(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final action in actions)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: action,
+                      ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

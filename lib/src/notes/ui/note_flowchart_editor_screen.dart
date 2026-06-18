@@ -450,7 +450,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
           label: 'Döntés?',
           shape: AiFlowchartNodeShape.decision,
           kind: NoteFlowchartNodeKind.binaryDecision,
-          visualShape: NoteFlowchartVisualShape.diamond,
+          visualShape: NoteFlowchartVisualShape.rectangle,
           ports: const [
             NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet'),
             NoteFlowchartPort(id: 'yes', side: NoteFlowchartPortSide.bottom, label: 'Igen', semantic: NoteFlowchartPortSemantic.yes),
@@ -463,7 +463,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
           label: 'Többágú döntés',
           shape: AiFlowchartNodeShape.decision,
           kind: NoteFlowchartNodeKind.multiDecision,
-          visualShape: NoteFlowchartVisualShape.diamond,
+          visualShape: NoteFlowchartVisualShape.rectangle,
           ports: const [
             NoteFlowchartPort(id: 'in', side: NoteFlowchartPortSide.top, label: 'Bemenet'),
             NoteFlowchartPort(id: 'branch-1', side: NoteFlowchartPortSide.right, label: 'Ág 1', semantic: NoteFlowchartPortSemantic.custom),
@@ -766,22 +766,6 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
                         ],
                       ),
                       _NodeConfigSection(
-                        title: 'Forma',
-                        children: [
-                          Wrap(
-                            spacing: 8,
-                            children: [
-                              for (final shape in NoteFlowchartVisualShape.values)
-                                ChoiceChip(
-                                  selected: draft.visualShape == shape,
-                                  label: Text(_visualShapeLabel(shape)),
-                                  onSelected: (_) => update(draft.copyWith(visualShape: shape), 'visual_shape'),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      _NodeConfigSection(
                         title: 'Portok',
                         children: [
                           for (final port in _portsForNode(draft))
@@ -845,7 +829,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
     return node.copyWith(
       kind: kind,
       shape: draft.shape,
-      visualShape: draft.visualShape,
+      visualShape: NoteFlowchartVisualShape.rectangle,
       ports: draft.ports,
       label: node.label.trim().isEmpty ? draft.label : node.label,
     );
@@ -2230,7 +2214,7 @@ class _NodePortPreview extends StatelessWidget {
                     key: const ValueKey('note-flowchart-preview-shape'),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(node.visualShape == NoteFlowchartVisualShape.oval ? 999 : 8),
+                      borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: const Color(0xFF7C3AED)),
                     ),
                     child: Center(
@@ -2804,9 +2788,6 @@ NoteFlowchartNodeKind _effectiveKind(NoteFlowchartNode node) {
 }
 
 IconData _nodeIcon(NoteFlowchartNode node) {
-  if (node.role == NoteFlowchartNodeRole.start || node.role == NoteFlowchartNodeRole.end || node.visualShape == NoteFlowchartVisualShape.oval) {
-    return Icons.trip_origin;
-  }
   return _kindIcon(_effectiveKind(node));
 }
 
@@ -2825,14 +2806,6 @@ String _roleLabel(NoteFlowchartNodeRole role) {
     NoteFlowchartNodeRole.normal => 'Normál',
     NoteFlowchartNodeRole.start => 'Kezdés',
     NoteFlowchartNodeRole.end => 'Vége',
-  };
-}
-
-String _visualShapeLabel(NoteFlowchartVisualShape shape) {
-  return switch (shape) {
-    NoteFlowchartVisualShape.rectangle => 'Téglalap',
-    NoteFlowchartVisualShape.oval => 'Ovális',
-    NoteFlowchartVisualShape.diamond => 'Rombusz',
   };
 }
 

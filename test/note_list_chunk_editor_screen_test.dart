@@ -91,6 +91,21 @@ void main() {
       ['súlyos', 'légzési elégtelenség'],
     );
     expect(find.byKey(const ValueKey('note-list-item-tag-highlight-item-1')), findsOneWidget);
+    final highlightWrapper = tester.widget<Container>(
+      find.byKey(const ValueKey('note-list-item-tag-highlight-item-1')),
+    );
+    final highlightDecoration = highlightWrapper.decoration as BoxDecoration?;
+    expect(highlightDecoration?.color, isNull);
+    final highlightedField = tester.widget<TextFormField>(
+      find.descendant(
+        of: find.byKey(const ValueKey('note-list-item-tag-highlight-item-1')),
+        matching: find.byKey(const ValueKey('note-list-item-item-1')),
+      ),
+    );
+    expect(
+      highlightedField.style!.backgroundColor,
+      const Color(0xFF2563EB).withValues(alpha: 0.22),
+    );
     expect(find.byKey(const ValueKey('note-list-item-tag-pill-item-1-súlyos')), findsNothing);
     expect(find.byKey(const ValueKey('note-list-item-tags-item-1')), findsNothing);
   });
@@ -114,6 +129,11 @@ void main() {
 
     expect(find.byKey(const ValueKey('note-list-item-select-item-1')), findsNothing);
     expect(find.byKey(const ValueKey('note-selection-action-rail')), findsOneWidget);
+    final rail = tester.widget<Material>(
+      find.byKey(const ValueKey('note-selection-action-rail')),
+    );
+    expect(rail.color, const Color(0xFFF3F4F6));
+    expect(rail.elevation, 0);
     expect(find.byKey(const ValueKey('note-list-rail-tag-item-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-list-rail-outdent-item-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-list-rail-indent-item-1')), findsOneWidget);

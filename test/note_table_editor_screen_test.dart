@@ -113,7 +113,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('note-table-cell-1-1')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('note-table-selected-cell-1-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-table-row-expansion-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-cell-expansion-1-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-row-expansion-1')), findsNothing);
     expect(find.byKey(const ValueKey('note-selection-action-rail')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
@@ -159,7 +160,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('note-table-column-head-1')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('note-table-column-expansion-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-column-head-expansion-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-column-expansion-1')), findsNothing);
     expect(find.byKey(const ValueKey('note-selection-action-rail')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-table-rail-tag-column-1')), findsOneWidget);
   });
@@ -352,6 +354,8 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('note-table-row-head-1')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('note-table-row-head-expansion-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-table-row-expansion-1')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('note-table-rail-delete-row-1')));
     await tester.pumpAndSettle();
 

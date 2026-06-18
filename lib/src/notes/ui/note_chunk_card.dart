@@ -456,7 +456,7 @@ MobileFlowchartData _mobileFlowchartDataFromBlock(NoteBlock block) {
           shape: node.shape.wireName,
           kind: node.kind.wireName,
           role: node.role.wireName,
-          visualShape: node.visualShape.wireName,
+          visualShape: NoteFlowchartVisualShape.rectangle.wireName,
           order: node.order,
           x: node.x,
           y: node.y,
