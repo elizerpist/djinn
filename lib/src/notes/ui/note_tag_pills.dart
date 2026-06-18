@@ -114,6 +114,7 @@ class NoteSelectionActionRail extends StatefulWidget {
 class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
   final ScrollController _actionController = ScrollController();
   final ScrollController _pillController = ScrollController();
+  final Map<String, double> _lastLoggedRowOffsets = <String, double>{};
 
   @override
   void dispose() {
@@ -138,13 +139,22 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
     final nextOffset = (position.pixels - delta)
         .clamp(position.minScrollExtent, position.maxScrollExtent)
         .toDouble();
-    DebugConsole.log(
-      '[${widget.debugLogPrefix}] row scroll row=$rowName delta=${delta.toStringAsFixed(1)} '
-      'from=${position.pixels.toStringAsFixed(1)} to=${nextOffset.toStringAsFixed(1)} '
-      'min=${position.minScrollExtent.toStringAsFixed(1)} '
-      'max=${position.maxScrollExtent.toStringAsFixed(1)} '
-      'moved=${nextOffset != position.pixels}',
-    );
+    final lastLoggedOffset = _lastLoggedRowOffsets[rowName];
+    final atBoundary = nextOffset == position.minScrollExtent ||
+        nextOffset == position.maxScrollExtent;
+    final shouldLog = lastLoggedOffset == null ||
+        (nextOffset - lastLoggedOffset).abs() >= 48 ||
+        (atBoundary && nextOffset != lastLoggedOffset);
+    if (shouldLog) {
+      _lastLoggedRowOffsets[rowName] = nextOffset;
+      DebugConsole.log(
+        '[${widget.debugLogPrefix}] row scroll row=$rowName '
+        'from=${position.pixels.toStringAsFixed(1)} '
+        'to=${nextOffset.toStringAsFixed(1)} '
+        'max=${position.maxScrollExtent.toStringAsFixed(1)} '
+        'moved=${nextOffset != position.pixels}',
+      );
+    }
     if (nextOffset != position.pixels) {
       controller.jumpTo(nextOffset);
     }

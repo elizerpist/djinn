@@ -704,7 +704,6 @@ void main() {
     expect(changeCount, 1);
     expect(latest!.tableColumnWidths.first, greaterThan(initialColumnWidth));
     expect(DebugConsole.allText, contains('[TableResize] column start column=0'));
-    expect(DebugConsole.allText, contains('[TableResize] column update column=0'));
     expect(DebugConsole.allText, contains('[TableResize] column commit column=0'));
 
     await tester.tap(find.byKey(const ValueKey('note-table-row-head-1')));
@@ -722,8 +721,39 @@ void main() {
     expect(changeCount, 2);
     expect(latest!.tableRowHeights[1], greaterThan(initialRowHeight));
     expect(DebugConsole.allText, contains('[TableResize] row start row=1'));
-    expect(DebugConsole.allText, contains('[TableResize] row update row=1'));
     expect(DebugConsole.allText, contains('[TableResize] row commit row=1'));
+    expect(
+      DebugConsole.entries
+          .where((entry) => entry.contains('[TableResize]'))
+          .length,
+      lessThanOrEqualTo(8),
+    );
+  });
+
+  testWidgets('table cell selection is visible on tap down', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('note-table-cell-1-1'))),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('note-table-selected-cell-1-1')), findsOneWidget);
+    await gesture.up();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('table pinch gesture zooms out but does not zoom in past default scale', (tester) async {
@@ -900,6 +930,18 @@ void main() {
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('note-selection-rail-toggle-tags'))).dx,
       moreOrLessEquals(railToggleLeftBeforeCanvasScroll, epsilon: 0.1),
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('note-selection-action-rail'))).width,
+      moreOrLessEquals(tester.view.physicalSize.width, epsilon: 0.1),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('note-selection-action-rail'))).dx,
+      moreOrLessEquals(railLeftBefore, epsilon: 0.1),
+    );
+    expect(
+      tester.getBottomRight(find.byKey(const ValueKey('note-selection-action-rail'))).dx,
+      moreOrLessEquals(railLeftBefore + tester.view.physicalSize.width, epsilon: 0.1),
     );
     expect(DebugConsole.allText, contains('[TableRail] canvas scroll offset='));
   });

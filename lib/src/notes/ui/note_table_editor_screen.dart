@@ -573,6 +573,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   }
 
   void _select(_TableSelection selection) {
+    if (_sameSelection(_selection, selection)) {
+      return;
+    }
     setState(() => _selection = selection);
   }
 
@@ -1127,10 +1130,16 @@ class _TableGridState extends State<_TableGrid> {
   double _pinchStartScale = 1;
   double? _pinchStartDistance;
   double? _lastLoggedCanvasOffset;
-  double? _lastLoggedColumnResizeWidth;
-  double? _lastLoggedRowResizeHeight;
   int? _resizingColumn;
   int? _resizingRow;
+  int? _pendingColumnResizeColumn;
+  int? _pendingRowResizeRow;
+  double _pendingColumnResizeDelta = 0;
+  double _pendingRowResizeDelta = 0;
+  int _columnResizeFrameCount = 0;
+  int _rowResizeFrameCount = 0;
+  bool _columnResizeFrameScheduled = false;
+  bool _rowResizeFrameScheduled = false;
   bool _railPointerActive = false;
 
   static const double _minimumScale = 0.55;
@@ -1182,7 +1191,7 @@ class _TableGridState extends State<_TableGrid> {
     }
     final offset = _horizontalController.offset;
     final lastOffset = _lastLoggedCanvasOffset;
-    if (lastOffset != null && (offset - lastOffset).abs() < 1) {
+    if (lastOffset != null && (offset - lastOffset).abs() < 96) {
       return;
     }
     _lastLoggedCanvasOffset = offset;
@@ -1330,7 +1339,9 @@ class _TableGridState extends State<_TableGrid> {
       return;
     }
     _resizingColumn = column;
-    _lastLoggedColumnResizeWidth = _columnWidth(column);
+    _pendingColumnResizeColumn = null;
+    _pendingColumnResizeDelta = 0;
+    _columnResizeFrameCount = 0;
     DebugConsole.log(
       '[TableResize] column start column=$column width=${_columnWidth(column).toStringAsFixed(1)}',
     );
@@ -1338,6 +1349,34 @@ class _TableGridState extends State<_TableGrid> {
 
   void _updateColumnResize(int column, double delta) {
     if (column < 0 || column >= widget.columnCount || delta == 0) {
+      return;
+    }
+    if (_pendingColumnResizeColumn != null && _pendingColumnResizeColumn != column) {
+      _flushPendingColumnResize();
+    }
+    _pendingColumnResizeColumn = column;
+    _pendingColumnResizeDelta += delta;
+    if (_columnResizeFrameScheduled) {
+      return;
+    }
+    _columnResizeFrameScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _flushPendingColumnResize();
+      }
+    });
+  }
+
+  void _flushPendingColumnResize() {
+    final column = _pendingColumnResizeColumn;
+    final delta = _pendingColumnResizeDelta;
+    _pendingColumnResizeColumn = null;
+    _pendingColumnResizeDelta = 0;
+    _columnResizeFrameScheduled = false;
+    if (column == null ||
+        column < 0 ||
+        column >= widget.columnCount ||
+        delta.abs() <= 0.1) {
       return;
     }
     final currentWidth = _columnWidth(column);
@@ -1348,15 +1387,8 @@ class _TableGridState extends State<_TableGrid> {
     if ((nextWidth - currentWidth).abs() <= 0.1) {
       return;
     }
+    _columnResizeFrameCount += 1;
     setState(() => _previewColumnWidths[column] = nextWidth);
-    final lastLoggedWidth = _lastLoggedColumnResizeWidth;
-    if (lastLoggedWidth == null || (nextWidth - lastLoggedWidth).abs() >= 8) {
-      _lastLoggedColumnResizeWidth = nextWidth;
-      DebugConsole.log(
-        '[TableResize] column update column=$column delta=${delta.toStringAsFixed(1)} '
-        'width=${nextWidth.toStringAsFixed(1)}',
-      );
-    }
   }
 
   void _commitColumnResize(int column) {
@@ -1364,12 +1396,14 @@ class _TableGridState extends State<_TableGrid> {
       _resizingColumn = null;
       return;
     }
+    _flushPendingColumnResize();
     final width = _columnWidth(column);
     DebugConsole.log(
-      '[TableResize] column end column=$column width=${width.toStringAsFixed(1)}',
+      '[TableResize] column end column=$column width=${width.toStringAsFixed(1)} '
+      'frames=$_columnResizeFrameCount',
     );
     _resizingColumn = null;
-    _lastLoggedColumnResizeWidth = null;
+    _columnResizeFrameCount = 0;
     widget.onCommitColumnWidth(column, width);
   }
 
@@ -1378,7 +1412,9 @@ class _TableGridState extends State<_TableGrid> {
       return;
     }
     _resizingRow = row;
-    _lastLoggedRowResizeHeight = _rowHeight(row);
+    _pendingRowResizeRow = null;
+    _pendingRowResizeDelta = 0;
+    _rowResizeFrameCount = 0;
     DebugConsole.log(
       '[TableResize] row start row=$row height=${_rowHeight(row).toStringAsFixed(1)}',
     );
@@ -1386,6 +1422,34 @@ class _TableGridState extends State<_TableGrid> {
 
   void _updateRowResize(int row, double delta) {
     if (row < 0 || row >= widget.rowCount || delta == 0) {
+      return;
+    }
+    if (_pendingRowResizeRow != null && _pendingRowResizeRow != row) {
+      _flushPendingRowResize();
+    }
+    _pendingRowResizeRow = row;
+    _pendingRowResizeDelta += delta;
+    if (_rowResizeFrameScheduled) {
+      return;
+    }
+    _rowResizeFrameScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _flushPendingRowResize();
+      }
+    });
+  }
+
+  void _flushPendingRowResize() {
+    final row = _pendingRowResizeRow;
+    final delta = _pendingRowResizeDelta;
+    _pendingRowResizeRow = null;
+    _pendingRowResizeDelta = 0;
+    _rowResizeFrameScheduled = false;
+    if (row == null ||
+        row < 0 ||
+        row >= widget.rowCount ||
+        delta.abs() <= 0.1) {
       return;
     }
     final currentHeight = _rowHeight(row);
@@ -1396,15 +1460,8 @@ class _TableGridState extends State<_TableGrid> {
     if ((nextHeight - currentHeight).abs() <= 0.1) {
       return;
     }
+    _rowResizeFrameCount += 1;
     setState(() => _previewRowHeights[row] = nextHeight);
-    final lastLoggedHeight = _lastLoggedRowResizeHeight;
-    if (lastLoggedHeight == null || (nextHeight - lastLoggedHeight).abs() >= 8) {
-      _lastLoggedRowResizeHeight = nextHeight;
-      DebugConsole.log(
-        '[TableResize] row update row=$row delta=${delta.toStringAsFixed(1)} '
-        'height=${nextHeight.toStringAsFixed(1)}',
-      );
-    }
   }
 
   void _commitRowResize(int row) {
@@ -1412,12 +1469,14 @@ class _TableGridState extends State<_TableGrid> {
       _resizingRow = null;
       return;
     }
+    _flushPendingRowResize();
     final height = _rowHeight(row);
     DebugConsole.log(
-      '[TableResize] row end row=$row height=${height.toStringAsFixed(1)}',
+      '[TableResize] row end row=$row height=${height.toStringAsFixed(1)} '
+      'frames=$_rowResizeFrameCount',
     );
     _resizingRow = null;
-    _lastLoggedRowResizeHeight = null;
+    _rowResizeFrameCount = 0;
     widget.onCommitRowHeight(row, height);
   }
 
@@ -1431,9 +1490,8 @@ class _TableGridState extends State<_TableGrid> {
       builder: (context, _) {
         final viewportWidth = _viewportWidth <= 0 ? width : _viewportWidth;
         final scaledViewportWidth = (viewportWidth / _scale).clamp(0, width).toDouble();
-        final maxLeft = (width - scaledViewportWidth).clamp(0, width).toDouble();
         final left = _horizontalController.hasClients
-            ? (_horizontalController.offset / _scale).clamp(0, maxLeft).toDouble()
+            ? (_horizontalController.offset / _scale).toDouble()
             : 0.0;
         return SizedBox(
           key: key,
@@ -1963,6 +2021,7 @@ class _CellField extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => onTap(),
       onTap: onTap,
       child: Container(
         key: ValueKey('note-table-cell-container-$row-$column'),
