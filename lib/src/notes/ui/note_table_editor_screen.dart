@@ -1100,6 +1100,7 @@ class _TableGrid extends StatefulWidget {
 
   static const double _rowHeadWidth = 64;
   static const double _cellHeight = 52;
+  static const double _horizontalPadding = 12;
 
   final int columnCount;
   final int rowCount;
@@ -1195,10 +1196,11 @@ class _TableGridState extends State<_TableGrid> {
       return;
     }
     _lastLoggedCanvasOffset = offset;
+    final railLocalLeft = ((offset - _horizontalPadding) / _scale).toDouble();
     DebugConsole.log(
       '[TableRail] canvas scroll offset=${offset.toStringAsFixed(1)} '
       'viewport=${_viewportWidth.toStringAsFixed(1)} scale=${_scale.toStringAsFixed(2)} '
-      'railPointer=$_railPointerActive',
+      'railLocalLeft=${railLocalLeft.toStringAsFixed(1)} railPointer=$_railPointerActive',
     );
   }
 
@@ -1223,7 +1225,12 @@ class _TableGridState extends State<_TableGrid> {
               physics: _railPointerActive
                   ? const NeverScrollableScrollPhysics()
                   : const ClampingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              padding: const EdgeInsets.fromLTRB(
+                _horizontalPadding,
+                12,
+                _horizontalPadding,
+                24,
+              ),
               scrollDirection: Axis.horizontal,
               child: SingleChildScrollView(
                 child: Transform.scale(
@@ -1489,17 +1496,20 @@ class _TableGridState extends State<_TableGrid> {
       animation: _horizontalController,
       builder: (context, _) {
         final viewportWidth = _viewportWidth <= 0 ? width : _viewportWidth;
-        final scaledViewportWidth = (viewportWidth / _scale).clamp(0, width).toDouble();
+        final scaledViewportWidth = (viewportWidth / _scale).toDouble();
         final left = _horizontalController.hasClients
-            ? (_horizontalController.offset / _scale).toDouble()
-            : 0.0;
+            ? ((_horizontalController.offset - _horizontalPadding) / _scale)
+                .toDouble()
+            : -_horizontalPadding / _scale;
         return SizedBox(
           key: key,
           width: width,
-          child: Align(
-            alignment: Alignment.topLeft,
-            child: Transform.translate(
-              offset: Offset(left, 0),
+          child: Transform.translate(
+            offset: Offset(left, 0),
+            child: OverflowBox(
+              alignment: Alignment.topLeft,
+              minWidth: scaledViewportWidth,
+              maxWidth: scaledViewportWidth,
               child: SizedBox(
                 width: scaledViewportWidth,
                 child: Listener(
@@ -1525,7 +1535,8 @@ class _TableGridState extends State<_TableGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        IntrinsicHeight(
+        SizedBox(
+          height: _TableGrid._cellHeight,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1570,7 +1581,8 @@ class _TableGridState extends State<_TableGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        IntrinsicHeight(
+        SizedBox(
+          height: rowHeight,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

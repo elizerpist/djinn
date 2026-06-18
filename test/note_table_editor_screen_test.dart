@@ -885,6 +885,13 @@ void main() {
     final railLeftBefore = tester.getTopLeft(
       find.byKey(const ValueKey('note-selection-action-rail')),
     ).dx;
+    expect(railLeftBefore, moreOrLessEquals(0, epsilon: 0.1));
+    expect(
+      tester
+          .getBottomRight(find.byKey(const ValueKey('note-selection-action-rail')))
+          .dx,
+      moreOrLessEquals(tester.view.physicalSize.width, epsilon: 0.1),
+    );
     final railViewportStart = tester.getTopLeft(
       find.byKey(const ValueKey('note-table-rail-pointer-shield')),
     );
