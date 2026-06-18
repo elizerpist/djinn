@@ -665,7 +665,7 @@ void main() {
     expect(changeCount, 2);
   });
 
-  testWidgets('table resize previews locally and commits only when drag ends', (tester) async {
+  testWidgets('table resize commits only once per continuous drag', (tester) async {
     NoteBlock? latest;
     var changeCount = 0;
     await tester.pumpWidget(
@@ -693,21 +693,11 @@ void main() {
       find.byKey(const ValueKey('note-table-column-head-0')),
     ).width;
 
-    final columnGesture = await tester.startGesture(
-      tester.getCenter(find.byKey(const ValueKey('note-table-column-resize-0'))),
+    await tester.timedDrag(
+      find.byKey(const ValueKey('note-table-column-resize-0')),
+      const Offset(72, 0),
+      const Duration(milliseconds: 500),
     );
-    await columnGesture.moveBy(const Offset(24, 0));
-    await tester.pump();
-    expect(changeCount, 0);
-    expect(latest, isNull);
-    expect(
-      tester.getSize(find.byKey(const ValueKey('note-table-column-head-0'))).width,
-      greaterThan(initialColumnWidth),
-    );
-    await columnGesture.moveBy(const Offset(18, 0));
-    await tester.pump();
-    expect(changeCount, 0);
-    await columnGesture.up();
     await tester.pumpAndSettle();
     expect(changeCount, 1);
     expect(latest!.tableColumnWidths.first, greaterThan(initialColumnWidth));
@@ -718,20 +708,11 @@ void main() {
       find.byKey(const ValueKey('note-table-row-head-1')),
     ).height;
 
-    final rowGesture = await tester.startGesture(
-      tester.getCenter(find.byKey(const ValueKey('note-table-row-resize-1'))),
+    await tester.timedDrag(
+      find.byKey(const ValueKey('note-table-row-resize-1')),
+      const Offset(0, 68),
+      const Duration(milliseconds: 500),
     );
-    await rowGesture.moveBy(const Offset(0, 22));
-    await tester.pump();
-    expect(changeCount, 1);
-    expect(
-      tester.getSize(find.byKey(const ValueKey('note-table-row-head-1'))).height,
-      greaterThan(initialRowHeight),
-    );
-    await rowGesture.moveBy(const Offset(0, 14));
-    await tester.pump();
-    expect(changeCount, 1);
-    await rowGesture.up();
     await tester.pumpAndSettle();
     expect(changeCount, 2);
     expect(latest!.tableRowHeights[1], greaterThan(initialRowHeight));

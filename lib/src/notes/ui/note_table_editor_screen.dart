@@ -35,6 +35,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   bool _railRoundedCard = false;
   bool _railTransparentBackground = false;
   bool _railBorderVisible = true;
+  bool _layoutDirty = false;
 
   static const double _defaultColumnWidth = 150;
   static const double _defaultRowHeight = 52;
@@ -349,12 +350,15 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     }
     setState(() {
       _normalizeLayout();
-      _columnWidths[column] = (_columnWidths[column] + delta).clamp(
+      final nextWidth = (_columnWidths[column] + delta).clamp(
         _minimumColumnWidth,
         _maximumColumnWidth,
       ).toDouble();
+      if ((nextWidth - _columnWidths[column]).abs() > 0.1) {
+        _columnWidths[column] = nextWidth;
+        _layoutDirty = true;
+      }
     });
-    _emitChange();
   }
 
   void _resizeRow(int row, double delta) {
@@ -363,11 +367,22 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     }
     setState(() {
       _normalizeLayout();
-      _rowHeights[row] = (_rowHeights[row] + delta).clamp(
+      final nextHeight = (_rowHeights[row] + delta).clamp(
         _minimumRowHeight,
         _maximumRowHeight,
       ).toDouble();
+      if ((nextHeight - _rowHeights[row]).abs() > 0.1) {
+        _rowHeights[row] = nextHeight;
+        _layoutDirty = true;
+      }
     });
+  }
+
+  void _commitLayoutChange() {
+    if (!_layoutDirty) {
+      return;
+    }
+    _layoutDirty = false;
     _emitChange();
   }
 
@@ -1044,6 +1059,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
               onMoveColumn: _moveColumn,
               onResizeColumn: _resizeColumn,
               onResizeRow: _resizeRow,
+              onCommitLayoutChange: _commitLayoutChange,
               railForSelection: _railForSelection,
             ),
           ),
@@ -1068,6 +1084,7 @@ class _TableGrid extends StatefulWidget {
     required this.onMoveColumn,
     required this.onResizeColumn,
     required this.onResizeRow,
+    required this.onCommitLayoutChange,
     required this.railForSelection,
   });
 
@@ -1087,6 +1104,7 @@ class _TableGrid extends StatefulWidget {
   final void Function(int fromIndex, int toIndex) onMoveColumn;
   final void Function(int column, double delta) onResizeColumn;
   final void Function(int row, double delta) onResizeRow;
+  final VoidCallback onCommitLayoutChange;
   final Widget Function(_TableSelection selection) railForSelection;
 
   @override
@@ -1100,6 +1118,7 @@ class _TableGridState extends State<_TableGrid> {
   double _scale = 1;
   double _pinchStartScale = 1;
   double? _pinchStartDistance;
+  bool _railPointerActive = false;
 
   static const double _minimumScale = 0.55;
   static const double _maximumScale = 1;
@@ -1134,7 +1153,9 @@ class _TableGridState extends State<_TableGrid> {
             axisDirection: AxisDirection.right,
             child: SingleChildScrollView(
               controller: _horizontalController,
-              physics: const ClampingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              physics: _railPointerActive
+                  ? const NeverScrollableScrollPhysics()
+                  : const ClampingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
               scrollDirection: Axis.horizontal,
               child: SingleChildScrollView(
@@ -1216,6 +1237,13 @@ class _TableGridState extends State<_TableGrid> {
     return (positions.first - positions.last).distance;
   }
 
+  void _setRailPointerActive(bool active) {
+    if (_railPointerActive == active) {
+      return;
+    }
+    setState(() => _railPointerActive = active);
+  }
+
   double get _tableWidth {
     return _TableGrid._rowHeadWidth +
         widget.columnWidths.fold<double>(0, (total, width) => total + width);
@@ -1245,8 +1273,7 @@ class _TableGridState extends State<_TableGrid> {
       builder: (context, _) {
         final viewportWidth = _viewportWidth <= 0 ? width : _viewportWidth;
         final scaledViewportWidth = (viewportWidth / _scale).clamp(0, width).toDouble();
-        final railWidth = scaledViewportWidth;
-        final maxLeft = (width - railWidth).clamp(0, width).toDouble();
+        final maxLeft = (width - scaledViewportWidth).clamp(0, width).toDouble();
         final left = _horizontalController.hasClients
             ? _horizontalController.offset.clamp(0, maxLeft).toDouble()
             : 0.0;
@@ -1256,8 +1283,25 @@ class _TableGridState extends State<_TableGrid> {
           child: Padding(
             padding: EdgeInsets.only(left: left),
             child: SizedBox(
-              width: railWidth,
-              child: child,
+              width: scaledViewportWidth,
+              child: Listener(
+                key: const ValueKey('note-table-rail-pointer-shield'),
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: (_) => _setRailPointerActive(true),
+                onPointerUp: (_) => _setRailPointerActive(false),
+                onPointerCancel: (_) => _setRailPointerActive(false),
+                child: ClipRect(
+                  child: OverflowBox(
+                    alignment: Alignment.topLeft,
+                    minWidth: width,
+                    maxWidth: width,
+                    child: SizedBox(
+                      width: width,
+                      child: child,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         );
@@ -1292,6 +1336,7 @@ class _TableGridState extends State<_TableGrid> {
                   onSelect: widget.onSelect,
                   onMoveColumn: widget.onMoveColumn,
                   onResizeColumn: widget.onResizeColumn,
+                  onCommitResize: widget.onCommitLayoutChange,
                 ),
             ],
           ),
@@ -1327,6 +1372,7 @@ class _TableGridState extends State<_TableGrid> {
                 onSelect: widget.onSelect,
                 onMoveRow: widget.onMoveRow,
                 onResizeRow: widget.onResizeRow,
+                onCommitResize: widget.onCommitLayoutChange,
               ),
               for (var column = 0; column < widget.columnCount; column += 1)
                 _CellSlot(
@@ -1368,6 +1414,7 @@ class _ColumnHeadSlot extends StatelessWidget {
     required this.onSelect,
     required this.onMoveColumn,
     required this.onResizeColumn,
+    required this.onCommitResize,
   });
 
   final int column;
@@ -1376,6 +1423,7 @@ class _ColumnHeadSlot extends StatelessWidget {
   final ValueChanged<_TableSelection> onSelect;
   final void Function(int fromIndex, int toIndex) onMoveColumn;
   final void Function(int column, double delta) onResizeColumn;
+  final VoidCallback onCommitResize;
 
   @override
   Widget build(BuildContext context) {
@@ -1409,6 +1457,7 @@ class _ColumnHeadSlot extends StatelessWidget {
                 resizeEnabled: selected,
                 onSelect: onSelect,
                 onResizeColumn: onResizeColumn,
+                onCommitResize: onCommitResize,
               ),
             ),
             child: _ColumnHeadContent(
@@ -1418,6 +1467,7 @@ class _ColumnHeadSlot extends StatelessWidget {
               resizeEnabled: selected,
               onSelect: onSelect,
               onResizeColumn: onResizeColumn,
+              onCommitResize: onCommitResize,
             ),
           );
         },
@@ -1434,6 +1484,7 @@ class _ColumnHeadContent extends StatelessWidget {
     required this.resizeEnabled,
     required this.onSelect,
     required this.onResizeColumn,
+    required this.onCommitResize,
   });
 
   final int column;
@@ -1442,6 +1493,7 @@ class _ColumnHeadContent extends StatelessWidget {
   final bool resizeEnabled;
   final ValueChanged<_TableSelection> onSelect;
   final void Function(int column, double delta) onResizeColumn;
+  final VoidCallback onCommitResize;
 
   @override
   Widget build(BuildContext context) {
@@ -1467,6 +1519,8 @@ class _ColumnHeadContent extends StatelessWidget {
               key: ValueKey('note-table-column-resize-$column'),
               behavior: HitTestBehavior.opaque,
               onHorizontalDragUpdate: (details) => onResizeColumn(column, details.delta.dx),
+              onHorizontalDragEnd: (_) => onCommitResize(),
+              onHorizontalDragCancel: onCommitResize,
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Icon(
@@ -1492,6 +1546,7 @@ class _RowHeadSlot extends StatelessWidget {
     required this.onSelect,
     required this.onMoveRow,
     required this.onResizeRow,
+    required this.onCommitResize,
   });
 
   final int row;
@@ -1501,6 +1556,7 @@ class _RowHeadSlot extends StatelessWidget {
   final ValueChanged<_TableSelection> onSelect;
   final void Function(int fromIndex, int toIndex) onMoveRow;
   final void Function(int row, double delta) onResizeRow;
+  final VoidCallback onCommitResize;
 
   @override
   Widget build(BuildContext context) {
@@ -1536,6 +1592,7 @@ class _RowHeadSlot extends StatelessWidget {
                 resizeEnabled: selected,
                 onSelect: onSelect,
                 onResizeRow: onResizeRow,
+                onCommitResize: onCommitResize,
               ),
             ),
             child: _RowHeadContent(
@@ -1546,6 +1603,7 @@ class _RowHeadSlot extends StatelessWidget {
               resizeEnabled: selected,
               onSelect: onSelect,
               onResizeRow: onResizeRow,
+              onCommitResize: onCommitResize,
             ),
           );
         },
@@ -1563,6 +1621,7 @@ class _RowHeadContent extends StatelessWidget {
     required this.resizeEnabled,
     required this.onSelect,
     required this.onResizeRow,
+    required this.onCommitResize,
   });
 
   final int row;
@@ -1572,6 +1631,7 @@ class _RowHeadContent extends StatelessWidget {
   final bool resizeEnabled;
   final ValueChanged<_TableSelection> onSelect;
   final void Function(int row, double delta) onResizeRow;
+  final VoidCallback onCommitResize;
 
   @override
   Widget build(BuildContext context) {
@@ -1598,6 +1658,8 @@ class _RowHeadContent extends StatelessWidget {
               key: ValueKey('note-table-row-resize-$row'),
               behavior: HitTestBehavior.opaque,
               onVerticalDragUpdate: (details) => onResizeRow(row, details.delta.dy),
+              onVerticalDragEnd: (_) => onCommitResize(),
+              onVerticalDragCancel: onCommitResize,
               child: Align(
                 alignment: Alignment.bottomCenter,
                 child: RotatedBox(

@@ -76,7 +76,7 @@ class NoteTagPills extends StatelessWidget {
   }
 }
 
-class NoteSelectionActionRail extends StatelessWidget {
+class NoteSelectionActionRail extends StatefulWidget {
   const NoteSelectionActionRail({
     super.key,
     required this.tags,
@@ -105,17 +105,36 @@ class NoteSelectionActionRail extends StatelessWidget {
   final bool showBorder;
 
   @override
+  State<NoteSelectionActionRail> createState() => _NoteSelectionActionRailState();
+}
+
+class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
+  final ScrollController _actionController = ScrollController();
+  final ScrollController _pillController = ScrollController();
+
+  @override
+  void dispose() {
+    _actionController.dispose();
+    _pillController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final backgroundColor = transparentBackground ? Colors.transparent : Colors.white;
-    final decoration = roundedCard
+    final backgroundColor = widget.transparentBackground
+        ? Colors.transparent
+        : Colors.white;
+    final decoration = widget.roundedCard
         ? BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(8),
-            border: showBorder ? Border.all(color: const Color(0xFFE5E7EB)) : null,
+            border: widget.showBorder
+                ? Border.all(color: const Color(0xFFE5E7EB))
+                : null,
           )
         : BoxDecoration(
             color: backgroundColor,
-            border: showBorder
+            border: widget.showBorder
                 ? const Border(
                     top: BorderSide(color: Color(0xFFE5E7EB)),
                     bottom: BorderSide(color: Color(0xFFE5E7EB)),
@@ -128,92 +147,104 @@ class NoteSelectionActionRail extends StatelessWidget {
       elevation: 0,
       child: KeyedSubtree(
         key: ValueKey(
-          roundedCard
+          widget.roundedCard
               ? 'note-selection-action-rail-rounded'
               : 'note-selection-action-rail-separator',
         ),
+        child: KeyedSubtree(
+          key: ValueKey(
+            widget.transparentBackground
+                ? 'note-selection-action-rail-transparent'
+                : 'note-selection-action-rail-white',
+          ),
           child: KeyedSubtree(
             key: ValueKey(
-              transparentBackground
-                  ? 'note-selection-action-rail-transparent'
-                  : 'note-selection-action-rail-white',
+              widget.showBorder
+                  ? 'note-selection-action-rail-border'
+                  : 'note-selection-action-rail-borderless',
             ),
-            child: KeyedSubtree(
-              key: ValueKey(
-                showBorder
-                    ? 'note-selection-action-rail-border'
-                    : 'note-selection-action-rail-borderless',
-              ),
-              child: Container(
-                decoration: decoration,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: contentPadding,
-                      child: SingleChildScrollView(
-                        key: const ValueKey('note-selection-action-row'),
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (onToggleBottomRow != null)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 4),
-                                child: IconButton(
-                                  key: const ValueKey('note-selection-rail-toggle-tags'),
-                                  tooltip: bottomRowExpanded ? 'Tagek bezárása' : 'Tagek megnyitása',
-                                  onPressed: onToggleBottomRow,
-                                  icon: Icon(
-                                    bottomRowExpanded
-                                        ? Icons.keyboard_arrow_up
-                                        : Icons.keyboard_arrow_down,
-                                    size: 20,
-                                  ),
+            child: Container(
+              decoration: decoration,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: widget.contentPadding,
+                    child: SingleChildScrollView(
+                      key: const ValueKey('note-selection-action-row'),
+                      controller: _actionController,
+                      primary: false,
+                      physics: const ClampingScrollPhysics(),
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.onToggleBottomRow != null)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: IconButton(
+                                key: const ValueKey('note-selection-rail-toggle-tags'),
+                                tooltip: widget.bottomRowExpanded
+                                    ? 'Tagek bezárása'
+                                    : 'Tagek megnyitása',
+                                onPressed: widget.onToggleBottomRow,
+                                icon: Icon(
+                                  widget.bottomRowExpanded
+                                      ? Icons.keyboard_arrow_up
+                                      : Icons.keyboard_arrow_down,
+                                  size: 20,
                                 ),
                               ),
-                            for (final action in actions)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 4),
-                                child: action,
+                            ),
+                          for (final action in widget.actions)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: action,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (widget.bottomRowExpanded) ...[
+                    const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                    Padding(
+                      padding: widget.contentPadding,
+                      child: SingleChildScrollView(
+                        key: const ValueKey('note-selection-pill-row'),
+                        controller: _pillController,
+                        primary: false,
+                        physics: const ClampingScrollPhysics(),
+                        scrollDirection: Axis.horizontal,
+                        child: widget.tags.isEmpty
+                            ? Text(
+                                'Nincs tag',
+                                key: const ValueKey('note-selection-empty-tags'),
+                                style: const TextStyle(
+                                  color: Color(0xFF6B7280),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              )
+                            : NoteTagPills(
+                                tags: widget.tags,
+                                prefix: widget.pillPrefix,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 9,
+                                  vertical: 5,
+                                ),
+                                onDeleted: widget.onDeleteTag,
+                                scrollable: false,
                               ),
-                          ],
                         ),
                       ),
                     ),
-                    if (bottomRowExpanded) ...[
-                      const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                      Padding(
-                        padding: contentPadding,
-                        child: SingleChildScrollView(
-                          key: const ValueKey('note-selection-pill-row'),
-                          scrollDirection: Axis.horizontal,
-                          child: tags.isEmpty
-                              ? Text(
-                                  'Nincs tag',
-                                  key: const ValueKey('note-selection-empty-tags'),
-                                  style: const TextStyle(
-                                    color: Color(0xFF6B7280),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                )
-                              : NoteTagPills(
-                                  tags: tags,
-                                  prefix: pillPrefix,
-                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                                  onDeleted: onDeleteTag,
-                                  scrollable: false,
-                                ),
-                        ),
-                      ),
-                    ],
                   ],
-                ),
+                ],
               ),
             ),
           ),
+        ),
       ),
     );
   }
