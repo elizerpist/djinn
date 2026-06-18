@@ -243,7 +243,7 @@ void main() {
                 ),
                 tags: [
                   NoteKnowledgeTag(
-                    type: NoteKnowledgeTagTypes.definition,
+                    type: NoteKnowledgeTagTypes.custom,
                     label: 'cella',
                     colorValue: 0xFF16A34A,
                   ),
@@ -256,10 +256,10 @@ void main() {
       ),
     );
 
-    final highlightedField = tester.widget<TextFormField>(
+    final highlightedField = tester.widget<TextField>(
       find.descendant(
         of: find.byKey(const ValueKey('note-table-cell-highlight-1-1')),
-        matching: find.byKey(const ValueKey('note-table-cell-1-1')),
+        matching: find.byType(TextField),
       ),
     );
 
