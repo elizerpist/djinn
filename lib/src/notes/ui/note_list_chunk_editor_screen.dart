@@ -31,6 +31,9 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
   final Map<String, FocusNode> _itemFocusNodes = <String, FocusNode>{};
   String? _selectedItemId;
   bool _railBottomExpanded = true;
+  bool _railRoundedCard = false;
+  bool _railTransparentBackground = false;
+  bool _railBorderVisible = true;
 
   @override
   void initState() {
@@ -400,9 +403,20 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
                       ? () => _focusTaggedItem(1)
                       : null,
                   railBottomExpanded: _railBottomExpanded,
+                  railRoundedCard: _railRoundedCard,
+                  railTransparentBackground: _railTransparentBackground,
+                  railBorderVisible: _railBorderVisible,
                   onToggleRailBottom: () => setState(
                     () => _railBottomExpanded = !_railBottomExpanded,
                   ),
+                  onToggleRailRounded: () =>
+                      setState(() => _railRoundedCard = !_railRoundedCard),
+                  onToggleRailTransparent: () => setState(
+                    () => _railTransparentBackground =
+                        !_railTransparentBackground,
+                  ),
+                  onToggleRailBorder: () =>
+                      setState(() => _railBorderVisible = !_railBorderVisible),
                   onSubmit: () => _insertItemAfter(item),
                   onDelete: () => _deleteItem(item),
                   onIndent: () => _changeIndent(item, 1),
@@ -457,7 +471,13 @@ class _ListItemRow extends StatelessWidget {
     required this.onPreviousTagged,
     required this.onNextTagged,
     required this.railBottomExpanded,
+    required this.railRoundedCard,
+    required this.railTransparentBackground,
+    required this.railBorderVisible,
     required this.onToggleRailBottom,
+    required this.onToggleRailRounded,
+    required this.onToggleRailTransparent,
+    required this.onToggleRailBorder,
     required this.onSubmit,
     required this.onDelete,
     required this.onIndent,
@@ -478,7 +498,13 @@ class _ListItemRow extends StatelessWidget {
   final VoidCallback? onPreviousTagged;
   final VoidCallback? onNextTagged;
   final bool railBottomExpanded;
+  final bool railRoundedCard;
+  final bool railTransparentBackground;
+  final bool railBorderVisible;
   final VoidCallback onToggleRailBottom;
+  final VoidCallback onToggleRailRounded;
+  final VoidCallback onToggleRailTransparent;
+  final VoidCallback onToggleRailBorder;
   final VoidCallback onSubmit;
   final VoidCallback onDelete;
   final VoidCallback onIndent;
@@ -486,9 +512,7 @@ class _ListItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tagColor = item.tags.isEmpty
-        ? null
-        : Color(item.tags.first.resolvedColorValue).withValues(alpha: 0.22);
+    final textStyle = _taggedListTextStyle(item.tags);
     return GestureDetector(
       key: ValueKey('note-list-row-${item.id}'),
       behavior: HitTestBehavior.translucent,
@@ -563,7 +587,7 @@ class _ListItemRow extends StatelessWidget {
                             hintText: 'Listaelem',
                             border: InputBorder.none,
                           ),
-                          style: TextStyle(backgroundColor: tagColor),
+                          style: textStyle,
                           onTap: onSelect,
                           onChanged: (value) =>
                               onChanged(item.copyWith(text: value)),
@@ -581,6 +605,9 @@ class _ListItemRow extends StatelessWidget {
                     bottomRowExpanded: railBottomExpanded,
                     onToggleBottomRow: onToggleRailBottom,
                     onDeleteTag: onDeleteTag,
+                    roundedCard: railRoundedCard,
+                    transparentBackground: railTransparentBackground,
+                    showBorder: railBorderVisible,
                     contentPadding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
                     showBottomBorder: false,
                     actions: [
@@ -632,6 +659,32 @@ class _ListItemRow extends StatelessWidget {
                         onPressed: onDelete,
                         icon: const Icon(Icons.close, size: 20),
                       ),
+                      IconButton(
+                        key: const ValueKey('note-list-rail-toggle-rounded'),
+                        tooltip: railRoundedCard
+                            ? 'Vonalas rail'
+                            : 'Cellaszerű rail',
+                        onPressed: onToggleRailRounded,
+                        icon: const Icon(Icons.crop_square_outlined, size: 20),
+                      ),
+                      IconButton(
+                        key: const ValueKey(
+                          'note-list-rail-toggle-transparent',
+                        ),
+                        tooltip: railTransparentBackground
+                            ? 'Fehér rail háttér'
+                            : 'Átlátszó rail háttér',
+                        onPressed: onToggleRailTransparent,
+                        icon: const Icon(Icons.opacity, size: 20),
+                      ),
+                      IconButton(
+                        key: const ValueKey('note-list-rail-toggle-border'),
+                        tooltip: railBorderVisible
+                            ? 'Rail border nélkül'
+                            : 'Rail borderrel',
+                        onPressed: onToggleRailBorder,
+                        icon: const Icon(Icons.border_outer, size: 20),
+                      ),
                     ],
                   ),
               ],
@@ -641,6 +694,25 @@ class _ListItemRow extends StatelessWidget {
       ),
     );
   }
+}
+
+TextStyle _taggedListTextStyle(List<NoteKnowledgeTag> tags) {
+  if (tags.isEmpty) {
+    return const TextStyle();
+  }
+  return TextStyle(
+    backgroundColor: Color(
+      tags.first.resolvedColorValue,
+    ).withValues(alpha: 0.22),
+    decoration: tags.length > 1
+        ? TextDecoration.underline
+        : TextDecoration.none,
+    decorationStyle: tags.length > 2
+        ? TextDecorationStyle.double
+        : TextDecorationStyle.solid,
+    decorationColor: tags.length > 1 ? Color(tags[1].resolvedColorValue) : null,
+    decorationThickness: tags.length > 1 ? 2 : null,
+  );
 }
 
 void unawaited(Future<void> future) {}

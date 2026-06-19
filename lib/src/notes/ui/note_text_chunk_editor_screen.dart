@@ -27,11 +27,17 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
 class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late NoteBlock _block;
   late final _TaggedTextEditingController _controller;
-  late final FocusNode _focusNode;
   bool _selectionCanDeleteTag = false;
   bool _selectionHasRange = false;
   bool _syncingRangeTags = false;
   bool _railBottomExpanded = true;
+  bool _railRoundedCard = false;
+  bool _railTransparentBackground = false;
+  bool _railBorderVisible = true;
+  int _activeParagraphIndex = 0;
+  final Map<int, _TaggedTextEditingController> _paragraphControllers =
+      <int, _TaggedTextEditingController>{};
+  final Map<int, FocusNode> _paragraphFocusNodes = <int, FocusNode>{};
 
   @override
   void initState() {
@@ -42,7 +48,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       rangeTags: widget.block.rangeTags,
     );
     _controller.addListener(_handleControllerChanged);
-    _focusNode = FocusNode();
     _selectionCanDeleteTag = _selectionHasTag();
     _selectionHasRange = _selectionIsTaggable();
   }
@@ -51,7 +56,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   void dispose() {
     _controller.removeListener(_handleControllerChanged);
     _controller.dispose();
-    _focusNode.dispose();
+    for (final controller in _paragraphControllers.values) {
+      controller.dispose();
+    }
+    for (final focusNode in _paragraphFocusNodes.values) {
+      focusNode.dispose();
+    }
     super.dispose();
   }
 
@@ -83,6 +93,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       tags: _block.rangeTags,
     );
     _setControllerRangeTags(rangeTags);
+    _syncParagraphRangeTags();
     _block = _block.copyWith(
       text: value,
       rangeTags: rangeTags,
@@ -180,8 +191,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   TextRange? _selectionTargetRange() {
-    final selection = _controller.selection;
-    if (!selection.isValid || _controller.text.isEmpty) {
+    final selection = _activeParagraphController?.selection;
+    final segment = _activeParagraphSegment;
+    if (selection == null ||
+        segment == null ||
+        !selection.isValid ||
+        _controller.text.isEmpty) {
       return null;
     }
     if (!selection.isCollapsed) {
@@ -192,8 +207,10 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           ? selection.end
           : selection.start;
       return TextRange(
-        start: start.clamp(0, _controller.text.length).toInt(),
-        end: end.clamp(0, _controller.text.length).toInt(),
+        start: (segment.start + start)
+            .clamp(0, _controller.text.length)
+            .toInt(),
+        end: (segment.start + end).clamp(0, _controller.text.length).toInt(),
       );
     }
     final collapsedRange = _collapsedTaggedRange();
@@ -204,11 +221,15 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   NoteTextRangeTag? _collapsedTaggedRange() {
-    final selection = _controller.selection;
-    if (!selection.isValid || !selection.isCollapsed) {
+    final selection = _activeParagraphController?.selection;
+    final segment = _activeParagraphSegment;
+    if (selection == null ||
+        segment == null ||
+        !selection.isValid ||
+        !selection.isCollapsed) {
       return null;
     }
-    final offset = selection.extentOffset
+    final offset = (segment.start + selection.extentOffset)
         .clamp(0, _controller.text.length)
         .toInt();
     for (final tag in _block.rangeTags) {
@@ -323,7 +344,23 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       baseOffset: target.start,
       extentOffset: target.end,
     );
-    _focusNode.requestFocus();
+    final segments = _segments;
+    final paragraphIndex = segments.indexWhere(
+      (segment) => target.start >= segment.start && target.start <= segment.end,
+    );
+    if (paragraphIndex >= 0) {
+      final segment = segments[paragraphIndex];
+      _activeParagraphIndex = paragraphIndex;
+      _paragraphControllers[paragraphIndex]?.selection = TextSelection(
+        baseOffset: (target.start - segment.start)
+            .clamp(0, segment.text.length)
+            .toInt(),
+        extentOffset: (target.end - segment.start)
+            .clamp(0, segment.text.length)
+            .toInt(),
+      );
+      _paragraphFocusNodes[paragraphIndex]?.requestFocus();
+    }
     _handleControllerChanged();
   }
 
@@ -356,6 +393,166 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     } finally {
       _syncingRangeTags = false;
     }
+  }
+
+  List<_TextParagraphSegment> get _segments =>
+      _TextParagraphSegment.fromText(_controller.text);
+
+  _TextParagraphSegment? get _activeParagraphSegment {
+    final segments = _segments;
+    if (_activeParagraphIndex < 0 || _activeParagraphIndex >= segments.length) {
+      return segments.isEmpty ? null : segments.first;
+    }
+    return segments[_activeParagraphIndex];
+  }
+
+  _TaggedTextEditingController? get _activeParagraphController =>
+      _paragraphControllers[_activeParagraphIndex];
+
+  _TaggedTextEditingController _paragraphControllerFor(
+    int index,
+    _TextParagraphSegment segment,
+  ) {
+    final controller = _paragraphControllers.putIfAbsent(index, () {
+      final created = _TaggedTextEditingController(
+        text: segment.text,
+        rangeTags: _localRangeTagsForSegment(segment),
+      );
+      created.addListener(() {
+        _activeParagraphIndex = index;
+        _handleControllerChanged();
+      });
+      return created;
+    });
+    if (controller.text != segment.text &&
+        !(_paragraphFocusNodes[index]?.hasFocus ?? false)) {
+      controller.value = TextEditingValue(
+        text: segment.text,
+        selection: TextSelection.collapsed(
+          offset: segment.text.length.clamp(0, segment.text.length).toInt(),
+        ),
+      );
+    }
+    controller.setRangeTags(_localRangeTagsForSegment(segment));
+    return controller;
+  }
+
+  FocusNode _paragraphFocusNodeFor(int index) {
+    return _paragraphFocusNodes.putIfAbsent(index, FocusNode.new);
+  }
+
+  List<NoteTextRangeTag> _localRangeTagsForSegment(
+    _TextParagraphSegment segment,
+  ) {
+    final localTags = <NoteTextRangeTag>[];
+    for (final rangeTag in _block.rangeTags) {
+      final tag = rangeTag.clampToTextLength(_controller.text.length);
+      final start = tag.start > segment.start ? tag.start : segment.start;
+      final end = tag.end < segment.end ? tag.end : segment.end;
+      if (end <= start) {
+        continue;
+      }
+      localTags.add(
+        NoteTextRangeTag(
+          id: tag.id,
+          start: start - segment.start,
+          end: end - segment.start,
+          tag: tag.tag,
+          tags: tag.tags,
+        ),
+      );
+    }
+    return localTags;
+  }
+
+  void _syncParagraphRangeTags() {
+    final segments = _segments;
+    for (var i = 0; i < segments.length; i += 1) {
+      _paragraphControllers[i]?.setRangeTags(
+        _localRangeTagsForSegment(segments[i]),
+      );
+    }
+  }
+
+  void _emitParagraphText(
+    int index,
+    _TextParagraphSegment segment,
+    String value,
+  ) {
+    final text = _controller.text;
+    final next =
+        '${text.substring(0, segment.start)}$value${text.substring(segment.end)}';
+    _controller.value = _controller.value.copyWith(text: next);
+    _emitText(next);
+  }
+
+  Widget _buildSelectionRail() {
+    return NoteSelectionActionRail(
+      key: const ValueKey('note-text-selection-rail'),
+      tags: _selectionTags(),
+      label: 'Kijelölt szöveg',
+      pillPrefix: 'note-text-selection-rail-pill',
+      bottomRowExpanded: _railBottomExpanded,
+      onToggleBottomRow: () =>
+          setState(() => _railBottomExpanded = !_railBottomExpanded),
+      onDeleteTag: _deleteSingleSelectedTag,
+      roundedCard: _railRoundedCard,
+      transparentBackground: _railTransparentBackground,
+      showBorder: _railBorderVisible,
+      actions: [
+        IconButton(
+          key: const ValueKey('note-text-selection-rail-tag'),
+          tooltip: 'Kijelölt rész tagelése',
+          onPressed: () => unawaited(_tagSelection()),
+          icon: const Icon(Icons.sell_outlined, size: 20),
+        ),
+        IconButton(
+          key: const ValueKey('note-text-selection-rail-clear-tags'),
+          tooltip: 'Minden tag törlése',
+          onPressed: _selectionCanDeleteTag ? _deleteSelectedTag : null,
+          icon: const Icon(Icons.delete_outline, size: 20),
+        ),
+        IconButton(
+          key: const ValueKey('note-text-selection-rail-prev'),
+          tooltip: 'Előző tag',
+          onPressed: _block.rangeTags.isEmpty
+              ? null
+              : () => _focusTaggedRange(-1),
+          icon: const Icon(Icons.chevron_left, size: 20),
+        ),
+        IconButton(
+          key: const ValueKey('note-text-selection-rail-next'),
+          tooltip: 'Következő tag',
+          onPressed: _block.rangeTags.isEmpty
+              ? null
+              : () => _focusTaggedRange(1),
+          icon: const Icon(Icons.chevron_right, size: 20),
+        ),
+        IconButton(
+          key: const ValueKey('note-text-rail-toggle-rounded'),
+          tooltip: _railRoundedCard ? 'Vonalas rail' : 'Cellaszerű rail',
+          onPressed: () => setState(() => _railRoundedCard = !_railRoundedCard),
+          icon: const Icon(Icons.crop_square_outlined, size: 20),
+        ),
+        IconButton(
+          key: const ValueKey('note-text-rail-toggle-transparent'),
+          tooltip: _railTransparentBackground
+              ? 'Fehér rail háttér'
+              : 'Átlátszó rail háttér',
+          onPressed: () => setState(
+            () => _railTransparentBackground = !_railTransparentBackground,
+          ),
+          icon: const Icon(Icons.opacity, size: 20),
+        ),
+        IconButton(
+          key: const ValueKey('note-text-rail-toggle-border'),
+          tooltip: _railBorderVisible ? 'Rail border nélkül' : 'Rail borderrel',
+          onPressed: () =>
+              setState(() => _railBorderVisible = !_railBorderVisible),
+          icon: const Icon(Icons.border_outer, size: 20),
+        ),
+      ],
+    );
   }
 
   void _deleteChunk() {
@@ -430,106 +627,136 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          if (_block.tags.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: NoteTagPills(
-                  tags: _block.tags,
-                  onDeleted: _deleteChunkTag,
+      body: Container(
+        key: const ValueKey('note-text-chunk-body'),
+        color: const Color(0xFFF3F4F6),
+        child: Column(
+          children: [
+            if (_block.tags.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: NoteTagPills(
+                    tags: _block.tags,
+                    onDeleted: _deleteChunkTag,
+                  ),
+                ),
+              ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final entry in _segments.indexed) ...[
+                      if (entry.$1 > 0) const SizedBox(height: 12),
+                      Container(
+                        key: ValueKey('note-text-paragraph-box-${entry.$1}'),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: TextField(
+                          key: entry.$1 == 0
+                              ? const ValueKey('note-text-chunk-field')
+                              : ValueKey('note-text-chunk-field-${entry.$1}'),
+                          controller: _paragraphControllerFor(
+                            entry.$1,
+                            entry.$2,
+                          ),
+                          focusNode: _paragraphFocusNodeFor(entry.$1),
+                          autofocus: entry.$1 == 0,
+                          maxLines: null,
+                          minLines: 1,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          decoration: const InputDecoration(
+                            hintText: 'Írd ide a chunk tartalmát',
+                            border: InputBorder.none,
+                          ),
+                          style: const TextStyle(fontSize: 16, height: 1.45),
+                          onTap: () {
+                            _activeParagraphIndex = entry.$1;
+                            _handleControllerChanged();
+                          },
+                          onChanged: (value) =>
+                              _emitParagraphText(entry.$1, entry.$2, value),
+                        ),
+                      ),
+                      if (_selectionHasRange &&
+                          _activeParagraphIndex == entry.$1)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildSelectionRail(),
+                        ),
+                    ],
+                  ],
                 ),
               ),
             ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: TextField(
-                key: const ValueKey('note-text-chunk-field'),
-                controller: _controller,
-                focusNode: _focusNode,
-                autofocus: true,
-                expands: true,
-                maxLines: null,
-                minLines: null,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                decoration: const InputDecoration(
-                  hintText: 'Írd ide a chunk tartalmát',
-                  border: InputBorder.none,
-                ),
-                style: const TextStyle(fontSize: 16, height: 1.45),
-                onChanged: _emitText,
+            if (_block.rangeTags.isNotEmpty)
+              const SizedBox.shrink(key: ValueKey('note-text-range-highlight')),
+            Container(
+              key: const ValueKey('note-text-tip-bar'),
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Írj szöveget, jelöld ki a részt, majd a hárompontos menüből taggeld.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
               ),
             ),
-          ),
-          if (_block.rangeTags.isNotEmpty)
-            const SizedBox.shrink(key: ValueKey('note-text-range-highlight')),
-          if (_selectionHasRange)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: NoteSelectionActionRail(
-                key: const ValueKey('note-text-selection-rail'),
-                tags: _selectionTags(),
-                label: 'Kijelölt szöveg',
-                pillPrefix: 'note-text-selection-rail-pill',
-                bottomRowExpanded: _railBottomExpanded,
-                onToggleBottomRow: () =>
-                    setState(() => _railBottomExpanded = !_railBottomExpanded),
-                onDeleteTag: _deleteSingleSelectedTag,
-                actions: [
-                  IconButton(
-                    key: const ValueKey('note-text-selection-rail-tag'),
-                    tooltip: 'Kijelölt rész tagelése',
-                    onPressed: () => unawaited(_tagSelection()),
-                    icon: const Icon(Icons.sell_outlined, size: 20),
-                  ),
-                  IconButton(
-                    key: const ValueKey('note-text-selection-rail-clear-tags'),
-                    tooltip: 'Minden tag törlése',
-                    onPressed: _selectionCanDeleteTag
-                        ? _deleteSelectedTag
-                        : null,
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                  ),
-                  IconButton(
-                    key: const ValueKey('note-text-selection-rail-prev'),
-                    tooltip: 'Előző tag',
-                    onPressed: _block.rangeTags.isEmpty
-                        ? null
-                        : () => _focusTaggedRange(-1),
-                    icon: const Icon(Icons.chevron_left, size: 20),
-                  ),
-                  IconButton(
-                    key: const ValueKey('note-text-selection-rail-next'),
-                    tooltip: 'Következő tag',
-                    onPressed: _block.rangeTags.isEmpty
-                        ? null
-                        : () => _focusTaggedRange(1),
-                    icon: const Icon(Icons.chevron_right, size: 20),
-                  ),
-                ],
-              ),
-            ),
-          Container(
-            key: const ValueKey('note-text-tip-bar'),
-            width: double.infinity,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'Írj szöveget, jelöld ki a részt, majd a hárompontos menüből taggeld.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+}
+
+class _TextParagraphSegment {
+  const _TextParagraphSegment({
+    required this.start,
+    required this.end,
+    required this.text,
+  });
+
+  final int start;
+  final int end;
+  final String text;
+
+  static List<_TextParagraphSegment> fromText(String text) {
+    if (text.isEmpty) {
+      return const [_TextParagraphSegment(start: 0, end: 0, text: '')];
+    }
+    final segments = <_TextParagraphSegment>[];
+    var start = 0;
+    for (final match in RegExp(r'\n{2,}').allMatches(text)) {
+      segments.add(
+        _TextParagraphSegment(
+          start: start,
+          end: match.start,
+          text: text.substring(start, match.start),
+        ),
+      );
+      start = match.end;
+    }
+    segments.add(
+      _TextParagraphSegment(
+        start: start,
+        end: text.length,
+        text: text.substring(start),
+      ),
+    );
+    return segments.isEmpty
+        ? const [_TextParagraphSegment(start: 0, end: 0, text: '')]
+        : segments;
   }
 }
 
@@ -608,8 +835,12 @@ class _TaggedTextEditingController extends TextEditingController {
   List<NoteTextRangeTag> _rangeTags;
 
   set rangeTags(List<NoteTextRangeTag> value) {
-    _rangeTags = value;
+    setRangeTags(value);
     notifyListeners();
+  }
+
+  void setRangeTags(List<NoteTextRangeTag> value) {
+    _rangeTags = value;
   }
 
   @override
@@ -640,12 +871,7 @@ class _TaggedTextEditingController extends TextEditingController {
       spans.add(
         TextSpan(
           text: textValue.substring(rangeTag.start, rangeTag.end),
-          style: TextStyle(
-            backgroundColor: Color(
-              rangeTag.resolvedTags.first.resolvedColorValue,
-            ).withValues(alpha: 0.22),
-            fontWeight: FontWeight.w600,
-          ),
+          style: _taggedTextStyle(rangeTag.resolvedTags, alpha: 0.22),
         ),
       );
       cursor = rangeTag.end;
@@ -655,6 +881,29 @@ class _TaggedTextEditingController extends TextEditingController {
     }
     return TextSpan(style: style, children: spans);
   }
+}
+
+TextStyle _taggedTextStyle(
+  List<NoteKnowledgeTag> tags, {
+  required double alpha,
+}) {
+  if (tags.isEmpty) {
+    return const TextStyle();
+  }
+  return TextStyle(
+    backgroundColor: Color(
+      tags.first.resolvedColorValue,
+    ).withValues(alpha: alpha),
+    fontWeight: FontWeight.w600,
+    decoration: tags.length > 1
+        ? TextDecoration.underline
+        : TextDecoration.none,
+    decorationStyle: tags.length > 2
+        ? TextDecorationStyle.double
+        : TextDecorationStyle.solid,
+    decorationColor: tags.length > 1 ? Color(tags[1].resolvedColorValue) : null,
+    decorationThickness: tags.length > 1 ? 2 : null,
+  );
 }
 
 void unawaited(Future<void> future) {}

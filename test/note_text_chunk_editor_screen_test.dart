@@ -262,6 +262,136 @@ void main() {
     expect(latest, isNotNull);
     expect(latest!.rangeTags, isEmpty);
   });
+
+  testWidgets(
+    'text selection rail expands below the active paragraph and exposes style toggles',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: NoteTextChunkEditorScreen(
+            block: NoteBlock(
+              id: 'text-1',
+              type: NoteBlockType.paragraph,
+              text: 'Első bekezdés szövege.\n\nMásodik bekezdés szövege.',
+            ),
+            onChanged: _ignoreBlockChange,
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('note-text-chunk-body')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-paragraph-box-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-paragraph-box-1')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
+      await tester.pump();
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('note-text-chunk-field')),
+      );
+      field.controller!.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 4,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('note-text-selection-rail')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-rail-toggle-rounded')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-rail-toggle-transparent')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-rail-toggle-border')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .getTopLeft(find.byKey(const ValueKey('note-text-selection-rail')))
+            .dy,
+        lessThan(
+          tester
+              .getTopLeft(
+                find.byKey(const ValueKey('note-text-paragraph-box-1')),
+              )
+              .dy,
+        ),
+      );
+    },
+  );
+
+  testWidgets('text range secondary tags render as underline styling', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Súlyos esetben high flow oxygen.',
+            rangeTags: [
+              NoteTextRangeTag(
+                id: 'range-1',
+                start: 0,
+                end: 6,
+                tag: NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.state,
+                  label: 'súlyos',
+                  colorValue: 0xFFDC2626,
+                ),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'súlyos',
+                    colorValue: 0xFFDC2626,
+                  ),
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.topic,
+                    label: 'légzés',
+                    colorValue: 0xFF2563EB,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    final span = field.controller!.buildTextSpan(
+      context: tester.element(
+        find.byKey(const ValueKey('note-text-chunk-field')),
+      ),
+      style: const TextStyle(),
+      withComposing: false,
+    );
+    final taggedSpan =
+        span.children!.firstWhere((child) => child.toPlainText() == 'Súlyos')
+            as TextSpan;
+
+    expect(taggedSpan.style!.backgroundColor, isNotNull);
+    expect(taggedSpan.style!.decoration, TextDecoration.underline);
+    expect(taggedSpan.style!.decorationColor, const Color(0xFF2563EB));
+  });
 }
 
 void _ignoreBlockChange(NoteBlock block) {}

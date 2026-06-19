@@ -1090,7 +1090,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
               intrinsicRows: intrinsicRows,
               selection: _selection,
               cellControllerFor: _controllerFor,
-              highlightColorForCell: tableTagLookup.highlightColorForCell,
+              tagsForCell: tableTagLookup.tagsForCell,
               onCellChanged: _updateCell,
               onSelect: _select,
               onMoveRow: _moveRow,
@@ -1177,17 +1177,43 @@ class _TableTagLookup {
 
   static String _cellKey(int row, int column) => '$row:$column';
 
-  Color? highlightColorForCell(int row, int column) {
-    final tags =
-        _cellTags[_cellKey(row, column)] ??
-        _rowTags[row] ??
-        _columnTags[column] ??
-        const <NoteKnowledgeTag>[];
-    if (tags.isEmpty) {
-      return null;
+  List<NoteKnowledgeTag> tagsForCell(int row, int column) {
+    final tags = <NoteKnowledgeTag>[];
+    void addAll(List<NoteKnowledgeTag>? next) {
+      if (next == null) {
+        return;
+      }
+      for (final tag in next) {
+        if (!tags.any((current) => current.metadataText == tag.metadataText)) {
+          tags.add(tag);
+        }
+      }
     }
-    return Color(tags.first.resolvedColorValue).withValues(alpha: 0.16);
+
+    addAll(_cellTags[_cellKey(row, column)]);
+    addAll(_rowTags[row]);
+    addAll(_columnTags[column]);
+    return tags;
   }
+}
+
+TextStyle _taggedTableTextStyle(List<NoteKnowledgeTag> tags) {
+  if (tags.isEmpty) {
+    return const TextStyle();
+  }
+  return TextStyle(
+    backgroundColor: Color(
+      tags.first.resolvedColorValue,
+    ).withValues(alpha: 0.16),
+    decoration: tags.length > 1
+        ? TextDecoration.underline
+        : TextDecoration.none,
+    decorationStyle: tags.length > 2
+        ? TextDecorationStyle.double
+        : TextDecorationStyle.solid,
+    decorationColor: tags.length > 1 ? Color(tags[1].resolvedColorValue) : null,
+    decorationThickness: tags.length > 1 ? 2 : null,
+  );
 }
 
 class _TableGrid extends StatefulWidget {
@@ -1199,7 +1225,7 @@ class _TableGrid extends StatefulWidget {
     required this.intrinsicRows,
     required this.selection,
     required this.cellControllerFor,
-    required this.highlightColorForCell,
+    required this.tagsForCell,
     required this.onCellChanged,
     required this.onSelect,
     required this.onMoveRow,
@@ -1220,7 +1246,7 @@ class _TableGrid extends StatefulWidget {
   final Set<int> intrinsicRows;
   final _TableSelection? selection;
   final TextEditingController Function(int row, int column) cellControllerFor;
-  final Color? Function(int row, int column) highlightColorForCell;
+  final List<NoteKnowledgeTag> Function(int row, int column) tagsForCell;
   final void Function(int row, int column, String value) onCellChanged;
   final ValueChanged<_TableSelection> onSelect;
   final void Function(int fromIndex, int toIndex) onMoveRow;
@@ -1649,7 +1675,7 @@ class _TableGridState extends State<_TableGrid> {
             height: rowHeight,
             controller: widget.cellControllerFor(row, column),
             selected: widget.selection?.isCell(row, column) == true,
-            highlightColor: widget.highlightColorForCell(row, column),
+            tags: widget.tagsForCell(row, column),
             onTap: () => widget.onSelect(_TableSelection.cell(row, column)),
             onHorizontalDragUpdate: _scrollFromCellDrag,
             onChanged: (value) => widget.onCellChanged(row, column, value),
@@ -1800,13 +1826,14 @@ class _ColumnHeadContent extends StatelessWidget {
         ),
         if (resizeEnabled)
           Positioned(
-            top: 4,
-            right: 3,
-            bottom: 4,
-            width: 24,
+            top: 2,
+            right: 2,
+            bottom: 2,
+            width: 36,
             child: GestureDetector(
               key: ValueKey('note-table-column-resize-$column'),
               behavior: HitTestBehavior.opaque,
+              dragStartBehavior: DragStartBehavior.down,
               onHorizontalDragStart: (_) => onResizeColumnStart(column),
               onHorizontalDragUpdate: (details) =>
                   onResizeColumnUpdate(column, details.delta.dx),
@@ -1947,13 +1974,14 @@ class _RowHeadContent extends StatelessWidget {
         ),
         if (resizeEnabled)
           Positioned(
-            left: 4,
-            right: 4,
-            bottom: 3,
-            height: 24,
+            left: 2,
+            right: 2,
+            bottom: 2,
+            height: 36,
             child: GestureDetector(
               key: ValueKey('note-table-row-resize-$row'),
               behavior: HitTestBehavior.opaque,
+              dragStartBehavior: DragStartBehavior.down,
               onVerticalDragStart: (_) => onResizeRowStart(row),
               onVerticalDragUpdate: (details) =>
                   onResizeRowUpdate(row, details.delta.dy),
@@ -1986,7 +2014,7 @@ class _CellSlot extends StatelessWidget {
     required this.height,
     required this.controller,
     required this.selected,
-    required this.highlightColor,
+    required this.tags,
     required this.onTap,
     required this.onHorizontalDragUpdate,
     required this.onChanged,
@@ -1998,7 +2026,7 @@ class _CellSlot extends StatelessWidget {
   final double height;
   final TextEditingController controller;
   final bool selected;
-  final Color? highlightColor;
+  final List<NoteKnowledgeTag> tags;
   final VoidCallback onTap;
   final ValueChanged<double> onHorizontalDragUpdate;
   final ValueChanged<String> onChanged;
@@ -2014,7 +2042,7 @@ class _CellSlot extends StatelessWidget {
         height: height,
         controller: controller,
         selected: selected,
-        highlightColor: highlightColor,
+        tags: tags,
         onTap: onTap,
         onHorizontalDragUpdate: onHorizontalDragUpdate,
         onChanged: onChanged,
@@ -2083,7 +2111,7 @@ class _CellField extends StatefulWidget {
     required this.height,
     required this.controller,
     required this.selected,
-    required this.highlightColor,
+    required this.tags,
     required this.onTap,
     required this.onHorizontalDragUpdate,
     required this.onChanged,
@@ -2095,7 +2123,7 @@ class _CellField extends StatefulWidget {
   final double height;
   final TextEditingController controller;
   final bool selected;
-  final Color? highlightColor;
+  final List<NoteKnowledgeTag> tags;
   final VoidCallback onTap;
   final ValueChanged<double> onHorizontalDragUpdate;
   final ValueChanged<String> onChanged;
@@ -2204,7 +2232,7 @@ class _CellFieldState extends State<_CellField> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: KeyedSubtree(
-                key: widget.highlightColor == null
+                key: widget.tags.isEmpty
                     ? null
                     : ValueKey(
                         'note-table-cell-highlight-${widget.row}-${widget.column}',
@@ -2218,8 +2246,7 @@ class _CellFieldState extends State<_CellField> {
                   maxLines: null,
                   keyboardType: TextInputType.multiline,
                   decoration: const InputDecoration(border: InputBorder.none),
-                  style: TextStyle(backgroundColor: widget.highlightColor),
-                  onTap: widget.onTap,
+                  style: _taggedTableTextStyle(widget.tags),
                   onChanged: widget.onChanged,
                 ),
               ),

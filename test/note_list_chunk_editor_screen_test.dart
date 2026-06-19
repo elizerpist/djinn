@@ -220,8 +220,68 @@ void main() {
         find.byKey(const ValueKey('note-list-rail-delete-item-1')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('note-list-rail-toggle-rounded')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('note-list-rail-toggle-transparent')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('note-list-rail-toggle-border')),
+        findsOneWidget,
+      );
     },
   );
+
+  testWidgets('list item secondary tags render as underline styling', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteListChunkEditorScreen(
+          block: NoteBlock(
+            id: 'list-1',
+            type: NoteBlockType.listItem,
+            listItems: [
+              NoteListItem(
+                id: 'item-1',
+                text: 'High flow oxygen',
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'súlyos',
+                    colorValue: 0xFFDC2626,
+                  ),
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.topic,
+                    label: 'légzés',
+                    colorValue: 0xFF2563EB,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    final field = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('note-list-item-tag-highlight-item-1')),
+        matching: find.byType(EditableText),
+      ),
+    );
+
+    expect(
+      field.style.backgroundColor,
+      const Color(0xFFDC2626).withValues(alpha: 0.22),
+    );
+    expect(field.style.decoration, TextDecoration.underline);
+    expect(field.style.decorationColor, const Color(0xFF2563EB));
+  });
 
   testWidgets('list item submit creates and focuses a new row below', (
     tester,
