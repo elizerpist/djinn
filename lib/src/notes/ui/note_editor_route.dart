@@ -87,12 +87,14 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
   }
 
   void _replaceBlock(NoteBlock block) {
-    _setDocument(_document.copyWith(
-      blocks: [
-        for (final existing in _document.blocks)
-          if (existing.id == block.id) block else existing,
-      ],
-    ));
+    _setDocument(
+      _document.copyWith(
+        blocks: [
+          for (final existing in _document.blocks)
+            if (existing.id == block.id) block else existing,
+        ],
+      ),
+    );
   }
 
   void _addBlock(NoteBlockType type) {
@@ -107,35 +109,37 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
       NoteBlockType.heading => NoteBlock(id: id, type: type, text: ''),
       NoteBlockType.paragraph => NoteBlock(id: id, type: type, text: ''),
       NoteBlockType.listItem => NoteBlock(
-          id: id,
-          type: type,
-          listItems: const [NoteListItem(id: 'item-1', text: '')],
-        ),
+        id: id,
+        type: type,
+        listItems: const [NoteListItem(id: 'item-1', text: '')],
+      ),
       NoteBlockType.table => NoteBlock(
-          id: id,
-          type: type,
-          rows: const [
-            ['', ''],
-          ],
-        ),
+        id: id,
+        type: type,
+        rows: const [
+          ['', ''],
+        ],
+      ),
       NoteBlockType.flowchart => NoteBlock(
-          id: id,
-          type: type,
-          title: 'Flowchart',
-          nodes: const [
-            NoteFlowchartNode(
-              id: 'node-1',
-              label: 'Kezdés',
-              shape: AiFlowchartNodeShape.startEnd,
-              order: 1,
-            ),
-          ],
-        ),
+        id: id,
+        type: type,
+        title: 'Flowchart',
+        nodes: const [
+          NoteFlowchartNode(
+            id: 'node-1',
+            label: 'Kezdés',
+            shape: AiFlowchartNodeShape.startEnd,
+            order: 1,
+          ),
+        ],
+      ),
     };
   }
 
   void _deleteBlock(NoteBlock block) {
-    final index = _document.blocks.indexWhere((candidate) => candidate.id == block.id);
+    final index = _document.blocks.indexWhere(
+      (candidate) => candidate.id == block.id,
+    );
     if (index == -1) {
       return;
     }
@@ -177,11 +181,17 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
 
   Future<void> _handleMenu(String value) async {
     if (value == 'index') {
-      final ids = _document.blocks.where((block) => block.hasContent).map((block) => block.id).toList();
+      final ids = _document.blocks
+          .where((block) => block.hasContent)
+          .map((block) => block.id)
+          .toList();
       if (ids.isEmpty) {
         return;
       }
-      final updated = await widget.repository.markNoteBlocksIndexed(_note.id, ids);
+      final updated = await widget.repository.markNoteBlocksIndexed(
+        _note.id,
+        ids,
+      );
       if (!mounted) {
         return;
       }
@@ -192,7 +202,10 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
       return;
     }
     if (value == 'chunks') {
-      setState(() => _expandedBlockIds.addAll(_document.blocks.map((block) => block.id)));
+      setState(
+        () =>
+            _expandedBlockIds.addAll(_document.blocks.map((block) => block.id)),
+      );
       return;
     }
     if (value == 'tags') {
@@ -214,7 +227,9 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         return;
       }
       _titleFocusNode.requestFocus();
-      _titleController.selection = TextSelection.collapsed(offset: _titleController.text.length);
+      _titleController.selection = TextSelection.collapsed(
+        offset: _titleController.text.length,
+      );
     });
   }
 
@@ -235,9 +250,9 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         autofocus: true,
         textInputAction: TextInputAction.done,
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontWeight: FontWeight.w800,
-            ),
+          color: Theme.of(context).colorScheme.onSurface,
+          fontWeight: FontWeight.w800,
+        ),
         decoration: const InputDecoration(
           isDense: true,
           border: InputBorder.none,
@@ -257,7 +272,9 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         child: Text(
           _normalizedTitle,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
       ),
     );
@@ -267,37 +284,38 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     Widget editorFor(NoteBlock current) {
       final availableTags = _document.knownTags;
       return switch (current.type) {
-        NoteBlockType.heading || NoteBlockType.paragraph => NoteTextChunkEditorScreen(
-            block: current,
-            availableTags: availableTags,
-            useWebEditor: true,
-            onChanged: _replaceBlock,
-            onDelete: () => _deleteBlock(current),
-          ),
+        NoteBlockType.heading ||
+        NoteBlockType.paragraph => NoteTextChunkEditorScreen(
+          block: current,
+          availableTags: availableTags,
+          onChanged: _replaceBlock,
+          onDelete: () => _deleteBlock(current),
+        ),
         NoteBlockType.listItem => NoteListChunkEditorScreen(
-            block: current,
-            availableTags: availableTags,
-            onChanged: _replaceBlock,
-            onDelete: () => _deleteBlock(current),
-          ),
+          block: current,
+          availableTags: availableTags,
+          onChanged: _replaceBlock,
+          onDelete: () => _deleteBlock(current),
+        ),
         NoteBlockType.table => NoteTableEditorScreen(
-            block: current,
-            availableTags: availableTags,
-            onChanged: _replaceBlock,
-            onDelete: () => _deleteBlock(current),
-          ),
+          block: current,
+          availableTags: availableTags,
+          onChanged: _replaceBlock,
+          onDelete: () => _deleteBlock(current),
+        ),
         NoteBlockType.flowchart => NoteFlowchartEditorScreen(
-            block: current,
-            availableTags: availableTags,
-            onChanged: _replaceBlock,
-            onDelete: () => _deleteBlock(current),
-          ),
+          block: current,
+          availableTags: availableTags,
+          onChanged: _replaceBlock,
+          onDelete: () => _deleteBlock(current),
+        ),
       };
     }
 
     final result = await Navigator.of(context).push<NoteBlock>(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => editorFor(block),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            editorFor(block),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
             position: Tween<Offset>(
@@ -352,7 +370,10 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
             tooltip: 'Jegyzet menü',
             onSelected: (value) => unawaited(_handleMenu(value)),
             itemBuilder: (context) => const [
-              PopupMenuItem(value: 'index', child: Text('Indexelés / újraindexelés')),
+              PopupMenuItem(
+                value: 'index',
+                child: Text('Indexelés / újraindexelés'),
+              ),
               PopupMenuItem(value: 'tags', child: Text('Tagek')),
               PopupMenuItem(value: 'chunks', child: Text('Chunkok kinyitása')),
               PopupMenuItem(value: 'delete', child: Text('Törlés')),
@@ -364,7 +385,9 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         children: [
           Expanded(
             child: ReorderableListView.builder(
-              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 108),
               itemCount: _document.blocks.length,
               // ignore: deprecated_member_use
@@ -380,7 +403,10 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
                     inheritedTags: _document.tags,
                     dragHandle: ReorderableDragStartListener(
                       index: index,
-                      child: const Icon(Icons.drag_indicator, color: Color(0xFF9CA3AF)),
+                      child: const Icon(
+                        Icons.drag_indicator,
+                        color: Color(0xFF9CA3AF),
+                      ),
                     ),
                     onToggleExpanded: () {
                       setState(() {

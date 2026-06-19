@@ -264,7 +264,7 @@ void main() {
   });
 
   testWidgets(
-    'text editor keeps one white text surface and exposes style toggles',
+    'text editor uses native editable rows and the shared inline rail',
     (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -288,19 +288,16 @@ void main() {
       );
       expect(body.color, Colors.white);
       expect(
-        find.byKey(const ValueKey('note-text-paragraph-box-0')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-paragraph-box-1')),
-        findsNothing,
-      );
-      expect(
         find.byKey(const ValueKey('note-text-chunk-field')),
         findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey('note-text-chunk-field-1')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('note-text-web-editor')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('note-text-visual-selection-layout')),
         findsNothing,
       );
 
@@ -333,7 +330,7 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('note-text-visual-selection-layout')),
-        findsOneWidget,
+        findsNothing,
       );
       final span = field.controller!.buildTextSpan(
         context: tester.element(
@@ -429,8 +426,7 @@ void main() {
     final field = tester.widget<TextField>(
       find.byKey(const ValueKey('note-text-chunk-field')),
     );
-    expect(field.controller!.selection.baseOffset, 0);
-    expect(field.controller!.selection.extentOffset, 6);
+    expect(field.controller!.selection.isCollapsed, isTrue);
   });
 
   testWidgets('text range secondary tags render one underline per tag', (
