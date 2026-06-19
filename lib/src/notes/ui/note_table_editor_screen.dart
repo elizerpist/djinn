@@ -6,6 +6,7 @@ import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
+import 'tagged_text_visual.dart';
 import 'tag_manager_sheet.dart';
 
 class NoteTableEditorScreen extends StatefulWidget {
@@ -1070,7 +1071,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     _normalizeLayout();
     final columnCount = _columnCount;
     final tableTagLookup = _TableTagLookup(_block.scopedTags);
-    final intrinsicRows = _intrinsicRowsForLayout();
+    final intrinsicRows = _intrinsicRowsForLayout(tableTagLookup);
     return Scaffold(
       appBar: NoteChunkEditorHeader(
         title: _block.title,
@@ -1143,11 +1144,15 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     );
   }
 
-  Set<int> _intrinsicRowsForLayout() {
+  Set<int> _intrinsicRowsForLayout(_TableTagLookup tagLookup) {
     final rows = <int>{};
     for (var row = 0; row < _rows.length; row += 1) {
       final cells = _rows[row];
       for (var column = 0; column < _columnCount; column += 1) {
+        if (tagLookup.tagsForCell(row, column).length > 1) {
+          rows.add(row);
+          break;
+        }
         final text = column < cells.length ? cells[column] : '';
         if (text.contains('\n')) {
           rows.add(row);
@@ -1233,25 +1238,6 @@ class _TableTagLookup {
     addAll(_columnTags[column]);
     return tags;
   }
-}
-
-TextStyle _taggedTableTextStyle(List<NoteKnowledgeTag> tags) {
-  if (tags.isEmpty) {
-    return const TextStyle();
-  }
-  return TextStyle(
-    backgroundColor: Color(
-      tags.first.resolvedColorValue,
-    ).withValues(alpha: 0.16),
-    decoration: tags.length > 1
-        ? TextDecoration.underline
-        : TextDecoration.none,
-    decorationStyle: tags.length > 2
-        ? TextDecorationStyle.double
-        : TextDecorationStyle.solid,
-    decorationColor: tags.length > 1 ? Color(tags[1].resolvedColorValue) : null,
-    decorationThickness: tags.length > 1 ? 2 : null,
-  );
 }
 
 class _TableGrid extends StatefulWidget {
@@ -2262,6 +2248,28 @@ class _CellFieldState extends State<_CellField> {
 
   @override
   Widget build(BuildContext context) {
+    final field = TextFormField(
+      key: ValueKey(
+        'note-table-cell-${widget.row}-${widget.column}',
+      ),
+      controller: widget.controller,
+      focusNode: widget.focusNode,
+      minLines: 1,
+      maxLines: null,
+      keyboardType: TextInputType.text,
+      textInputAction: TextInputAction.next,
+      decoration: const InputDecoration(
+        border: InputBorder.none,
+      ),
+      style: noteTaggedEditableTextStyle(
+        widget.tags,
+        alpha: 0.16,
+      ),
+      onChanged: widget.onChanged,
+      onFieldSubmitted: (_) => widget.onSubmitted(),
+    );
+    final hasSecondaryTags = widget.tags.length > 1;
+
     return Listener(
       behavior: HitTestBehavior.opaque,
       onPointerDown: _handlePointerDown,
@@ -2303,21 +2311,20 @@ class _CellFieldState extends State<_CellField> {
                     : ValueKey(
                         'note-table-cell-highlight-${widget.row}-${widget.column}',
                       ),
-                child: TextFormField(
-                  key: ValueKey(
-                    'note-table-cell-${widget.row}-${widget.column}',
-                  ),
-                  controller: widget.controller,
-                  focusNode: widget.focusNode,
-                  minLines: 1,
-                  maxLines: null,
-                  keyboardType: TextInputType.text,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(border: InputBorder.none),
-                  style: _taggedTableTextStyle(widget.tags),
-                  onChanged: widget.onChanged,
-                  onFieldSubmitted: (_) => widget.onSubmitted(),
-                ),
+                child: hasSecondaryTags
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          field,
+                          NoteSecondaryTagUnderlines(
+                            tags: widget.tags,
+                            prefix:
+                                'note-table-cell-${widget.row}-${widget.column}',
+                          ),
+                        ],
+                      )
+                    : field,
               ),
             ),
           ],

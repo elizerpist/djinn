@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
+import 'tagged_text_visual.dart';
 import 'tag_manager_sheet.dart';
 
 class NoteListChunkEditorScreen extends StatefulWidget {
@@ -512,7 +513,6 @@ class _ListItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textStyle = _taggedListTextStyle(item.tags);
     return GestureDetector(
       key: ValueKey('note-list-row-${item.id}'),
       behavior: HitTestBehavior.translucent,
@@ -574,24 +574,34 @@ class _ListItemRow extends StatelessWidget {
                                 'note-list-item-tag-highlight-${item.id}',
                               ),
                         padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: TextFormField(
-                          key: ValueKey('note-list-item-${item.id}'),
-                          focusNode: focusNode,
-                          initialValue: item.text,
-                          autofocus: selected && item.text.isEmpty,
-                          minLines: 1,
-                          maxLines: null,
-                          keyboardType: TextInputType.text,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            hintText: 'Listaelem',
-                            border: InputBorder.none,
-                          ),
-                          style: textStyle,
-                          onTap: onSelect,
-                          onChanged: (value) =>
-                              onChanged(item.copyWith(text: value)),
-                          onFieldSubmitted: (_) => onSubmit(),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextFormField(
+                              key: ValueKey('note-list-item-${item.id}'),
+                              focusNode: focusNode,
+                              initialValue: item.text,
+                              autofocus: selected && item.text.isEmpty,
+                              minLines: 1,
+                              maxLines: null,
+                              keyboardType: TextInputType.text,
+                              textInputAction: TextInputAction.next,
+                              decoration: const InputDecoration(
+                                hintText: 'Listaelem',
+                                border: InputBorder.none,
+                              ),
+                              style: noteTaggedEditableTextStyle(item.tags),
+                              onTap: onSelect,
+                              onChanged: (value) =>
+                                  onChanged(item.copyWith(text: value)),
+                              onFieldSubmitted: (_) => onSubmit(),
+                            ),
+                            NoteSecondaryTagUnderlines(
+                              tags: item.tags,
+                              prefix: 'note-list-item-${item.id}',
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -694,25 +704,6 @@ class _ListItemRow extends StatelessWidget {
       ),
     );
   }
-}
-
-TextStyle _taggedListTextStyle(List<NoteKnowledgeTag> tags) {
-  if (tags.isEmpty) {
-    return const TextStyle();
-  }
-  return TextStyle(
-    backgroundColor: Color(
-      tags.first.resolvedColorValue,
-    ).withValues(alpha: 0.22),
-    decoration: tags.length > 1
-        ? TextDecoration.underline
-        : TextDecoration.none,
-    decorationStyle: tags.length > 2
-        ? TextDecorationStyle.double
-        : TextDecorationStyle.solid,
-    decorationColor: tags.length > 1 ? Color(tags[1].resolvedColorValue) : null,
-    decorationThickness: tags.length > 1 ? 2 : null,
-  );
 }
 
 void unawaited(Future<void> future) {}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
+import 'note_text_chunk_web_editor.dart';
 import 'note_tag_pills.dart';
 import 'tag_manager_sheet.dart';
 
@@ -12,12 +13,14 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
     required this.onChanged,
     this.availableTags = const [],
     this.onDelete,
+    this.useWebEditor = false,
   });
 
   final NoteBlock block;
   final ValueChanged<NoteBlock> onChanged;
   final List<NoteKnowledgeTag> availableTags;
   final VoidCallback? onDelete;
+  final bool useWebEditor;
 
   @override
   State<NoteTextChunkEditorScreen> createState() =>
@@ -97,6 +100,27 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       clearIndex: true,
     );
     _handleControllerChanged();
+    widget.onChanged(_block);
+  }
+
+  void _emitWebText(String value) {
+    if (value == _block.text) {
+      return;
+    }
+    setState(() {
+      _block = _block.copyWith(text: value, clearIndex: true);
+    });
+    widget.onChanged(_block);
+  }
+
+  void _emitWebRangeTags(List<NoteTextRangeTag> rangeTags) {
+    setState(() {
+      _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
+      _setControllerRangeTags(rangeTags);
+      _selectionCanDeleteTag = false;
+      _selectionHasRange = false;
+      _activeRailRange = null;
+    });
     widget.onChanged(_block);
   }
 
@@ -181,6 +205,18 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _selectionHasRange = _selectionIsTaggable();
     });
     widget.onChanged(_block);
+  }
+
+  Future<List<NoteKnowledgeTag>?> _tagWebSelection(
+    TextRange range,
+    List<NoteKnowledgeTag> initialTags,
+  ) {
+    return showTagManagerSheet(
+      context,
+      initialTags: initialTags,
+      availableTags: [...widget.availableTags, ..._block.knownTags],
+      title: 'Kijelölt rész tagje',
+    );
   }
 
   bool _selectionIsTaggable() {
@@ -552,61 +588,76 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    LayoutBuilder(
-                      builder: (context, _) {
-                        const textStyle = TextStyle(fontSize: 16, height: 1.45);
-                        final showVisualLayer = _selectionHasRange;
-                        _controller.paintTagStyles = !showVisualLayer;
-                        final textField = TextField(
-                          key: const ValueKey('note-text-chunk-field'),
-                          controller: _controller,
-                          focusNode: _focusNode,
-                          autofocus: true,
-                          maxLines: null,
-                          minLines: 12,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.newline,
-                          cursorColor: const Color(0xFF111827),
-                          decoration: const InputDecoration(
-                            hintText: 'Írd ide a chunk tartalmát',
-                            border: InputBorder.none,
-                          ),
-                          style: showVisualLayer
-                              ? textStyle.copyWith(
-                                  color: Colors.transparent,
-                                  decorationColor: Colors.transparent,
-                                )
-                              : textStyle,
-                          onTap: _handleTextFieldTap,
-                          onChanged: _emitText,
-                        );
-                        if (!showVisualLayer) {
-                          return textField;
-                        }
-                        return Stack(
-                          alignment: Alignment.topLeft,
-                          children: [
-                            textField,
-                            _TaggedTextVisualLayer(
-                              key: const ValueKey(
-                                'note-text-visual-selection-layout',
-                              ),
-                              text: _controller.text,
-                              rangeTags: _block.rangeTags,
-                              activeRailRange: _selectionHasRange
-                                  ? _activeRailRange
-                                  : null,
-                              rail: _selectionHasRange
-                                  ? _buildSelectionRail()
-                                  : null,
-                              baseStyle: textStyle.copyWith(
-                                color: const Color(0xFF111827),
-                              ),
+                    if (widget.useWebEditor &&
+                        NoteTextChunkWebEditor.isPlatformAvailable)
+                      SizedBox(
+                        height: MediaQuery.sizeOf(context).height - 140,
+                        child: NoteTextChunkWebEditor(
+                          block: _block,
+                          onTextChanged: _emitWebText,
+                          onRangeTagsChanged: _emitWebRangeTags,
+                          onTagRequested: _tagWebSelection,
+                        ),
+                      )
+                    else
+                      LayoutBuilder(
+                        builder: (context, _) {
+                          const textStyle = TextStyle(
+                            fontSize: 16,
+                            height: 1.45,
+                          );
+                          final showVisualLayer = _selectionHasRange;
+                          _controller.paintTagStyles = !showVisualLayer;
+                          final textField = TextField(
+                            key: const ValueKey('note-text-chunk-field'),
+                            controller: _controller,
+                            focusNode: _focusNode,
+                            autofocus: true,
+                            maxLines: null,
+                            minLines: 12,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            cursorColor: const Color(0xFF111827),
+                            decoration: const InputDecoration(
+                              hintText: 'Írd ide a chunk tartalmát',
+                              border: InputBorder.none,
                             ),
-                          ],
-                        );
-                      },
-                    ),
+                            style: showVisualLayer
+                                ? textStyle.copyWith(
+                                    color: Colors.transparent,
+                                    decorationColor: Colors.transparent,
+                                  )
+                                : textStyle,
+                            onTap: _handleTextFieldTap,
+                            onChanged: _emitText,
+                          );
+                          if (!showVisualLayer) {
+                            return textField;
+                          }
+                          return Stack(
+                            alignment: Alignment.topLeft,
+                            children: [
+                              textField,
+                              _TaggedTextVisualLayer(
+                                key: const ValueKey(
+                                  'note-text-visual-selection-layout',
+                                ),
+                                text: _controller.text,
+                                rangeTags: _block.rangeTags,
+                                activeRailRange: _selectionHasRange
+                                    ? _activeRailRange
+                                    : null,
+                                rail: _selectionHasRange
+                                    ? _buildSelectionRail()
+                                    : null,
+                                baseStyle: textStyle.copyWith(
+                                  color: const Color(0xFF111827),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),

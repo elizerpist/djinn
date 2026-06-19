@@ -270,6 +270,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         NoteBlockType.heading || NoteBlockType.paragraph => NoteTextChunkEditorScreen(
             block: current,
             availableTags: availableTags,
+            useWebEditor: true,
             onChanged: _replaceBlock,
             onDelete: () => _deleteBlock(current),
           ),

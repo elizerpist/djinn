@@ -279,8 +279,19 @@ void main() {
       field.style.backgroundColor,
       const Color(0xFFDC2626).withValues(alpha: 0.22),
     );
-    expect(field.style.decoration, TextDecoration.underline);
-    expect(field.style.decorationColor, const Color(0xFF2563EB));
+    expect(field.style.decoration, TextDecoration.none);
+    expect(
+      find.byKey(
+        const ValueKey('note-list-item-item-1-secondary-underline-1'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('note-list-item-item-1-secondary-underline-2'),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('list item submit creates and focuses a new row below', (

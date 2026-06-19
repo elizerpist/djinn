@@ -1282,8 +1282,19 @@ void main() {
       field.style.backgroundColor,
       const Color(0xFFDC2626).withValues(alpha: 0.16),
     );
-    expect(field.style.decoration, TextDecoration.underline);
-    expect(field.style.decorationColor, const Color(0xFF2563EB));
+    expect(field.style.decoration, TextDecoration.none);
+    expect(
+      find.byKey(
+        const ValueKey('note-table-cell-1-0-secondary-underline-1'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('note-table-cell-1-0-secondary-underline-2'),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('table does not expose pinch zoom wrappers', (tester) async {
