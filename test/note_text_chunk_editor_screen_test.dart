@@ -331,6 +331,10 @@ void main() {
         find.byKey(const ValueKey('note-text-rail-toggle-border')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('note-text-visual-selection-layout')),
+        findsOneWidget,
+      );
       final span = field.controller!.buildTextSpan(
         context: tester.element(
           find.byKey(const ValueKey('note-text-chunk-field')),
@@ -338,13 +342,7 @@ void main() {
         style: const TextStyle(),
         withComposing: false,
       );
-      expect(_containsWidgetSpan(span), isTrue);
-      final inlineChildren = span.children!;
-      final railIndex = inlineChildren.indexWhere(
-        (child) => child is WidgetSpan,
-      );
-      expect(railIndex, greaterThan(0));
-      expect((inlineChildren[railIndex - 1] as TextSpan).text, endsWith('\n'));
+      expect(_containsWidgetSpan(span), isFalse);
     },
   );
 
@@ -397,7 +395,7 @@ void main() {
     expect(field.controller!.selection.extentOffset, 6);
   });
 
-  testWidgets('text range secondary tags render as underline styling', (
+  testWidgets('text range secondary tags render one underline per tag', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -428,6 +426,11 @@ void main() {
                     label: 'légzés',
                     colorValue: 0xFF2563EB,
                   ),
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.symbol,
+                    label: 'oxigén',
+                    colorValue: 0xFF16A34A,
+                  ),
                 ],
               ),
             ],
@@ -440,20 +443,21 @@ void main() {
     final field = tester.widget<TextField>(
       find.byKey(const ValueKey('note-text-chunk-field')),
     );
-    final span = field.controller!.buildTextSpan(
-      context: tester.element(
-        find.byKey(const ValueKey('note-text-chunk-field')),
-      ),
-      style: const TextStyle(),
-      withComposing: false,
-    );
-    final taggedSpan =
-        span.children!.firstWhere((child) => child.toPlainText() == 'Súlyos')
-            as TextSpan;
+    field.controller!.selection = const TextSelection.collapsed(offset: 3);
+    await tester.pumpAndSettle();
 
-    expect(taggedSpan.style!.backgroundColor, isNotNull);
-    expect(taggedSpan.style!.decoration, TextDecoration.underline);
-    expect(taggedSpan.style!.decorationColor, const Color(0xFF2563EB));
+    expect(
+      find.byKey(const ValueKey('note-text-secondary-underline-range-1-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-secondary-underline-range-1-2')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-secondary-underline-range-1-3')),
+      findsNothing,
+    );
   });
 }
 

@@ -553,15 +553,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     LayoutBuilder(
-                      builder: (context, constraints) {
-                        _controller.setInlineRail(
-                          range: _selectionHasRange ? _activeRailRange : null,
-                          rail: _selectionHasRange
-                              ? _buildSelectionRail()
-                              : null,
-                          width: constraints.maxWidth,
-                        );
-                        return TextField(
+                      builder: (context, _) {
+                        const textStyle = TextStyle(fontSize: 16, height: 1.45);
+                        final showVisualLayer =
+                            _block.rangeTags.isNotEmpty || _selectionHasRange;
+                        _controller.paintTagStyles = !showVisualLayer;
+                        final textField = TextField(
                           key: const ValueKey('note-text-chunk-field'),
                           controller: _controller,
                           focusNode: _focusNode,
@@ -570,13 +567,44 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                           minLines: 12,
                           keyboardType: TextInputType.multiline,
                           textInputAction: TextInputAction.newline,
+                          cursorColor: const Color(0xFF111827),
                           decoration: const InputDecoration(
                             hintText: 'Írd ide a chunk tartalmát',
                             border: InputBorder.none,
                           ),
-                          style: const TextStyle(fontSize: 16, height: 1.45),
+                          style: showVisualLayer
+                              ? textStyle.copyWith(
+                                  color: Colors.transparent,
+                                  decorationColor: Colors.transparent,
+                                )
+                              : textStyle,
                           onTap: _handleTextFieldTap,
                           onChanged: _emitText,
+                        );
+                        if (!showVisualLayer) {
+                          return textField;
+                        }
+                        return Stack(
+                          alignment: Alignment.topLeft,
+                          children: [
+                            textField,
+                            _TaggedTextVisualLayer(
+                              key: const ValueKey(
+                                'note-text-visual-selection-layout',
+                              ),
+                              text: _controller.text,
+                              rangeTags: _block.rangeTags,
+                              activeRailRange: _selectionHasRange
+                                  ? _activeRailRange
+                                  : null,
+                              rail: _selectionHasRange
+                                  ? _buildSelectionRail()
+                                  : null,
+                              baseStyle: textStyle.copyWith(
+                                color: const Color(0xFF111827),
+                              ),
+                            ),
+                          ],
                         );
                       },
                     ),
@@ -666,9 +694,7 @@ class _TaggedTextEditingController extends TextEditingController {
        super(text: text);
 
   List<NoteTextRangeTag> _rangeTags;
-  TextRange? _inlineRailRange;
-  Widget? _inlineRail;
-  double _inlineRailWidth = 0;
+  bool paintTagStyles = true;
 
   set rangeTags(List<NoteTextRangeTag> value) {
     setRangeTags(value);
@@ -677,16 +703,6 @@ class _TaggedTextEditingController extends TextEditingController {
 
   void setRangeTags(List<NoteTextRangeTag> value) {
     _rangeTags = value;
-  }
-
-  void setInlineRail({
-    required TextRange? range,
-    required Widget? rail,
-    required double width,
-  }) {
-    _inlineRailRange = range;
-    _inlineRail = rail;
-    _inlineRailWidth = width;
   }
 
   @override
@@ -703,134 +719,235 @@ class _TaggedTextEditingController extends TextEditingController {
             .toList()
           ..sort((a, b) => a.start.compareTo(b.start));
     if (validTags.isEmpty) {
-      final spans = <InlineSpan>[];
-      _appendStyledTextWithRail(
-        spans: spans,
-        textValue: textValue,
-        start: 0,
-        end: textValue.length,
-        style: null,
-        railOffset: _railOffset(textValue.length),
-        railSpan: _railSpan(),
-      );
-      return spans.isEmpty
-          ? TextSpan(style: style, text: textValue)
-          : TextSpan(style: style, children: spans);
+      return TextSpan(style: style, text: textValue);
     }
     final spans = <InlineSpan>[];
     var cursor = 0;
-    final railOffset = _railOffset(textValue.length);
-    final railSpan = _railSpan();
     for (final rangeTag in validTags) {
       if (rangeTag.start < cursor) {
         continue;
       }
       if (rangeTag.start > cursor) {
-        _appendStyledTextWithRail(
-          spans: spans,
-          textValue: textValue,
-          start: cursor,
-          end: rangeTag.start,
-          style: null,
-          railOffset: railOffset,
-          railSpan: railSpan,
-        );
+        spans.add(TextSpan(text: textValue.substring(cursor, rangeTag.start)));
       }
-      _appendStyledTextWithRail(
-        spans: spans,
-        textValue: textValue,
-        start: rangeTag.start,
-        end: rangeTag.end,
-        style: _taggedTextStyle(rangeTag.resolvedTags, alpha: 0.22),
-        railOffset: railOffset,
-        railSpan: railSpan,
+      spans.add(
+        TextSpan(
+          text: textValue.substring(rangeTag.start, rangeTag.end),
+          style: paintTagStyles
+              ? _taggedTextStyle(rangeTag.resolvedTags, alpha: 0.22)
+              : null,
+        ),
       );
       cursor = rangeTag.end;
     }
     if (cursor < textValue.length) {
-      _appendStyledTextWithRail(
-        spans: spans,
-        textValue: textValue,
-        start: cursor,
-        end: textValue.length,
-        style: null,
-        railOffset: railOffset,
-        railSpan: railSpan,
-      );
-    } else if (railOffset != null && railOffset == textValue.length) {
-      _appendRailIfNeeded(spans, railSpan);
+      spans.add(TextSpan(text: textValue.substring(cursor)));
     }
     return TextSpan(style: style, children: spans);
   }
+}
 
-  int? _railOffset(int textLength) {
-    final range = _inlineRailRange;
-    if (range == null || _inlineRail == null || !range.isValid) {
-      return null;
-    }
-    return range.end.clamp(0, textLength).toInt();
-  }
+class _TaggedTextVisualLayer extends StatelessWidget {
+  const _TaggedTextVisualLayer({
+    super.key,
+    required this.text,
+    required this.rangeTags,
+    required this.baseStyle,
+    this.activeRailRange,
+    this.rail,
+  });
 
-  WidgetSpan? _railSpan() {
-    final rail = _inlineRail;
-    if (rail == null) {
-      return null;
+  final String text;
+  final List<NoteTextRangeTag> rangeTags;
+  final TextRange? activeRailRange;
+  final Widget? rail;
+  final TextStyle baseStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final range = activeRailRange;
+    final railWidget = rail;
+    if (range == null || railWidget == null || !range.isValid) {
+      return IgnorePointer(
+        child: _TaggedTextVisualSegment(
+          text: text,
+          start: 0,
+          end: text.length,
+          rangeTags: rangeTags,
+          baseStyle: baseStyle,
+        ),
+      );
     }
-    final width = _inlineRailWidth.isFinite && _inlineRailWidth > 0
-        ? _inlineRailWidth
-        : 360.0;
-    return WidgetSpan(
-      alignment: PlaceholderAlignment.middle,
-      child: SizedBox(
-        key: const ValueKey('note-text-inline-selection-rail'),
-        width: width,
-        child: Padding(
+    final railOffset = range.end.clamp(0, text.length).toInt();
+    return Column(
+      key: const ValueKey('note-text-visual-selection-column'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IgnorePointer(
+          child: _TaggedTextVisualSegment(
+            text: text,
+            start: 0,
+            end: railOffset,
+            rangeTags: rangeTags,
+            baseStyle: baseStyle,
+          ),
+        ),
+        Padding(
+          key: const ValueKey('note-text-visual-selection-rail'),
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: rail,
+          child: railWidget,
+        ),
+        IgnorePointer(
+          child: _TaggedTextVisualSegment(
+            text: text,
+            start: railOffset,
+            end: text.length,
+            rangeTags: rangeTags,
+            baseStyle: baseStyle,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TaggedTextVisualSegment extends StatelessWidget {
+  const _TaggedTextVisualSegment({
+    required this.text,
+    required this.start,
+    required this.end,
+    required this.rangeTags,
+    required this.baseStyle,
+  });
+
+  final String text;
+  final int start;
+  final int end;
+  final List<NoteTextRangeTag> rangeTags;
+  final TextStyle baseStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return RichText(
+      text: TextSpan(
+        style: baseStyle,
+        children: _taggedVisualSpans(
+          textValue: text,
+          start: start,
+          end: end,
+          rangeTags: rangeTags,
+          baseStyle: baseStyle,
         ),
       ),
     );
   }
 }
 
-void _appendStyledTextWithRail({
-  required List<InlineSpan> spans,
+List<InlineSpan> _taggedVisualSpans({
   required String textValue,
   required int start,
   required int end,
-  required TextStyle? style,
-  required int? railOffset,
-  required WidgetSpan? railSpan,
+  required List<NoteTextRangeTag> rangeTags,
+  required TextStyle baseStyle,
 }) {
-  if (end <= start) {
-    if (railOffset == start) {
-      _appendRailIfNeeded(spans, railSpan);
+  final clampedStart = start.clamp(0, textValue.length).toInt();
+  final clampedEnd = end.clamp(clampedStart, textValue.length).toInt();
+  if (clampedEnd <= clampedStart) {
+    return const [];
+  }
+  final validTags =
+      rangeTags
+          .map((tag) => tag.clampToTextLength(textValue.length))
+          .where(
+            (tag) =>
+                tag.isValid && tag.start < clampedEnd && tag.end > clampedStart,
+          )
+          .toList()
+        ..sort((a, b) => a.start.compareTo(b.start));
+  if (validTags.isEmpty) {
+    return [TextSpan(text: textValue.substring(clampedStart, clampedEnd))];
+  }
+  final spans = <InlineSpan>[];
+  var cursor = clampedStart;
+  for (final rangeTag in validTags) {
+    final tagStart = rangeTag.start < clampedStart
+        ? clampedStart
+        : rangeTag.start;
+    final tagEnd = rangeTag.end > clampedEnd ? clampedEnd : rangeTag.end;
+    if (tagStart < cursor) {
+      continue;
     }
-    return;
-  }
-  if (railOffset != null && railOffset > start && railOffset < end) {
+    if (tagStart > cursor) {
+      spans.add(TextSpan(text: textValue.substring(cursor, tagStart)));
+    }
     spans.add(
-      TextSpan(text: textValue.substring(start, railOffset), style: style),
+      WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: _TaggedInlineText(
+          rangeId: rangeTag.id,
+          text: textValue.substring(tagStart, tagEnd),
+          tags: rangeTag.resolvedTags,
+          baseStyle: baseStyle,
+        ),
+      ),
     );
-    _appendRailIfNeeded(spans, railSpan);
-    spans.add(
-      TextSpan(text: textValue.substring(railOffset, end), style: style),
-    );
-    return;
+    cursor = tagEnd;
   }
-  spans.add(TextSpan(text: textValue.substring(start, end), style: style));
-  if (railOffset == end) {
-    _appendRailIfNeeded(spans, railSpan);
+  if (cursor < clampedEnd) {
+    spans.add(TextSpan(text: textValue.substring(cursor, clampedEnd)));
   }
+  return spans;
 }
 
-void _appendRailIfNeeded(List<InlineSpan> spans, WidgetSpan? railSpan) {
-  if (railSpan == null || spans.any((span) => span is WidgetSpan)) {
-    return;
+class _TaggedInlineText extends StatelessWidget {
+  const _TaggedInlineText({
+    required this.rangeId,
+    required this.text,
+    required this.tags,
+    required this.baseStyle,
+  });
+
+  final String rangeId;
+  final String text;
+  final List<NoteKnowledgeTag> tags;
+  final TextStyle baseStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    if (tags.isEmpty) {
+      return Text(text, style: baseStyle);
+    }
+    return IntrinsicWidth(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            text,
+            style: baseStyle.copyWith(
+              backgroundColor: Color(
+                tags.first.resolvedColorValue,
+              ).withValues(alpha: 0.22),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          for (var index = 1; index < tags.length; index++)
+            Padding(
+              padding: EdgeInsets.only(top: index == 1 ? 1 : 2),
+              child: DecoratedBox(
+                key: ValueKey('note-text-secondary-underline-$rangeId-$index'),
+                decoration: BoxDecoration(
+                  color: Color(tags[index].resolvedColorValue),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const SizedBox(height: 2),
+              ),
+            ),
+        ],
+      ),
+    );
   }
-  spans.add(const TextSpan(text: '\n'));
-  spans.add(railSpan);
-  spans.add(const TextSpan(text: '\n'));
 }
 
 TextStyle _taggedTextStyle(
