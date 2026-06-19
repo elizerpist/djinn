@@ -264,7 +264,7 @@ void main() {
   });
 
   testWidgets(
-    'text selection rail expands below the active paragraph and exposes style toggles',
+    'text editor keeps one white text surface and exposes style toggles',
     (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -283,13 +283,25 @@ void main() {
         find.byKey(const ValueKey('note-text-chunk-body')),
         findsOneWidget,
       );
+      final body = tester.widget<Container>(
+        find.byKey(const ValueKey('note-text-chunk-body')),
+      );
+      expect(body.color, Colors.white);
       expect(
         find.byKey(const ValueKey('note-text-paragraph-box-0')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('note-text-paragraph-box-1')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-chunk-field')),
         findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-chunk-field-1')),
+        findsNothing,
       );
 
       await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
@@ -319,20 +331,52 @@ void main() {
         find.byKey(const ValueKey('note-text-rail-toggle-border')),
         findsOneWidget,
       );
-      expect(
-        tester
-            .getTopLeft(find.byKey(const ValueKey('note-text-selection-rail')))
-            .dy,
-        lessThan(
-          tester
-              .getTopLeft(
-                find.byKey(const ValueKey('note-text-paragraph-box-1')),
-              )
-              .dy,
-        ),
-      );
     },
   );
+
+  testWidgets('tap inside an existing tagged range opens the selection rail', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Súlyos esetben high flow oxygen.',
+            rangeTags: [
+              NoteTextRangeTag(
+                id: 'range-1',
+                start: 0,
+                end: 6,
+                tag: NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.state,
+                  label: 'súlyos',
+                  colorValue: 0xFFDC2626,
+                ),
+              ),
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    await tester.tapAt(
+      tester.getTopLeft(find.byKey(const ValueKey('note-text-chunk-field'))) +
+          const Offset(24, 24),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-text-selection-rail')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-selection-rail-pill-súlyos')),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('text range secondary tags render as underline styling', (
     tester,

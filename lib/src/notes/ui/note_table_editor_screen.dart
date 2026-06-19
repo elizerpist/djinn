@@ -1500,6 +1500,12 @@ class _TableGridState extends State<_TableGrid> {
     if (row < 0 || row >= widget.rowCount) {
       return;
     }
+    if (_resizingRow != null) {
+      if (_resizingRow == row) {
+        DebugConsole.log('[TableResize] row duplicate start ignored row=$row');
+      }
+      return;
+    }
     _resizingRow = row;
     _pendingRowResizeRow = null;
     _pendingRowResizeDelta = 0;
@@ -1511,6 +1517,9 @@ class _TableGridState extends State<_TableGrid> {
 
   void _updateRowResize(int row, double delta) {
     if (row < 0 || row >= widget.rowCount || delta == 0) {
+      return;
+    }
+    if (_resizingRow != null && _resizingRow != row) {
       return;
     }
     if (_pendingRowResizeRow != null && _pendingRowResizeRow != row) {
@@ -1556,6 +1565,9 @@ class _TableGridState extends State<_TableGrid> {
   }
 
   void _commitRowResize(int row) {
+    if (_resizingRow != null && _resizingRow != row) {
+      return;
+    }
     if (row < 0 || row >= widget.rowCount) {
       _resizingRow = null;
       return;
@@ -1974,10 +1986,10 @@ class _RowHeadContent extends StatelessWidget {
         ),
         if (resizeEnabled)
           Positioned(
-            left: 2,
-            right: 2,
             bottom: 2,
-            height: 36,
+            left: (width - 36) / 2,
+            width: 36,
+            height: 28,
             child: GestureDetector(
               key: ValueKey('note-table-row-resize-$row'),
               behavior: HitTestBehavior.opaque,

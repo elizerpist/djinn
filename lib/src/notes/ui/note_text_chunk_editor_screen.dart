@@ -27,6 +27,7 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
 class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late NoteBlock _block;
   late final _TaggedTextEditingController _controller;
+  late final FocusNode _focusNode;
   bool _selectionCanDeleteTag = false;
   bool _selectionHasRange = false;
   bool _syncingRangeTags = false;
@@ -34,10 +35,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   bool _railRoundedCard = false;
   bool _railTransparentBackground = false;
   bool _railBorderVisible = true;
-  int _activeParagraphIndex = 0;
-  final Map<int, _TaggedTextEditingController> _paragraphControllers =
-      <int, _TaggedTextEditingController>{};
-  final Map<int, FocusNode> _paragraphFocusNodes = <int, FocusNode>{};
 
   @override
   void initState() {
@@ -47,6 +44,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       text: widget.block.text,
       rangeTags: widget.block.rangeTags,
     );
+    _focusNode = FocusNode();
     _controller.addListener(_handleControllerChanged);
     _selectionCanDeleteTag = _selectionHasTag();
     _selectionHasRange = _selectionIsTaggable();
@@ -56,12 +54,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   void dispose() {
     _controller.removeListener(_handleControllerChanged);
     _controller.dispose();
-    for (final controller in _paragraphControllers.values) {
-      controller.dispose();
-    }
-    for (final focusNode in _paragraphFocusNodes.values) {
-      focusNode.dispose();
-    }
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -93,7 +86,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       tags: _block.rangeTags,
     );
     _setControllerRangeTags(rangeTags);
-    _syncParagraphRangeTags();
     _block = _block.copyWith(
       text: value,
       rangeTags: rangeTags,
@@ -191,12 +183,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   TextRange? _selectionTargetRange() {
-    final selection = _activeParagraphController?.selection;
-    final segment = _activeParagraphSegment;
-    if (selection == null ||
-        segment == null ||
-        !selection.isValid ||
-        _controller.text.isEmpty) {
+    final selection = _controller.selection;
+    if (!selection.isValid || _controller.text.isEmpty) {
       return null;
     }
     if (!selection.isCollapsed) {
@@ -207,10 +195,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           ? selection.end
           : selection.start;
       return TextRange(
-        start: (segment.start + start)
-            .clamp(0, _controller.text.length)
-            .toInt(),
-        end: (segment.start + end).clamp(0, _controller.text.length).toInt(),
+        start: start.clamp(0, _controller.text.length).toInt(),
+        end: end.clamp(0, _controller.text.length).toInt(),
       );
     }
     final collapsedRange = _collapsedTaggedRange();
@@ -221,15 +207,11 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   NoteTextRangeTag? _collapsedTaggedRange() {
-    final selection = _activeParagraphController?.selection;
-    final segment = _activeParagraphSegment;
-    if (selection == null ||
-        segment == null ||
-        !selection.isValid ||
-        !selection.isCollapsed) {
+    final selection = _controller.selection;
+    if (!selection.isValid || !selection.isCollapsed) {
       return null;
     }
-    final offset = (segment.start + selection.extentOffset)
+    final offset = selection.extentOffset
         .clamp(0, _controller.text.length)
         .toInt();
     for (final tag in _block.rangeTags) {
@@ -237,7 +219,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       if (!range.isValid) {
         continue;
       }
-      if (offset >= range.start && offset <= range.end) {
+      if (offset >= range.start && offset < range.end) {
         return range;
       }
     }
@@ -344,23 +326,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       baseOffset: target.start,
       extentOffset: target.end,
     );
-    final segments = _segments;
-    final paragraphIndex = segments.indexWhere(
-      (segment) => target.start >= segment.start && target.start <= segment.end,
-    );
-    if (paragraphIndex >= 0) {
-      final segment = segments[paragraphIndex];
-      _activeParagraphIndex = paragraphIndex;
-      _paragraphControllers[paragraphIndex]?.selection = TextSelection(
-        baseOffset: (target.start - segment.start)
-            .clamp(0, segment.text.length)
-            .toInt(),
-        extentOffset: (target.end - segment.start)
-            .clamp(0, segment.text.length)
-            .toInt(),
-      );
-      _paragraphFocusNodes[paragraphIndex]?.requestFocus();
-    }
+    _focusNode.requestFocus();
     _handleControllerChanged();
   }
 
@@ -393,97 +359,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     } finally {
       _syncingRangeTags = false;
     }
-  }
-
-  List<_TextParagraphSegment> get _segments =>
-      _TextParagraphSegment.fromText(_controller.text);
-
-  _TextParagraphSegment? get _activeParagraphSegment {
-    final segments = _segments;
-    if (_activeParagraphIndex < 0 || _activeParagraphIndex >= segments.length) {
-      return segments.isEmpty ? null : segments.first;
-    }
-    return segments[_activeParagraphIndex];
-  }
-
-  _TaggedTextEditingController? get _activeParagraphController =>
-      _paragraphControllers[_activeParagraphIndex];
-
-  _TaggedTextEditingController _paragraphControllerFor(
-    int index,
-    _TextParagraphSegment segment,
-  ) {
-    final controller = _paragraphControllers.putIfAbsent(index, () {
-      final created = _TaggedTextEditingController(
-        text: segment.text,
-        rangeTags: _localRangeTagsForSegment(segment),
-      );
-      created.addListener(() {
-        _activeParagraphIndex = index;
-        _handleControllerChanged();
-      });
-      return created;
-    });
-    if (controller.text != segment.text &&
-        !(_paragraphFocusNodes[index]?.hasFocus ?? false)) {
-      controller.value = TextEditingValue(
-        text: segment.text,
-        selection: TextSelection.collapsed(
-          offset: segment.text.length.clamp(0, segment.text.length).toInt(),
-        ),
-      );
-    }
-    controller.setRangeTags(_localRangeTagsForSegment(segment));
-    return controller;
-  }
-
-  FocusNode _paragraphFocusNodeFor(int index) {
-    return _paragraphFocusNodes.putIfAbsent(index, FocusNode.new);
-  }
-
-  List<NoteTextRangeTag> _localRangeTagsForSegment(
-    _TextParagraphSegment segment,
-  ) {
-    final localTags = <NoteTextRangeTag>[];
-    for (final rangeTag in _block.rangeTags) {
-      final tag = rangeTag.clampToTextLength(_controller.text.length);
-      final start = tag.start > segment.start ? tag.start : segment.start;
-      final end = tag.end < segment.end ? tag.end : segment.end;
-      if (end <= start) {
-        continue;
-      }
-      localTags.add(
-        NoteTextRangeTag(
-          id: tag.id,
-          start: start - segment.start,
-          end: end - segment.start,
-          tag: tag.tag,
-          tags: tag.tags,
-        ),
-      );
-    }
-    return localTags;
-  }
-
-  void _syncParagraphRangeTags() {
-    final segments = _segments;
-    for (var i = 0; i < segments.length; i += 1) {
-      _paragraphControllers[i]?.setRangeTags(
-        _localRangeTagsForSegment(segments[i]),
-      );
-    }
-  }
-
-  void _emitParagraphText(
-    int index,
-    _TextParagraphSegment segment,
-    String value,
-  ) {
-    final text = _controller.text;
-    final next =
-        '${text.substring(0, segment.start)}$value${text.substring(segment.end)}';
-    _controller.value = _controller.value.copyWith(text: next);
-    _emitText(next);
   }
 
   Widget _buildSelectionRail() {
@@ -629,7 +504,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       ),
       body: Container(
         key: const ValueKey('note-text-chunk-body'),
-        color: const Color(0xFFF3F4F6),
+        color: Colors.white,
         child: Column(
           children: [
             if (_block.tags.isNotEmpty)
@@ -649,50 +524,34 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (final entry in _segments.indexed) ...[
-                      if (entry.$1 > 0) const SizedBox(height: 12),
-                      Container(
-                        key: ValueKey('note-text-paragraph-box-${entry.$1}'),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: TextField(
-                          key: entry.$1 == 0
-                              ? const ValueKey('note-text-chunk-field')
-                              : ValueKey('note-text-chunk-field-${entry.$1}'),
-                          controller: _paragraphControllerFor(
-                            entry.$1,
-                            entry.$2,
-                          ),
-                          focusNode: _paragraphFocusNodeFor(entry.$1),
-                          autofocus: entry.$1 == 0,
-                          maxLines: null,
-                          minLines: 1,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.newline,
-                          decoration: const InputDecoration(
-                            hintText: 'Írd ide a chunk tartalmát',
-                            border: InputBorder.none,
-                          ),
-                          style: const TextStyle(fontSize: 16, height: 1.45),
-                          onTap: () {
-                            _activeParagraphIndex = entry.$1;
-                            _handleControllerChanged();
-                          },
-                          onChanged: (value) =>
-                              _emitParagraphText(entry.$1, entry.$2, value),
-                        ),
+                    TextField(
+                      key: const ValueKey('note-text-chunk-field'),
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      autofocus: true,
+                      maxLines: null,
+                      minLines: 12,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      decoration: const InputDecoration(
+                        hintText: 'Írd ide a chunk tartalmát',
+                        border: InputBorder.none,
                       ),
-                      if (_selectionHasRange &&
-                          _activeParagraphIndex == entry.$1)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _buildSelectionRail(),
-                        ),
-                    ],
+                      style: const TextStyle(fontSize: 16, height: 1.45),
+                      onTap: () {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) {
+                            _handleControllerChanged();
+                          }
+                        });
+                      },
+                      onChanged: _emitText,
+                    ),
+                    if (_selectionHasRange)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _buildSelectionRail(),
+                      ),
                   ],
                 ),
               ),
@@ -717,46 +576,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         ),
       ),
     );
-  }
-}
-
-class _TextParagraphSegment {
-  const _TextParagraphSegment({
-    required this.start,
-    required this.end,
-    required this.text,
-  });
-
-  final int start;
-  final int end;
-  final String text;
-
-  static List<_TextParagraphSegment> fromText(String text) {
-    if (text.isEmpty) {
-      return const [_TextParagraphSegment(start: 0, end: 0, text: '')];
-    }
-    final segments = <_TextParagraphSegment>[];
-    var start = 0;
-    for (final match in RegExp(r'\n{2,}').allMatches(text)) {
-      segments.add(
-        _TextParagraphSegment(
-          start: start,
-          end: match.start,
-          text: text.substring(start, match.start),
-        ),
-      );
-      start = match.end;
-    }
-    segments.add(
-      _TextParagraphSegment(
-        start: start,
-        end: text.length,
-        text: text.substring(start),
-      ),
-    );
-    return segments.isEmpty
-        ? const [_TextParagraphSegment(start: 0, end: 0, text: '')]
-        : segments;
   }
 }
 

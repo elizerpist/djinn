@@ -946,6 +946,58 @@ void main() {
     );
   });
 
+  testWidgets('table row resize only starts from the selected row drag icon', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+              ['Enyhe', 'Célzott oxygen'],
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-table-row-head-1')));
+    await tester.pumpAndSettle();
+    final initialRowHeight = tester
+        .getSize(find.byKey(const ValueKey('note-table-row-head-1')))
+        .height;
+    final rowHeadBottomLeft = tester.getBottomLeft(
+      find.byKey(const ValueKey('note-table-row-head-1')),
+    );
+
+    await tester.dragFrom(
+      rowHeadBottomLeft + const Offset(8, -8),
+      const Offset(0, 64),
+    );
+    await tester.pumpAndSettle();
+
+    expect(latest, isNull);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('note-table-row-head-1')))
+          .height,
+      initialRowHeight,
+    );
+    expect(
+      DebugConsole.entries.where(
+        (entry) => entry.contains('[TableResize] row start row=1'),
+      ),
+      isEmpty,
+    );
+  });
+
   testWidgets('table row grows immediately while editing multiline cell', (
     tester,
   ) async {
