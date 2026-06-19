@@ -155,7 +155,7 @@ void main() {
       find.byKey(const ValueKey('note-local-tag-pill-súlyos')),
       findsNothing,
     );
-    expect(find.byKey(const ValueKey('note-text-tip-bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-text-tip-bar')), findsNothing);
     expect(find.byKey(const ValueKey('note-text-tag-selection')), findsNothing);
   });
 
@@ -331,6 +331,14 @@ void main() {
         find.byKey(const ValueKey('note-text-rail-toggle-border')),
         findsOneWidget,
       );
+      final span = field.controller!.buildTextSpan(
+        context: tester.element(
+          find.byKey(const ValueKey('note-text-chunk-field')),
+        ),
+        style: const TextStyle(),
+        withComposing: false,
+      );
+      expect(_containsWidgetSpan(span), isTrue);
     },
   );
 
@@ -376,6 +384,11 @@ void main() {
       find.byKey(const ValueKey('note-text-selection-rail-pill-súlyos')),
       findsOneWidget,
     );
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    expect(field.controller!.selection.baseOffset, 0);
+    expect(field.controller!.selection.extentOffset, 6);
   });
 
   testWidgets('text range secondary tags render as underline styling', (
@@ -439,3 +452,13 @@ void main() {
 }
 
 void _ignoreBlockChange(NoteBlock block) {}
+
+bool _containsWidgetSpan(InlineSpan span) {
+  if (span is WidgetSpan) {
+    return true;
+  }
+  if (span is TextSpan) {
+    return span.children?.any(_containsWidgetSpan) ?? false;
+  }
+  return false;
+}

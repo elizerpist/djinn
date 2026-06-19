@@ -35,6 +35,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   bool _railRoundedCard = false;
   bool _railTransparentBackground = false;
   bool _railBorderVisible = true;
+  TextRange? _activeRailRange;
 
   @override
   void initState() {
@@ -62,20 +63,24 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     if (_syncingRangeTags) {
       return;
     }
+    final nextRailRange = _selectionTargetRange();
     final nextCanDelete = _selectionHasTag();
-    final nextHasRange = _selectionIsTaggable();
+    final nextHasRange = nextRailRange != null;
     if (nextCanDelete == _selectionCanDeleteTag &&
-        nextHasRange == _selectionHasRange) {
+        nextHasRange == _selectionHasRange &&
+        _sameTextRange(nextRailRange, _activeRailRange)) {
       return;
     }
     if (!mounted) {
       _selectionCanDeleteTag = nextCanDelete;
       _selectionHasRange = nextHasRange;
+      _activeRailRange = nextRailRange;
       return;
     }
     setState(() {
       _selectionCanDeleteTag = nextCanDelete;
       _selectionHasRange = nextHasRange;
+      _activeRailRange = nextRailRange;
     });
   }
 
@@ -180,6 +185,13 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
 
   bool _selectionIsTaggable() {
     return _selectionTargetRange() != null;
+  }
+
+  bool _sameTextRange(TextRange? a, TextRange? b) {
+    if (a == null || b == null) {
+      return a == b;
+    }
+    return a.start == b.start && a.end == b.end;
   }
 
   TextRange? _selectionTargetRange() {
@@ -361,6 +373,22 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     }
   }
 
+  void _handleTextFieldTap() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final taggedRange = _collapsedTaggedRange();
+      if (taggedRange != null) {
+        _controller.selection = TextSelection(
+          baseOffset: taggedRange.start,
+          extentOffset: taggedRange.end,
+        );
+      }
+      _handleControllerChanged();
+    });
+  }
+
   Widget _buildSelectionRail() {
     return NoteSelectionActionRail(
       key: const ValueKey('note-text-selection-rail'),
@@ -524,54 +552,40 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextField(
-                      key: const ValueKey('note-text-chunk-field'),
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      autofocus: true,
-                      maxLines: null,
-                      minLines: 12,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.newline,
-                      decoration: const InputDecoration(
-                        hintText: 'Írd ide a chunk tartalmát',
-                        border: InputBorder.none,
-                      ),
-                      style: const TextStyle(fontSize: 16, height: 1.45),
-                      onTap: () {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) {
-                            _handleControllerChanged();
-                          }
-                        });
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        _controller.setInlineRail(
+                          range: _selectionHasRange ? _activeRailRange : null,
+                          rail: _selectionHasRange
+                              ? _buildSelectionRail()
+                              : null,
+                          width: constraints.maxWidth,
+                        );
+                        return TextField(
+                          key: const ValueKey('note-text-chunk-field'),
+                          controller: _controller,
+                          focusNode: _focusNode,
+                          autofocus: true,
+                          maxLines: null,
+                          minLines: 12,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          decoration: const InputDecoration(
+                            hintText: 'Írd ide a chunk tartalmát',
+                            border: InputBorder.none,
+                          ),
+                          style: const TextStyle(fontSize: 16, height: 1.45),
+                          onTap: _handleTextFieldTap,
+                          onChanged: _emitText,
+                        );
                       },
-                      onChanged: _emitText,
                     ),
-                    if (_selectionHasRange)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _buildSelectionRail(),
-                      ),
                   ],
                 ),
               ),
             ),
             if (_block.rangeTags.isNotEmpty)
               const SizedBox.shrink(key: ValueKey('note-text-range-highlight')),
-            Container(
-              key: const ValueKey('note-text-tip-bar'),
-              width: double.infinity,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'Írj szöveget, jelöld ki a részt, majd a hárompontos menüből taggeld.',
-                style: TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
-              ),
-            ),
           ],
         ),
       ),
@@ -652,6 +666,9 @@ class _TaggedTextEditingController extends TextEditingController {
        super(text: text);
 
   List<NoteTextRangeTag> _rangeTags;
+  TextRange? _inlineRailRange;
+  Widget? _inlineRail;
+  double _inlineRailWidth = 0;
 
   set rangeTags(List<NoteTextRangeTag> value) {
     setRangeTags(value);
@@ -660,6 +677,16 @@ class _TaggedTextEditingController extends TextEditingController {
 
   void setRangeTags(List<NoteTextRangeTag> value) {
     _rangeTags = value;
+  }
+
+  void setInlineRail({
+    required TextRange? range,
+    required Widget? rail,
+    required double width,
+  }) {
+    _inlineRailRange = range;
+    _inlineRail = rail;
+    _inlineRailWidth = width;
   }
 
   @override
@@ -676,30 +703,132 @@ class _TaggedTextEditingController extends TextEditingController {
             .toList()
           ..sort((a, b) => a.start.compareTo(b.start));
     if (validTags.isEmpty) {
-      return TextSpan(style: style, text: textValue);
+      final spans = <InlineSpan>[];
+      _appendStyledTextWithRail(
+        spans: spans,
+        textValue: textValue,
+        start: 0,
+        end: textValue.length,
+        style: null,
+        railOffset: _railOffset(textValue.length),
+        railSpan: _railSpan(),
+      );
+      return spans.isEmpty
+          ? TextSpan(style: style, text: textValue)
+          : TextSpan(style: style, children: spans);
     }
-    final spans = <TextSpan>[];
+    final spans = <InlineSpan>[];
     var cursor = 0;
+    final railOffset = _railOffset(textValue.length);
+    final railSpan = _railSpan();
     for (final rangeTag in validTags) {
       if (rangeTag.start < cursor) {
         continue;
       }
       if (rangeTag.start > cursor) {
-        spans.add(TextSpan(text: textValue.substring(cursor, rangeTag.start)));
+        _appendStyledTextWithRail(
+          spans: spans,
+          textValue: textValue,
+          start: cursor,
+          end: rangeTag.start,
+          style: null,
+          railOffset: railOffset,
+          railSpan: railSpan,
+        );
       }
-      spans.add(
-        TextSpan(
-          text: textValue.substring(rangeTag.start, rangeTag.end),
-          style: _taggedTextStyle(rangeTag.resolvedTags, alpha: 0.22),
-        ),
+      _appendStyledTextWithRail(
+        spans: spans,
+        textValue: textValue,
+        start: rangeTag.start,
+        end: rangeTag.end,
+        style: _taggedTextStyle(rangeTag.resolvedTags, alpha: 0.22),
+        railOffset: railOffset,
+        railSpan: railSpan,
       );
       cursor = rangeTag.end;
     }
     if (cursor < textValue.length) {
-      spans.add(TextSpan(text: textValue.substring(cursor)));
+      _appendStyledTextWithRail(
+        spans: spans,
+        textValue: textValue,
+        start: cursor,
+        end: textValue.length,
+        style: null,
+        railOffset: railOffset,
+        railSpan: railSpan,
+      );
+    } else if (railOffset != null && railOffset == textValue.length) {
+      _appendRailIfNeeded(spans, railSpan);
     }
     return TextSpan(style: style, children: spans);
   }
+
+  int? _railOffset(int textLength) {
+    final range = _inlineRailRange;
+    if (range == null || _inlineRail == null || !range.isValid) {
+      return null;
+    }
+    return range.end.clamp(0, textLength).toInt();
+  }
+
+  WidgetSpan? _railSpan() {
+    final rail = _inlineRail;
+    if (rail == null) {
+      return null;
+    }
+    final width = _inlineRailWidth.isFinite && _inlineRailWidth > 0
+        ? _inlineRailWidth
+        : 360.0;
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: SizedBox(
+        key: const ValueKey('note-text-inline-selection-rail'),
+        width: width,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: rail,
+        ),
+      ),
+    );
+  }
+}
+
+void _appendStyledTextWithRail({
+  required List<InlineSpan> spans,
+  required String textValue,
+  required int start,
+  required int end,
+  required TextStyle? style,
+  required int? railOffset,
+  required WidgetSpan? railSpan,
+}) {
+  if (end <= start) {
+    if (railOffset == start) {
+      _appendRailIfNeeded(spans, railSpan);
+    }
+    return;
+  }
+  if (railOffset != null && railOffset > start && railOffset < end) {
+    spans.add(
+      TextSpan(text: textValue.substring(start, railOffset), style: style),
+    );
+    _appendRailIfNeeded(spans, railSpan);
+    spans.add(
+      TextSpan(text: textValue.substring(railOffset, end), style: style),
+    );
+    return;
+  }
+  spans.add(TextSpan(text: textValue.substring(start, end), style: style));
+  if (railOffset == end) {
+    _appendRailIfNeeded(spans, railSpan);
+  }
+}
+
+void _appendRailIfNeeded(List<InlineSpan> spans, WidgetSpan? railSpan) {
+  if (railSpan == null || spans.any((span) => span is WidgetSpan)) {
+    return;
+  }
+  spans.add(railSpan);
 }
 
 TextStyle _taggedTextStyle(
