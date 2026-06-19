@@ -346,6 +346,44 @@ void main() {
     },
   );
 
+  testWidgets('tagged text remains visible when the selection rail is closed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Súlyos esetben high flow oxygen.',
+            rangeTags: [
+              NoteTextRangeTag(
+                id: 'range-1',
+                start: 0,
+                end: 6,
+                tag: NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.state,
+                  label: 'súlyos',
+                  colorValue: 0xFFDC2626,
+                ),
+              ),
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    expect(field.style!.color, isNot(Colors.transparent));
+    expect(
+      find.byKey(const ValueKey('note-text-visual-selection-layout')),
+      findsNothing,
+    );
+  });
+
   testWidgets('tap inside an existing tagged range opens the selection rail', (
     tester,
   ) async {
@@ -457,6 +495,74 @@ void main() {
     expect(
       find.byKey(const ValueKey('note-text-secondary-underline-range-1-3')),
       findsNothing,
+    );
+  });
+
+  testWidgets('overlapping text range tags merge into secondary underlines', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Súlyos esetben high flow oxygen.',
+            rangeTags: [
+              NoteTextRangeTag(
+                id: 'range-primary',
+                start: 0,
+                end: 6,
+                tag: NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.state,
+                  label: 'súlyos',
+                  colorValue: 0xFFDC2626,
+                ),
+              ),
+              NoteTextRangeTag(
+                id: 'range-secondary-a',
+                start: 0,
+                end: 6,
+                tag: NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.topic,
+                  label: 'légzés',
+                  colorValue: 0xFF2563EB,
+                ),
+              ),
+              NoteTextRangeTag(
+                id: 'range-secondary-b',
+                start: 0,
+                end: 6,
+                tag: NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.symbol,
+                  label: 'oxigén',
+                  colorValue: 0xFF16A34A,
+                ),
+              ),
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    field.controller!.selection = const TextSelection.collapsed(offset: 3);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey('note-text-secondary-underline-range-primary-1'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('note-text-secondary-underline-range-primary-2'),
+      ),
+      findsOneWidget,
     );
   });
 }

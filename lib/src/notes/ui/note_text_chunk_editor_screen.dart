@@ -555,8 +555,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                     LayoutBuilder(
                       builder: (context, _) {
                         const textStyle = TextStyle(fontSize: 16, height: 1.45);
-                        final showVisualLayer =
-                            _block.rangeTags.isNotEmpty || _selectionHasRange;
+                        final showVisualLayer = _selectionHasRange;
                         _controller.paintTagStyles = !showVisualLayer;
                         final textField = TextField(
                           key: const ValueKey('note-text-chunk-field'),
@@ -856,15 +855,11 @@ List<InlineSpan> _taggedVisualSpans({
   if (clampedEnd <= clampedStart) {
     return const [];
   }
-  final validTags =
-      rangeTags
-          .map((tag) => tag.clampToTextLength(textValue.length))
-          .where(
-            (tag) =>
-                tag.isValid && tag.start < clampedEnd && tag.end > clampedStart,
-          )
-          .toList()
-        ..sort((a, b) => a.start.compareTo(b.start));
+  final validTags = _mergeVisualRangeTags(rangeTags, textValue.length).where((
+    tag,
+  ) {
+    return tag.isValid && tag.start < clampedEnd && tag.end > clampedStart;
+  }).toList()..sort((a, b) => a.start.compareTo(b.start));
   if (validTags.isEmpty) {
     return [TextSpan(text: textValue.substring(clampedStart, clampedEnd))];
   }
@@ -898,6 +893,41 @@ List<InlineSpan> _taggedVisualSpans({
     spans.add(TextSpan(text: textValue.substring(cursor, clampedEnd)));
   }
   return spans;
+}
+
+List<NoteTextRangeTag> _mergeVisualRangeTags(
+  List<NoteTextRangeTag> rangeTags,
+  int textLength,
+) {
+  final merged = <String, NoteTextRangeTag>{};
+  for (final rawTag in rangeTags) {
+    final rangeTag = rawTag.clampToTextLength(textLength);
+    if (!rangeTag.isValid) {
+      continue;
+    }
+    final key = '${rangeTag.start}:${rangeTag.end}';
+    final existing = merged[key];
+    if (existing == null) {
+      merged[key] = rangeTag;
+      continue;
+    }
+    final nextTags = [...existing.resolvedTags];
+    for (final tag in rangeTag.resolvedTags) {
+      if (!nextTags.any(
+        (current) => current.metadataText == tag.metadataText,
+      )) {
+        nextTags.add(tag);
+      }
+    }
+    merged[key] = NoteTextRangeTag(
+      id: existing.id,
+      start: existing.start,
+      end: existing.end,
+      tag: nextTags.first,
+      tags: nextTags,
+    );
+  }
+  return merged.values.toList(growable: false);
 }
 
 class _TaggedInlineText extends StatelessWidget {
