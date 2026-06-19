@@ -4,6 +4,7 @@ import '../../ai/ai_provider.dart';
 import '../../branding/djinn_brand_mark.dart';
 import '../../cases/data/case_repository.dart';
 import '../../debug/debug_header_button.dart';
+import '../../debug/debug_console.dart';
 import '../../flowchart/data/flowchart_validation_repository.dart';
 import '../../knowledge/data/document_processing_service.dart';
 import '../../knowledge/data/knowledge_document_repository.dart';
@@ -54,7 +55,7 @@ class MainScreen extends StatefulWidget {
   final Future<bool> Function() testApiKey;
   final CaseRepository caseRepository;
   final Future<bool> Function(AiProvider provider, String model)?
-      testApiKeyForProvider;
+  testApiKeyForProvider;
   final DocumentProcessingService? processingService;
   final LocalDocumentProcessingService? localProcessingService;
   final FlowchartValidationRepository? flowchartValidationRepository;
@@ -66,6 +67,8 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   List<ChatConversation> _conversations = const [];
   AppDestinationId _selectedDestination = AppDestinationId.chat;
+  final Map<AppDestinationId, Widget> _destinationBodyCache =
+      <AppDestinationId, Widget>{};
 
   @override
   void initState() {
@@ -131,6 +134,10 @@ class _MainScreenState extends State<MainScreen> {
     final index = appDestinations.indexWhere(
       (destination) => destination.id == _selectedDestination,
     );
+    _destinationBodyCache.putIfAbsent(
+      _selectedDestination,
+      () => _buildDestinationBody(_selectedDestination),
+    );
     return Scaffold(
       appBar: _destinationOwnsScaffold(_selectedDestination)
           ? null
@@ -142,11 +149,31 @@ class _MainScreenState extends State<MainScreen> {
               surfaceTintColor: Colors.white,
               actions: const [DebugHeaderButton()],
             ),
-      body: _buildDestinationBody(_selectedDestination),
+      body: IndexedStack(
+        index: index < 0 ? 2 : index,
+        children: [
+          for (final destination in appDestinations)
+            _destinationBodyCache[destination.id] ?? const SizedBox.shrink(),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index < 0 ? 2 : index,
         onDestinationSelected: (index) {
-          setState(() => _selectedDestination = appDestinations[index].id);
+          final destination = appDestinations[index].id;
+          if (destination == _selectedDestination) {
+            return;
+          }
+          DebugConsole.log(
+            '[MainNav] switch from=${_selectedDestination.name} '
+            'to=${destination.name}',
+          );
+          setState(() {
+            _selectedDestination = destination;
+            _destinationBodyCache.putIfAbsent(
+              destination,
+              () => _buildDestinationBody(destination),
+            );
+          });
         },
         destinations: [
           for (final destination in appDestinations)
@@ -172,20 +199,20 @@ class _MainScreenState extends State<MainScreen> {
     return switch (destination) {
       AppDestinationId.notes => NotesScreen(repository: widget.noteRepository),
       AppDestinationId.knowledge => KnowledgeBaseScreen(
-          repository: widget.knowledgeRepository,
-          importService: widget.pdfImportService,
-          processingService: widget.processingService,
-          localProcessingService: widget.localProcessingService,
-        ),
+        repository: widget.knowledgeRepository,
+        importService: widget.pdfImportService,
+        processingService: widget.processingService,
+        localProcessingService: widget.localProcessingService,
+      ),
       AppDestinationId.chat => _buildChatListBody(),
       AppDestinationId.settings => SettingsScreen(
-          apiKeyStore: widget.apiKeyStore,
-          loadSettings: widget.loadSettings,
-          saveSettings: widget.saveSettings,
-          testApiKey: widget.testApiKey,
-          testApiKeyForProvider: widget.testApiKeyForProvider,
-          onSettingsChanged: _handleSettingsChanged,
-        ),
+        apiKeyStore: widget.apiKeyStore,
+        loadSettings: widget.loadSettings,
+        saveSettings: widget.saveSettings,
+        testApiKey: widget.testApiKey,
+        testApiKeyForProvider: widget.testApiKeyForProvider,
+        onSettingsChanged: _handleSettingsChanged,
+      ),
     };
   }
 

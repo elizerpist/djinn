@@ -13,6 +13,7 @@ import 'package:djinn/src/chat/ui/main_screen.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/data/pdf_import_service.dart';
 import 'package:djinn/src/notes/data/note_repository.dart';
+import 'package:djinn/src/notes/models/note_item.dart';
 import 'package:djinn/src/settings/data/api_key_store.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
 
@@ -58,9 +59,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('AI'), findsOneWidget);
   });
+
+  testWidgets('bottom navigation keeps visited destinations alive', (
+    tester,
+  ) async {
+    final noteRepository = _CountingNoteRepository();
+    await tester.pumpWidget(
+      _mainScreenApp(AppSettings.defaults(), noteRepository: noteRepository),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Jegyzetek'));
+    await tester.pumpAndSettle();
+    final callsAfterFirstOpen = noteRepository.listNotesCalls;
+    expect(callsAfterFirstOpen, greaterThan(0));
+
+    await tester.tap(find.text('Chat'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Jegyzetek'));
+    await tester.pumpAndSettle();
+
+    expect(noteRepository.listNotesCalls, callsAfterFirstOpen);
+  });
 }
 
-Widget _mainScreenApp(AppSettings initialSettings) {
+Widget _mainScreenApp(
+  AppSettings initialSettings, {
+  NoteRepository? noteRepository,
+}) {
   final chatRepository = LocalChatRepository();
   final knowledgeRepository = KnowledgeDocumentRepository();
   var settings = initialSettings;
@@ -72,7 +98,7 @@ Widget _mainScreenApp(AppSettings initialSettings) {
         answerService: const _StubAnswerService(),
       ),
       knowledgeRepository: knowledgeRepository,
-      noteRepository: MemoryNoteRepository(),
+      noteRepository: noteRepository ?? MemoryNoteRepository(),
       pdfImportService: PdfImportService(importDirectory: Directory('/memory')),
       refreshKnowledgeReadiness: knowledgeRepository.state,
       apiKeyStore: MemoryApiKeyStore(),
@@ -94,5 +120,15 @@ class _StubAnswerService implements AnswerService {
     List<ChatMessage> context = const [],
   }) async {
     return const LocalAnswerResult(text: 'OK', status: 'ok', citations: []);
+  }
+}
+
+class _CountingNoteRepository extends MemoryNoteRepository {
+  int listNotesCalls = 0;
+
+  @override
+  Future<List<NoteItem>> listNotes({String? folderId, NoteItemType? type}) {
+    listNotesCalls += 1;
+    return super.listNotes(folderId: folderId, type: type);
   }
 }

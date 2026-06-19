@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../ai/ai_client.dart';
+import '../../debug/debug_console.dart';
 import '../data/note_repository.dart';
 import '../models/note_document.dart';
 import '../models/note_item.dart';
@@ -281,8 +282,12 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
   }
 
   Future<void> _openBlockEditor(NoteBlock block) async {
+    final availableTags = _document.knownTags;
+    DebugConsole.log(
+      '[NoteEditor] open chunk type=${block.type.wireName} '
+      'blocks=${_document.blocks.length} knownTags=${availableTags.length}',
+    );
     Widget editorFor(NoteBlock current) {
-      final availableTags = _document.knownTags;
       return switch (current.type) {
         NoteBlockType.heading ||
         NoteBlockType.paragraph => NoteTextChunkEditorScreen(

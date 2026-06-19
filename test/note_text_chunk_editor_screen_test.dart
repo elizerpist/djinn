@@ -494,6 +494,129 @@ void main() {
     );
   });
 
+  testWidgets('text editor keeps default line height', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Első sor\nMásodik sor',
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+
+    expect(field.style!.height, isNull);
+  });
+
+  testWidgets('non-empty text chunk does not autofocus on editor open', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Meglévő szöveg',
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+
+    expect(field.autofocus, isFalse);
+  });
+
+  testWidgets('indent changes every manual row in the active paragraph', (
+    tester,
+  ) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: const NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Első sor\nMásodik sor\n\nMásik bekezdés',
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('note-text-indent')));
+    await tester.pump();
+
+    expect(latest!.text, '  Első sor\n  Második sor\n\nMásik bekezdés');
+  });
+
+  testWidgets('text range coloring does not add native text decoration', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Súlyos esetben high flow oxygen.',
+            rangeTags: [
+              NoteTextRangeTag(
+                id: 'range-1',
+                start: 0,
+                end: 6,
+                tag: NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.state,
+                  label: 'súlyos',
+                  colorValue: 0xFFDC2626,
+                ),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'súlyos',
+                    colorValue: 0xFFDC2626,
+                  ),
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.topic,
+                    label: 'légzés',
+                    colorValue: 0xFF2563EB,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    final span = field.controller!.buildTextSpan(
+      context: tester.element(
+        find.byKey(const ValueKey('note-text-chunk-field')),
+      ),
+      style: const TextStyle(),
+      withComposing: false,
+    );
+
+    expect(_textDecorations(span), isNot(contains(TextDecoration.underline)));
+  });
+
   testWidgets('overlapping text range tags merge into secondary underlines', (
     tester,
   ) async {
@@ -573,4 +696,15 @@ bool _containsWidgetSpan(InlineSpan span) {
     return span.children?.any(_containsWidgetSpan) ?? false;
   }
   return false;
+}
+
+List<TextDecoration?> _textDecorations(InlineSpan span) {
+  final decorations = <TextDecoration?>[];
+  if (span is TextSpan) {
+    decorations.add(span.style?.decoration);
+    for (final child in span.children ?? const <InlineSpan>[]) {
+      decorations.addAll(_textDecorations(child));
+    }
+  }
+  return decorations;
 }

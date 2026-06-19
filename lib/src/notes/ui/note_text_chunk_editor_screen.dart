@@ -686,25 +686,46 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     if (index < 0) {
       return;
     }
+    if (_lines[index].text.trim().isEmpty) {
+      return;
+    }
     final oldText = _block.text;
-    final line = _lines[index];
-    final nextText = delta > 0
-        ? (line.text.trim().isEmpty ? line.text : '  ${line.text}')
-        : line.text.startsWith('  ')
-        ? line.text.substring(2)
-        : line.text.startsWith(' ')
-        ? line.text.substring(1)
-        : line.text;
+    var paragraphStart = index;
+    while (paragraphStart > 0 &&
+        _lines[paragraphStart - 1].text.trim().isNotEmpty) {
+      paragraphStart -= 1;
+    }
+    var paragraphEnd = index;
+    while (paragraphEnd + 1 < _lines.length &&
+        _lines[paragraphEnd + 1].text.trim().isNotEmpty) {
+      paragraphEnd += 1;
+    }
     setState(() {
       _lines = [
-        for (final current in _lines)
-          if (current.id == activeLineId)
-            current.copyWith(text: nextText)
+        for (var i = 0; i < _lines.length; i += 1)
+          if (i >= paragraphStart && i <= paragraphEnd)
+            _lines[i].copyWith(text: _indentedLine(_lines[i].text, delta))
           else
-            current,
+            _lines[i],
       ];
     });
     _emitJoinedText(oldText: oldText, source: 'indent');
+  }
+
+  String _indentedLine(String text, int delta) {
+    if (text.trim().isEmpty) {
+      return text;
+    }
+    if (delta > 0) {
+      return '  $text';
+    }
+    if (text.startsWith('  ')) {
+      return text.substring(2);
+    }
+    if (text.startsWith(' ')) {
+      return text.substring(1);
+    }
+    return text;
   }
 
   @override
@@ -796,7 +817,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
             ),
             controller: controller,
             focusNode: _focusNodeForLine(line.id),
-            autofocus: index == 0,
+            autofocus: index == 0 && line.text.isEmpty,
             minLines: 1,
             maxLines: null,
             keyboardType: TextInputType.multiline,
@@ -808,11 +829,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(vertical: 2),
             ),
-            style: const TextStyle(
-              color: Color(0xFF111827),
-              fontSize: 16,
-              height: 1.45,
-            ),
+            style: const TextStyle(color: Color(0xFF111827), fontSize: 16),
             onTap: () {
               _activeLineId = line.id;
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -823,6 +840,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
             },
           ),
           _TextLineSecondaryUnderlines(
+            lineText: line.text,
             lineStart: _lineStartForId(line.id),
             lineTextLength: line.text.length,
             rangeTags: _block.rangeTags,
@@ -921,11 +939,13 @@ class _TextLineEditingController extends TextEditingController {
 
 class _TextLineSecondaryUnderlines extends StatelessWidget {
   const _TextLineSecondaryUnderlines({
+    required this.lineText,
     required this.lineStart,
     required this.lineTextLength,
     required this.rangeTags,
   });
 
+  final String lineText;
   final int lineStart;
   final int lineTextLength;
   final List<NoteTextRangeTag> rangeTags;
@@ -937,46 +957,119 @@ class _TextLineSecondaryUnderlines extends StatelessWidget {
       lineStart: lineStart,
       lineEnd: lineStart + lineTextLength,
     );
-    final underlineEntries = <({String id, List<NoteKnowledgeTag> tags})>[
-      for (final group in groups)
-        if (group.tags.length > 1) group,
-    ];
+    final underlineEntries =
+        <({String id, int start, int end, List<NoteKnowledgeTag> tags})>[
+          for (final group in groups)
+            if (group.tags.length > 1) group,
+        ];
     if (underlineEntries.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Padding(
-      padding: const EdgeInsets.only(top: 1, bottom: 4),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final group in underlineEntries)
-            for (var index = 1; index < group.tags.length; index += 1)
-              Padding(
-                padding: EdgeInsets.only(top: index == 1 ? 1 : 2),
-                child: DecoratedBox(
-                  key: ValueKey(
-                    'note-text-secondary-underline-${group.id}-$index',
+    final maxSecondaryCount = underlineEntries
+        .map((group) => group.tags.length - 1)
+        .fold<int>(0, (max, count) => count > max ? count : max);
+    return SizedBox(
+      height: maxSecondaryCount * 4 + 3,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              for (final group in underlineEntries)
+                for (var index = 1; index < group.tags.length; index += 1)
+                  CustomPaint(
+                    key: ValueKey(
+                      'note-text-secondary-underline-${group.id}-$index',
+                    ),
+                    painter: _TextSegmentUnderlinePainter(
+                      text: lineText,
+                      rangeStart: group.start - lineStart,
+                      rangeEnd: group.end - lineStart,
+                      color: Color(group.tags[index].resolvedColorValue),
+                      underlineIndex: index - 1,
+                    ),
                   ),
-                  decoration: BoxDecoration(
-                    color: Color(group.tags[index].resolvedColorValue),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const SizedBox(height: 2),
-                ),
-              ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-List<({String id, List<NoteKnowledgeTag> tags})> _mergedLineTagGroups({
+class _TextSegmentUnderlinePainter extends CustomPainter {
+  const _TextSegmentUnderlinePainter({
+    required this.text,
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.color,
+    required this.underlineIndex,
+  });
+
+  final String text;
+  final int rangeStart;
+  final int rangeEnd;
+  final Color color;
+  final int underlineIndex;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (text.isEmpty || rangeStart >= rangeEnd) {
+      return;
+    }
+    final start = rangeStart.clamp(0, text.length).toInt();
+    final end = rangeEnd.clamp(0, text.length).toInt();
+    if (start >= end) {
+      return;
+    }
+    final textDirection = TextDirection.ltr;
+    final baseStyle = const TextStyle(fontSize: 16, color: Color(0xFF111827));
+    final beforePainter = TextPainter(
+      text: TextSpan(text: text.substring(0, start), style: baseStyle),
+      textDirection: textDirection,
+      maxLines: 1,
+    )..layout(maxWidth: double.infinity);
+    final segmentPainter = TextPainter(
+      text: TextSpan(text: text.substring(start, end), style: baseStyle),
+      textDirection: textDirection,
+      maxLines: 1,
+    )..layout(maxWidth: double.infinity);
+    final left = beforePainter.width.clamp(0.0, size.width).toDouble();
+    final right = (left + segmentPainter.width)
+        .clamp(left, size.width)
+        .toDouble();
+    if (right <= left) {
+      return;
+    }
+    final y = 2.0 + underlineIndex * 4.0;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset(left, y), Offset(right, y), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TextSegmentUnderlinePainter oldDelegate) {
+    return oldDelegate.text != text ||
+        oldDelegate.rangeStart != rangeStart ||
+        oldDelegate.rangeEnd != rangeEnd ||
+        oldDelegate.color != color ||
+        oldDelegate.underlineIndex != underlineIndex;
+  }
+}
+
+List<({String id, int start, int end, List<NoteKnowledgeTag> tags})>
+_mergedLineTagGroups({
   required List<NoteTextRangeTag> rangeTags,
   required int lineStart,
   required int lineEnd,
 }) {
-  final groups = <String, ({String id, List<NoteKnowledgeTag> tags})>{};
+  final groups =
+      <
+        String,
+        ({String id, int start, int end, List<NoteKnowledgeTag> tags})
+      >{};
   for (final rawTag in rangeTags) {
     final range = rawTag.clampToTextLength(lineEnd);
     if (!range.isValid || range.start >= lineEnd || range.end <= lineStart) {
@@ -992,7 +1085,12 @@ List<({String id, List<NoteKnowledgeTag> tags})> _mergedLineTagGroups({
         tags.add(tag);
       }
     }
-    groups[key] = (id: existing?.id ?? range.id, tags: tags);
+    groups[key] = (
+      id: existing?.id ?? range.id,
+      start: start,
+      end: end,
+      tags: tags,
+    );
   }
   return groups.values.toList(growable: false);
 }
@@ -1030,14 +1128,6 @@ TextStyle _taggedTextStyle(
       tags.first.resolvedColorValue,
     ).withValues(alpha: alpha),
     fontWeight: FontWeight.w600,
-    decoration: tags.length > 1
-        ? TextDecoration.underline
-        : TextDecoration.none,
-    decorationStyle: tags.length > 2
-        ? TextDecorationStyle.double
-        : TextDecorationStyle.solid,
-    decorationColor: tags.length > 1 ? Color(tags[1].resolvedColorValue) : null,
-    decorationThickness: tags.length > 1 ? 2 : null,
   );
 }
 
