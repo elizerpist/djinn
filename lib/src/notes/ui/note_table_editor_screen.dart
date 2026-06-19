@@ -34,6 +34,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   late final TextEditingController _titleController;
   final Map<String, TextEditingController> _cellControllers =
       <String, TextEditingController>{};
+  final Map<String, FocusNode> _cellFocusNodes = <String, FocusNode>{};
   _TableSelection? _selection;
   bool _railBottomExpanded = true;
   bool _railRoundedCard = false;
@@ -70,6 +71,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     _titleController.dispose();
     for (final controller in _cellControllers.values) {
       controller.dispose();
+    }
+    for (final focusNode in _cellFocusNodes.values) {
+      focusNode.dispose();
     }
     super.dispose();
   }
@@ -151,12 +155,22 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
     return controller;
   }
 
+  FocusNode _focusNodeFor(int row, int column) {
+    final key = _cellControllerKey(row, column);
+    return _cellFocusNodes.putIfAbsent(key, FocusNode.new);
+  }
+
   void _resetCellControllers() {
     final staleControllers = _cellControllers.values.toList(growable: false);
+    final staleFocusNodes = _cellFocusNodes.values.toList(growable: false);
     _cellControllers.clear();
+    _cellFocusNodes.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       for (final controller in staleControllers) {
         controller.dispose();
+      }
+      for (final focusNode in staleFocusNodes) {
+        focusNode.dispose();
       }
     });
   }
@@ -172,6 +186,28 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       _rows[row][column] = value;
     });
     _emitChange();
+  }
+
+  void _submitCell(int row, int column) {
+    final targetRow = row + 1;
+    if (targetRow >= _rows.length) {
+      _insertRow(_rows.length);
+    }
+    setState(() {
+      _ensureCell(targetRow, column);
+      _selection = _TableSelection.cell(targetRow, column);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final focusNode = _focusNodeFor(targetRow, column);
+      focusNode.requestFocus();
+      final controller = _controllerFor(targetRow, column);
+      controller.selection = TextSelection.collapsed(
+        offset: controller.text.length,
+      );
+    });
   }
 
   NoteBlock _currentBlock() {
@@ -1090,8 +1126,10 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
               intrinsicRows: intrinsicRows,
               selection: _selection,
               cellControllerFor: _controllerFor,
+              cellFocusNodeFor: _focusNodeFor,
               tagsForCell: tableTagLookup.tagsForCell,
               onCellChanged: _updateCell,
+              onCellSubmitted: _submitCell,
               onSelect: _select,
               onMoveRow: _moveRow,
               onMoveColumn: _moveColumn,
@@ -1225,8 +1263,10 @@ class _TableGrid extends StatefulWidget {
     required this.intrinsicRows,
     required this.selection,
     required this.cellControllerFor,
+    required this.cellFocusNodeFor,
     required this.tagsForCell,
     required this.onCellChanged,
+    required this.onCellSubmitted,
     required this.onSelect,
     required this.onMoveRow,
     required this.onMoveColumn,
@@ -1246,8 +1286,10 @@ class _TableGrid extends StatefulWidget {
   final Set<int> intrinsicRows;
   final _TableSelection? selection;
   final TextEditingController Function(int row, int column) cellControllerFor;
+  final FocusNode Function(int row, int column) cellFocusNodeFor;
   final List<NoteKnowledgeTag> Function(int row, int column) tagsForCell;
   final void Function(int row, int column, String value) onCellChanged;
+  final void Function(int row, int column) onCellSubmitted;
   final ValueChanged<_TableSelection> onSelect;
   final void Function(int fromIndex, int toIndex) onMoveRow;
   final void Function(int fromIndex, int toIndex) onMoveColumn;
@@ -1686,11 +1728,13 @@ class _TableGridState extends State<_TableGrid> {
             width: _columnWidth(column),
             height: rowHeight,
             controller: widget.cellControllerFor(row, column),
+            focusNode: widget.cellFocusNodeFor(row, column),
             selected: widget.selection?.isCell(row, column) == true,
             tags: widget.tagsForCell(row, column),
             onTap: () => widget.onSelect(_TableSelection.cell(row, column)),
             onHorizontalDragUpdate: _scrollFromCellDrag,
             onChanged: (value) => widget.onCellChanged(row, column, value),
+            onSubmitted: () => widget.onCellSubmitted(row, column),
           ),
       ],
     );
@@ -2025,11 +2069,13 @@ class _CellSlot extends StatelessWidget {
     required this.width,
     required this.height,
     required this.controller,
+    required this.focusNode,
     required this.selected,
     required this.tags,
     required this.onTap,
     required this.onHorizontalDragUpdate,
     required this.onChanged,
+    required this.onSubmitted,
   });
 
   final int row;
@@ -2037,11 +2083,13 @@ class _CellSlot extends StatelessWidget {
   final double width;
   final double height;
   final TextEditingController controller;
+  final FocusNode focusNode;
   final bool selected;
   final List<NoteKnowledgeTag> tags;
   final VoidCallback onTap;
   final ValueChanged<double> onHorizontalDragUpdate;
   final ValueChanged<String> onChanged;
+  final VoidCallback onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -2053,11 +2101,13 @@ class _CellSlot extends StatelessWidget {
         width: width,
         height: height,
         controller: controller,
+        focusNode: focusNode,
         selected: selected,
         tags: tags,
         onTap: onTap,
         onHorizontalDragUpdate: onHorizontalDragUpdate,
         onChanged: onChanged,
+        onSubmitted: onSubmitted,
       ),
     );
   }
@@ -2122,11 +2172,13 @@ class _CellField extends StatefulWidget {
     required this.width,
     required this.height,
     required this.controller,
+    required this.focusNode,
     required this.selected,
     required this.tags,
     required this.onTap,
     required this.onHorizontalDragUpdate,
     required this.onChanged,
+    required this.onSubmitted,
   });
 
   final int row;
@@ -2134,11 +2186,13 @@ class _CellField extends StatefulWidget {
   final double width;
   final double height;
   final TextEditingController controller;
+  final FocusNode focusNode;
   final bool selected;
   final List<NoteKnowledgeTag> tags;
   final VoidCallback onTap;
   final ValueChanged<double> onHorizontalDragUpdate;
   final ValueChanged<String> onChanged;
+  final VoidCallback onSubmitted;
 
   @override
   State<_CellField> createState() => _CellFieldState();
@@ -2254,12 +2308,15 @@ class _CellFieldState extends State<_CellField> {
                     'note-table-cell-${widget.row}-${widget.column}',
                   ),
                   controller: widget.controller,
+                  focusNode: widget.focusNode,
                   minLines: 1,
                   maxLines: null,
-                  keyboardType: TextInputType.multiline,
+                  keyboardType: TextInputType.text,
+                  textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(border: InputBorder.none),
                   style: _taggedTableTextStyle(widget.tags),
                   onChanged: widget.onChanged,
+                  onFieldSubmitted: (_) => widget.onSubmitted(),
                 ),
               ),
             ),

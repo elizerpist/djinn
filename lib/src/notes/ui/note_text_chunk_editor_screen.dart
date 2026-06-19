@@ -828,7 +828,9 @@ void _appendRailIfNeeded(List<InlineSpan> spans, WidgetSpan? railSpan) {
   if (railSpan == null || spans.any((span) => span is WidgetSpan)) {
     return;
   }
+  spans.add(const TextSpan(text: '\n'));
   spans.add(railSpan);
+  spans.add(const TextSpan(text: '\n'));
 }
 
 TextStyle _taggedTextStyle(

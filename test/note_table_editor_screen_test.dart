@@ -1037,6 +1037,48 @@ void main() {
     );
   });
 
+  testWidgets('table cell submit moves down and creates a row at the bottom', (
+    tester,
+  ) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-table-cell-1-1')));
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.next);
+    await tester.pumpAndSettle();
+
+    expect(latest, isNotNull);
+    expect(latest!.rows, hasLength(3));
+    expect(latest!.rows[1][1], 'High flow');
+    expect(find.byKey(const ValueKey('note-table-cell-2-1')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('note-table-selected-cell-2-1')),
+      findsOneWidget,
+    );
+    final nextCellEditor = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('note-table-cell-2-1')),
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(nextCellEditor.focusNode.hasFocus, isTrue);
+  });
+
   testWidgets('table cell tap selects but horizontal drag scrolls the table', (
     tester,
   ) async {

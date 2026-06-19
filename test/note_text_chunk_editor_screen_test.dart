@@ -339,6 +339,12 @@ void main() {
         withComposing: false,
       );
       expect(_containsWidgetSpan(span), isTrue);
+      final inlineChildren = span.children!;
+      final railIndex = inlineChildren.indexWhere(
+        (child) => child is WidgetSpan,
+      );
+      expect(railIndex, greaterThan(0));
+      expect((inlineChildren[railIndex - 1] as TextSpan).text, endsWith('\n'));
     },
   );
 
