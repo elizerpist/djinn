@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
-import 'note_text_chunk_web_editor.dart';
 import 'note_tag_pills.dart';
 import 'tag_manager_sheet.dart';
 
@@ -29,304 +27,91 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
 
 class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late NoteBlock _block;
-  late List<_TextLine> _lines;
-  final Map<String, _TextLineEditingController> _lineControllers =
-      <String, _TextLineEditingController>{};
-  final Map<String, FocusNode> _lineFocusNodes = <String, FocusNode>{};
-  bool _syncingLineText = false;
+  late final _TextChunkEditingController _controller;
+  late final FocusNode _focusNode;
+  bool _syncingController = false;
   bool _selectionCanDeleteTag = false;
   bool _selectionHasRange = false;
   bool _railBottomExpanded = true;
   bool _railRoundedCard = false;
   bool _railTransparentBackground = false;
   bool _railBorderVisible = true;
-  String? _activeLineId;
   TextRange? _activeRailRange;
-  int _lineCounter = 0;
+
+  static const _textStyle = TextStyle(color: Color(0xFF111827), fontSize: 16);
 
   @override
   void initState() {
     super.initState();
     _block = widget.block;
-    _lines = _linesFromText(widget.block.text);
+    _focusNode = FocusNode();
+    _controller = _TextChunkEditingController(
+      text: widget.block.text,
+      rangeTags: widget.block.rangeTags,
+    )..addListener(_handleControllerChanged);
   }
 
   @override
   void didUpdateWidget(NoteTextChunkEditorScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.block.id != widget.block.id) {
-      _disposeLineEditors();
       _block = widget.block;
-      _lines = _linesFromText(widget.block.text);
-      _activeLineId = null;
       _activeRailRange = null;
       _selectionCanDeleteTag = false;
       _selectionHasRange = false;
+      _syncControllerText(widget.block.text);
+      _controller.setRangeTags(widget.block.rangeTags);
     }
   }
 
   @override
   void dispose() {
-    _disposeLineEditors();
+    _controller
+      ..removeListener(_handleControllerChanged)
+      ..dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
-  void _disposeLineEditors() {
-    for (final controller in _lineControllers.values) {
-      controller.dispose();
-    }
-    for (final focusNode in _lineFocusNodes.values) {
-      focusNode.dispose();
-    }
-    _lineControllers.clear();
-    _lineFocusNodes.clear();
-  }
-
-  List<_TextLine> _linesFromText(String text) {
-    final parts = text.split(RegExp(r'\n{2,}'));
-    return [for (final part in parts) _TextLine(id: _nextLineId(), text: part)];
-  }
-
-  String _nextLineId() {
-    _lineCounter += 1;
-    return 'line-${DateTime.now().microsecondsSinceEpoch}-$_lineCounter';
-  }
-
-  String get _joinedLineText => _lines.map((line) => line.text).join('\n\n');
-
-  bool get _shouldUseWebEditor {
-    return defaultTargetPlatform == TargetPlatform.android &&
-        NoteTextChunkWebEditor.isPlatformAvailable;
-  }
-
-  int _lineIndexById(String lineId) {
-    return _lines.indexWhere((line) => line.id == lineId);
-  }
-
-  int _lineStartForIndex(int index) {
-    var offset = 0;
-    for (var i = 0; i < index; i += 1) {
-      offset += _lines[i].text.length + 2;
-    }
-    return offset;
-  }
-
-  int _lineStartForId(String lineId) {
-    final index = _lineIndexById(lineId);
-    return index < 0 ? 0 : _lineStartForIndex(index);
-  }
-
-  _TextLineEditingController _controllerForLine(_TextLine line) {
-    return _lineControllers.putIfAbsent(line.id, () {
-      final controller = _TextLineEditingController(
-        text: line.text,
-        lineStart: _lineStartForId(line.id),
-        rangeTags: _block.rangeTags,
-      );
-      controller.addListener(() => _handleLineControllerChanged(line.id));
-      return controller;
-    });
-  }
-
-  FocusNode _focusNodeForLine(String lineId) {
-    return _lineFocusNodes.putIfAbsent(lineId, FocusNode.new);
-  }
-
-  void _configureLineController(_TextLine line) {
-    final controller = _controllerForLine(line);
-    controller.setTagContext(
-      lineStart: _lineStartForId(line.id),
-      rangeTags: _block.rangeTags,
-    );
-    if (controller.text != line.text) {
-      _syncingLineText = true;
-      try {
-        controller.value = TextEditingValue(
-          text: line.text,
-          selection: TextSelection.collapsed(offset: line.text.length),
-        );
-      } finally {
-        _syncingLineText = false;
-      }
-    }
-  }
-
-  void _handleLineControllerChanged(String lineId) {
-    if (_syncingLineText) {
-      return;
-    }
-    final controller = _lineControllers[lineId];
-    final index = _lineIndexById(lineId);
-    if (controller == null || index < 0) {
-      return;
-    }
-    final value = controller.text;
-    if (RegExp(r'\n{2,}').hasMatch(value)) {
-      _splitLineAtNewlines(lineId, value);
-      return;
-    }
-    final oldText = _block.text;
-    if (_lines[index].text != value) {
-      setState(() {
-        _lines = [
-          for (final line in _lines)
-            if (line.id == lineId) line.copyWith(text: value) else line,
-        ];
-      });
-      _emitJoinedText(oldText: oldText, source: 'lineChanged');
-    }
-    _updateSelectionState(lineId, source: 'controllerChanged');
-  }
-
-  void _splitLineAtNewlines(String lineId, String rawValue) {
-    final index = _lineIndexById(lineId);
-    final controller = _lineControllers[lineId];
-    if (index < 0 || controller == null) {
-      return;
-    }
-    final oldText = _block.text;
-    final parts = rawValue.split(RegExp(r'\n{2,}'));
-    final inserted = [
-      _lines[index].copyWith(text: parts.first),
-      for (final part in parts.skip(1))
-        _TextLine(id: _nextLineId(), text: part),
-    ];
-    final focusTarget = inserted.last;
-    setState(() {
-      final next = [..._lines];
-      next
-        ..removeAt(index)
-        ..insertAll(index, inserted);
-      _lines = next;
-      _activeLineId = focusTarget.id;
-    });
-    _syncingLineText = true;
+  void _syncControllerText(String text) {
+    _syncingController = true;
     try {
-      controller.value = TextEditingValue(
-        text: parts.first,
-        selection: TextSelection.collapsed(offset: parts.first.length),
+      _controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
       );
     } finally {
-      _syncingLineText = false;
+      _syncingController = false;
     }
-    _emitJoinedText(oldText: oldText, source: 'splitLine');
-    _requestLineFocus(focusTarget.id, offset: focusTarget.text.length);
-    DebugConsole.log(
-      '[TextChunk] split line parts=${parts.length} activeLine=$index',
-    );
   }
 
-  void _requestLineFocus(String lineId, {int? offset}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      final focusNode = _lineFocusNodes[lineId];
-      final controller = _lineControllers[lineId];
-      if (focusNode == null || controller == null) {
-        return;
-      }
-      final nextOffset = (offset ?? controller.text.length)
-          .clamp(0, controller.text.length)
-          .toInt();
-      controller.selection = TextSelection.collapsed(offset: nextOffset);
-      focusNode.requestFocus();
-      _updateSelectionState(lineId, source: 'requestFocus');
-    });
-  }
-
-  void _emitJoinedText({required String oldText, required String source}) {
-    final value = _joinedLineText;
-    if (value == _block.text && oldText == value) {
-      return;
-    }
-    final rangeTags = _adjustRangeTagsForEdit(
-      oldText: oldText,
-      newText: value,
-      tags: _block.rangeTags,
-    );
-    setState(() {
-      _block = _block.copyWith(
-        text: value,
-        rangeTags: rangeTags,
-        clearIndex: true,
-      );
-    });
-    _refreshControllerTagContexts();
-    widget.onChanged(_block);
-    DebugConsole.log(
-      '[TextChunk] text changed source=$source chars=${value.length} '
-      'ranges=${rangeTags.length}',
-    );
-  }
-
-  void _handleWebTextChanged(String value) {
-    if (value == _block.text) {
+  void _handleControllerChanged() {
+    if (_syncingController) {
       return;
     }
     final oldText = _block.text;
-    final rangeTags = _adjustRangeTagsForEdit(
-      oldText: oldText,
-      newText: value,
-      tags: _block.rangeTags,
-    );
-    setState(() {
-      _block = _block.copyWith(
-        text: value,
-        rangeTags: rangeTags,
-        clearIndex: true,
+    final value = _controller.text;
+    if (oldText != value) {
+      final rangeTags = _adjustRangeTagsForEdit(
+        oldText: oldText,
+        newText: value,
+        tags: _block.rangeTags,
       );
-      _lines = _linesFromText(value);
-    });
-    widget.onChanged(_block);
-    DebugConsole.log(
-      '[TextChunk/Web] text changed chars=${value.length} '
-      'ranges=${rangeTags.length}',
-    );
-  }
-
-  void _handleWebRangeTagsChanged(List<NoteTextRangeTag> rangeTags) {
-    setState(() {
-      _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
-    });
-    widget.onChanged(_block);
-    DebugConsole.log(
-      '[TextChunk/Web] range tags changed count=${rangeTags.length}',
-    );
-  }
-
-  Future<List<NoteKnowledgeTag>?> _tagWebSelection(
-    TextRange range,
-    List<NoteKnowledgeTag> initialTags,
-  ) async {
-    final tags = await showTagManagerSheet(
-      context,
-      initialTags: initialTags,
-      availableTags: [...widget.availableTags, ..._block.knownTags],
-      title: 'Kijelölt rész tagje',
-    );
-    if (tags == null || tags.isEmpty) {
-      DebugConsole.log('[TextChunk/Web] tag request cancelled');
-      return null;
-    }
-    DebugConsole.log(
-      '[TextChunk/Web] tag request start=${range.start} end=${range.end} '
-      'tags=${tags.length}',
-    );
-    return tags;
-  }
-
-  void _refreshControllerTagContexts() {
-    for (final line in _lines) {
-      final controller = _lineControllers[line.id];
-      if (controller == null) {
-        continue;
-      }
-      controller.setTagContext(
-        lineStart: _lineStartForId(line.id),
-        rangeTags: _block.rangeTags,
+      setState(() {
+        _block = _block.copyWith(
+          text: value,
+          rangeTags: rangeTags,
+          clearIndex: true,
+        );
+      });
+      _controller.setRangeTags(rangeTags);
+      widget.onChanged(_block);
+      DebugConsole.log(
+        '[TextChunk] text changed chars=${value.length} '
+        'ranges=${rangeTags.length}',
       );
     }
+    _updateSelectionState(source: 'controllerChanged');
   }
 
   void _emitTitle(String value) {
@@ -361,7 +146,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       );
     });
     widget.onChanged(_block);
-    DebugConsole.log('[TextChunk] chunk tag deleted tag=${tag.metadataText}');
   }
 
   Future<void> _tagSelection() async {
@@ -406,7 +190,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _selectionCanDeleteTag = _selectionHasTag();
       _selectionHasRange = _selectionTargetRange() != null;
     });
-    _refreshControllerTagContexts();
+    _controller.setRangeTags(_block.rangeTags);
     widget.onChanged(_block);
     DebugConsole.log(
       '[TextChunk] range tagged start=${rangeTag.start} end=${rangeTag.end} '
@@ -426,31 +210,14 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     return null;
   }
 
-  bool _sameTextRange(TextRange? a, TextRange? b) {
-    if (a == null || b == null) {
-      return a == b;
-    }
-    return a.start == b.start && a.end == b.end;
-  }
-
   TextRange? _selectionTargetRange() {
-    final lineId = _activeLineId;
-    if (lineId == null) {
+    if (_block.text.isEmpty) {
       return null;
     }
-    return _selectionTargetRangeForLine(lineId);
-  }
-
-  TextRange? _selectionTargetRangeForLine(String lineId) {
-    final controller = _lineControllers[lineId];
-    if (controller == null || _block.text.isEmpty) {
-      return null;
-    }
-    final selection = controller.selection;
+    final selection = _controller.selection;
     if (!selection.isValid) {
       return null;
     }
-    final lineStart = _lineStartForId(lineId);
     if (!selection.isCollapsed) {
       final start = selection.start < selection.end
           ? selection.start
@@ -459,13 +226,11 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           ? selection.end
           : selection.start;
       return TextRange(
-        start: (lineStart + start).clamp(0, _block.text.length).toInt(),
-        end: (lineStart + end).clamp(0, _block.text.length).toInt(),
+        start: start.clamp(0, _block.text.length).toInt(),
+        end: end.clamp(0, _block.text.length).toInt(),
       );
     }
-    final offset = (lineStart + selection.extentOffset)
-        .clamp(0, _block.text.length)
-        .toInt();
+    final offset = selection.extentOffset.clamp(0, _block.text.length).toInt();
     final collapsedRange = _collapsedTaggedRangeAt(offset);
     if (collapsedRange == null) {
       return null;
@@ -491,8 +256,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     if (targetRange == null) {
       return false;
     }
+    return _rangeHasTag(targetRange);
+  }
+
+  bool _rangeHasTag(TextRange range) {
     return _block.rangeTags.any(
-      (tag) => tag.start < targetRange.end && tag.end > targetRange.start,
+      (tag) => tag.start < range.end && tag.end > range.start,
     );
   }
 
@@ -515,12 +284,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         _activeRailRange = null;
       }
     });
-    _refreshControllerTagContexts();
+    _controller.setRangeTags(_block.rangeTags);
     widget.onChanged(_block);
-    DebugConsole.log(
-      '[TextChunk] range tags cleared start=${targetRange.start} '
-      'end=${targetRange.end}',
-    );
   }
 
   void _deleteSingleSelectedTag(NoteKnowledgeTag tag) {
@@ -555,17 +320,11 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _selectionCanDeleteTag = _selectionHasTag();
       _selectionHasRange = _selectionTargetRange() != null;
     });
-    _refreshControllerTagContexts();
+    _controller.setRangeTags(_block.rangeTags);
     widget.onChanged(_block);
-    DebugConsole.log(
-      '[TextChunk] single range tag deleted ${tag.metadataText}',
-    );
   }
 
   void _focusTaggedRange(int direction) {
-    if (_block.rangeTags.isEmpty) {
-      return;
-    }
     final ranges =
         [
             for (final range in _block.rangeTags)
@@ -585,33 +344,13 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
             (range) => range.start < currentOffset,
             orElse: () => ranges.last,
           );
-    final lineId = _lineIdForOffset(target.start);
-    if (lineId == null) {
-      return;
-    }
-    final localOffset = target.start - _lineStartForId(lineId);
     setState(() {
-      _activeLineId = lineId;
       _activeRailRange = TextRange(start: target.start, end: target.end);
       _selectionCanDeleteTag = true;
       _selectionHasRange = true;
     });
-    _requestLineFocus(lineId, offset: localOffset);
-    DebugConsole.log(
-      '[TextChunk] focus tagged direction=$direction start=${target.start} '
-      'end=${target.end}',
-    );
-  }
-
-  String? _lineIdForOffset(int offset) {
-    for (var index = 0; index < _lines.length; index += 1) {
-      final start = _lineStartForIndex(index);
-      final end = start + _lines[index].text.length;
-      if (offset >= start && offset <= end) {
-        return _lines[index].id;
-      }
-    }
-    return _lines.isEmpty ? null : _lines.last.id;
+    _controller.selection = TextSelection.collapsed(offset: target.start);
+    _focusNode.requestFocus();
   }
 
   List<NoteKnowledgeTag> _selectionTags() {
@@ -634,33 +373,32 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     return tags;
   }
 
-  void _updateSelectionState(String lineId, {required String source}) {
-    final nextRailRange = _selectionTargetRangeForLine(lineId);
+  bool _sameTextRange(TextRange? a, TextRange? b) {
+    if (a == null || b == null) {
+      return a == b;
+    }
+    return a.start == b.start && a.end == b.end;
+  }
+
+  void _updateSelectionState({required String source}) {
+    final nextRailRange = _selectionTargetRange();
     final previousRange = _activeRailRange;
     final nextCanDelete = nextRailRange != null && _rangeHasTag(nextRailRange);
     final nextHasRange = nextRailRange != null;
     if (nextCanDelete == _selectionCanDeleteTag &&
         nextHasRange == _selectionHasRange &&
-        _sameTextRange(nextRailRange, _activeRailRange) &&
-        _activeLineId == (nextHasRange ? lineId : _activeLineId)) {
+        _sameTextRange(nextRailRange, _activeRailRange)) {
       return;
     }
     setState(() {
-      _activeLineId = nextHasRange ? lineId : null;
       _activeRailRange = nextRailRange;
       _selectionCanDeleteTag = nextCanDelete;
       _selectionHasRange = nextHasRange;
     });
     DebugConsole.log(
-      '[TextChunk] selection source=$source line=${_lineIndexById(lineId)} '
+      '[TextChunk] selection source=$source '
       'range=${nextRailRange == null ? 'none' : '${nextRailRange.start}-${nextRailRange.end}'} '
       'previous=${previousRange == null ? 'none' : '${previousRange.start}-${previousRange.end}'}',
-    );
-  }
-
-  bool _rangeHasTag(TextRange range) {
-    return _block.rangeTags.any(
-      (tag) => tag.start < range.end && tag.end > range.start,
     );
   }
 
@@ -741,39 +479,80 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   void _changeParagraphIndent(int delta) {
-    final activeLineId = _activeLineId;
-    if (activeLineId == null) {
+    if (_block.text.trim().isEmpty) {
       return;
     }
-    final index = _lineIndexById(activeLineId);
-    if (index < 0) {
-      return;
-    }
-    if (_lines[index].text.trim().isEmpty) {
+    final selection = _controller.selection;
+    final offset =
+        _activeRailRange?.start ??
+        (selection.isValid ? selection.extentOffset : 0);
+    final paragraphRange = _paragraphRangeForOffset(_block.text, offset);
+    if (paragraphRange == null) {
       return;
     }
     final oldText = _block.text;
+    final paragraph = oldText.substring(
+      paragraphRange.start,
+      paragraphRange.end,
+    );
+    final nextParagraph = paragraph
+        .split('\n')
+        .map((line) => _indentedLine(line, delta))
+        .join('\n');
+    final nextText =
+        oldText.substring(0, paragraphRange.start) +
+        nextParagraph +
+        oldText.substring(paragraphRange.end);
+    if (nextText == oldText) {
+      return;
+    }
+    final rangeTags = _adjustRangeTagsForEdit(
+      oldText: oldText,
+      newText: nextText,
+      tags: _block.rangeTags,
+    );
     setState(() {
-      _lines = [
-        for (var i = 0; i < _lines.length; i += 1)
-          if (i == index)
-            _lines[i].copyWith(text: _indentedLine(_lines[i].text, delta))
-          else
-            _lines[i],
-      ];
+      _block = _block.copyWith(
+        text: nextText,
+        rangeTags: rangeTags,
+        clearIndex: true,
+      );
     });
-    _emitJoinedText(oldText: oldText, source: 'indent');
+    _syncingController = true;
+    try {
+      _controller.setRangeTags(rangeTags);
+      _controller.value = TextEditingValue(
+        text: nextText,
+        selection: TextSelection.collapsed(
+          offset: (offset + (nextText.length - oldText.length))
+              .clamp(0, nextText.length)
+              .toInt(),
+        ),
+      );
+    } finally {
+      _syncingController = false;
+    }
+    widget.onChanged(_block);
+  }
+
+  TextRange? _paragraphRangeForOffset(String text, int rawOffset) {
+    if (text.isEmpty) {
+      return null;
+    }
+    final offset = rawOffset.clamp(0, text.length).toInt();
+    final before = offset <= 0 ? -1 : text.lastIndexOf('\n\n', offset - 1);
+    final after = text.indexOf('\n\n', offset);
+    final start = before < 0 ? 0 : before + 2;
+    final end = after < 0 ? text.length : after;
+    if (start >= end) {
+      return null;
+    }
+    return TextRange(start: start, end: end);
   }
 
   String _indentedLine(String text, int delta) {
     if (text.trim().isEmpty) {
       return text;
-    }
-    if (text.contains('\n')) {
-      return text
-          .split('\n')
-          .map((line) => _indentedLine(line, delta))
-          .join('\n');
     }
     if (delta > 0) {
       return '  $text';
@@ -834,27 +613,25 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 ),
               ),
             Expanded(
-              child: _shouldUseWebEditor
-                  ? NoteTextChunkWebEditor(
-                      block: _block,
-                      onTextChanged: _handleWebTextChanged,
-                      onRangeTagsChanged: _handleWebRangeTagsChanged,
-                      onTagRequested: _tagWebSelection,
-                    )
-                  : SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildTextField(),
+                    if (_selectionHasRange)
+                      Padding(
+                        key: const ValueKey('note-text-inline-selection-rail'),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: _buildSelectionRail(),
                       ),
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (var index = 0; index < _lines.length; index += 1)
-                            _buildLineEditor(index),
-                          const SizedBox(height: 220),
-                        ],
-                      ),
-                    ),
+                    const SizedBox(height: 220),
+                  ],
+                ),
+              ),
             ),
             if (_block.rangeTags.isNotEmpty)
               const SizedBox.shrink(key: ValueKey('note-text-range-highlight')),
@@ -864,94 +641,76 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     );
   }
 
-  Widget _buildLineEditor(int index) {
-    final line = _lines[index];
-    _configureLineController(line);
-    final selected = _activeLineId == line.id && _selectionHasRange;
-    final controller = _controllerForLine(line);
-    return Padding(
-      key: ValueKey('note-text-line-shell-${line.id}'),
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            key: ValueKey(
-              index == 0
-                  ? 'note-text-chunk-field'
-                  : 'note-text-chunk-field-$index',
+  Widget _buildTextField() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Stack(
+          children: [
+            TextField(
+              key: const ValueKey('note-text-chunk-field'),
+              controller: _controller,
+              focusNode: _focusNode,
+              autofocus: _block.text.isEmpty,
+              minLines: 1,
+              maxLines: null,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+              cursorColor: const Color(0xFF111827),
+              decoration: const InputDecoration(
+                hintText: 'Írd ide a chunk tartalmát',
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 2),
+              ),
+              style: _textStyle,
+              onTap: () {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    _updateSelectionState(source: 'tap');
+                  }
+                });
+              },
             ),
-            controller: controller,
-            focusNode: _focusNodeForLine(line.id),
-            autofocus: index == 0 && line.text.isEmpty,
-            minLines: 1,
-            maxLines: null,
-            keyboardType: TextInputType.multiline,
-            textInputAction: TextInputAction.newline,
-            cursorColor: const Color(0xFF111827),
-            decoration: InputDecoration(
-              hintText: index == 0 ? 'Írd ide a chunk tartalmát' : null,
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 2),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _TextSecondaryUnderlinePainter(
+                    text: _controller.text,
+                    rangeTags: _block.rangeTags,
+                    textStyle: _textStyle,
+                    maxWidth: constraints.maxWidth,
+                  ),
+                ),
+              ),
             ),
-            style: const TextStyle(color: Color(0xFF111827), fontSize: 16),
-            onTap: () {
-              _activeLineId = line.id;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  _updateSelectionState(line.id, source: 'tap');
-                }
-              });
-            },
-          ),
-          _TextLineSecondaryUnderlines(
-            lineText: line.text,
-            lineStart: _lineStartForId(line.id),
-            lineTextLength: line.text.length,
-            rangeTags: _block.rangeTags,
-          ),
-          if (selected)
-            Padding(
-              key: const ValueKey('note-text-inline-selection-rail'),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: _buildSelectionRail(),
-            ),
-        ],
-      ),
+            for (final marker in _secondaryUnderlineMarkers(_block.rangeTags))
+              Positioned(
+                key: ValueKey(
+                  'note-text-secondary-underline-${marker.id}-${marker.index}',
+                ),
+                left: 0,
+                top: 0,
+                child: const SizedBox.shrink(),
+              ),
+          ],
+        );
+      },
     );
   }
 }
 
-class _TextLine {
-  const _TextLine({required this.id, required this.text});
-
-  final String id;
-  final String text;
-
-  _TextLine copyWith({String? text}) {
-    return _TextLine(id: id, text: text ?? this.text);
-  }
-}
-
-class _TextLineEditingController extends TextEditingController {
-  _TextLineEditingController({
+class _TextChunkEditingController extends TextEditingController {
+  _TextChunkEditingController({
     required String text,
-    required int lineStart,
     required List<NoteTextRangeTag> rangeTags,
-  }) : _lineStart = lineStart,
-       _rangeTags = rangeTags,
+  }) : _rangeTags = rangeTags,
        super(text: text);
 
-  int _lineStart;
   List<NoteTextRangeTag> _rangeTags;
 
-  void setTagContext({
-    required int lineStart,
-    required List<NoteTextRangeTag> rangeTags,
-  }) {
-    _lineStart = lineStart;
+  void setRangeTags(List<NoteTextRangeTag> rangeTags) {
     _rangeTags = rangeTags;
+    notifyListeners();
   }
 
   @override
@@ -964,37 +723,27 @@ class _TextLineEditingController extends TextEditingController {
     if (textValue.isEmpty) {
       return TextSpan(style: style, text: textValue);
     }
-    final lineEnd = _lineStart + textValue.length;
     final breakpoints = <int>{0, textValue.length};
     for (final rawTag in _rangeTags) {
-      final range = rawTag.clampToTextLength(lineEnd);
-      if (!range.isValid || range.start >= lineEnd || range.end <= _lineStart) {
+      final range = rawTag.clampToTextLength(textValue.length);
+      if (!range.isValid) {
         continue;
       }
-      breakpoints.add(
-        (range.start - _lineStart).clamp(0, textValue.length).toInt(),
-      );
-      breakpoints.add(
-        (range.end - _lineStart).clamp(0, textValue.length).toInt(),
-      );
+      breakpoints.add(range.start);
+      breakpoints.add(range.end);
     }
     final sorted = breakpoints.toList()..sort();
     final spans = <InlineSpan>[];
     for (var i = 0; i < sorted.length - 1; i += 1) {
-      final localStart = sorted[i];
-      final localEnd = sorted[i + 1];
-      if (localStart >= localEnd) {
+      final start = sorted[i];
+      final end = sorted[i + 1];
+      if (start >= end) {
         continue;
       }
-      final tags = _tagsForSegment(
-        _rangeTags,
-        _lineStart + localStart,
-        _lineStart + localEnd,
-        lineEnd,
-      );
+      final tags = _tagsForSegment(_rangeTags, start, end, textValue.length);
       spans.add(
         TextSpan(
-          text: textValue.substring(localStart, localEnd),
+          text: textValue.substring(start, end),
           style: tags.isEmpty ? null : _taggedTextStyle(tags, alpha: 0.22),
         ),
       );
@@ -1003,133 +752,83 @@ class _TextLineEditingController extends TextEditingController {
   }
 }
 
-class _TextLineSecondaryUnderlines extends StatelessWidget {
-  const _TextLineSecondaryUnderlines({
-    required this.lineText,
-    required this.lineStart,
-    required this.lineTextLength,
-    required this.rangeTags,
-  });
-
-  final String lineText;
-  final int lineStart;
-  final int lineTextLength;
-  final List<NoteTextRangeTag> rangeTags;
-
-  @override
-  Widget build(BuildContext context) {
-    final groups = _mergedLineTagGroups(
-      rangeTags: rangeTags,
-      lineStart: lineStart,
-      lineEnd: lineStart + lineTextLength,
-    );
-    final underlineEntries =
-        <({String id, int start, int end, List<NoteKnowledgeTag> tags})>[
-          for (final group in groups)
-            if (group.tags.length > 1) group,
-        ];
-    if (underlineEntries.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    final maxSecondaryCount = underlineEntries
-        .map((group) => group.tags.length - 1)
-        .fold<int>(0, (max, count) => count > max ? count : max);
-    return SizedBox(
-      height: maxSecondaryCount * 4 + 3,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              for (final group in underlineEntries)
-                for (var index = 1; index < group.tags.length; index += 1)
-                  CustomPaint(
-                    key: ValueKey(
-                      'note-text-secondary-underline-${group.id}-$index',
-                    ),
-                    painter: _TextSegmentUnderlinePainter(
-                      text: lineText,
-                      rangeStart: group.start - lineStart,
-                      rangeEnd: group.end - lineStart,
-                      color: Color(group.tags[index].resolvedColorValue),
-                      underlineIndex: index - 1,
-                    ),
-                  ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _TextSegmentUnderlinePainter extends CustomPainter {
-  const _TextSegmentUnderlinePainter({
+class _TextSecondaryUnderlinePainter extends CustomPainter {
+  const _TextSecondaryUnderlinePainter({
     required this.text,
-    required this.rangeStart,
-    required this.rangeEnd,
-    required this.color,
-    required this.underlineIndex,
+    required this.rangeTags,
+    required this.textStyle,
+    required this.maxWidth,
   });
 
   final String text;
-  final int rangeStart;
-  final int rangeEnd;
-  final Color color;
-  final int underlineIndex;
+  final List<NoteTextRangeTag> rangeTags;
+  final TextStyle textStyle;
+  final double maxWidth;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (text.isEmpty || rangeStart >= rangeEnd) {
+    if (text.isEmpty || rangeTags.isEmpty || maxWidth <= 0) {
       return;
     }
-    final start = rangeStart.clamp(0, text.length).toInt();
-    final end = rangeEnd.clamp(0, text.length).toInt();
-    if (start >= end) {
-      return;
+    final groups = _mergedTextTagGroups(
+      rangeTags: rangeTags,
+      textLength: text.length,
+    );
+    final textPainter = TextPainter(
+      text: TextSpan(text: text, style: textStyle),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: maxWidth);
+    for (final group in groups) {
+      if (group.tags.length <= 1) {
+        continue;
+      }
+      final boxes = textPainter.getBoxesForSelection(
+        TextSelection(baseOffset: group.start, extentOffset: group.end),
+      );
+      for (var index = 1; index < group.tags.length; index += 1) {
+        final paint = Paint()
+          ..color = Color(group.tags[index].resolvedColorValue)
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round;
+        for (final box in boxes) {
+          final y = box.bottom + 2 + ((index - 1) * 4.0);
+          canvas.drawLine(Offset(box.left, y), Offset(box.right, y), paint);
+        }
+      }
     }
-    final textDirection = TextDirection.ltr;
-    final baseStyle = const TextStyle(fontSize: 16, color: Color(0xFF111827));
-    final beforePainter = TextPainter(
-      text: TextSpan(text: text.substring(0, start), style: baseStyle),
-      textDirection: textDirection,
-      maxLines: 1,
-    )..layout(maxWidth: double.infinity);
-    final segmentPainter = TextPainter(
-      text: TextSpan(text: text.substring(start, end), style: baseStyle),
-      textDirection: textDirection,
-      maxLines: 1,
-    )..layout(maxWidth: double.infinity);
-    final left = beforePainter.width.clamp(0.0, size.width).toDouble();
-    final right = (left + segmentPainter.width)
-        .clamp(left, size.width)
-        .toDouble();
-    if (right <= left) {
-      return;
-    }
-    final y = 2.0 + underlineIndex * 4.0;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(Offset(left, y), Offset(right, y), paint);
   }
 
   @override
-  bool shouldRepaint(covariant _TextSegmentUnderlinePainter oldDelegate) {
+  bool shouldRepaint(covariant _TextSecondaryUnderlinePainter oldDelegate) {
     return oldDelegate.text != text ||
-        oldDelegate.rangeStart != rangeStart ||
-        oldDelegate.rangeEnd != rangeEnd ||
-        oldDelegate.color != color ||
-        oldDelegate.underlineIndex != underlineIndex;
+        oldDelegate.rangeTags != rangeTags ||
+        oldDelegate.textStyle != textStyle ||
+        oldDelegate.maxWidth != maxWidth;
   }
 }
 
+List<({String id, int index})> _secondaryUnderlineMarkers(
+  List<NoteTextRangeTag> rangeTags,
+) {
+  final groups = _mergedTextTagGroups(
+    rangeTags: rangeTags,
+    textLength: rangeTags.fold<int>(
+      0,
+      (max, range) => range.end > max ? range.end : max,
+    ),
+  );
+  return [
+    for (final group in groups)
+      if (group.tags.length > 1)
+        for (var index = 1; index < group.tags.length; index += 1)
+          (id: group.id, index: index),
+  ];
+}
+
 List<({String id, int start, int end, List<NoteKnowledgeTag> tags})>
-_mergedLineTagGroups({
+_mergedTextTagGroups({
   required List<NoteTextRangeTag> rangeTags,
-  required int lineStart,
-  required int lineEnd,
+  required int textLength,
 }) {
   final groups =
       <
@@ -1137,13 +836,11 @@ _mergedLineTagGroups({
         ({String id, int start, int end, List<NoteKnowledgeTag> tags})
       >{};
   for (final rawTag in rangeTags) {
-    final range = rawTag.clampToTextLength(lineEnd);
-    if (!range.isValid || range.start >= lineEnd || range.end <= lineStart) {
+    final range = rawTag.clampToTextLength(textLength);
+    if (!range.isValid) {
       continue;
     }
-    final start = range.start < lineStart ? lineStart : range.start;
-    final end = range.end > lineEnd ? lineEnd : range.end;
-    final key = '$start:$end';
+    final key = '${range.start}:${range.end}';
     final existing = groups[key];
     final tags = existing == null ? <NoteKnowledgeTag>[] : [...existing.tags];
     for (final tag in range.resolvedTags) {
@@ -1153,8 +850,8 @@ _mergedLineTagGroups({
     }
     groups[key] = (
       id: existing?.id ?? range.id,
-      start: start,
-      end: end,
+      start: range.start,
+      end: range.end,
       tags: tags,
     );
   }

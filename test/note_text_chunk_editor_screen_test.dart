@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -5,6 +7,23 @@ import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/ui/note_text_chunk_editor_screen.dart';
 
 void main() {
+  test(
+    'text chunk editor screen does not route Android editing through WebView',
+    () {
+      final source = File(
+        'lib/src/notes/ui/note_text_chunk_editor_screen.dart',
+      ).readAsStringSync();
+
+      expect(source, isNot(contains('NoteTextChunkWebEditor')));
+      expect(source, isNot(contains('note_text_chunk_web_editor.dart')));
+      expect(source, isNot(contains('_shouldUseWebEditor')));
+      expect(
+        File('pubspec.yaml').readAsStringSync(),
+        isNot(contains('webview_flutter')),
+      );
+    },
+  );
+
   testWidgets('selected text can be tagged as a highlighted range', (
     tester,
   ) async {
@@ -263,85 +282,79 @@ void main() {
     expect(latest!.rangeTags, isEmpty);
   });
 
-  testWidgets(
-    'text editor uses native editable rows and the shared inline rail',
-    (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: NoteTextChunkEditorScreen(
-            block: NoteBlock(
-              id: 'text-1',
-              type: NoteBlockType.paragraph,
-              text: 'Első bekezdés szövege.\n\nMásodik bekezdés szövege.',
-            ),
-            onChanged: _ignoreBlockChange,
+  testWidgets('text editor stays one native editable chunk across paragraphs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Első bekezdés szövege.\n\nMásodik bekezdés szövege.',
           ),
+          onChanged: _ignoreBlockChange,
         ),
-      );
+      ),
+    );
 
-      expect(
-        find.byKey(const ValueKey('note-text-chunk-body')),
-        findsOneWidget,
-      );
-      final body = tester.widget<Container>(
-        find.byKey(const ValueKey('note-text-chunk-body')),
-      );
-      expect(body.color, Colors.white);
-      expect(
+    expect(find.byKey(const ValueKey('note-text-chunk-body')), findsOneWidget);
+    final body = tester.widget<Container>(
+      find.byKey(const ValueKey('note-text-chunk-body')),
+    );
+    expect(body.color, Colors.white);
+    expect(find.byKey(const ValueKey('note-text-chunk-field')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-text-chunk-field-1')), findsNothing);
+    expect(find.byKey(const ValueKey('note-text-web-editor')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('note-text-visual-selection-layout')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
+    await tester.pump();
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    expect(
+      field.controller!.text,
+      'Első bekezdés szövege.\n\nMásodik bekezdés szövege.',
+    );
+    field.controller!.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 4,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-text-selection-rail')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-rail-toggle-rounded')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-rail-toggle-transparent')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-rail-toggle-border')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-visual-selection-layout')),
+      findsNothing,
+    );
+    final span = field.controller!.buildTextSpan(
+      context: tester.element(
         find.byKey(const ValueKey('note-text-chunk-field')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-chunk-field-1')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const ValueKey('note-text-web-editor')), findsNothing);
-      expect(
-        find.byKey(const ValueKey('note-text-visual-selection-layout')),
-        findsNothing,
-      );
-
-      await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
-      await tester.pump();
-      final field = tester.widget<TextField>(
-        find.byKey(const ValueKey('note-text-chunk-field')),
-      );
-      field.controller!.selection = const TextSelection(
-        baseOffset: 0,
-        extentOffset: 4,
-      );
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('note-text-selection-rail')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-rail-toggle-rounded')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-rail-toggle-transparent')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-rail-toggle-border')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-visual-selection-layout')),
-        findsNothing,
-      );
-      final span = field.controller!.buildTextSpan(
-        context: tester.element(
-          find.byKey(const ValueKey('note-text-chunk-field')),
-        ),
-        style: const TextStyle(),
-        withComposing: false,
-      );
-      expect(_containsWidgetSpan(span), isFalse);
-    },
-  );
+      ),
+      style: const TextStyle(),
+      withComposing: false,
+    );
+    expect(_containsWidgetSpan(span), isFalse);
+  });
 
   testWidgets('tagged text remains visible when the selection rail is closed', (
     tester,
@@ -539,6 +552,34 @@ void main() {
     expect(find.byKey(const ValueKey('note-text-chunk-field-1')), findsNothing);
   });
 
+  testWidgets('empty line keeps paragraph split inside one text field', (
+    tester,
+  ) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: const NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Első bekezdés',
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+      'Első bekezdés\n\nMásodik bekezdés',
+    );
+    await tester.pump();
+
+    expect(latest!.text, 'Első bekezdés\n\nMásodik bekezdés');
+    expect(find.byKey(const ValueKey('note-text-chunk-field')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-text-chunk-field-1')), findsNothing);
+  });
+
   testWidgets('non-empty text chunk does not autofocus on editor open', (
     tester,
   ) async {
@@ -580,6 +621,11 @@ void main() {
     );
 
     await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
+    await tester.pump();
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    field.controller!.selection = const TextSelection.collapsed(offset: 0);
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('note-text-indent')));
     await tester.pump();
