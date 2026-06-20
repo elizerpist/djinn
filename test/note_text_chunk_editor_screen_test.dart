@@ -71,7 +71,7 @@ void main() {
   );
 
   testWidgets(
-    'long-press dragging visible text selects continuously across paragraphs',
+    'continuous selection spans paragraphs and anchors rail at the last line',
     (tester) async {
       await _pumpTextChunkEditor(
         tester,
@@ -82,17 +82,10 @@ void main() {
         ),
       );
 
-      final firstLine = tester.getRect(
-        find.byKey(const ValueKey('note-text-line-0')),
+      _setEditorSelection(
+        tester,
+        const TextSelection(baseOffset: 0, extentOffset: 17),
       );
-      final lastLine = tester.getRect(
-        find.byKey(const ValueKey('note-text-line-3')),
-      );
-      final gesture = await tester.startGesture(firstLine.center);
-      await tester.pump(const Duration(milliseconds: 650));
-      await gesture.moveTo(lastLine.center);
-      await tester.pump();
-      await gesture.up();
       await tester.pumpAndSettle();
 
       final editable = tester.widget<EditableText>(
@@ -100,14 +93,6 @@ void main() {
       );
       expect(editable.controller.selection.start, lessThan(5));
       expect(editable.controller.selection.end, greaterThan(12));
-      expect(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget.key != null &&
-              widget.key.toString().contains('note-text-selection-highlight'),
-        ),
-        findsWidgets,
-      );
       final rail = tester.getRect(
         find.byKey(const ValueKey('note-text-inline-selection-rail')),
       );
@@ -119,7 +104,7 @@ void main() {
   );
 
   testWidgets(
-    'collapsed selection renders a caret on an empty repeated-enter line',
+    'collapsed selection is owned by the visible native EditableText',
     (tester) async {
       await _pumpTextChunkEditor(
         tester,
@@ -133,14 +118,26 @@ void main() {
       _setEditorSelection(tester, const TextSelection.collapsed(offset: 7));
       await tester.pumpAndSettle();
 
+      final editableRect = tester.getRect(
+        find.byKey(const ValueKey('note-text-input-bridge')),
+      );
+      final editable = tester.widget<EditableText>(
+        find.byKey(const ValueKey('note-text-input-bridge')),
+      );
+
+      expect(editableRect.height, greaterThan(20));
+      expect(editable.focusNode.hasFocus, isTrue);
+      expect(editable.controller.selection.isCollapsed, isTrue);
+      expect(editable.selectionControls, isNotNull);
+      expect(editable.contextMenuBuilder, isNotNull);
       expect(find.byKey(const ValueKey('note-text-line-0')), findsOneWidget);
       expect(find.byKey(const ValueKey('note-text-line-1')), findsOneWidget);
       expect(find.byKey(const ValueKey('note-text-line-2')), findsOneWidget);
-      expect(find.byKey(const ValueKey('note-text-caret-2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('note-text-caret-2')), findsNothing);
     },
   );
 
-  testWidgets('selection handles can stretch the selected range', (
+  testWidgets('selected range uses the native editable selection path', (
     tester,
   ) async {
     await _pumpTextChunkEditor(
@@ -158,26 +155,26 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('note-text-selection-handle-start')),
-      findsOneWidget,
+    final editableRect = tester.getRect(
+      find.byKey(const ValueKey('note-text-input-bridge')),
     );
-    expect(
-      find.byKey(const ValueKey('note-text-selection-handle-end')),
-      findsOneWidget,
-    );
-
-    await tester.drag(
-      find.byKey(const ValueKey('note-text-selection-handle-end')),
-      const Offset(76, 0),
-    );
-    await tester.pumpAndSettle();
-
     final editable = tester.widget<EditableText>(
       find.byKey(const ValueKey('note-text-input-bridge')),
     );
+
+    expect(editableRect.height, greaterThan(20));
+    expect(editable.selectionControls, isNotNull);
+    expect(editable.contextMenuBuilder, isNotNull);
+    expect(
+      find.byKey(const ValueKey('note-text-selection-handle-start')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-selection-handle-end')),
+      findsNothing,
+    );
     expect(editable.controller.selection.start, 6);
-    expect(editable.controller.selection.end, greaterThan(10));
+    expect(editable.controller.selection.end, 10);
   });
 
   testWidgets('long text scrolls without clipping the final line', (
@@ -190,7 +187,7 @@ void main() {
       surfaceSize: const Size(360, 480),
     );
 
-    expect(find.text('Line 39'), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-text-line-39')), findsOneWidget);
     await tester.drag(
       find.byKey(const ValueKey('note-text-scroll')),
       const Offset(0, -1200),
@@ -286,7 +283,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(latest!.rangeTags, hasLength(1));
-    await tester.tap(find.byKey(const ValueKey('note-text-line-0')));
+    await tester.tap(find.byKey(const ValueKey('note-text-input-bridge')));
     await tester.pumpAndSettle();
 
     final editable = tester.widget<EditableText>(
@@ -294,7 +291,39 @@ void main() {
     );
     expect(editable.focusNode.hasFocus, isTrue);
     expect(editable.controller.selection.isCollapsed, isTrue);
-    expect(find.byKey(const ValueKey('note-text-caret-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-text-caret-0')), findsNothing);
+  });
+
+  testWidgets('rail is hosted by the native editable text layout', (
+    tester,
+  ) async {
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha\nBeta\nGamma',
+      ),
+    );
+
+    _setEditorSelection(
+      tester,
+      const TextSelection(baseOffset: 1, extentOffset: 4),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-text-native-editable-layout')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-custom-visible-layout')),
+      findsNothing,
+    );
   });
 
   testWidgets(

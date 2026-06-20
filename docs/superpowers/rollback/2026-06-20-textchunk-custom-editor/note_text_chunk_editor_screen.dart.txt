@@ -31,7 +31,7 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
 
 class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late NoteBlock _block;
-  late final TextChunkNativeEditingController _controller;
+  late final TextEditingController _controller;
   late final FocusNode _focusNode;
   bool _syncingController = false;
   bool _railBottomExpanded = true;
@@ -47,7 +47,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   void initState() {
     super.initState();
     _block = widget.block;
-    _controller = TextChunkNativeEditingController(text: widget.block.text)
+    _controller = TextEditingController(text: widget.block.text)
       ..addListener(_handleControllerChanged);
     _focusNode = FocusNode();
   }

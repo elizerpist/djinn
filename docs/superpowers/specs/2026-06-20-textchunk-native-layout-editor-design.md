@@ -10,18 +10,21 @@ Authoritative source instructions:
 
 - User message on 2026-06-20 requesting a full native Flutter textchunk layout/editor rewrite.
 - User follow-up on 2026-06-20 requiring this new dated spec and deletion of the old misleading specs.
+- User follow-up on 2026-06-20 after external research: prioritize native Flutter caret, selection handles, and copy/paste context menu by moving to a hybrid visible `EditableText`/`RenderEditable` implementation; keep the previous custom editor file archived so rollback is possible.
 
 Do not use older textchunk rail specs, old HTML prototypes, old textchunk implementation plans, or old textchunk widget tests as requirements. They were explicitly marked misleading by the user.
 
 ## Goal
 
-Build a Google Keep-like native Flutter textchunk editor with a custom text layout/editor layer. The editor stores one holistic textchunk, supports paragraphs inside that chunk, keeps the whole text content selectable/editable as one continuous text model, and inserts the existing rail design as real inline content between visual text lines.
+Build a Google Keep-like native Flutter textchunk editor. The editor stores one holistic textchunk, supports paragraphs inside that chunk, keeps the whole text content selectable/editable as one continuous text model, and shows the existing rail design near the selected visual line.
 
-This is not a patch to the current body. The current textchunk body/layout implementation must be removed and rebuilt.
+Current latest direction: use a hybrid native editor. The visible text editing surface must be `EditableText`/`RenderEditable` so Flutter owns the native caret, selection handles, and copy/paste/select-all context menu. The rail may be inserted through the editable text span as a `WidgetSpan`/layout spacer rather than by fully custom-rendering the text.
+
+The previous custom line-rendered editor must be preserved in an archive file before replacement, so the project can roll back if the hybrid path proves worse on device.
 
 ## Non-Goals
 
-- Do not keep the current `TextField` plus `TextPainter` plus overlay rail architecture.
+- Do not keep the hidden 1x1 `EditableText` plus fully custom visible text/caret/handle renderer as the active implementation.
 - Do not use WebView, HTML, or contenteditable.
 - Do not split the textchunk into separate isolated note blocks.
 - Do not treat paragraphs as separate menu/editor blocks.
@@ -79,11 +82,11 @@ The existing rail visual design stays. The current button set and functions stay
 - collapse/expand pill row;
 - pill row with the active range tags.
 
-The rail implementation must change:
+The original custom implementation inserted the rail as real content between custom-rendered visual lines. The current hybrid implementation must instead keep native editing first:
 
-- The rail is real inline content in the text layout.
-- The rail is inserted below the selected visual line.
-- The text opens at that point and every following line is pushed down by normal layout.
+- The rail is inserted into the visible `EditableText` layout through a `WidgetSpan`/spacer or equivalent native-editable-compatible mechanism.
+- The rail is inserted below the selected visual line when possible.
+- The text opens at that point and following text is pushed down by the editable text layout, without replacing the native `RenderEditable` caret/selection system.
 - The rail must not be painted on top of selected text.
 - The rail must not be a global bottom menu.
 - The rail must not be a floating popup.
@@ -111,12 +114,13 @@ Rendering rules:
 
 ## Architecture
 
-Create a native Flutter custom textchunk layout/editor layer.
+Create a hybrid native Flutter textchunk layout/editor layer.
 
 Required boundaries:
 
 - A layout model that converts the one continuous text value into paragraphs, visual lines, selection boxes, rail insertion point, and underline lanes.
-- An editor widget that renders visual lines and inserts the rail as a normal widget below the selected visual line.
+- A visible `EditableText` editor widget that owns the native cursor, selection handles, keyboard integration, and context menu.
+- A styled text controller/span builder that applies tag highlighting and inserts the rail spacer/widget at the selected visual line boundary.
 - A selection controller that stores selection as continuous text offsets, so selection can span paragraphs.
 - A paragraph step service that edits paragraph indent without splitting the chunk into blocks.
 - Tag range adjustment logic that keeps range tags aligned when text changes.
@@ -131,7 +135,7 @@ The existing persistence model should be reused:
 - existing `showTagManagerSheet`
 - existing `NoteSelectionActionRail` visual rail component, with the same button functions.
 
-The current textchunk body can be emptied and rebuilt. Existing route/header/storage integration should remain unless it directly depends on the old body architecture.
+Existing route/header/storage integration should remain unless it directly depends on the old body architecture.
 
 ## Testing Requirements
 
@@ -185,3 +189,16 @@ Source: user message on 2026-06-20 after testing the first native textchunk APK.
 | TC-REQ-021 | User 2026-06-20: after tagging cannot tap text to show keyboard/write again | `text_chunk_canvas_editor.dart`, `note_text_chunk_editor_screen.dart` | Tapping visible text after tagging collapses/moves the selection, focuses the input bridge, and leaves the editor ready for text input. | Widget tests | DONE |
 | TC-REQ-022 | User 2026-06-20: textchunk rail needs table-like design buttons | `note_text_chunk_editor_screen.dart`, `note_tag_pills.dart` | Textchunk rail exposes rounded, white/grey background, and border toggles like the table rail, with white/grey background behavior. | Widget tests | DONE |
 | TC-REQ-023 | User 2026-06-20: many text rail buttons need horizontal scroll | `NoteSelectionActionRail`, text rail actions | Textchunk rail action row remains horizontally scrollable with the expanded action set; tag row remains scrollable. | Widget tests | DONE |
+
+## Native EditableText Hybrid Checklist
+
+Source: user message on 2026-06-20 after external research. This section supersedes the custom-only implementation constraints above when they conflict.
+
+| ID | Source | Intended Code Area | Acceptance Condition | Verification Method | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-REQ-024 | User 2026-06-20: "korábbi fájl meglegyen, ha vissza akarunk lépni" | `docs/superpowers/rollback` | The previous custom textchunk editor files are archived outside the active `lib` tree before replacement. | Git diff inspection | DONE |
+| TC-REQ-025 | User 2026-06-20: native Flutter caret/handles/copy actions | `text_chunk_canvas_editor.dart` | The visible editor is a real `EditableText`, not a hidden 1x1 input bridge plus custom-rendered text. | Widget/code inspection test | DONE |
+| TC-REQ-026 | User 2026-06-20: keep rail and current functions | `text_chunk_canvas_editor.dart`, `note_text_chunk_editor_screen.dart` | The existing rail component and buttons still appear for selected text and remain tappable. | Widget test | DONE |
+| TC-REQ-027 | User 2026-06-20: hybrid rail/spacer compromise | styled controller/editor span | The rail is inserted into the editable layout through a widget span/spacer at the selected visual line boundary, pushing following text instead of covering selected text. | Widget rect/order test | DONE |
+| TC-REQ-028 | User 2026-06-20: selection must remain usable after inline rail insertion | editor selection normalization | Tapping/selecting text after the inserted rail keeps controller selection offsets valid for the underlying text value. | Widget test | DONE |
+| TC-REQ-029 | User 2026-06-20: do not lose blank Enter behavior | layout/editor | Repeated Enter still renders reachable empty lines in the visible native editor. | Widget test | DONE |
