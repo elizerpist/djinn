@@ -10,20 +10,27 @@ void main() {
     final repository = MemoryNoteRepository();
     final note = await repository.createDocumentNote(
       title: 'Régi cím',
-      document: const NoteDocument(blocks: [
-        NoteBlock(id: 'block-1', type: NoteBlockType.paragraph, text: 'abc'),
-      ]),
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(id: 'block-1', type: NoteBlockType.paragraph, text: 'abc'),
+        ],
+      ),
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: NoteEditorRoute(repository: repository, initialNote: note)),
+      MaterialApp(
+        home: NoteEditorRoute(repository: repository, initialNote: note),
+      ),
     );
 
     expect(find.byKey(const ValueKey('note-editor-route')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-editor-title-field')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('note-editor-title-display')));
     await tester.pump();
-    await tester.enterText(find.byKey(const ValueKey('note-editor-title-field')), 'Új cím');
+    await tester.enterText(
+      find.byKey(const ValueKey('note-editor-title-field')),
+      'Új cím',
+    );
     await tester.pump();
 
     final saved = (await repository.listNotes()).single;
@@ -37,7 +44,9 @@ void main() {
       document: NoteDocument.empty(),
     );
     await tester.pumpWidget(
-      MaterialApp(home: NoteEditorRoute(repository: repository, initialNote: note)),
+      MaterialApp(
+        home: NoteEditorRoute(repository: repository, initialNote: note),
+      ),
     );
 
     await tester.tap(find.byKey(const ValueKey('note-editor-add-fab')));
@@ -46,21 +55,30 @@ void main() {
     expect(find.byKey(const ValueKey('note-editor-add-text')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-editor-add-list')), findsOneWidget);
     expect(find.byKey(const ValueKey('note-editor-add-table')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-editor-add-flowchart')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('note-editor-add-flowchart')),
+      findsOneWidget,
+    );
     expect(find.text('Szöveg'), findsNothing);
   });
 
-  testWidgets('delete chunk shows undo and restores original position', (tester) async {
+  testWidgets('delete chunk shows undo and restores original position', (
+    tester,
+  ) async {
     final repository = MemoryNoteRepository();
     final note = await repository.createDocumentNote(
       title: 'N',
-      document: const NoteDocument(blocks: [
-        NoteBlock(id: 'a', type: NoteBlockType.paragraph, text: 'Alpha'),
-        NoteBlock(id: 'b', type: NoteBlockType.paragraph, text: 'Beta'),
-      ]),
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(id: 'a', type: NoteBlockType.paragraph, text: 'Alpha'),
+          NoteBlock(id: 'b', type: NoteBlockType.paragraph, text: 'Beta'),
+        ],
+      ),
     );
     await tester.pumpWidget(
-      MaterialApp(home: NoteEditorRoute(repository: repository, initialNote: note)),
+      MaterialApp(
+        home: NoteEditorRoute(repository: repository, initialNote: note),
+      ),
     );
 
     expect(find.byKey(const ValueKey('note-chunk-card-a')), findsOneWidget);
@@ -76,39 +94,58 @@ void main() {
     expect(saved.document.blocks.map((block) => block.id), ['a', 'b']);
   });
 
-  testWidgets('tapping a text chunk opens full-screen editor and autosaves edits', (tester) async {
+  testWidgets(
+    'tapping a text chunk opens full-screen editor and autosaves edits',
+    (tester) async {
+      final repository = MemoryNoteRepository();
+      final note = await repository.createDocumentNote(
+        title: 'N',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(id: 'a', type: NoteBlockType.paragraph, text: 'Régi'),
+          ],
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: NoteEditorRoute(repository: repository, initialNote: note),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('note-chunk-card-a')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('note-text-chunk-editor')),
+        findsOneWidget,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('note-text-input-bridge')),
+        'Új szöveg',
+      );
+      await tester.pump();
+
+      final saved = (await repository.listNotes()).single;
+      expect(saved.document.blocks.single.text, 'Új szöveg');
+    },
+  );
+
+  testWidgets('note menu opens the colored tag manager for the current note', (
+    tester,
+  ) async {
     final repository = MemoryNoteRepository();
     final note = await repository.createDocumentNote(
       title: 'N',
-      document: const NoteDocument(blocks: [
-        NoteBlock(id: 'a', type: NoteBlockType.paragraph, text: 'Régi'),
-      ]),
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(id: 'a', type: NoteBlockType.paragraph, text: 'Alpha'),
+        ],
+      ),
     );
     await tester.pumpWidget(
-      MaterialApp(home: NoteEditorRoute(repository: repository, initialNote: note)),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('note-chunk-card-a')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('note-text-chunk-editor')), findsOneWidget);
-
-    await tester.enterText(find.byKey(const ValueKey('note-text-chunk-field')), 'Új szöveg');
-    await tester.pump();
-
-    final saved = (await repository.listNotes()).single;
-    expect(saved.document.blocks.single.text, 'Új szöveg');
-  });
-
-  testWidgets('note menu opens the colored tag manager for the current note', (tester) async {
-    final repository = MemoryNoteRepository();
-    final note = await repository.createDocumentNote(
-      title: 'N',
-      document: const NoteDocument(blocks: [
-        NoteBlock(id: 'a', type: NoteBlockType.paragraph, text: 'Alpha'),
-      ]),
-    );
-    await tester.pumpWidget(
-      MaterialApp(home: NoteEditorRoute(repository: repository, initialNote: note)),
+      MaterialApp(
+        home: NoteEditorRoute(repository: repository, initialNote: note),
+      ),
     );
 
     await tester.tap(find.byKey(const ValueKey('note-editor-menu')));
@@ -117,7 +154,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('tag-manager-sheet')), findsOneWidget);
 
-    await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'légzési elégtelenség');
+    await tester.enterText(
+      find.byKey(const ValueKey('tag-manager-name')),
+      'légzési elégtelenség',
+    );
     await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
@@ -127,5 +167,4 @@ void main() {
     expect(saved.document.tags.single.label, 'légzési elégtelenség');
     expect(saved.document.tags.single.colorValue, isNotNull);
   });
-
 }
