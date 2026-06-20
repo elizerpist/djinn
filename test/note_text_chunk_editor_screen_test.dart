@@ -86,7 +86,7 @@ void main() {
         find.byKey(const ValueKey('note-text-line-0')),
       );
       final lastLine = tester.getRect(
-        find.byKey(const ValueKey('note-text-line-2')),
+        find.byKey(const ValueKey('note-text-line-3')),
       );
       final gesture = await tester.startGesture(firstLine.center);
       await tester.pump(const Duration(milliseconds: 650));
@@ -112,11 +112,73 @@ void main() {
         find.byKey(const ValueKey('note-text-inline-selection-rail')),
       );
       final selectedLine = tester.getRect(
-        find.byKey(const ValueKey('note-text-line-2')),
+        find.byKey(const ValueKey('note-text-line-3')),
       );
       expect(rail.top, greaterThanOrEqualTo(selectedLine.bottom));
     },
   );
+
+  testWidgets(
+    'collapsed selection renders a caret on an empty repeated-enter line',
+    (tester) async {
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: 'Alpha\n\n',
+        ),
+      );
+
+      _setEditorSelection(tester, const TextSelection.collapsed(offset: 7));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('note-text-line-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('note-text-line-1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('note-text-line-2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('note-text-caret-2')), findsOneWidget);
+    },
+  );
+
+  testWidgets('selection handles can stretch the selected range', (
+    tester,
+  ) async {
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha Beta Gamma',
+      ),
+    );
+
+    _setEditorSelection(
+      tester,
+      const TextSelection(baseOffset: 6, extentOffset: 10),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-text-selection-handle-start')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-selection-handle-end')),
+      findsOneWidget,
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('note-text-selection-handle-end')),
+      const Offset(76, 0),
+    );
+    await tester.pumpAndSettle();
+
+    final editable = tester.widget<EditableText>(
+      find.byKey(const ValueKey('note-text-input-bridge')),
+    );
+    expect(editable.controller.selection.start, 6);
+    expect(editable.controller.selection.end, greaterThan(10));
+  });
 
   testWidgets('long text scrolls without clipping the final line', (
     tester,
@@ -190,6 +252,50 @@ void main() {
       ]);
     },
   );
+
+  testWidgets('tapping text after tagging focuses input and shows caret', (
+    tester,
+  ) async {
+    NoteBlock? latest;
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha Beta Gamma',
+      ),
+      onChanged: (block) => latest = block,
+    );
+
+    _setEditorSelection(
+      tester,
+      const TextSelection(baseOffset: 6, extentOffset: 10),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('note-text-selection-rail-tag')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('tag-manager-name')),
+      'primary',
+    );
+    await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.pumpAndSettle();
+
+    expect(latest!.rangeTags, hasLength(1));
+    await tester.tap(find.byKey(const ValueKey('note-text-line-0')));
+    await tester.pumpAndSettle();
+
+    final editable = tester.widget<EditableText>(
+      find.byKey(const ValueKey('note-text-input-bridge')),
+    );
+    expect(editable.focusNode.hasFocus, isTrue);
+    expect(editable.controller.selection.isCollapsed, isTrue);
+    expect(find.byKey(const ValueKey('note-text-caret-0')), findsOneWidget);
+  });
 
   testWidgets(
     'primary highlight and secondary underlines are scoped to tagged text',
@@ -300,6 +406,69 @@ void main() {
       expect(firstParagraphLines, greaterThan(1));
     },
   );
+
+  testWidgets('text rail exposes table-like design toggles and scroll row', (
+    tester,
+  ) async {
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha Beta Gamma',
+      ),
+      surfaceSize: const Size(260, 700),
+    );
+
+    _setEditorSelection(
+      tester,
+      const TextSelection(baseOffset: 6, extentOffset: 10),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-selection-action-row')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-selection-action-rail-white')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('note-text-rail-toggle-rounded')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('note-text-rail-toggle-rounded')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('note-selection-action-rail-rounded')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('note-text-rail-toggle-grey')),
+    );
+    await tester.tap(find.byKey(const ValueKey('note-text-rail-toggle-grey')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('note-selection-action-rail-grey')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('note-text-rail-toggle-border')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('note-text-rail-toggle-border')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('note-selection-action-rail-borderless')),
+      findsOneWidget,
+    );
+  });
 }
 
 Future<void> _pumpTextChunkEditor(
@@ -330,4 +499,5 @@ void _setEditorSelection(WidgetTester tester, TextSelection selection) {
     find.byKey(const ValueKey('note-text-input-bridge')),
   );
   editable.controller.selection = selection;
+  editable.focusNode.requestFocus();
 }

@@ -29,19 +29,54 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   final Map<int, GlobalKey> _lineKeys = {};
   TextChunkLayout? _latestLayout;
   int? _selectionAnchor;
+  bool _draggingSelectionHandle = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_handleControllerSelectionChanged);
+    widget.focusNode.addListener(_handleControllerSelectionChanged);
+  }
+
+  @override
+  void didUpdateWidget(TextChunkCanvasEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_handleControllerSelectionChanged);
+      widget.controller.addListener(_handleControllerSelectionChanged);
+    }
+    if (oldWidget.focusNode != widget.focusNode) {
+      oldWidget.focusNode.removeListener(_handleControllerSelectionChanged);
+      widget.focusNode.addListener(_handleControllerSelectionChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleControllerSelectionChanged);
+    widget.focusNode.removeListener(_handleControllerSelectionChanged);
+    super.dispose();
+  }
+
+  void _handleControllerSelectionChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final textScaler = MediaQuery.textScalerOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
+        final visualSelection = _visualSelection();
         final layout = buildTextChunkLayout(
           text: widget.controller.text,
           maxWidth: constraints.maxWidth - 56,
           textStyle: widget.textStyle,
           textScaler: textScaler,
           rangeTags: widget.rangeTags,
-          selection: widget.activeRange,
+          selection: visualSelection,
           railHeight: 96,
         );
         _latestLayout = layout;
@@ -96,13 +131,20 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                           key: _lineKey(line.index),
                           line: line,
                           textStyle: widget.textStyle,
+                          selection: visualSelection,
+                          focused: widget.focusNode.hasFocus,
+                          onSelectionHandleDragStart: _startSelectionHandleDrag,
+                          onSelectionHandleDragUpdate:
+                              _handleSelectionHandleDragUpdate,
+                          onSelectionHandleDragEnd: _finishSelectionHandleDrag,
                         ),
                       ),
                     ),
                   ),
                   if (layout.railLineIndex == line.index &&
                       widget.selectionRail != null &&
-                      _selectionAnchor == null)
+                      _selectionAnchor == null &&
+                      !_draggingSelectionHandle)
                     KeyedSubtree(
                       key: const ValueKey('note-text-inline-selection-rail'),
                       child: Padding(
@@ -121,6 +163,14 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
 
   GlobalKey _lineKey(int index) =>
       _lineKeys.putIfAbsent(index, () => GlobalKey());
+
+  TextRange? _visualSelection() {
+    final selection = widget.controller.selection;
+    if (!selection.isValid) {
+      return widget.activeRange;
+    }
+    return TextRange(start: selection.baseOffset, end: selection.extentOffset);
+  }
 
   void _handleLineTapDown(TextChunkVisualLine line, TapDownDetails details) {
     _selectionAnchor = null;
@@ -155,6 +205,37 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   void _setSelection(TextSelection selection) {
     widget.controller.selection = selection;
     widget.focusNode.requestFocus();
+  }
+
+  void _startSelectionHandleDrag() {
+    if (!_draggingSelectionHandle) {
+      setState(() => _draggingSelectionHandle = true);
+    }
+  }
+
+  void _handleSelectionHandleDragUpdate({
+    required bool startHandle,
+    required Offset globalPosition,
+  }) {
+    final selection = widget.controller.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      return;
+    }
+    final start = selection.start;
+    final end = selection.end;
+    final offset = _offsetForGlobalPosition(globalPosition);
+    _setSelection(
+      startHandle
+          ? TextSelection(baseOffset: end, extentOffset: offset)
+          : TextSelection(baseOffset: start, extentOffset: offset),
+    );
+  }
+
+  void _finishSelectionHandleDrag() {
+    if (!_draggingSelectionHandle) {
+      return;
+    }
+    setState(() => _draggingSelectionHandle = false);
   }
 
   void _finishSelectionDrag() {
@@ -240,48 +321,181 @@ class _TextChunkLineView extends StatelessWidget {
     super.key,
     required this.line,
     required this.textStyle,
+    required this.selection,
+    required this.focused,
+    required this.onSelectionHandleDragStart,
+    required this.onSelectionHandleDragUpdate,
+    required this.onSelectionHandleDragEnd,
   });
 
   final TextChunkVisualLine line;
   final TextStyle textStyle;
+  final TextRange? selection;
+  final bool focused;
+  final VoidCallback onSelectionHandleDragStart;
+  final void Function({
+    required bool startHandle,
+    required Offset globalPosition,
+  })
+  onSelectionHandleDragUpdate;
+  final VoidCallback onSelectionHandleDragEnd;
 
   @override
   Widget build(BuildContext context) {
     final pieces = _piecesForLine(line);
-    if (pieces.isEmpty) {
-      return Text(' ', style: textStyle);
-    }
+    final textRow = pieces.isEmpty
+        ? Text(' ', style: textStyle)
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final piece in pieces)
+                piece.segment == null
+                    ? _PlainPieceView(
+                        piece: piece,
+                        lineIndex: line.index,
+                        textStyle: textStyle,
+                      )
+                    : _SelectionPieceFrame(
+                        selected: piece.selected,
+                        lineIndex: line.index,
+                        segmentIndex: piece.index,
+                        child: _TaggedPieceView(
+                          text: piece.text,
+                          segment: piece.segment!,
+                          lineIndex: line.index,
+                          segmentIndex: piece.index,
+                          textStyle: textStyle,
+                        ),
+                      ),
+            ],
+          );
     return Padding(
       padding: EdgeInsets.only(
         bottom: line.underlineLanes.isEmpty
             ? 0
             : 4 + (line.underlineLanes.length * 3),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          for (final piece in pieces)
-            piece.segment == null
-                ? _PlainPieceView(
-                    piece: piece,
-                    lineIndex: line.index,
-                    textStyle: textStyle,
-                  )
-                : _SelectionPieceFrame(
-                    selected: piece.selected,
-                    lineIndex: line.index,
-                    segmentIndex: piece.index,
-                    child: _TaggedPieceView(
-                      text: piece.text,
-                      segment: piece.segment!,
-                      lineIndex: line.index,
-                      segmentIndex: piece.index,
-                      textStyle: textStyle,
-                    ),
-                  ),
+          textRow,
+          if (_showsCaret) _caret(),
+          if (_showsStartHandle) _selectionHandle(startHandle: true),
+          if (_showsEndHandle) _selectionHandle(startHandle: false),
         ],
       ),
     );
+  }
+
+  bool get _showsCaret {
+    final current = selection;
+    if (!focused || current == null || current.start != current.end) {
+      return false;
+    }
+    return _lineContainsOffset(current.start);
+  }
+
+  bool get _showsStartHandle {
+    final current = selection;
+    if (current == null || current.start == current.end) {
+      return false;
+    }
+    return _lineContainsOffset(
+      current.start < current.end ? current.start : current.end,
+    );
+  }
+
+  bool get _showsEndHandle {
+    final current = selection;
+    if (current == null || current.start == current.end) {
+      return false;
+    }
+    return _lineContainsOffset(
+      current.start < current.end ? current.end : current.start,
+    );
+  }
+
+  bool _lineContainsOffset(int offset) {
+    if (line.start == line.end) {
+      return offset == line.start;
+    }
+    return offset >= line.start && offset <= line.end;
+  }
+
+  Widget _caret() {
+    return Positioned(
+      key: ValueKey('note-text-caret-${line.index}'),
+      left: _xForOffset(selection!.start),
+      top: 1,
+      child: Container(
+        width: 2,
+        height: _lineHeight,
+        color: const Color(0xFF2563EB),
+      ),
+    );
+  }
+
+  Widget _selectionHandle({required bool startHandle}) {
+    final current = selection!;
+    final normalizedStart = current.start < current.end
+        ? current.start
+        : current.end;
+    final normalizedEnd = current.start < current.end
+        ? current.end
+        : current.start;
+    final offset = startHandle ? normalizedStart : normalizedEnd;
+    return Positioned(
+      left: _xForOffset(offset) - 6,
+      top: _lineHeight - 1,
+      child: GestureDetector(
+        key: ValueKey(
+          startHandle
+              ? 'note-text-selection-handle-start'
+              : 'note-text-selection-handle-end',
+        ),
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (_) => onSelectionHandleDragStart(),
+        onPanUpdate: (details) => onSelectionHandleDragUpdate(
+          startHandle: startHandle,
+          globalPosition: details.globalPosition,
+        ),
+        onPanEnd: (_) => onSelectionHandleDragEnd(),
+        onPanCancel: onSelectionHandleDragEnd,
+        child: Container(
+          width: 12,
+          height: 12,
+          decoration: const BoxDecoration(
+            color: Color(0xFF2563EB),
+            shape: BoxShape.circle,
+          ),
+        ),
+      ),
+    );
+  }
+
+  double get _lineHeight {
+    final painter = TextPainter(
+      text: TextSpan(text: ' ', style: textStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return painter.height;
+  }
+
+  double _xForOffset(int offset) {
+    final localOffset = (offset - line.start)
+        .clamp(0, line.text.length)
+        .toInt();
+    if (localOffset == 0 || line.text.isEmpty) {
+      return 0;
+    }
+    final painter = TextPainter(
+      text: TextSpan(
+        text: line.text.substring(0, localOffset),
+        style: textStyle,
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return painter.width;
   }
 
   List<_LinePiece> _piecesForLine(TextChunkVisualLine line) {

@@ -34,7 +34,13 @@ void main() {
       expect(layout.paragraphs, hasLength(2));
       expect(layout.paragraphs[0].range, const TextRange(start: 0, end: 10));
       expect(layout.paragraphs[1].range, const TextRange(start: 12, end: 17));
-      expect(layout.lines.map((line) => line.paragraphIndex), [0, 0, 1]);
+      expect(layout.lines.map((line) => line.text), [
+        'Alpha',
+        'Beta',
+        '',
+        'Gamma',
+      ]);
+      expect(layout.lines.map((line) => line.paragraphIndex), [0, 0, 0, 1]);
       expect(
         textChunkParagraphRangeForOffset(text, 8),
         const TextRange(start: 0, end: 10),
@@ -45,6 +51,18 @@ void main() {
       );
     },
   );
+
+  test('repeated enter keeps visible empty separator and caret lines', () {
+    final trailingLayout = layoutFor('Alpha\n\n');
+
+    expect(trailingLayout.paragraphs, hasLength(1));
+    expect(trailingLayout.lines.map((line) => line.text), ['Alpha', '', '']);
+    expect(trailingLayout.lines.map((line) => line.start), [0, 6, 7]);
+
+    final splitLayout = layoutFor('Alpha\n\nGamma');
+    expect(splitLayout.paragraphs, hasLength(2));
+    expect(splitLayout.lines.map((line) => line.text), ['Alpha', '', 'Gamma']);
+  });
 
   test(
     'paragraph step changes one paragraph indent and leaves next paragraph unchanged',

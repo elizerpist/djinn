@@ -35,6 +35,9 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late final FocusNode _focusNode;
   bool _syncingController = false;
   bool _railBottomExpanded = true;
+  bool _railRoundedCard = false;
+  bool _railGreyBackground = false;
+  bool _railBorderVisible = true;
   TextRange? _activeRailRange;
   bool _selectionCanDeleteTag = false;
 
@@ -412,6 +415,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   Widget _buildSelectionRail() {
+    const compactConstraints = BoxConstraints.tightFor(width: 34, height: 34);
+    const compactPadding = EdgeInsets.zero;
     return NoteSelectionActionRail(
       key: const ValueKey('note-text-selection-rail'),
       tags: _selectionTags(),
@@ -420,6 +425,9 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       onToggleBottomRow: () =>
           setState(() => _railBottomExpanded = !_railBottomExpanded),
       onDeleteTag: _deleteSingleSelectedTag,
+      roundedCard: _railRoundedCard,
+      transparentBackground: _railGreyBackground,
+      showBorder: _railBorderVisible,
       showBottomBorder: false,
       contentPadding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
       actions: [
@@ -427,24 +435,32 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           key: const ValueKey('note-text-selection-rail-outdent'),
           tooltip: 'Bekezdés kijjebb',
           onPressed: () => _changeParagraphIndent(-1),
+          constraints: compactConstraints,
+          padding: compactPadding,
           icon: const Icon(Icons.format_indent_decrease, size: 20),
         ),
         IconButton(
           key: const ValueKey('note-text-selection-rail-indent'),
           tooltip: 'Bekezdés beljebb',
           onPressed: () => _changeParagraphIndent(1),
+          constraints: compactConstraints,
+          padding: compactPadding,
           icon: const Icon(Icons.format_indent_increase, size: 20),
         ),
         IconButton(
           key: const ValueKey('note-text-selection-rail-tag'),
           tooltip: 'Kijelölt rész tagelése',
           onPressed: () => unawaited(_tagSelection()),
+          constraints: compactConstraints,
+          padding: compactPadding,
           icon: const Icon(Icons.sell_outlined, size: 20),
         ),
         IconButton(
           key: const ValueKey('note-text-selection-rail-clear-tags'),
           tooltip: 'Minden tag törlése',
           onPressed: _selectionCanDeleteTag ? _deleteSelectedTag : null,
+          constraints: compactConstraints,
+          padding: compactPadding,
           icon: const Icon(Icons.delete_outline, size: 20),
         ),
         IconButton(
@@ -453,6 +469,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           onPressed: _block.rangeTags.isEmpty
               ? null
               : () => _focusTaggedRange(-1),
+          constraints: compactConstraints,
+          padding: compactPadding,
           icon: const Icon(Icons.chevron_left, size: 20),
         ),
         IconButton(
@@ -461,7 +479,37 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           onPressed: _block.rangeTags.isEmpty
               ? null
               : () => _focusTaggedRange(1),
+          constraints: compactConstraints,
+          padding: compactPadding,
           icon: const Icon(Icons.chevron_right, size: 20),
+        ),
+        IconButton(
+          key: const ValueKey('note-text-rail-toggle-rounded'),
+          tooltip: _railRoundedCard ? 'Vonalas rail' : 'Cellaszerű rail',
+          onPressed: () => setState(() => _railRoundedCard = !_railRoundedCard),
+          constraints: compactConstraints,
+          padding: compactPadding,
+          icon: const Icon(Icons.crop_square_outlined, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-text-rail-toggle-grey'),
+          tooltip: _railGreyBackground
+              ? 'Fehér rail háttér'
+              : 'Szürke rail háttér',
+          onPressed: () =>
+              setState(() => _railGreyBackground = !_railGreyBackground),
+          constraints: compactConstraints,
+          padding: compactPadding,
+          icon: const Icon(Icons.opacity, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-text-rail-toggle-border'),
+          tooltip: _railBorderVisible ? 'Rail border nélkül' : 'Rail borderrel',
+          onPressed: () =>
+              setState(() => _railBorderVisible = !_railBorderVisible),
+          constraints: compactConstraints,
+          padding: compactPadding,
+          icon: const Icon(Icons.border_outer, size: 18),
         ),
       ],
     );

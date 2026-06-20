@@ -172,3 +172,16 @@ Run tests under Ubuntu/Flutter. Do not run local Android APK builds on Termux.
 | TC-REQ-015 | User 2026-06-20: many underlines need spacing | tag renderer/layout model | Multiple underlines reserve vertical space so they never overlap following text. | Widget spacing test | DONE |
 | TC-REQ-016 | User 2026-06-20: old tests misleading | `test/note_text_chunk_editor_screen_test.dart`, new tests | Old textchunk editor tests are deleted/replaced with tests derived only from this spec. | Git diff and test names | DONE |
 | TC-REQ-017 | User 2026-06-20: commit, push, build link | GitHub branch/actions/release | Changes are committed, pushed, GitHub Actions APK build completes, and download link is reported. | Git/GitHub Actions/release verification | DONE |
+
+## Follow-Up Patch Checklist
+
+Source: user message on 2026-06-20 after testing the first native textchunk APK. The current custom textchunk workaround and inline rail architecture must remain; only targeted patches are allowed.
+
+| ID | Source | Intended Code Area | Acceptance Condition | Verification Method | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-REQ-018 | User 2026-06-20: "nincs kurzor" | `text_chunk_canvas_editor.dart` | A collapsed selection renders a visible caret on the custom text line, including empty lines. | Widget tests | DONE |
+| TC-REQ-019 | User 2026-06-20: selection cannot be stretched; missing points | `text_chunk_canvas_editor.dart` | A selected range renders draggable start/end handles, and dragging a handle updates the continuous selection. | Widget tests | DONE |
+| TC-REQ-020 | User 2026-06-20: repeated Enter blank line not visible | `text_chunk_layout_model.dart`, `text_chunk_canvas_editor.dart` | Empty manual/separator lines created by repeated Enter are rendered as real visual lines. | Model and widget tests | DONE |
+| TC-REQ-021 | User 2026-06-20: after tagging cannot tap text to show keyboard/write again | `text_chunk_canvas_editor.dart`, `note_text_chunk_editor_screen.dart` | Tapping visible text after tagging collapses/moves the selection, focuses the input bridge, and leaves the editor ready for text input. | Widget tests | DONE |
+| TC-REQ-022 | User 2026-06-20: textchunk rail needs table-like design buttons | `note_text_chunk_editor_screen.dart`, `note_tag_pills.dart` | Textchunk rail exposes rounded, white/grey background, and border toggles like the table rail, with white/grey background behavior. | Widget tests | DONE |
+| TC-REQ-023 | User 2026-06-20: many text rail buttons need horizontal scroll | `NoteSelectionActionRail`, text rail actions | Textchunk rail action row remains horizontally scrollable with the expanded action set; tag row remains scrollable. | Widget tests | DONE |

@@ -117,7 +117,12 @@ TextChunkLayout buildTextChunkLayout({
 }) {
   final paragraphs = _paragraphsForText(text);
   final lines = <TextChunkVisualLine>[];
-  for (final paragraph in paragraphs) {
+  for (
+    var paragraphIndex = 0;
+    paragraphIndex < paragraphs.length;
+    paragraphIndex += 1
+  ) {
+    final paragraph = paragraphs[paragraphIndex];
     final paragraphLines = _visualLinesForParagraph(
       text: text,
       paragraph: paragraph,
@@ -129,6 +134,19 @@ TextChunkLayout buildTextChunkLayout({
       selection: selection,
     );
     lines.addAll(paragraphLines);
+    final nextParagraphStart = paragraphIndex + 1 < paragraphs.length
+        ? paragraphs[paragraphIndex + 1].range.start
+        : text.length;
+    lines.addAll(
+      _separatorLinesAfterParagraph(
+        text: text,
+        paragraph: paragraph,
+        nextParagraphStart: nextParagraphStart,
+        hasNextParagraph: paragraphIndex + 1 < paragraphs.length,
+        lineStartIndex: lines.length,
+        selection: selection,
+      ),
+    );
   }
   final layout = TextChunkLayout(
     text: text,
@@ -174,7 +192,7 @@ int? textChunkRailLineIndexForSelection(TextChunkLayout layout) {
   }
   var result = layout.lines.first.index;
   for (final line in layout.lines) {
-    if (line.end > start && line.start < end) {
+    if (line.overlaps(TextRange(start: start, end: end))) {
       result = line.index;
     }
   }
@@ -294,6 +312,58 @@ List<TextChunkVisualLine> _visualLinesForParagraph({
     manualStart = manualEnd + 1;
   }
   return lines;
+}
+
+List<TextChunkVisualLine> _separatorLinesAfterParagraph({
+  required String text,
+  required TextChunkParagraph paragraph,
+  required int nextParagraphStart,
+  required bool hasNextParagraph,
+  required int lineStartIndex,
+  required TextRange? selection,
+}) {
+  final gapLength = nextParagraphStart - paragraph.range.end;
+  if (gapLength <= 0) {
+    return const [];
+  }
+  final blankCount = hasNextParagraph ? gapLength - 1 : gapLength;
+  if (blankCount <= 0) {
+    return const [];
+  }
+  return [
+    for (var index = 0; index < blankCount; index += 1)
+      _blankLine(
+        offset: (paragraph.range.end + 1 + index).clamp(0, text.length).toInt(),
+        index: lineStartIndex + index,
+        paragraph: paragraph,
+        selection: selection,
+      ),
+  ];
+}
+
+TextChunkVisualLine _blankLine({
+  required int offset,
+  required int index,
+  required TextChunkParagraph paragraph,
+  required TextRange? selection,
+}) {
+  return TextChunkVisualLine(
+    index: index,
+    paragraphIndex: paragraph.index,
+    lineIndexInParagraph: 0,
+    start: offset,
+    end: offset,
+    text: '',
+    indentLevel: paragraph.indentLevel,
+    hardBreakAfter: false,
+    tagSegments: const [],
+    underlineLanes: const [],
+    selectionSegments: _selectionSegmentsForLine(
+      selection: selection,
+      lineStart: offset,
+      lineEnd: offset,
+    ),
+  );
 }
 
 int _skipParagraphIndent(String text, int start, int end) {
