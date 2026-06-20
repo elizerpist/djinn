@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
+import 'note_text_chunk_web_editor.dart';
 import 'note_tag_pills.dart';
 import 'tag_manager_sheet.dart';
 
@@ -81,7 +83,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   List<_TextLine> _linesFromText(String text) {
-    final parts = text.split('\n');
+    final parts = text.split(RegExp(r'\n{2,}'));
     return [for (final part in parts) _TextLine(id: _nextLineId(), text: part)];
   }
 
@@ -90,7 +92,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     return 'line-${DateTime.now().microsecondsSinceEpoch}-$_lineCounter';
   }
 
-  String get _joinedLineText => _lines.map((line) => line.text).join('\n');
+  String get _joinedLineText => _lines.map((line) => line.text).join('\n\n');
+
+  bool get _shouldUseWebEditor {
+    return defaultTargetPlatform == TargetPlatform.android &&
+        NoteTextChunkWebEditor.isPlatformAvailable;
+  }
 
   int _lineIndexById(String lineId) {
     return _lines.indexWhere((line) => line.id == lineId);
@@ -99,7 +106,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   int _lineStartForIndex(int index) {
     var offset = 0;
     for (var i = 0; i < index; i += 1) {
-      offset += _lines[i].text.length + 1;
+      offset += _lines[i].text.length + 2;
     }
     return offset;
   }
@@ -154,7 +161,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       return;
     }
     final value = controller.text;
-    if (value.contains('\n')) {
+    if (RegExp(r'\n{2,}').hasMatch(value)) {
       _splitLineAtNewlines(lineId, value);
       return;
     }
@@ -178,7 +185,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       return;
     }
     final oldText = _block.text;
-    final parts = rawValue.split('\n');
+    final parts = rawValue.split(RegExp(r'\n{2,}'));
     final inserted = [
       _lines[index].copyWith(text: parts.first),
       for (final part in parts.skip(1))
@@ -251,6 +258,62 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       '[TextChunk] text changed source=$source chars=${value.length} '
       'ranges=${rangeTags.length}',
     );
+  }
+
+  void _handleWebTextChanged(String value) {
+    if (value == _block.text) {
+      return;
+    }
+    final oldText = _block.text;
+    final rangeTags = _adjustRangeTagsForEdit(
+      oldText: oldText,
+      newText: value,
+      tags: _block.rangeTags,
+    );
+    setState(() {
+      _block = _block.copyWith(
+        text: value,
+        rangeTags: rangeTags,
+        clearIndex: true,
+      );
+      _lines = _linesFromText(value);
+    });
+    widget.onChanged(_block);
+    DebugConsole.log(
+      '[TextChunk/Web] text changed chars=${value.length} '
+      'ranges=${rangeTags.length}',
+    );
+  }
+
+  void _handleWebRangeTagsChanged(List<NoteTextRangeTag> rangeTags) {
+    setState(() {
+      _block = _block.copyWith(rangeTags: rangeTags, clearIndex: true);
+    });
+    widget.onChanged(_block);
+    DebugConsole.log(
+      '[TextChunk/Web] range tags changed count=${rangeTags.length}',
+    );
+  }
+
+  Future<List<NoteKnowledgeTag>?> _tagWebSelection(
+    TextRange range,
+    List<NoteKnowledgeTag> initialTags,
+  ) async {
+    final tags = await showTagManagerSheet(
+      context,
+      initialTags: initialTags,
+      availableTags: [...widget.availableTags, ..._block.knownTags],
+      title: 'Kijelölt rész tagje',
+    );
+    if (tags == null || tags.isEmpty) {
+      DebugConsole.log('[TextChunk/Web] tag request cancelled');
+      return null;
+    }
+    DebugConsole.log(
+      '[TextChunk/Web] tag request start=${range.start} end=${range.end} '
+      'tags=${tags.length}',
+    );
+    return tags;
   }
 
   void _refreshControllerTagContexts() {
@@ -655,7 +718,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           key: const ValueKey('note-text-rail-toggle-transparent'),
           tooltip: _railTransparentBackground
               ? 'Fehér rail háttér'
-              : 'Átlátszó rail háttér',
+              : 'Szürke rail háttér',
           onPressed: () => setState(
             () => _railTransparentBackground = !_railTransparentBackground,
           ),
@@ -690,20 +753,10 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       return;
     }
     final oldText = _block.text;
-    var paragraphStart = index;
-    while (paragraphStart > 0 &&
-        _lines[paragraphStart - 1].text.trim().isNotEmpty) {
-      paragraphStart -= 1;
-    }
-    var paragraphEnd = index;
-    while (paragraphEnd + 1 < _lines.length &&
-        _lines[paragraphEnd + 1].text.trim().isNotEmpty) {
-      paragraphEnd += 1;
-    }
     setState(() {
       _lines = [
         for (var i = 0; i < _lines.length; i += 1)
-          if (i >= paragraphStart && i <= paragraphEnd)
+          if (i == index)
             _lines[i].copyWith(text: _indentedLine(_lines[i].text, delta))
           else
             _lines[i],
@@ -715,6 +768,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   String _indentedLine(String text, int delta) {
     if (text.trim().isEmpty) {
       return text;
+    }
+    if (text.contains('\n')) {
+      return text
+          .split('\n')
+          .map((line) => _indentedLine(line, delta))
+          .join('\n');
     }
     if (delta > 0) {
       return '  $text';
@@ -775,20 +834,27 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 ),
               ),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var index = 0; index < _lines.length; index += 1)
-                      _buildLineEditor(index),
-                    const SizedBox(height: 220),
-                  ],
-                ),
-              ),
+              child: _shouldUseWebEditor
+                  ? NoteTextChunkWebEditor(
+                      block: _block,
+                      onTextChanged: _handleWebTextChanged,
+                      onRangeTagsChanged: _handleWebRangeTagsChanged,
+                      onTagRequested: _tagWebSelection,
+                    )
+                  : SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var index = 0; index < _lines.length; index += 1)
+                            _buildLineEditor(index),
+                          const SizedBox(height: 220),
+                        ],
+                      ),
+                    ),
             ),
             if (_block.rangeTags.isNotEmpty)
               const SizedBox.shrink(key: ValueKey('note-text-range-highlight')),

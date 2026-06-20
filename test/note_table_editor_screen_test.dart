@@ -1284,15 +1284,11 @@ void main() {
     );
     expect(field.style.decoration, TextDecoration.none);
     expect(
-      find.byKey(
-        const ValueKey('note-table-cell-1-0-secondary-underline-1'),
-      ),
+      find.byKey(const ValueKey('note-table-cell-1-0-secondary-underline-1')),
       findsOneWidget,
     );
     expect(
-      find.byKey(
-        const ValueKey('note-table-cell-1-0-secondary-underline-2'),
-      ),
+      find.byKey(const ValueKey('note-table-cell-1-0-secondary-underline-2')),
       findsNothing,
     );
   });
@@ -1325,76 +1321,75 @@ void main() {
     );
   });
 
-  testWidgets(
-    'table rail exposes rounded, transparent, and border style toggles',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: NoteTableEditorScreen(
-            block: const NoteBlock(
-              id: 'table-1',
-              type: NoteBlockType.table,
-              rows: [
-                ['Állapot', 'Teendő'],
-                ['Súlyos', 'High flow'],
-              ],
-            ),
-            onChanged: _ignoreBlockChange,
+  testWidgets('table rail exposes rounded, grey, and border style toggles', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
           ),
+          onChanged: _ignoreBlockChange,
         ),
-      );
+      ),
+    );
 
-      await tester.tap(find.byKey(const ValueKey('note-table-cell-1-1')));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('note-selection-action-rail-separator')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('note-selection-action-rail-border')),
-        findsOneWidget,
-      );
+    await tester.tap(find.byKey(const ValueKey('note-table-cell-1-1')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('note-selection-action-rail-separator')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-selection-action-rail-border')),
+      findsOneWidget,
+    );
 
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('note-table-rail-toggle-rounded')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey('note-table-rail-toggle-rounded')),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('note-selection-action-rail-rounded')),
-        findsOneWidget,
-      );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('note-table-rail-toggle-rounded')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('note-table-rail-toggle-rounded')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('note-selection-action-rail-rounded')),
+      findsOneWidget,
+    );
 
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('note-table-rail-toggle-transparent')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey('note-table-rail-toggle-transparent')),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('note-selection-action-rail-transparent')),
-        findsOneWidget,
-      );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('note-table-rail-toggle-transparent')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('note-table-rail-toggle-transparent')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('note-selection-action-rail-grey')),
+      findsOneWidget,
+    );
 
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('note-table-rail-toggle-border')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey('note-table-rail-toggle-border')),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('note-selection-action-rail-borderless')),
-        findsOneWidget,
-      );
-    },
-  );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('note-table-rail-toggle-border')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('note-table-rail-toggle-border')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('note-selection-action-rail-borderless')),
+      findsOneWidget,
+    );
+  });
 
   testWidgets(
     'table rail is screen-sticky and scrolls independently from canvas',

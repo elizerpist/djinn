@@ -48,8 +48,8 @@ String buildTextChunkWebEditorHtml(NoteBlock block) {
     html, body { width: 100%; min-height: 100%; margin: 0; background: #FFFFFF; color: var(--ink); }
     body { overflow: auto; }
     .text-field-wrap { min-height: 100vh; padding: 12px 16px 24px; overflow: auto; }
-    .text-field { min-height: 100%; outline: 0; color: var(--ink); font-size: 16px; line-height: 1.45; caret-color: var(--primary); white-space: normal; }
-    .line { margin: 0; min-height: 23px; white-space: pre-wrap; cursor: text; }
+    .text-field { min-height: 100%; outline: 0; color: var(--ink); font-size: 16px; line-height: normal; caret-color: var(--primary); white-space: normal; }
+    .line { margin: 0; min-height: 20px; white-space: pre-wrap; cursor: text; }
     .tag-unit {
       --primary-bg: rgba(37, 99, 235, 0.22);
       --u1: transparent;
@@ -325,6 +325,32 @@ String buildTextChunkWebEditorHtml(NoteBlock block) {
       return Number(line.dataset.start || "0");
     }
 
+    function normalizeEditableLines() {
+      const children = [...editor.children];
+      if (children.length === 0) {
+        const line = document.createElement("p");
+        line.className = "line";
+        line.dataset.line = "true";
+        line.dataset.start = "0";
+        line.appendChild(document.createElement("br"));
+        editor.appendChild(line);
+        return;
+      }
+      for (const child of children) {
+        child.classList.add("line");
+        child.dataset.line = "true";
+      }
+      refreshLineStarts();
+    }
+
+    function refreshLineStarts() {
+      let offset = 0;
+      for (const line of editor.querySelectorAll("[data-line]")) {
+        line.dataset.start = String(offset);
+        offset += line.textContent.length + 1;
+      }
+    }
+
     function closestLine(node) {
       return node && node.nodeType === 1
         ? node.closest("[data-line]")
@@ -429,6 +455,7 @@ String buildTextChunkWebEditorHtml(NoteBlock block) {
     }
 
     editor.addEventListener("input", () => {
+      normalizeEditableLines();
       state.text = [...editor.querySelectorAll("[data-line]")].map((line) => line.textContent).join("\\n");
       post("textChanged", { text: state.text });
     });

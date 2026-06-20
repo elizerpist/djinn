@@ -779,7 +779,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
         key: const ValueKey('note-table-rail-toggle-transparent'),
         tooltip: _railTransparentBackground
             ? 'Fehér rail háttér'
-            : 'Átlátszó rail háttér',
+            : 'Szürke rail háttér',
         onPressed: () => setState(
           () => _railTransparentBackground = !_railTransparentBackground,
         ),
@@ -2249,22 +2249,15 @@ class _CellFieldState extends State<_CellField> {
   @override
   Widget build(BuildContext context) {
     final field = TextFormField(
-      key: ValueKey(
-        'note-table-cell-${widget.row}-${widget.column}',
-      ),
+      key: ValueKey('note-table-cell-${widget.row}-${widget.column}'),
       controller: widget.controller,
       focusNode: widget.focusNode,
       minLines: 1,
       maxLines: null,
       keyboardType: TextInputType.text,
       textInputAction: TextInputAction.next,
-      decoration: const InputDecoration(
-        border: InputBorder.none,
-      ),
-      style: noteTaggedEditableTextStyle(
-        widget.tags,
-        alpha: 0.16,
-      ),
+      decoration: const InputDecoration(border: InputBorder.none),
+      style: noteTaggedEditableTextStyle(widget.tags, alpha: 0.16),
       onChanged: widget.onChanged,
       onFieldSubmitted: (_) => widget.onSubmitted(),
     );

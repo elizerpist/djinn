@@ -50,5 +50,7 @@ void main() {
     expect(html, contains('"--secondary-lines", "2"'));
     expect(html, contains('0xFF2563EB'));
     expect(html, contains('0xFFDC2626'));
+    expect(html, contains('line-height: normal'));
+    expect(html, isNot(contains('line-height: 1.45')));
   });
 }

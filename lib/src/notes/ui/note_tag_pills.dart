@@ -193,7 +193,7 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
   @override
   Widget build(BuildContext context) {
     final backgroundColor = widget.transparentBackground
-        ? Colors.transparent
+        ? const Color(0xFFF8FAFC)
         : Colors.white;
     final decoration = widget.roundedCard
         ? BoxDecoration(
@@ -227,7 +227,7 @@ class _NoteSelectionActionRailState extends State<NoteSelectionActionRail> {
         child: KeyedSubtree(
           key: ValueKey(
             widget.transparentBackground
-                ? 'note-selection-action-rail-transparent'
+                ? 'note-selection-action-rail-grey'
                 : 'note-selection-action-rail-white',
           ),
           child: KeyedSubtree(

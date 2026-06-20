@@ -515,6 +515,30 @@ void main() {
     expect(field.style!.height, isNull);
   });
 
+  testWidgets('manual line breaks stay in one editable paragraph field', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Első sor\nMásodik sor',
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+
+    expect(field.controller!.text, 'Első sor\nMásodik sor');
+    expect(find.byKey(const ValueKey('note-text-chunk-field-1')), findsNothing);
+  });
+
   testWidgets('non-empty text chunk does not autofocus on editor open', (
     tester,
   ) async {

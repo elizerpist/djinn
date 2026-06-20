@@ -683,7 +683,7 @@ class _ListItemRow extends StatelessWidget {
                         ),
                         tooltip: railTransparentBackground
                             ? 'Fehér rail háttér'
-                            : 'Átlátszó rail háttér',
+                            : 'Szürke rail háttér',
                         onPressed: onToggleRailTransparent,
                         icon: const Icon(Icons.opacity, size: 20),
                       ),
