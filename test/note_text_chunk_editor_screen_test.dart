@@ -758,20 +758,21 @@ void main() {
   testWidgets(
     'selection rail is inserted under the selected visual line inside the text field',
     (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: NoteTextChunkEditorScreen(
-            block: NoteBlock(
-              id: 'text-1',
-              type: NoteBlockType.paragraph,
-              text:
-                  'Holnap reggel megyek a boltba mert mar nincs kenyerem\n'
-                  'dolgozni de kesobb hazaerek\n'
-                  'GGGHBNNHJJJJJJJ',
-            ),
-            onChanged: _ignoreBlockChange,
-          ),
+      const text =
+          'Hdhjdjdjdjrj\n'
+          'Hdjdjdjdjdj meg a par pixellel nagyobb meret is jo lenne ha nem '
+          'lenne meg a par pixellel nagyobb meret is jo lenne ha nem lenne '
+          'meg a par pixellel nagyobb';
+      final start = text.indexOf('nem');
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
         ),
+        textScale: 1.6,
+        surfaceSize: const Size(360, 960),
       );
 
       await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
@@ -779,21 +780,54 @@ void main() {
       final field = tester.widget<TextField>(
         find.byKey(const ValueKey('note-text-chunk-field')),
       );
-      field.controller!.selection = const TextSelection(
-        baseOffset: 0,
-        extentOffset: 6,
+      field.controller!.selection = TextSelection(
+        baseOffset: start,
+        extentOffset: start + 3,
       );
       await tester.pumpAndSettle();
 
-      final fieldRect = tester.getRect(
-        find.byKey(const ValueKey('note-text-chunk-field')),
+      final selectedRect = _editableSelectionRect(
+        tester,
+        TextSelection(baseOffset: start, extentOffset: start + 3),
       );
       final railRect = tester.getRect(
         find.byKey(const ValueKey('note-text-inline-selection-rail')),
       );
 
-      expect(railRect.top, greaterThan(fieldRect.top));
-      expect(railRect.top, lessThan(fieldRect.bottom));
+      expect(railRect.top, greaterThanOrEqualTo(selectedRect.bottom + 8));
+    },
+  );
+
+  testWidgets(
+    'text chunk field expands on the canvas without inner scrolling',
+    (tester) async {
+      const text =
+          'Hdhjdjdjdjrj\n'
+          'Hdjdjdjdjdj meg a par pixellel nagyobb meret is jo lenne ha nem '
+          'lenne meg a par pixellel nagyobb meret is jo lenne ha nem lenne '
+          'meg a par pixellel nagyobb meret is jo lenne ha nem lenne meg a par '
+          'pixellel nagyobb meret is jo lenne ha nem lenne meg a par pixellel '
+          'nagyobb';
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+        ),
+        textScale: 1.6,
+        surfaceSize: const Size(360, 960),
+      );
+
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('note-text-chunk-field')),
+      );
+      final fieldHeight = tester
+          .getSize(find.byKey(const ValueKey('note-text-chunk-field')))
+          .height;
+
+      expect(field.scrollPhysics, isA<NeverScrollableScrollPhysics>());
+      expect(fieldHeight, greaterThan(220));
     },
   );
 
@@ -833,57 +867,210 @@ void main() {
     expect(latest!.text, '  Első sor\n  Második sor\n\nMásik bekezdés');
   });
 
+  testWidgets(
+    'header indent changes every wrapped visual row in the paragraph',
+    (tester) async {
+      const text =
+          'Elso bekezdes hosszu szovege ami biztosan tobb vizualis sorra torik '
+          'a keskeny szerkesztoben es a masodik automatikus sor is ugyanahhoz '
+          'a bekezdeshez tartozik.\n\nMasodik bekezdes marad.';
+      NoteBlock? latest;
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+        ),
+        onChanged: (block) => latest = block,
+        surfaceSize: const Size(320, 900),
+      );
+      final fieldRect = tester.getRect(
+        find.byKey(const ValueKey('note-text-chunk-field')),
+      );
+      final visualStarts = _visualLineStarts(
+        text: text,
+        maxWidth: fieldRect.width,
+        paragraph: TextRange(start: 0, end: text.indexOf('\n\n')),
+      );
+      expect(visualStarts.length, greaterThan(1));
+
+      await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
+      await tester.pump();
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('note-text-chunk-field')),
+      );
+      final wrappedLineStart = visualStarts[1];
+      field.controller!.selection = TextSelection.collapsed(
+        offset: wrappedLineStart,
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('note-text-indent')));
+      await tester.pump();
+
+      expect(latest!.text, _insertAtOffsets(text, visualStarts, '  '));
+      expect(latest!.text.endsWith('\n\nMasodik bekezdes marad.'), isTrue);
+    },
+  );
+
+  testWidgets('rail indent changes every wrapped visual row in the paragraph', (
+    tester,
+  ) async {
+    const text =
+        'Elso bekezdes hosszu szovege ami biztosan tobb vizualis sorra torik '
+        'a keskeny szerkesztoben es a masodik automatikus sor is ugyanahhoz '
+        'a bekezdeshez tartozik.\n\nMasodik bekezdes marad.';
+    NoteBlock? latest;
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(id: 'text-1', type: NoteBlockType.paragraph, text: text),
+      onChanged: (block) => latest = block,
+      surfaceSize: const Size(320, 900),
+    );
+    final fieldRect = tester.getRect(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    final visualStarts = _visualLineStarts(
+      text: text,
+      maxWidth: fieldRect.width,
+      paragraph: TextRange(start: 0, end: text.indexOf('\n\n')),
+    );
+    expect(visualStarts.length, greaterThan(1));
+
+    await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
+    await tester.pump();
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    field.controller!.selection = TextSelection(
+      baseOffset: visualStarts[1],
+      extentOffset: visualStarts[1] + 4,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('note-text-selection-rail-indent')),
+    );
+    await tester.pump();
+
+    expect(latest!.text, _insertAtOffsets(text, visualStarts, '  '));
+    expect(latest!.text.endsWith('\n\nMasodik bekezdes marad.'), isTrue);
+  });
+
   testWidgets('secondary underline marker matches the tagged word width', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: NoteTextChunkEditorScreen(
-          block: NoteBlock(
-            id: 'text-1',
-            type: NoteBlockType.paragraph,
-            text: 'Alpha beta gamma',
-            rangeTags: [
-              NoteTextRangeTag(
-                id: 'range-word',
-                start: 6,
-                end: 10,
-                tag: NoteKnowledgeTag(
-                  type: NoteKnowledgeTagTypes.state,
-                  label: 'primary',
-                  colorValue: 0xFFDC2626,
-                ),
-                tags: [
-                  NoteKnowledgeTag(
-                    type: NoteKnowledgeTagTypes.state,
-                    label: 'primary',
-                    colorValue: 0xFFDC2626,
-                  ),
-                  NoteKnowledgeTag(
-                    type: NoteKnowledgeTagTypes.topic,
-                    label: 'secondary',
-                    colorValue: 0xFF2563EB,
-                  ),
-                ],
+    const text =
+        'Hdhjdjdjdjrj\n'
+        'Hdjdjdjdjdj meg a par pixellel nagyobb meret is jo lenne ha nem '
+        'lenne meg a par pixellel nagyobb';
+    final start = text.indexOf('nem');
+    await _pumpTextChunkEditor(
+      tester,
+      NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: text,
+        rangeTags: [
+          NoteTextRangeTag(
+            id: 'range-word',
+            start: start,
+            end: start + 3,
+            tag: const NoteKnowledgeTag(
+              type: NoteKnowledgeTagTypes.state,
+              label: 'primary',
+              colorValue: 0xFFDC2626,
+            ),
+            tags: const [
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.state,
+                label: 'primary',
+                colorValue: 0xFFDC2626,
+              ),
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.topic,
+                label: 'secondary',
+                colorValue: 0xFF2563EB,
               ),
             ],
           ),
-          onChanged: _ignoreBlockChange,
-        ),
+        ],
       ),
+      textScale: 1.6,
+      surfaceSize: const Size(360, 960),
     );
     await tester.pumpAndSettle();
 
-    final fieldRect = tester.getRect(
-      find.byKey(const ValueKey('note-text-chunk-field')),
+    final targetRect = _editableSelectionRect(
+      tester,
+      TextSelection(baseOffset: start, extentOffset: start + 3),
     );
     final markerRect = tester.getRect(
       find.byKey(const ValueKey('note-text-secondary-underline-range-word-1')),
     );
 
-    expect(markerRect.width, greaterThan(0));
-    expect(markerRect.width, lessThan(fieldRect.width / 2));
-    expect(markerRect.left, greaterThan(fieldRect.left));
+    expect(markerRect.left, closeTo(targetRect.left, 5));
+    expect(markerRect.width, closeTo(targetRect.width, 5));
+  });
+
+  testWidgets('stacked secondary underlines leave room before the next line', (
+    tester,
+  ) async {
+    const text = 'Alpha beta gamma\nNext line starts here';
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: text,
+        rangeTags: [
+          NoteTextRangeTag(
+            id: 'range-many',
+            start: 0,
+            end: 5,
+            tag: NoteKnowledgeTag(
+              type: NoteKnowledgeTagTypes.state,
+              label: 'primary',
+              colorValue: 0xFFDC2626,
+            ),
+            tags: [
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.state,
+                label: 'primary',
+                colorValue: 0xFFDC2626,
+              ),
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.topic,
+                label: 'secondary-a',
+                colorValue: 0xFF2563EB,
+              ),
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.symbol,
+                label: 'secondary-b',
+                colorValue: 0xFF16A34A,
+              ),
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.custom,
+                label: 'secondary-c',
+                colorValue: 0xFF7C3AED,
+              ),
+            ],
+          ),
+        ],
+      ),
+      textScale: 1.6,
+      surfaceSize: const Size(360, 960),
+    );
+    await tester.pumpAndSettle();
+
+    final lastMarkerRect = tester.getRect(
+      find.byKey(const ValueKey('note-text-secondary-underline-range-many-3')),
+    );
+    final nextLineRect = _editableSelectionRect(
+      tester,
+      const TextSelection(baseOffset: 17, extentOffset: 21),
+    );
+
+    expect(nextLineRect.top, greaterThanOrEqualTo(lastMarkerRect.bottom + 6));
   });
 
   testWidgets(
@@ -956,18 +1143,95 @@ Future<double> _pumpTextFieldHeight(
   WidgetTester tester,
   NoteBlock block,
 ) async {
-  await tester.pumpWidget(
-    MaterialApp(
-      home: NoteTextChunkEditorScreen(
-        block: block,
-        onChanged: _ignoreBlockChange,
-      ),
-    ),
-  );
+  await _pumpTextChunkEditor(tester, block);
   await tester.pumpAndSettle();
   return tester
       .getSize(find.byKey(const ValueKey('note-text-chunk-field')))
       .height;
+}
+
+Future<void> _pumpTextChunkEditor(
+  WidgetTester tester,
+  NoteBlock block, {
+  ValueChanged<NoteBlock> onChanged = _ignoreBlockChange,
+  double textScale = 1,
+  Size surfaceSize = const Size(800, 600),
+}) async {
+  await tester.binding.setSurfaceSize(surfaceSize);
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(
+          size: surfaceSize,
+          textScaler: TextScaler.linear(textScale),
+        ),
+        child: NoteTextChunkEditorScreen(block: block, onChanged: onChanged),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Rect _editableSelectionRect(WidgetTester tester, TextSelection selection) {
+  final editableState = tester.state<EditableTextState>(
+    find.descendant(
+      of: find.byKey(const ValueKey('note-text-chunk-field')),
+      matching: find.byType(EditableText),
+    ),
+  );
+  final renderEditable = editableState.renderEditable;
+  final boxes = renderEditable.getBoxesForSelection(selection);
+  expect(boxes, isNotEmpty);
+  final box = boxes.first;
+  final localRect = Rect.fromLTRB(box.left, box.top, box.right, box.bottom);
+  return renderEditable.localToGlobal(localRect.topLeft) & localRect.size;
+}
+
+List<int> _visualLineStarts({
+  required String text,
+  required double maxWidth,
+  required TextRange paragraph,
+  double textScale = 1,
+}) {
+  final painter = TextPainter(
+    text: const TextSpan(
+      text: '',
+      style: TextStyle(color: Color(0xFF111827), fontSize: 16),
+    ),
+    textDirection: TextDirection.ltr,
+    textScaler: TextScaler.linear(textScale),
+  );
+  painter.text = TextSpan(
+    text: text,
+    style: const TextStyle(color: Color(0xFF111827), fontSize: 16),
+  );
+  painter.layout(maxWidth: maxWidth);
+  final starts = <int>{};
+  for (final line in painter.computeLineMetrics()) {
+    final centerY = line.baseline + ((line.descent - line.ascent) / 2);
+    final position = painter.getPositionForOffset(Offset(0, centerY));
+    final boundary = painter.getLineBoundary(position);
+    final start = boundary.start.clamp(paragraph.start, paragraph.end).toInt();
+    final end = boundary.end.clamp(paragraph.start, paragraph.end).toInt();
+    if (start < end) {
+      starts.add(start);
+    }
+  }
+  return starts.toList()..sort();
+}
+
+String _insertAtOffsets(String text, List<int> offsets, String insertion) {
+  final buffer = StringBuffer();
+  var cursor = 0;
+  for (final offset in offsets) {
+    buffer
+      ..write(text.substring(cursor, offset))
+      ..write(insertion);
+    cursor = offset;
+  }
+  buffer.write(text.substring(cursor));
+  return buffer.toString();
 }
 
 bool _containsWidgetSpan(InlineSpan span) {

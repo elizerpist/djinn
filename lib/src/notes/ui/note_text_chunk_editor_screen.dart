@@ -1,3 +1,5 @@
+import 'dart:ui' show BoxHeightStyle, BoxWidthStyle;
+
 import 'package:flutter/material.dart';
 
 import '../../debug/debug_console.dart';
@@ -37,10 +39,20 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   bool _railTransparentBackground = false;
   bool _railBorderVisible = true;
   TextRange? _activeRailRange;
+  double _lastTextLayoutWidth = 0;
+  List<_VisualTextLine> _lastVisualLines = const [];
+  String? _lastLayoutLogSignature;
+  String? _lastRailLogSignature;
+  String? _lastUnderlineLogSignature;
+  String? _lastParagraphLogSignature;
 
   static const _textStyle = TextStyle(color: Color(0xFF111827), fontSize: 16);
-  static const _collapsedRailReservedHeight = 72.0;
-  static const _expandedRailReservedHeight = 122.0;
+  static const _textContentPadding = EdgeInsets.symmetric(vertical: 2);
+  static const _railTopTextGap = 10.0;
+  static const _railBottomTextGap = 10.0;
+  static const _collapsedRailHeight = 64.0;
+  static const _expandedRailHeight = 113.0;
+  static const _editorBottomSlack = 12.0;
 
   @override
   void initState() {
@@ -491,9 +503,11 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     );
   }
 
-  double get _selectionRailReservedHeight => _railBottomExpanded
-      ? _expandedRailReservedHeight
-      : _collapsedRailReservedHeight;
+  double get _selectionRailHeight =>
+      _railBottomExpanded ? _expandedRailHeight : _collapsedRailHeight;
+
+  double get _selectionRailReservedHeight =>
+      _selectionRailHeight + _railTopTextGap + _railBottomTextGap;
 
   void _deleteChunk() {
     widget.onDelete?.call();
@@ -513,26 +527,34 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       return;
     }
     final oldText = _block.text;
-    final paragraph = oldText.substring(
-      paragraphRange.start,
-      paragraphRange.end,
+    final lineStarts = _visualLineStartsForParagraph(oldText, paragraphRange);
+    final edits = _paragraphIndentEdits(
+      oldText,
+      lineStarts: lineStarts,
+      delta: delta,
     );
-    final nextParagraph = paragraph
-        .split('\n')
-        .map((line) => _indentedLine(line, delta))
-        .join('\n');
-    final nextText =
-        oldText.substring(0, paragraphRange.start) +
-        nextParagraph +
-        oldText.substring(paragraphRange.end);
-    if (nextText == oldText) {
+    final logSignature =
+        '${paragraphRange.start}:${paragraphRange.end}:$delta:'
+        '${lineStarts.join(',')}:${edits.length}';
+    if (_lastParagraphLogSignature != logSignature) {
+      _lastParagraphLogSignature = logSignature;
+      DebugConsole.log(
+        '[TextChunkLayout] paragraph step delta=$delta '
+        'range=${paragraphRange.start}-${paragraphRange.end} '
+        'visualLines=${lineStarts.length} edits=${edits.length} '
+        'layoutWidth=${_lastTextLayoutWidth.toStringAsFixed(1)}',
+      );
+    }
+    if (edits.isEmpty) {
       return;
     }
-    final rangeTags = _adjustRangeTagsForEdit(
-      oldText: oldText,
-      newText: nextText,
-      tags: _block.rangeTags,
+    final result = _applyTextEdits(
+      text: oldText,
+      rangeTags: _block.rangeTags,
+      edits: edits,
     );
+    final nextText = result.text;
+    final rangeTags = result.rangeTags;
     setState(() {
       _block = _block.copyWith(
         text: nextText,
@@ -546,9 +568,10 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _controller.value = TextEditingValue(
         text: nextText,
         selection: TextSelection.collapsed(
-          offset: (offset + (nextText.length - oldText.length))
-              .clamp(0, nextText.length)
-              .toInt(),
+          offset: _offsetAfterTextEdits(
+            offset,
+            edits,
+          ).clamp(0, nextText.length).toInt(),
         ),
       );
     } finally {
@@ -572,20 +595,35 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     return TextRange(start: start, end: end);
   }
 
-  String _indentedLine(String text, int delta) {
-    if (text.trim().isEmpty) {
-      return text;
+  List<int> _visualLineStartsForParagraph(String text, TextRange paragraph) {
+    final measured =
+        _lastVisualLines
+            .where(
+              (line) =>
+                  line.start < paragraph.end && line.end > paragraph.start,
+            )
+            .map(
+              (line) =>
+                  line.start.clamp(paragraph.start, paragraph.end).toInt(),
+            )
+            .where((offset) => offset < paragraph.end)
+            .toSet()
+            .toList()
+          ..sort();
+    if (measured.isNotEmpty) {
+      return measured;
     }
-    if (delta > 0) {
-      return '  $text';
+    final starts = <int>[paragraph.start];
+    var cursor = paragraph.start;
+    while (cursor < paragraph.end) {
+      final newline = text.indexOf('\n', cursor);
+      if (newline < 0 || newline + 1 >= paragraph.end) {
+        break;
+      }
+      starts.add(newline + 1);
+      cursor = newline + 1;
     }
-    if (text.startsWith('  ')) {
-      return text.substring(2);
-    }
-    if (text.startsWith(' ')) {
-      return text.substring(1);
-    }
-    return text;
+    return starts;
   }
 
   @override
@@ -657,6 +695,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   Widget _buildTextField() {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final textScaler = MediaQuery.textScalerOf(context);
         final activeRailRange = _selectionHasRange ? _activeRailRange : null;
         final activeRailGapPx = activeRailRange == null
             ? 0.0
@@ -665,29 +704,51 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           ..activeRailRange = activeRailRange
           ..activeRailGapPx = activeRailGapPx;
         final textForLayout = _controller.text.isEmpty ? ' ' : _controller.text;
-        final textPainter = _plainTextPainter(
+        final baseTextPainter = _plainTextPainter(
           text: textForLayout,
           textStyle: _textStyle,
           maxWidth: constraints.maxWidth,
+          textScaler: textScaler,
         );
-        final lineMetrics = textPainter.computeLineMetrics();
-        final lineGaps = lineMetrics.isEmpty
+        final baseLineMetrics = baseTextPainter.computeLineMetrics();
+        final lineGaps = baseLineMetrics.isEmpty
             ? const <double>[]
             : _lineExtraGaps(
-                textPainter: textPainter,
-                lineMetrics: lineMetrics,
+                textPainter: baseTextPainter,
+                lineMetrics: baseLineMetrics,
                 textLength: textForLayout.length,
                 rangeTags: _block.rangeTags,
                 activeRailRange: activeRailRange,
                 activeRailGapPx: activeRailGapPx,
               );
+        final textPainter = _richTextPainter(
+          text: textForLayout,
+          textStyle: _textStyle,
+          maxWidth: constraints.maxWidth,
+          textScaler: textScaler,
+          rangeTags: _block.rangeTags,
+          activeRailRange: activeRailRange,
+          activeRailGapPx: activeRailGapPx,
+        );
+        final lineMetrics = textPainter.computeLineMetrics();
+        final visualLines = _visualTextLines(
+          textPainter: textPainter,
+          lineMetrics: lineMetrics,
+          textLength: textForLayout.length,
+        );
         final editorHeight =
-            textPainter.height + 14 + lineGaps.fold<double>(0, (a, b) => a + b);
+            _textContentPadding.vertical +
+            textPainter.height +
+            _editorBottomSlack;
+        _lastTextLayoutWidth = constraints.maxWidth;
+        _lastVisualLines = visualLines;
         final underlineMarkers = _secondaryUnderlineMarkers(
           text: _controller.text,
           rangeTags: _block.rangeTags,
           textStyle: _textStyle,
           maxWidth: constraints.maxWidth,
+          textScaler: textScaler,
+          contentPadding: _textContentPadding,
           activeRailRange: activeRailRange,
           activeRailGapPx: activeRailGapPx,
         );
@@ -695,10 +756,26 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           text: _controller.text,
           textStyle: _textStyle,
           maxWidth: constraints.maxWidth,
+          textScaler: textScaler,
+          contentPadding: _textContentPadding,
+          railTopTextGap: _railTopTextGap,
           rangeTags: _block.rangeTags,
           activeRailRange: activeRailRange,
           activeRailGapPx: activeRailGapPx,
         );
+        _logTextLayout(
+          textLength: _controller.text.length,
+          maxWidth: constraints.maxWidth,
+          editorHeight: editorHeight,
+          lineCount: lineMetrics.length,
+          visualLineCount: visualLines.length,
+          lineGaps: lineGaps,
+          activeRailRange: activeRailRange,
+          activeRailGapPx: activeRailGapPx,
+          textScaler: textScaler,
+        );
+        _logRailPlacement(railPlacement);
+        _logUnderlineMarkers(underlineMarkers);
         return SizedBox(
           height: editorHeight,
           child: Stack(
@@ -720,9 +797,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                     hintText: 'Írd ide a chunk tartalmát',
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 2),
+                    contentPadding: _textContentPadding,
                   ),
                   style: _textStyle,
+                  scrollPhysics: const NeverScrollableScrollPhysics(),
+                  selectionHeightStyle: BoxHeightStyle.tight,
+                  selectionWidthStyle: BoxWidthStyle.tight,
                   onTap: () {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted) {
@@ -740,6 +820,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                       rangeTags: _block.rangeTags,
                       textStyle: _textStyle,
                       maxWidth: constraints.maxWidth,
+                      textScaler: textScaler,
+                      contentPadding: _textContentPadding,
                       activeRailRange: activeRailRange,
                       activeRailGapPx: activeRailGapPx,
                     ),
@@ -771,6 +853,183 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       },
     );
   }
+
+  void _logTextLayout({
+    required int textLength,
+    required double maxWidth,
+    required double editorHeight,
+    required int lineCount,
+    required int visualLineCount,
+    required List<double> lineGaps,
+    required TextRange? activeRailRange,
+    required double activeRailGapPx,
+    required TextScaler textScaler,
+  }) {
+    final nonZeroGaps = <String>[];
+    for (var index = 0; index < lineGaps.length; index += 1) {
+      final gap = lineGaps[index];
+      if (gap > 0) {
+        nonZeroGaps.add('$index:${gap.toStringAsFixed(1)}');
+      }
+    }
+    final signature =
+        '$textLength:${maxWidth.toStringAsFixed(1)}:'
+        '${editorHeight.toStringAsFixed(1)}:$lineCount:$visualLineCount:'
+        '${activeRailRange?.start}-${activeRailRange?.end}:'
+        '${activeRailGapPx.toStringAsFixed(1)}:${nonZeroGaps.join('|')}:'
+        '${textScaler.scale(_textStyle.fontSize ?? 16).toStringAsFixed(1)}';
+    if (_lastLayoutLogSignature == signature) {
+      return;
+    }
+    _lastLayoutLogSignature = signature;
+    DebugConsole.log(
+      '[TextChunkLayout] build chars=$textLength '
+      'width=${maxWidth.toStringAsFixed(1)} '
+      'height=${editorHeight.toStringAsFixed(1)} '
+      'lines=$lineCount visualLines=$visualLineCount '
+      'scaledFont=${textScaler.scale(_textStyle.fontSize ?? 16).toStringAsFixed(1)} '
+      'rail=${activeRailRange == null ? 'none' : '${activeRailRange.start}-${activeRailRange.end}'} '
+      'railGap=${activeRailGapPx.toStringAsFixed(1)} '
+      'lineGaps=${nonZeroGaps.isEmpty ? 'none' : nonZeroGaps.join(',')}',
+    );
+  }
+
+  void _logRailPlacement(({double top})? placement) {
+    final signature = placement == null
+        ? 'none'
+        : '${placement.top.toStringAsFixed(1)}:${_selectionRailHeight.toStringAsFixed(1)}';
+    if (_lastRailLogSignature == signature) {
+      return;
+    }
+    _lastRailLogSignature = signature;
+    DebugConsole.log(
+      '[TextChunkLayout] rail placement '
+      '${placement == null ? 'none' : 'top=${placement.top.toStringAsFixed(1)} height=${_selectionRailHeight.toStringAsFixed(1)} reserved=${_selectionRailReservedHeight.toStringAsFixed(1)}'}',
+    );
+  }
+
+  void _logUnderlineMarkers(
+    List<
+      ({
+        String id,
+        int index,
+        int boxIndex,
+        double left,
+        double top,
+        double width,
+        Color color,
+      })
+    >
+    markers,
+  ) {
+    final first = markers.isEmpty
+        ? 'none'
+        : '${markers.first.id}:${markers.first.index}:'
+              '${markers.first.left.toStringAsFixed(1)},'
+              '${markers.first.top.toStringAsFixed(1)},'
+              '${markers.first.width.toStringAsFixed(1)}';
+    final signature = '${markers.length}:$first';
+    if (_lastUnderlineLogSignature == signature) {
+      return;
+    }
+    _lastUnderlineLogSignature = signature;
+    DebugConsole.log(
+      '[TextChunkLayout] underline markers count=${markers.length} first=$first',
+    );
+  }
+}
+
+class _VisualTextLine {
+  const _VisualTextLine({
+    required this.index,
+    required this.start,
+    required this.end,
+    required this.top,
+    required this.bottom,
+  });
+
+  final int index;
+  final int start;
+  final int end;
+  final double top;
+  final double bottom;
+}
+
+class _TextEdit {
+  const _TextEdit({
+    required this.offset,
+    required this.deleteCount,
+    required this.insertText,
+  });
+
+  final int offset;
+  final int deleteCount;
+  final String insertText;
+}
+
+({String text, List<NoteTextRangeTag> rangeTags}) _applyTextEdits({
+  required String text,
+  required List<NoteTextRangeTag> rangeTags,
+  required List<_TextEdit> edits,
+}) {
+  var currentText = text;
+  var currentTags = rangeTags;
+  var shift = 0;
+  final sorted = [...edits]..sort((a, b) => a.offset.compareTo(b.offset));
+  for (final edit in sorted) {
+    final start = (edit.offset + shift).clamp(0, currentText.length).toInt();
+    final end = (start + edit.deleteCount)
+        .clamp(start, currentText.length)
+        .toInt();
+    final nextText = currentText.replaceRange(start, end, edit.insertText);
+    currentTags = _adjustRangeTagsForEdit(
+      oldText: currentText,
+      newText: nextText,
+      tags: currentTags,
+    );
+    shift += edit.insertText.length - edit.deleteCount;
+    currentText = nextText;
+  }
+  return (text: currentText, rangeTags: currentTags);
+}
+
+int _offsetAfterTextEdits(int offset, List<_TextEdit> edits) {
+  var result = offset;
+  for (final edit in edits) {
+    if (edit.offset <= offset) {
+      result += edit.insertText.length - edit.deleteCount;
+    }
+  }
+  return result;
+}
+
+List<_TextEdit> _paragraphIndentEdits(
+  String text, {
+  required List<int> lineStarts,
+  required int delta,
+}) {
+  final edits = <_TextEdit>[];
+  final uniqueStarts = lineStarts.toSet().toList()..sort();
+  for (final offset in uniqueStarts) {
+    if (offset < 0 || offset >= text.length) {
+      continue;
+    }
+    if (text.codeUnitAt(offset) == 10) {
+      continue;
+    }
+    if (delta > 0) {
+      edits.add(_TextEdit(offset: offset, deleteCount: 0, insertText: '  '));
+      continue;
+    }
+    if (delta < 0 && text.startsWith('  ', offset)) {
+      edits.add(_TextEdit(offset: offset, deleteCount: 2, insertText: ''));
+      continue;
+    }
+    if (delta < 0 && text.startsWith(' ', offset)) {
+      edits.add(_TextEdit(offset: offset, deleteCount: 1, insertText: ''));
+    }
+  }
+  return edits;
 }
 
 class _TextChunkEditingController extends TextEditingController {
@@ -801,6 +1060,7 @@ class _TextChunkEditingController extends TextEditingController {
       rangeTags: _rangeTags,
       activeRailRange: activeRailRange,
       activeRailGapPx: activeRailGapPx,
+      textScaler: MediaQuery.textScalerOf(context),
     );
   }
 }
@@ -811,6 +1071,8 @@ class _TextSecondaryUnderlinePainter extends CustomPainter {
     required this.rangeTags,
     required this.textStyle,
     required this.maxWidth,
+    required this.textScaler,
+    required this.contentPadding,
     required this.activeRailRange,
     required this.activeRailGapPx,
   });
@@ -819,6 +1081,8 @@ class _TextSecondaryUnderlinePainter extends CustomPainter {
   final List<NoteTextRangeTag> rangeTags;
   final TextStyle textStyle;
   final double maxWidth;
+  final TextScaler textScaler;
+  final EdgeInsets contentPadding;
   final TextRange? activeRailRange;
   final double activeRailGapPx;
 
@@ -832,6 +1096,8 @@ class _TextSecondaryUnderlinePainter extends CustomPainter {
       rangeTags: rangeTags,
       textStyle: textStyle,
       maxWidth: maxWidth,
+      textScaler: textScaler,
+      contentPadding: contentPadding,
       activeRailRange: activeRailRange,
       activeRailGapPx: activeRailGapPx,
     );
@@ -854,6 +1120,8 @@ class _TextSecondaryUnderlinePainter extends CustomPainter {
         oldDelegate.rangeTags != rangeTags ||
         oldDelegate.textStyle != textStyle ||
         oldDelegate.maxWidth != maxWidth ||
+        oldDelegate.textScaler != textScaler ||
+        oldDelegate.contentPadding != contentPadding ||
         oldDelegate.activeRailRange != activeRailRange ||
         oldDelegate.activeRailGapPx != activeRailGapPx;
   }
@@ -875,29 +1143,27 @@ _secondaryUnderlineMarkers({
   required List<NoteTextRangeTag> rangeTags,
   required TextStyle textStyle,
   required double maxWidth,
+  required TextScaler textScaler,
+  required EdgeInsets contentPadding,
   required TextRange? activeRailRange,
   required double activeRailGapPx,
 }) {
   if (text.isEmpty || rangeTags.isEmpty || maxWidth <= 0) {
     return const [];
   }
-  final textPainter = _plainTextPainter(
+  final textPainter = _richTextPainter(
     text: text,
     textStyle: textStyle,
     maxWidth: maxWidth,
+    textScaler: textScaler,
+    rangeTags: rangeTags,
+    activeRailRange: activeRailRange,
+    activeRailGapPx: activeRailGapPx,
   );
   final lineMetrics = textPainter.computeLineMetrics();
   if (lineMetrics.isEmpty) {
     return const [];
   }
-  final lineGaps = _lineExtraGaps(
-    textPainter: textPainter,
-    lineMetrics: lineMetrics,
-    textLength: text.length,
-    rangeTags: rangeTags,
-    activeRailRange: activeRailRange,
-    activeRailGapPx: activeRailGapPx,
-  );
   final groups = _mergedTextTagGroups(
     rangeTags: rangeTags,
     textLength: text.length,
@@ -920,18 +1186,18 @@ _secondaryUnderlineMarkers({
     }
     final boxes = textPainter.getBoxesForSelection(
       TextSelection(baseOffset: group.start, extentOffset: group.end),
+      boxHeightStyle: BoxHeightStyle.tight,
+      boxWidthStyle: BoxWidthStyle.tight,
     );
     for (var index = 1; index < group.tags.length; index += 1) {
       for (var boxIndex = 0; boxIndex < boxes.length; boxIndex += 1) {
         final box = boxes[boxIndex];
-        final lineIndex = _lineIndexForBox(lineMetrics, box);
-        final cumulativeGap = _cumulativeGapBeforeLine(lineGaps, lineIndex);
         markers.add((
           id: group.id,
           index: index,
           boxIndex: boxIndex,
           left: box.left,
-          top: box.bottom + cumulativeGap + 2 + ((index - 1) * 4.0),
+          top: contentPadding.top + box.bottom + 2 + ((index - 1) * 4.0),
           width: box.right - box.left,
           color: Color(group.tags[index].resolvedColorValue),
         ));
@@ -980,6 +1246,7 @@ TextSpan _buildTextChunkTextSpan({
   required List<NoteTextRangeTag> rangeTags,
   required TextRange? activeRailRange,
   required double activeRailGapPx,
+  required TextScaler textScaler,
 }) {
   if (textValue.isEmpty) {
     return TextSpan(style: baseStyle, text: textValue);
@@ -1024,6 +1291,7 @@ TextSpan _buildTextChunkTextSpan({
           tags: tags,
           extraHeightPx: extraHeight,
           baseStyle: baseStyle,
+          textScaler: textScaler,
         ),
       ),
     );
@@ -1035,6 +1303,7 @@ TextStyle? _segmentTextStyle({
   required List<NoteKnowledgeTag> tags,
   required double extraHeightPx,
   required TextStyle? baseStyle,
+  required TextScaler textScaler,
 }) {
   final taggedStyle = tags.isEmpty ? null : _taggedTextStyle(tags, alpha: 0.22);
   final gapStyle = extraHeightPx <= 0
@@ -1043,6 +1312,7 @@ TextStyle? _segmentTextStyle({
           height: _lineHeightMultiplier(
             extraHeightPx: extraHeightPx,
             baseStyle: baseStyle,
+            textScaler: textScaler,
           ),
         );
   if (taggedStyle == null) {
@@ -1054,9 +1324,11 @@ TextStyle? _segmentTextStyle({
 double _lineHeightMultiplier({
   required double extraHeightPx,
   required TextStyle? baseStyle,
+  required TextScaler textScaler,
 }) {
   final fontSize = baseStyle?.fontSize ?? 16.0;
-  return (fontSize + extraHeightPx) / fontSize;
+  final scaledFontSize = textScaler.scale(fontSize);
+  return (scaledFontSize + extraHeightPx) / scaledFontSize;
 }
 
 double _extraHeightForSegment({
@@ -1086,10 +1358,35 @@ TextPainter _plainTextPainter({
   required String text,
   required TextStyle textStyle,
   required double maxWidth,
+  required TextScaler textScaler,
 }) {
   return TextPainter(
     text: TextSpan(text: text, style: textStyle),
     textDirection: TextDirection.ltr,
+    textScaler: textScaler,
+  )..layout(maxWidth: maxWidth);
+}
+
+TextPainter _richTextPainter({
+  required String text,
+  required TextStyle textStyle,
+  required double maxWidth,
+  required TextScaler textScaler,
+  required List<NoteTextRangeTag> rangeTags,
+  required TextRange? activeRailRange,
+  required double activeRailGapPx,
+}) {
+  return TextPainter(
+    text: _buildTextChunkTextSpan(
+      textValue: text,
+      baseStyle: textStyle,
+      rangeTags: rangeTags,
+      activeRailRange: activeRailRange,
+      activeRailGapPx: activeRailGapPx,
+      textScaler: textScaler,
+    ),
+    textDirection: TextDirection.ltr,
+    textScaler: textScaler,
   )..layout(maxWidth: maxWidth);
 }
 
@@ -1097,6 +1394,9 @@ TextPainter _plainTextPainter({
   required String text,
   required TextStyle textStyle,
   required double maxWidth,
+  required TextScaler textScaler,
+  required EdgeInsets contentPadding,
+  required double railTopTextGap,
   required List<NoteTextRangeTag> rangeTags,
   required TextRange? activeRailRange,
   required double activeRailGapPx,
@@ -1105,10 +1405,14 @@ TextPainter _plainTextPainter({
   if (range == null || maxWidth <= 0) {
     return null;
   }
-  final textPainter = _plainTextPainter(
+  final textPainter = _richTextPainter(
     text: text,
     textStyle: textStyle,
     maxWidth: maxWidth,
+    textScaler: textScaler,
+    rangeTags: rangeTags,
+    activeRailRange: range,
+    activeRailGapPx: activeRailGapPx,
   );
   final lineMetrics = textPainter.computeLineMetrics();
   if (lineMetrics.isEmpty) {
@@ -1116,22 +1420,49 @@ TextPainter _plainTextPainter({
   }
   final boxes = textPainter.getBoxesForSelection(
     TextSelection(baseOffset: range.start, extentOffset: range.end),
+    boxHeightStyle: BoxHeightStyle.tight,
+    boxWidthStyle: BoxWidthStyle.tight,
   );
   if (boxes.isEmpty) {
     return null;
   }
-  final lineGaps = _lineExtraGaps(
-    textPainter: textPainter,
-    lineMetrics: lineMetrics,
-    textLength: text.length,
-    rangeTags: rangeTags,
-    activeRailRange: range,
-    activeRailGapPx: activeRailGapPx,
-  );
   final firstBox = boxes.first;
-  final lineIndex = _lineIndexForBox(lineMetrics, firstBox);
-  final cumulativeGap = _cumulativeGapBeforeLine(lineGaps, lineIndex);
-  return (top: firstBox.bottom + cumulativeGap + 4);
+  return (top: contentPadding.top + firstBox.bottom + railTopTextGap);
+}
+
+List<_VisualTextLine> _visualTextLines({
+  required TextPainter textPainter,
+  required List<LineMetrics> lineMetrics,
+  required int textLength,
+}) {
+  final lines = <_VisualTextLine>[];
+  if (textLength <= 0) {
+    return lines;
+  }
+  for (var index = 0; index < lineMetrics.length; index += 1) {
+    final line = lineMetrics[index];
+    final top = line.baseline - line.ascent;
+    final bottom = line.baseline + line.descent;
+    final position = textPainter.getPositionForOffset(
+      Offset(0, (top + bottom) / 2),
+    );
+    final boundary = textPainter.getLineBoundary(position);
+    final start = boundary.start.clamp(0, textLength).toInt();
+    final end = boundary.end.clamp(0, textLength).toInt();
+    if (start >= end) {
+      continue;
+    }
+    lines.add(
+      _VisualTextLine(
+        index: index,
+        start: start,
+        end: end,
+        top: top,
+        bottom: bottom,
+      ),
+    );
+  }
+  return lines;
 }
 
 List<double> _lineExtraGaps({
@@ -1147,6 +1478,8 @@ List<double> _lineExtraGaps({
   if (railRange != null && activeRailGapPx > 0) {
     final boxes = textPainter.getBoxesForSelection(
       TextSelection(baseOffset: railRange.start, extentOffset: railRange.end),
+      boxHeightStyle: BoxHeightStyle.tight,
+      boxWidthStyle: BoxWidthStyle.tight,
     );
     if (boxes.isNotEmpty) {
       final lineIndex = _lineIndexForBox(lineMetrics, boxes.first);
@@ -1165,6 +1498,8 @@ List<double> _lineExtraGaps({
     final underlineGap = _secondaryUnderlineGap(group.tags.length);
     final boxes = textPainter.getBoxesForSelection(
       TextSelection(baseOffset: group.start, extentOffset: group.end),
+      boxHeightStyle: BoxHeightStyle.tight,
+      boxWidthStyle: BoxWidthStyle.tight,
     );
     for (final box in boxes) {
       final lineIndex = _lineIndexForBox(lineMetrics, box);
@@ -1199,18 +1534,6 @@ int _lineIndexForBox(List<LineMetrics> lineMetrics, TextBox box) {
     }
   }
   return nearestIndex;
-}
-
-double _cumulativeGapBeforeLine(List<double> lineGaps, int lineIndex) {
-  var total = 0.0;
-  for (
-    var index = 0;
-    index < lineIndex && index < lineGaps.length;
-    index += 1
-  ) {
-    total += lineGaps[index];
-  }
-  return total;
 }
 
 TextRange? _validTextRange(TextRange? range, {required int textLength}) {
