@@ -754,9 +754,221 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'selection rail is inserted under the selected visual line inside the text field',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: NoteTextChunkEditorScreen(
+            block: NoteBlock(
+              id: 'text-1',
+              type: NoteBlockType.paragraph,
+              text:
+                  'Holnap reggel megyek a boltba mert mar nincs kenyerem\n'
+                  'dolgozni de kesobb hazaerek\n'
+                  'GGGHBNNHJJJJJJJ',
+            ),
+            onChanged: _ignoreBlockChange,
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
+      await tester.pump();
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('note-text-chunk-field')),
+      );
+      field.controller!.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 6,
+      );
+      await tester.pumpAndSettle();
+
+      final fieldRect = tester.getRect(
+        find.byKey(const ValueKey('note-text-chunk-field')),
+      );
+      final railRect = tester.getRect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      );
+
+      expect(railRect.top, greaterThan(fieldRect.top));
+      expect(railRect.top, lessThan(fieldRect.bottom));
+    },
+  );
+
+  testWidgets('rail indent changes every manual row in the active paragraph', (
+    tester,
+  ) async {
+    NoteBlock? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: const NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Első sor\nMásodik sor\n\nMásik bekezdés',
+          ),
+          onChanged: (block) => latest = block,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-text-chunk-field')));
+    await tester.pump();
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    field.controller!.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 4,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('note-text-selection-rail-indent')),
+    );
+    await tester.pump();
+
+    expect(latest!.text, '  Első sor\n  Második sor\n\nMásik bekezdés');
+  });
+
+  testWidgets('secondary underline marker matches the tagged word width', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: NoteTextChunkEditorScreen(
+          block: NoteBlock(
+            id: 'text-1',
+            type: NoteBlockType.paragraph,
+            text: 'Alpha beta gamma',
+            rangeTags: [
+              NoteTextRangeTag(
+                id: 'range-word',
+                start: 6,
+                end: 10,
+                tag: NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.state,
+                  label: 'primary',
+                  colorValue: 0xFFDC2626,
+                ),
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'primary',
+                    colorValue: 0xFFDC2626,
+                  ),
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.topic,
+                    label: 'secondary',
+                    colorValue: 0xFF2563EB,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          onChanged: _ignoreBlockChange,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final fieldRect = tester.getRect(
+      find.byKey(const ValueKey('note-text-chunk-field')),
+    );
+    final markerRect = tester.getRect(
+      find.byKey(const ValueKey('note-text-secondary-underline-range-word-1')),
+    );
+
+    expect(markerRect.width, greaterThan(0));
+    expect(markerRect.width, lessThan(fieldRect.width / 2));
+    expect(markerRect.left, greaterThan(fieldRect.left));
+  });
+
+  testWidgets(
+    'stacked secondary underlines reserve line space without global line height',
+    (tester) async {
+      final plainHeight = await _pumpTextFieldHeight(
+        tester,
+        const NoteBlock(
+          id: 'plain',
+          type: NoteBlockType.paragraph,
+          text: 'Alpha beta\nGamma delta',
+        ),
+      );
+      final taggedHeight = await _pumpTextFieldHeight(
+        tester,
+        const NoteBlock(
+          id: 'tagged',
+          type: NoteBlockType.paragraph,
+          text: 'Alpha beta\nGamma delta',
+          rangeTags: [
+            NoteTextRangeTag(
+              id: 'range-many',
+              start: 0,
+              end: 5,
+              tag: NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.state,
+                label: 'primary',
+                colorValue: 0xFFDC2626,
+              ),
+              tags: [
+                NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.state,
+                  label: 'primary',
+                  colorValue: 0xFFDC2626,
+                ),
+                NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.topic,
+                  label: 'secondary-a',
+                  colorValue: 0xFF2563EB,
+                ),
+                NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.symbol,
+                  label: 'secondary-b',
+                  colorValue: 0xFF16A34A,
+                ),
+                NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.custom,
+                  label: 'secondary-c',
+                  colorValue: 0xFF7C3AED,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('note-text-chunk-field')),
+      );
+
+      expect(field.style!.height, isNull);
+      expect(taggedHeight, greaterThan(plainHeight + 8));
+    },
+  );
 }
 
 void _ignoreBlockChange(NoteBlock block) {}
+
+Future<double> _pumpTextFieldHeight(
+  WidgetTester tester,
+  NoteBlock block,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: NoteTextChunkEditorScreen(
+        block: block,
+        onChanged: _ignoreBlockChange,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return tester
+      .getSize(find.byKey(const ValueKey('note-text-chunk-field')))
+      .height;
+}
 
 bool _containsWidgetSpan(InlineSpan span) {
   if (span is WidgetSpan) {

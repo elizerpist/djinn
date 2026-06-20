@@ -39,6 +39,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   TextRange? _activeRailRange;
 
   static const _textStyle = TextStyle(color: Color(0xFF111827), fontSize: 16);
+  static const _collapsedRailReservedHeight = 72.0;
+  static const _expandedRailReservedHeight = 122.0;
 
   @override
   void initState() {
@@ -324,6 +326,10 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     widget.onChanged(_block);
   }
 
+  void _changeRailParagraphIndent(int delta) {
+    _changeParagraphIndent(delta);
+  }
+
   void _focusTaggedRange(int direction) {
     final ranges =
         [
@@ -419,6 +425,18 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       contentPadding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
       actions: [
         IconButton(
+          key: const ValueKey('note-text-selection-rail-outdent'),
+          tooltip: 'Bekezdés kijjebb',
+          onPressed: () => _changeRailParagraphIndent(-1),
+          icon: const Icon(Icons.format_indent_decrease, size: 20),
+        ),
+        IconButton(
+          key: const ValueKey('note-text-selection-rail-indent'),
+          tooltip: 'Bekezdés beljebb',
+          onPressed: () => _changeRailParagraphIndent(1),
+          icon: const Icon(Icons.format_indent_increase, size: 20),
+        ),
+        IconButton(
           key: const ValueKey('note-text-selection-rail-tag'),
           tooltip: 'Kijelölt rész tagelése',
           onPressed: () => unawaited(_tagSelection()),
@@ -427,7 +445,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         IconButton(
           key: const ValueKey('note-text-selection-rail-clear-tags'),
           tooltip: 'Minden tag törlése',
-          onPressed: _selectionCanDeleteTag ? _deleteSelectedTag : null,
+          onPressed: _selectionHasRange ? _deleteSelectedTag : null,
           icon: const Icon(Icons.delete_outline, size: 20),
         ),
         IconButton(
@@ -472,6 +490,10 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       ],
     );
   }
+
+  double get _selectionRailReservedHeight => _railBottomExpanded
+      ? _expandedRailReservedHeight
+      : _collapsedRailReservedHeight;
 
   void _deleteChunk() {
     widget.onDelete?.call();
@@ -620,16 +642,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildTextField(),
-                    if (_selectionHasRange)
-                      Padding(
-                        key: const ValueKey('note-text-inline-selection-rail'),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: _buildSelectionRail(),
-                      ),
-                    const SizedBox(height: 220),
-                  ],
+                  children: [_buildTextField(), const SizedBox(height: 220)],
                 ),
               ),
             ),
@@ -644,55 +657,116 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   Widget _buildTextField() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return Stack(
-          children: [
-            TextField(
-              key: const ValueKey('note-text-chunk-field'),
-              controller: _controller,
-              focusNode: _focusNode,
-              autofocus: _block.text.isEmpty,
-              minLines: 1,
-              maxLines: null,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.newline,
-              cursorColor: const Color(0xFF111827),
-              decoration: const InputDecoration(
-                hintText: 'Írd ide a chunk tartalmát',
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 2),
+        final activeRailRange = _selectionHasRange ? _activeRailRange : null;
+        final activeRailGapPx = activeRailRange == null
+            ? 0.0
+            : _selectionRailReservedHeight;
+        _controller
+          ..activeRailRange = activeRailRange
+          ..activeRailGapPx = activeRailGapPx;
+        final textForLayout = _controller.text.isEmpty ? ' ' : _controller.text;
+        final textPainter = _plainTextPainter(
+          text: textForLayout,
+          textStyle: _textStyle,
+          maxWidth: constraints.maxWidth,
+        );
+        final lineMetrics = textPainter.computeLineMetrics();
+        final lineGaps = lineMetrics.isEmpty
+            ? const <double>[]
+            : _lineExtraGaps(
+                textPainter: textPainter,
+                lineMetrics: lineMetrics,
+                textLength: textForLayout.length,
+                rangeTags: _block.rangeTags,
+                activeRailRange: activeRailRange,
+                activeRailGapPx: activeRailGapPx,
+              );
+        final editorHeight =
+            textPainter.height + 14 + lineGaps.fold<double>(0, (a, b) => a + b);
+        final underlineMarkers = _secondaryUnderlineMarkers(
+          text: _controller.text,
+          rangeTags: _block.rangeTags,
+          textStyle: _textStyle,
+          maxWidth: constraints.maxWidth,
+          activeRailRange: activeRailRange,
+          activeRailGapPx: activeRailGapPx,
+        );
+        final railPlacement = _selectionRailPlacement(
+          text: _controller.text,
+          textStyle: _textStyle,
+          maxWidth: constraints.maxWidth,
+          rangeTags: _block.rangeTags,
+          activeRailRange: activeRailRange,
+          activeRailGapPx: activeRailGapPx,
+        );
+        return SizedBox(
+          height: editorHeight,
+          child: Stack(
+            key: const ValueKey('note-text-field-layout-stack'),
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: TextField(
+                  key: const ValueKey('note-text-chunk-field'),
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  autofocus: _block.text.isEmpty,
+                  minLines: 1,
+                  maxLines: null,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                  cursorColor: const Color(0xFF111827),
+                  decoration: const InputDecoration(
+                    hintText: 'Írd ide a chunk tartalmát',
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 2),
+                  ),
+                  style: _textStyle,
+                  onTap: () {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        _updateSelectionState(source: 'tap');
+                      }
+                    });
+                  },
+                ),
               ),
-              style: _textStyle,
-              onTap: () {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) {
-                    _updateSelectionState(source: 'tap');
-                  }
-                });
-              },
-            ),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(
-                  painter: _TextSecondaryUnderlinePainter(
-                    text: _controller.text,
-                    rangeTags: _block.rangeTags,
-                    textStyle: _textStyle,
-                    maxWidth: constraints.maxWidth,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _TextSecondaryUnderlinePainter(
+                      text: _controller.text,
+                      rangeTags: _block.rangeTags,
+                      textStyle: _textStyle,
+                      maxWidth: constraints.maxWidth,
+                      activeRailRange: activeRailRange,
+                      activeRailGapPx: activeRailGapPx,
+                    ),
                   ),
                 ),
               ),
-            ),
-            for (final marker in _secondaryUnderlineMarkers(_block.rangeTags))
-              Positioned(
-                key: ValueKey(
-                  'note-text-secondary-underline-${marker.id}-${marker.index}',
+              for (final marker in underlineMarkers)
+                Positioned(
+                  key: ValueKey(
+                    marker.boxIndex == 0
+                        ? 'note-text-secondary-underline-${marker.id}-${marker.index}'
+                        : 'note-text-secondary-underline-${marker.id}-${marker.index}-${marker.boxIndex}',
+                  ),
+                  left: marker.left,
+                  top: marker.top,
+                  child: SizedBox(width: marker.width, height: 2),
                 ),
-                left: 0,
-                top: 0,
-                child: const SizedBox.shrink(),
-              ),
-          ],
+              if (railPlacement != null)
+                Positioned(
+                  key: const ValueKey('note-text-inline-selection-rail'),
+                  left: 0,
+                  right: 0,
+                  top: railPlacement.top,
+                  child: _buildSelectionRail(),
+                ),
+            ],
+          ),
         );
       },
     );
@@ -707,6 +781,8 @@ class _TextChunkEditingController extends TextEditingController {
        super(text: text);
 
   List<NoteTextRangeTag> _rangeTags;
+  TextRange? activeRailRange;
+  double activeRailGapPx = 0;
 
   void setRangeTags(List<NoteTextRangeTag> rangeTags) {
     _rangeTags = rangeTags;
@@ -719,36 +795,13 @@ class _TextChunkEditingController extends TextEditingController {
     TextStyle? style,
     required bool withComposing,
   }) {
-    final textValue = text;
-    if (textValue.isEmpty) {
-      return TextSpan(style: style, text: textValue);
-    }
-    final breakpoints = <int>{0, textValue.length};
-    for (final rawTag in _rangeTags) {
-      final range = rawTag.clampToTextLength(textValue.length);
-      if (!range.isValid) {
-        continue;
-      }
-      breakpoints.add(range.start);
-      breakpoints.add(range.end);
-    }
-    final sorted = breakpoints.toList()..sort();
-    final spans = <InlineSpan>[];
-    for (var i = 0; i < sorted.length - 1; i += 1) {
-      final start = sorted[i];
-      final end = sorted[i + 1];
-      if (start >= end) {
-        continue;
-      }
-      final tags = _tagsForSegment(_rangeTags, start, end, textValue.length);
-      spans.add(
-        TextSpan(
-          text: textValue.substring(start, end),
-          style: tags.isEmpty ? null : _taggedTextStyle(tags, alpha: 0.22),
-        ),
-      );
-    }
-    return TextSpan(style: style, children: spans);
+    return _buildTextChunkTextSpan(
+      textValue: text,
+      baseStyle: style,
+      rangeTags: _rangeTags,
+      activeRailRange: activeRailRange,
+      activeRailGapPx: activeRailGapPx,
+    );
   }
 }
 
@@ -758,43 +811,40 @@ class _TextSecondaryUnderlinePainter extends CustomPainter {
     required this.rangeTags,
     required this.textStyle,
     required this.maxWidth,
+    required this.activeRailRange,
+    required this.activeRailGapPx,
   });
 
   final String text;
   final List<NoteTextRangeTag> rangeTags;
   final TextStyle textStyle;
   final double maxWidth;
+  final TextRange? activeRailRange;
+  final double activeRailGapPx;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (text.isEmpty || rangeTags.isEmpty || maxWidth <= 0) {
       return;
     }
-    final groups = _mergedTextTagGroups(
+    final markers = _secondaryUnderlineMarkers(
+      text: text,
       rangeTags: rangeTags,
-      textLength: text.length,
+      textStyle: textStyle,
+      maxWidth: maxWidth,
+      activeRailRange: activeRailRange,
+      activeRailGapPx: activeRailGapPx,
     );
-    final textPainter = TextPainter(
-      text: TextSpan(text: text, style: textStyle),
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: maxWidth);
-    for (final group in groups) {
-      if (group.tags.length <= 1) {
-        continue;
-      }
-      final boxes = textPainter.getBoxesForSelection(
-        TextSelection(baseOffset: group.start, extentOffset: group.end),
+    for (final marker in markers) {
+      final paint = Paint()
+        ..color = marker.color
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(
+        Offset(marker.left, marker.top),
+        Offset(marker.left + marker.width, marker.top),
+        paint,
       );
-      for (var index = 1; index < group.tags.length; index += 1) {
-        final paint = Paint()
-          ..color = Color(group.tags[index].resolvedColorValue)
-          ..strokeWidth = 2
-          ..strokeCap = StrokeCap.round;
-        for (final box in boxes) {
-          final y = box.bottom + 2 + ((index - 1) * 4.0);
-          canvas.drawLine(Offset(box.left, y), Offset(box.right, y), paint);
-        }
-      }
     }
   }
 
@@ -803,26 +853,92 @@ class _TextSecondaryUnderlinePainter extends CustomPainter {
     return oldDelegate.text != text ||
         oldDelegate.rangeTags != rangeTags ||
         oldDelegate.textStyle != textStyle ||
-        oldDelegate.maxWidth != maxWidth;
+        oldDelegate.maxWidth != maxWidth ||
+        oldDelegate.activeRailRange != activeRailRange ||
+        oldDelegate.activeRailGapPx != activeRailGapPx;
   }
 }
 
-List<({String id, int index})> _secondaryUnderlineMarkers(
-  List<NoteTextRangeTag> rangeTags,
-) {
+List<
+  ({
+    String id,
+    int index,
+    int boxIndex,
+    double left,
+    double top,
+    double width,
+    Color color,
+  })
+>
+_secondaryUnderlineMarkers({
+  required String text,
+  required List<NoteTextRangeTag> rangeTags,
+  required TextStyle textStyle,
+  required double maxWidth,
+  required TextRange? activeRailRange,
+  required double activeRailGapPx,
+}) {
+  if (text.isEmpty || rangeTags.isEmpty || maxWidth <= 0) {
+    return const [];
+  }
+  final textPainter = _plainTextPainter(
+    text: text,
+    textStyle: textStyle,
+    maxWidth: maxWidth,
+  );
+  final lineMetrics = textPainter.computeLineMetrics();
+  if (lineMetrics.isEmpty) {
+    return const [];
+  }
+  final lineGaps = _lineExtraGaps(
+    textPainter: textPainter,
+    lineMetrics: lineMetrics,
+    textLength: text.length,
+    rangeTags: rangeTags,
+    activeRailRange: activeRailRange,
+    activeRailGapPx: activeRailGapPx,
+  );
   final groups = _mergedTextTagGroups(
     rangeTags: rangeTags,
-    textLength: rangeTags.fold<int>(
-      0,
-      (max, range) => range.end > max ? range.end : max,
-    ),
+    textLength: text.length,
   );
-  return [
-    for (final group in groups)
-      if (group.tags.length > 1)
-        for (var index = 1; index < group.tags.length; index += 1)
-          (id: group.id, index: index),
-  ];
+  final markers =
+      <
+        ({
+          String id,
+          int index,
+          int boxIndex,
+          double left,
+          double top,
+          double width,
+          Color color,
+        })
+      >[];
+  for (final group in groups) {
+    if (group.tags.length <= 1) {
+      continue;
+    }
+    final boxes = textPainter.getBoxesForSelection(
+      TextSelection(baseOffset: group.start, extentOffset: group.end),
+    );
+    for (var index = 1; index < group.tags.length; index += 1) {
+      for (var boxIndex = 0; boxIndex < boxes.length; boxIndex += 1) {
+        final box = boxes[boxIndex];
+        final lineIndex = _lineIndexForBox(lineMetrics, box);
+        final cumulativeGap = _cumulativeGapBeforeLine(lineGaps, lineIndex);
+        markers.add((
+          id: group.id,
+          index: index,
+          boxIndex: boxIndex,
+          left: box.left,
+          top: box.bottom + cumulativeGap + 2 + ((index - 1) * 4.0),
+          width: box.right - box.left,
+          color: Color(group.tags[index].resolvedColorValue),
+        ));
+      }
+    }
+  }
+  return markers;
 }
 
 List<({String id, int start, int end, List<NoteKnowledgeTag> tags})>
@@ -856,6 +972,257 @@ _mergedTextTagGroups({
     );
   }
   return groups.values.toList(growable: false);
+}
+
+TextSpan _buildTextChunkTextSpan({
+  required String textValue,
+  required TextStyle? baseStyle,
+  required List<NoteTextRangeTag> rangeTags,
+  required TextRange? activeRailRange,
+  required double activeRailGapPx,
+}) {
+  if (textValue.isEmpty) {
+    return TextSpan(style: baseStyle, text: textValue);
+  }
+  final breakpoints = <int>{0, textValue.length};
+  for (final rawTag in rangeTags) {
+    final range = rawTag.clampToTextLength(textValue.length);
+    if (!range.isValid) {
+      continue;
+    }
+    breakpoints.add(range.start);
+    breakpoints.add(range.end);
+  }
+  final railRange = _validTextRange(
+    activeRailRange,
+    textLength: textValue.length,
+  );
+  if (railRange != null) {
+    breakpoints.add(railRange.start);
+    breakpoints.add(railRange.end);
+  }
+  final sorted = breakpoints.toList()..sort();
+  final spans = <InlineSpan>[];
+  for (var i = 0; i < sorted.length - 1; i += 1) {
+    final start = sorted[i];
+    final end = sorted[i + 1];
+    if (start >= end) {
+      continue;
+    }
+    final tags = _tagsForSegment(rangeTags, start, end, textValue.length);
+    final extraHeight = _extraHeightForSegment(
+      tags: tags,
+      start: start,
+      end: end,
+      activeRailRange: railRange,
+      activeRailGapPx: activeRailGapPx,
+    );
+    spans.add(
+      TextSpan(
+        text: textValue.substring(start, end),
+        style: _segmentTextStyle(
+          tags: tags,
+          extraHeightPx: extraHeight,
+          baseStyle: baseStyle,
+        ),
+      ),
+    );
+  }
+  return TextSpan(style: baseStyle, children: spans);
+}
+
+TextStyle? _segmentTextStyle({
+  required List<NoteKnowledgeTag> tags,
+  required double extraHeightPx,
+  required TextStyle? baseStyle,
+}) {
+  final taggedStyle = tags.isEmpty ? null : _taggedTextStyle(tags, alpha: 0.22);
+  final gapStyle = extraHeightPx <= 0
+      ? null
+      : TextStyle(
+          height: _lineHeightMultiplier(
+            extraHeightPx: extraHeightPx,
+            baseStyle: baseStyle,
+          ),
+        );
+  if (taggedStyle == null) {
+    return gapStyle;
+  }
+  return taggedStyle.merge(gapStyle);
+}
+
+double _lineHeightMultiplier({
+  required double extraHeightPx,
+  required TextStyle? baseStyle,
+}) {
+  final fontSize = baseStyle?.fontSize ?? 16.0;
+  return (fontSize + extraHeightPx) / fontSize;
+}
+
+double _extraHeightForSegment({
+  required List<NoteKnowledgeTag> tags,
+  required int start,
+  required int end,
+  required TextRange? activeRailRange,
+  required double activeRailGapPx,
+}) {
+  var extra = tags.length > 1 ? _secondaryUnderlineGap(tags.length) : 0.0;
+  if (activeRailRange != null &&
+      activeRailRange.start < end &&
+      activeRailRange.end > start) {
+    extra = extra > activeRailGapPx ? extra : activeRailGapPx;
+  }
+  return extra;
+}
+
+double _secondaryUnderlineGap(int tagCount) {
+  if (tagCount <= 1) {
+    return 0;
+  }
+  return 8 + ((tagCount - 1) * 4.0);
+}
+
+TextPainter _plainTextPainter({
+  required String text,
+  required TextStyle textStyle,
+  required double maxWidth,
+}) {
+  return TextPainter(
+    text: TextSpan(text: text, style: textStyle),
+    textDirection: TextDirection.ltr,
+  )..layout(maxWidth: maxWidth);
+}
+
+({double top})? _selectionRailPlacement({
+  required String text,
+  required TextStyle textStyle,
+  required double maxWidth,
+  required List<NoteTextRangeTag> rangeTags,
+  required TextRange? activeRailRange,
+  required double activeRailGapPx,
+}) {
+  final range = _validTextRange(activeRailRange, textLength: text.length);
+  if (range == null || maxWidth <= 0) {
+    return null;
+  }
+  final textPainter = _plainTextPainter(
+    text: text,
+    textStyle: textStyle,
+    maxWidth: maxWidth,
+  );
+  final lineMetrics = textPainter.computeLineMetrics();
+  if (lineMetrics.isEmpty) {
+    return null;
+  }
+  final boxes = textPainter.getBoxesForSelection(
+    TextSelection(baseOffset: range.start, extentOffset: range.end),
+  );
+  if (boxes.isEmpty) {
+    return null;
+  }
+  final lineGaps = _lineExtraGaps(
+    textPainter: textPainter,
+    lineMetrics: lineMetrics,
+    textLength: text.length,
+    rangeTags: rangeTags,
+    activeRailRange: range,
+    activeRailGapPx: activeRailGapPx,
+  );
+  final firstBox = boxes.first;
+  final lineIndex = _lineIndexForBox(lineMetrics, firstBox);
+  final cumulativeGap = _cumulativeGapBeforeLine(lineGaps, lineIndex);
+  return (top: firstBox.bottom + cumulativeGap + 4);
+}
+
+List<double> _lineExtraGaps({
+  required TextPainter textPainter,
+  required List<LineMetrics> lineMetrics,
+  required int textLength,
+  required List<NoteTextRangeTag> rangeTags,
+  required TextRange? activeRailRange,
+  required double activeRailGapPx,
+}) {
+  final gaps = List<double>.filled(lineMetrics.length, 0);
+  final railRange = _validTextRange(activeRailRange, textLength: textLength);
+  if (railRange != null && activeRailGapPx > 0) {
+    final boxes = textPainter.getBoxesForSelection(
+      TextSelection(baseOffset: railRange.start, extentOffset: railRange.end),
+    );
+    if (boxes.isNotEmpty) {
+      final lineIndex = _lineIndexForBox(lineMetrics, boxes.first);
+      gaps[lineIndex] = gaps[lineIndex] > activeRailGapPx
+          ? gaps[lineIndex]
+          : activeRailGapPx;
+    }
+  }
+  for (final group in _mergedTextTagGroups(
+    rangeTags: rangeTags,
+    textLength: textLength,
+  )) {
+    if (group.tags.length <= 1) {
+      continue;
+    }
+    final underlineGap = _secondaryUnderlineGap(group.tags.length);
+    final boxes = textPainter.getBoxesForSelection(
+      TextSelection(baseOffset: group.start, extentOffset: group.end),
+    );
+    for (final box in boxes) {
+      final lineIndex = _lineIndexForBox(lineMetrics, box);
+      gaps[lineIndex] = gaps[lineIndex] > underlineGap
+          ? gaps[lineIndex]
+          : underlineGap;
+    }
+  }
+  return gaps;
+}
+
+int _lineIndexForBox(List<LineMetrics> lineMetrics, TextBox box) {
+  final centerY = (box.top + box.bottom) / 2;
+  for (var index = 0; index < lineMetrics.length; index += 1) {
+    final line = lineMetrics[index];
+    final top = line.baseline - line.ascent;
+    final bottom = line.baseline + line.descent;
+    if (centerY >= top - 0.5 && centerY <= bottom + 0.5) {
+      return index;
+    }
+  }
+  var nearestIndex = 0;
+  var nearestDistance = double.infinity;
+  for (var index = 0; index < lineMetrics.length; index += 1) {
+    final line = lineMetrics[index];
+    final top = line.baseline - line.ascent;
+    final bottom = line.baseline + line.descent;
+    final distance = centerY < top ? top - centerY : centerY - bottom;
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  }
+  return nearestIndex;
+}
+
+double _cumulativeGapBeforeLine(List<double> lineGaps, int lineIndex) {
+  var total = 0.0;
+  for (
+    var index = 0;
+    index < lineIndex && index < lineGaps.length;
+    index += 1
+  ) {
+    total += lineGaps[index];
+  }
+  return total;
+}
+
+TextRange? _validTextRange(TextRange? range, {required int textLength}) {
+  if (range == null || textLength <= 0) {
+    return null;
+  }
+  final start = range.start.clamp(0, textLength).toInt();
+  final end = range.end.clamp(0, textLength).toInt();
+  if (end <= start) {
+    return null;
+  }
+  return TextRange(start: start, end: end);
 }
 
 List<NoteKnowledgeTag> _tagsForSegment(
