@@ -206,7 +206,7 @@
 - [x] Run `flutter analyze` under Ubuntu.
 - [x] Run full `flutter test` under Ubuntu; if ObjectBox host libraries are unavailable, report exact skipped/failing reason.
 - [x] Re-read `docs/superpowers/specs/2026-06-20-textchunk-native-layout-editor-design.md` and ensure no checklist item is falsely marked DONE.
-- [ ] Commit all changes.
-- [ ] Push branch `feature/textchunk-editor-layout-bugfix` to the user's GitHub remote.
-- [ ] Wait for GitHub Actions Android debug APK build/release.
-- [ ] Report branch, commit, Actions run, release page, APK download link, and any incomplete checklist item.
+- [x] Commit all changes.
+- [x] Push branch `feature/textchunk-editor-layout-bugfix` to the user's GitHub remote.
+- [x] Wait for GitHub Actions Android debug APK build/release.
+- [x] Report branch, commit, Actions run, release page, APK download link, and any incomplete checklist item.
