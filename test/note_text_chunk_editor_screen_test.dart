@@ -91,6 +91,59 @@ void main() {
     },
   );
 
+  testWidgets('soft-wrapped rail opens enough native space below itself', (
+    tester,
+  ) async {
+    const target = 'targetword';
+    final text = [
+      'alpha beta gamma delta epsilon zeta eta theta',
+      target,
+      'iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon',
+    ].join(' ');
+    final targetStart = text.indexOf(target);
+    await _pumpTextChunkEditor(
+      tester,
+      NoteBlock(id: 'text-1', type: NoteBlockType.paragraph, text: text),
+      surfaceSize: const Size(260, 900),
+    );
+
+    _setEditorSelection(
+      tester,
+      TextSelection(
+        baseOffset: targetStart,
+        extentOffset: targetStart + target.length,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final targetRect = _nativeEditableSubstringTightRect(tester, target);
+    final rail = tester.getRect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+    );
+    final lineBounds = _nativeEditableNonEmptyLineBounds(tester);
+    final nextLine = lineBounds.firstWhere((line) => line.top > rail.top + 2);
+    final diagnostic =
+        'target=$targetRect rail=$rail nextLine=$nextLine '
+        'lineBounds=${lineBounds.map((line) => '${line.left.toStringAsFixed(1)},${line.top.toStringAsFixed(1)},${line.right.toStringAsFixed(1)},${line.bottom.toStringAsFixed(1)}').join(';')} '
+        'logs=${DebugConsole.allText}';
+
+    expect(rail.top, greaterThanOrEqualTo(targetRect.bottom));
+    expect(
+      nextLine.top,
+      greaterThanOrEqualTo(rail.bottom),
+      reason:
+          'A rail inserted after a soft-wrapped visual line must reserve one '
+          'terminating native line plus the measured rail rows. $diagnostic',
+    );
+    expect(
+      nextLine.top - rail.bottom,
+      lessThanOrEqualTo(24),
+      reason:
+          'The rail gap may round to the native line grid but must not leave '
+          'a large stale spacer. $diagnostic',
+    );
+  });
+
   testWidgets('textchunk layout writes detailed debug geometry logs', (
     tester,
   ) async {
@@ -120,6 +173,9 @@ void main() {
     expect(DebugConsole.allText, contains('railRoundedGap='));
     expect(DebugConsole.allText, contains('railLineBreaks='));
     expect(DebugConsole.allText, contains('railLeadingUnderlineSpacer='));
+    expect(DebugConsole.allText, contains('railSoftWrapTerminator='));
+    expect(DebugConsole.allText, contains('railNativeLines='));
+    expect(DebugConsole.allText, contains('railPlaceholderBreaks='));
     expect(DebugConsole.allText, contains('[TextChunkLayout] nativeGeometry'));
     expect(DebugConsole.allText, contains('nativeOrigins='));
     expect(DebugConsole.allText, contains('tightTagBoxes=true'));
@@ -679,6 +735,93 @@ void main() {
     expect(gamma.top, greaterThanOrEqualTo(lastUnderline.bottom + 1));
   });
 
+  testWidgets('underline spacer shrinks when secondary tags are removed', (
+    tester,
+  ) async {
+    const target = 'targetword';
+    final text = [
+      'alpha beta gamma delta epsilon zeta',
+      target,
+      'theta iota kappa lambda mu nu xi omicron pi rho sigma',
+    ].join(' ');
+    final targetStart = text.indexOf(target);
+
+    Future<(Rect targetRect, Rect nextLine)> pumpWithSecondaryTags(
+      int secondaryCount,
+    ) async {
+      final tags = _tagsWithSecondary(secondaryCount);
+      await _pumpTextChunkEditor(
+        tester,
+        NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+          rangeTags: [
+            NoteTextRangeTag(
+              id: 'range-target',
+              start: targetStart,
+              end: targetStart + target.length,
+              tag: tags.first,
+              tags: tags,
+            ),
+          ],
+        ),
+        surfaceSize: const Size(260, 900),
+      );
+      final targetRect = _nativeEditableSubstringTightRect(tester, target);
+      final lineBounds = _nativeEditableNonEmptyLineBounds(tester);
+      final nextLine = lineBounds.firstWhere(
+        (line) => line.top > targetRect.top + 2,
+      );
+      return (targetRect, nextLine);
+    }
+
+    final many = await pumpWithSecondaryTags(10);
+    expect(
+      DebugConsole.allText,
+      contains('underline-line-'),
+      reason: 'The many-tag state must use native underline spacers.',
+    );
+    DebugConsole.clear();
+
+    final one = await pumpWithSecondaryTags(1);
+    final oneLogs = DebugConsole.allText;
+    DebugConsole.clear();
+
+    final none = await pumpWithSecondaryTags(0);
+    final noneLogs = DebugConsole.allText;
+    final manyGap = many.$2.top - many.$1.top;
+    final oneGap = one.$2.top - one.$1.top;
+    final noneGap = none.$2.top - none.$1.top;
+    final diagnostic =
+        'manyGap=${manyGap.toStringAsFixed(1)} '
+        'oneGap=${oneGap.toStringAsFixed(1)} '
+        'noneGap=${noneGap.toStringAsFixed(1)} '
+        'oneLogs=$oneLogs noneLogs=$noneLogs';
+
+    expect(
+      oneGap,
+      lessThan(manyGap),
+      reason:
+          'Removing most secondary underline lanes must shrink the native '
+          'line gap. $diagnostic',
+    );
+    expect(
+      noneGap,
+      lessThanOrEqualTo(oneGap),
+      reason:
+          'Removing the final secondary underline must not keep the old '
+          'larger spacer. $diagnostic',
+    );
+    expect(
+      noneLogs,
+      isNot(contains('underline-line-')),
+      reason:
+          'With only the primary tag left, there must be no underline '
+          'placeholder. $diagnostic',
+    );
+  });
+
   testWidgets('stacked underline spacing opens the next soft-wrapped row', (
     tester,
   ) async {
@@ -942,6 +1085,58 @@ void main() {
     },
   );
 
+  testWidgets(
+    'paragraph step out restores every native wrapped row to the left margin',
+    (tester) async {
+      NoteBlock? latest;
+      const text =
+          'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda '
+          'mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega';
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+        ),
+        surfaceSize: const Size(260, 700),
+        onChanged: (block) => latest = block,
+      );
+
+      _setEditorSelection(tester, const TextSelection.collapsed(offset: 2));
+      await tester.pumpAndSettle();
+      for (var index = 0; index < 5; index += 1) {
+        await tester.tap(find.byKey(const ValueKey('note-text-indent')));
+        await tester.pumpAndSettle();
+      }
+      for (var index = 0; index < 5; index += 1) {
+        await tester.tap(find.byKey(const ValueKey('note-text-outdent')));
+        await tester.pumpAndSettle();
+      }
+
+      expect(latest!.text, text);
+      final editableLeft = tester
+          .getRect(find.byKey(const ValueKey('note-text-input-bridge')))
+          .left;
+      final lineBounds = _nativeEditableNonEmptyLineBounds(tester);
+      final diagnostic =
+          'editableLeft=${editableLeft.toStringAsFixed(1)} '
+          'bounds=${lineBounds.map((line) => '${line.left.toStringAsFixed(1)},${line.top.toStringAsFixed(1)},${line.right.toStringAsFixed(1)}').join(';')} '
+          'text=${latest!.text} logs=${DebugConsole.allText}';
+
+      expect(lineBounds.length, greaterThan(2));
+      for (final line in lineBounds) {
+        expect(
+          line.left,
+          closeTo(editableLeft, 1.5),
+          reason:
+              'After returning to zero indent, every native wrapped row must '
+              'start at the editor left edge. $diagnostic',
+        );
+      }
+    },
+  );
+
   testWidgets('text rail exposes table-like design toggles and scroll row', (
     tester,
   ) async {
@@ -1092,13 +1287,17 @@ Rect _nativeEditableSubstringTightRect(WidgetTester tester, String text) {
 }
 
 List<NoteKnowledgeTag> _stackedTags() {
+  return _tagsWithSecondary(10);
+}
+
+List<NoteKnowledgeTag> _tagsWithSecondary(int secondaryCount) {
   return [
     const NoteKnowledgeTag(
       type: NoteKnowledgeTagTypes.state,
       label: 'primary',
       colorValue: 0xFFDC2626,
     ),
-    for (var index = 1; index <= 10; index += 1)
+    for (var index = 1; index <= secondaryCount; index += 1)
       NoteKnowledgeTag(
         type: NoteKnowledgeTagTypes.custom,
         label: 'secondary-$index',

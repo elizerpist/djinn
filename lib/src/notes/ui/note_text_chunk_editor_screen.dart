@@ -10,6 +10,34 @@ import 'tag_manager_sheet.dart';
 import 'text_chunk_canvas_editor.dart';
 import 'text_chunk_text_editing.dart';
 
+String _editorBlockSignature(NoteBlock block) {
+  return [
+    block.id,
+    block.type.wireName,
+    block.text,
+    block.title ?? '',
+    block.tags.map(_tagSignature).join('\u001e'),
+    block.rangeTags.map(_rangeTagSignature).join('\u001e'),
+  ].join('\u001f');
+}
+
+String _rangeTagSignature(NoteTextRangeTag rangeTag) {
+  return [
+    rangeTag.id,
+    rangeTag.start,
+    rangeTag.end,
+    rangeTag.resolvedTags.map(_tagSignature).join('\u001d'),
+  ].join(':');
+}
+
+String _tagSignature(NoteKnowledgeTag tag) {
+  return [
+    NoteKnowledgeTagTypes.normalize(tag.type),
+    tag.label.trim(),
+    tag.colorValue ?? '',
+  ].join(':');
+}
+
 class NoteTextChunkEditorScreen extends StatefulWidget {
   const NoteTextChunkEditorScreen({
     super.key,
@@ -55,11 +83,32 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   @override
   void didUpdateWidget(NoteTextChunkEditorScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.block.id != widget.block.id) {
-      _block = widget.block;
+    final idChanged = oldWidget.block.id != widget.block.id;
+    final blockPayloadChanged =
+        _editorBlockSignature(oldWidget.block) !=
+        _editorBlockSignature(widget.block);
+    if (blockPayloadChanged) {
+      final nextBlock = widget.block;
+      _block = nextBlock;
+      if (idChanged) {
+        _activeRailRange = null;
+      } else if (_activeRailRange != null) {
+        final start = _activeRailRange!.start
+            .clamp(0, nextBlock.text.length)
+            .toInt();
+        final end = _activeRailRange!.end.clamp(start, nextBlock.text.length);
+        _activeRailRange = TextRange(start: start, end: end.toInt());
+      }
+      _selectionCanDeleteTag =
+          _selectionTargetRange() != null &&
+          _rangeHasTag(_selectionTargetRange()!);
+      if (_controller.text != nextBlock.text) {
+        _syncControllerText(nextBlock.text);
+      }
+    }
+    if (idChanged) {
       _activeRailRange = null;
       _selectionCanDeleteTag = false;
-      _syncControllerText(widget.block.text);
     }
   }
 

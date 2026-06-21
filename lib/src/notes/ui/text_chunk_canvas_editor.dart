@@ -296,7 +296,13 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
             underlineSpacerPlans.any(
               (plan) => plan.offset == railInsertionOffset,
             );
-        final railLineBreakCount = railLine == null ? 0 : railNativeLineCount;
+        final railNeedsSoftWrapTerminator =
+            railLine != null &&
+            !railLine.hardBreakAfter &&
+            !railHasLeadingUnderlineSpacer;
+        final railLineBreakCount = railLine == null
+            ? 0
+            : railNativeLineCount + (railNeedsSoftWrapTerminator ? 1 : 0);
         final railNativeSpacerHeight = railNativeLineCount * lineHeight;
         final railPlaceholderText = railLine == null
             ? ''
@@ -345,6 +351,9 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           railNativeSpacerHeight: railNativeSpacerHeight,
           railPlaceholderCount: railPlaceholderCount,
           railHasLeadingUnderlineSpacer: railHasLeadingUnderlineSpacer,
+          railNeedsSoftWrapTerminator: railNeedsSoftWrapTerminator,
+          railNativeLineCount: railNativeLineCount,
+          railLineBreakCount: railLineBreakCount,
           baseLineHeight: baseLineHeight,
         );
         _logLayoutUpdate(
@@ -362,6 +371,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           railNativeSpacerHeight: railNativeSpacerHeight,
           railLineBreakCount: railLineBreakCount,
           railHasLeadingUnderlineSpacer: railHasLeadingUnderlineSpacer,
+          railNeedsSoftWrapTerminator: railNeedsSoftWrapTerminator,
+          railNativeLineCount: railNativeLineCount,
           underlineSpacerPlans: underlineSpacerPlans,
           totalPlaceholderCount: totalPlaceholderCount,
           railPlaceholderCount: railPlaceholderCount,
@@ -558,6 +569,9 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     required double railNativeSpacerHeight,
     required int railPlaceholderCount,
     required bool railHasLeadingUnderlineSpacer,
+    required bool railNeedsSoftWrapTerminator,
+    required int railNativeLineCount,
+    required int railLineBreakCount,
     required double baseLineHeight,
   }) {
     final signature = [
@@ -574,6 +588,9 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
       railNativeSpacerHeight.toStringAsFixed(1),
       railPlaceholderCount,
       railHasLeadingUnderlineSpacer,
+      railNeedsSoftWrapTerminator,
+      railNativeLineCount,
+      railLineBreakCount,
       nativePlaceholders
           .map(
             (placeholder) =>
@@ -587,7 +604,9 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
       if (!mounted || _lastNativeGeometrySignature != signature) {
         return;
       }
-      final measuredRailHeight = _measureRailHeight() ?? railHeight;
+      final measuredRailHeight = railLine == null
+          ? _measuredRailHeight
+          : (_measureRailHeight() ?? railHeight);
       final renderEditable = _findRenderEditable(
         _layoutKey.currentContext?.findRenderObject(),
       );
@@ -606,6 +625,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
       final nextSignature = _geometrySignature(nextGeometries);
       final currentSignature = _geometrySignature(_nativeTagGeometries);
       final railChanged =
+          railLine != null &&
           (measuredRailHeight - _measuredRailHeight).abs() > 0.5;
       final geometryChanged = nextSignature != currentSignature;
       DebugConsole.log(
@@ -618,6 +638,9 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         'railRoundedGap=${(railNativeSpacerHeight - railTargetSpacerHeight).toStringAsFixed(1)} '
         'railPlaceholderCount=$railPlaceholderCount '
         'railLeadingUnderlineSpacer=$railHasLeadingUnderlineSpacer '
+        'railSoftWrapTerminator=$railNeedsSoftWrapTerminator '
+        'railNativeLines=$railNativeLineCount '
+        'railPlaceholderBreaks=$railLineBreakCount '
         'placeholderCount=${nativePlaceholders.fold<int>(0, (total, placeholder) => total + placeholder.length)} '
         'placeholders=[${_placeholderSummary(nativePlaceholders)}] '
         'nativeOrigins=editable:${_formatOffset(renderOrigin)},layout:${_formatOffset(layoutOrigin)} '
@@ -794,6 +817,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     required double railNativeSpacerHeight,
     required int railLineBreakCount,
     required bool railHasLeadingUnderlineSpacer,
+    required bool railNeedsSoftWrapTerminator,
+    required int railNativeLineCount,
     required List<_LineSpacerPlan> underlineSpacerPlans,
     required int totalPlaceholderCount,
     required int railPlaceholderCount,
@@ -861,6 +886,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
       'railNativeSpacerBottom=${railNativeSpacerBottom?.toStringAsFixed(1)} '
       'railLineBreaks=$railLineBreakCount '
       'railLeadingUnderlineSpacer=$railHasLeadingUnderlineSpacer '
+      'railSoftWrapTerminator=$railNeedsSoftWrapTerminator '
+      'railNativeLines=$railNativeLineCount '
       'railPlaceholderCount=$railPlaceholderCount '
       'placeholderCount=$totalPlaceholderCount '
       'underlineSpacers=[${_lineSpacerSummary(underlineSpacerPlans)}] '
