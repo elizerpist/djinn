@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -11,7 +10,6 @@ import 'text_chunk_layout_model.dart';
 
 const double _railGap = 8;
 const double _defaultRailHeight = 105;
-const Duration _selectionDragSettleDelay = Duration(milliseconds: 160);
 const double _underlineFirstLaneInset = 0.5;
 const double _underlineLaneStep = 3.5;
 
@@ -221,7 +219,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   String? _lastNativeGeometrySignature;
   double _measuredRailHeight = _defaultRailHeight;
   List<_TagHighlightGeometry> _nativeTagGeometries = const [];
-  Timer? _selectionDragSettleTimer;
   bool _selectionHandleDragActive = false;
 
   @override
@@ -246,7 +243,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
 
   @override
   void dispose() {
-    _selectionDragSettleTimer?.cancel();
     widget.controller.removeListener(_handleEditorChanged);
     widget.focusNode.removeListener(_handleEditorChanged);
     super.dispose();
@@ -280,17 +276,18 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           selection: selection,
           railHeight: _measuredRailHeight,
         );
-        final underlineSpacerPlans = _underlineSpacerPlans(
-          layout.lines,
-          lineHeight,
-        );
-        final underlineSpacerHeights = {
-          for (final plan in underlineSpacerPlans) plan.lineIndex: plan.height,
-        };
         final railLine = _railLine(layout);
         final railInsertionOffset = railLine == null
             ? null
             : _insertionOffsetForLine(railLine);
+        final underlineSpacerPlans = _underlineSpacerPlans(
+          layout.lines,
+          lineHeight,
+          trailingIndentSuppressedOffset: railInsertionOffset,
+        );
+        final underlineSpacerHeights = {
+          for (final plan in underlineSpacerPlans) plan.lineIndex: plan.height,
+        };
         final railHeight = railLine == null ? 0.0 : _measuredRailHeight;
         final railTargetSpacerHeight = railLine == null
             ? 0.0
@@ -313,7 +310,12 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         final railNativeSpacerHeight = railNativeLineCount * lineHeight;
         final railPlaceholderText = railLine == null
             ? ''
-            : _railPlaceholderTextForLineBreaks(railLineBreakCount);
+            : _railPlaceholderTextForLineBreaks(
+                railLineBreakCount,
+                trailingText: railLine.hardBreakAfter
+                    ? ''
+                    : _continuationIndentForLine(railLine),
+              );
         final railPlaceholderCount = railPlaceholderText.length;
         final nativePlaceholders = [
           for (final plan in underlineSpacerPlans)
@@ -419,7 +421,11 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                         maxLines: null,
                         showSelectionHandles: true,
                         selectionColor: const Color(0x552563EB),
-                        selectionControls: materialTextSelectionHandleControls,
+                        selectionControls: _TextChunkSelectionControls(
+                          onHandlePointerDown:
+                              _handleSelectionHandlePointerDown,
+                          onHandlePointerEnd: _handleSelectionHandlePointerEnd,
+                        ),
                         contextMenuBuilder: (context, editableTextState) =>
                             AdaptiveTextSelectionToolbar.editableText(
                               editableTextState: editableTextState,
@@ -546,7 +552,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         ? selection
         : controller.normalizeNativeSelection(selection);
     if (cause == SelectionChangedCause.drag) {
-      _handleSelectionHandleDrag(normalized);
+      _handleSelectionHandleDrag();
       if (normalized.baseOffset != selection.baseOffset ||
           normalized.extentOffset != selection.extentOffset) {
         controller.selection = normalized;
@@ -561,25 +567,32 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     _showNativeToolbarForSelection(normalized, cause);
   }
 
-  void _handleSelectionHandleDrag(TextSelection selection) {
-    _selectionDragSettleTimer?.cancel();
+  void _handleSelectionHandleDrag() {
+    _handleSelectionHandlePointerDown();
+  }
+
+  void _handleSelectionHandlePointerDown() {
+    _editableTextKey.currentState?.hideToolbar(false);
     if (!_selectionHandleDragActive && mounted) {
       setState(() {
         _selectionHandleDragActive = true;
       });
     }
-    _selectionDragSettleTimer = Timer(_selectionDragSettleDelay, () {
+  }
+
+  void _handleSelectionHandlePointerEnd() {
+    if (!_selectionHandleDragActive) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
       setState(() {
         _selectionHandleDragActive = false;
       });
-      final settledSelection = widget.controller.selection.isValid
-          ? widget.controller.selection
-          : selection;
       _showNativeToolbarForSelection(
-        settledSelection,
+        widget.controller.selection,
         SelectionChangedCause.drag,
       );
     });
@@ -593,8 +606,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   }
 
   void _cancelSelectionHandleDrag() {
-    _selectionDragSettleTimer?.cancel();
-    _selectionDragSettleTimer = null;
     if (_selectionHandleDragActive && mounted) {
       setState(() {
         _selectionHandleDragActive = false;
@@ -1049,6 +1060,34 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   }
 }
 
+class _TextChunkSelectionControls extends MaterialTextSelectionControls
+    with TextSelectionHandleControls {
+  _TextChunkSelectionControls({
+    required this.onHandlePointerDown,
+    required this.onHandlePointerEnd,
+  });
+
+  final VoidCallback onHandlePointerDown;
+  final VoidCallback onHandlePointerEnd;
+
+  @override
+  Widget buildHandle(
+    BuildContext context,
+    TextSelectionHandleType type,
+    double textLineHeight, [
+    VoidCallback? onTap,
+  ]) {
+    return Listener(
+      key: ValueKey('note-text-native-selection-handle-${type.name}'),
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => onHandlePointerDown(),
+      onPointerUp: (_) => onHandlePointerEnd(),
+      onPointerCancel: (_) => onHandlePointerEnd(),
+      child: super.buildHandle(context, type, textLineHeight, onTap),
+    );
+  }
+}
+
 class _LineMarker extends StatelessWidget {
   const _LineMarker({
     required this.line,
@@ -1173,8 +1212,9 @@ Map<int, double> _lineTops(
 
 List<_LineSpacerPlan> _underlineSpacerPlans(
   List<TextChunkVisualLine> lines,
-  double baseLineHeight,
-) {
+  double baseLineHeight, {
+  int? trailingIndentSuppressedOffset,
+}) {
   final plans = <_LineSpacerPlan>[];
   for (final line in lines) {
     final lanes = line.underlineLanes.length;
@@ -1185,15 +1225,21 @@ List<_LineSpacerPlan> _underlineSpacerPlans(
     // The first inserted newline terminates the current visual row. The
     // following newlines are the rows that create visible vertical space.
     final placeholderLineBreakCount = nativeLineCount + 1;
+    final offset = _insertionOffsetForLine(line);
+    final shouldCarryContinuationIndent =
+        !line.hardBreakAfter && offset != trailingIndentSuppressedOffset;
     plans.add(
       _LineSpacerPlan(
         lineIndex: line.index,
-        offset: _insertionOffsetForLine(line),
+        offset: offset,
         underlineLanes: lanes,
         lineBreakCount: placeholderLineBreakCount,
         height: nativeLineCount * baseLineHeight,
         placeholderText: _railPlaceholderTextForLineBreaks(
           placeholderLineBreakCount,
+          trailingText: shouldCarryContinuationIndent
+              ? _continuationIndentForLine(line)
+              : '',
         ),
       ),
     );
@@ -1210,6 +1256,13 @@ int _underlineNativeLineCountForLanes(int lanes) {
 
 int _insertionOffsetForLine(TextChunkVisualLine line) {
   return line.hardBreakAfter ? line.end + 1 : line.end;
+}
+
+String _continuationIndentForLine(TextChunkVisualLine line) {
+  if (line.indentLevel <= 0) {
+    return '';
+  }
+  return '  ' * line.indentLevel;
 }
 
 String _lineHeightSummary(
@@ -1247,11 +1300,14 @@ String _placeholderSummary(List<_TextChunkNativePlaceholder> placeholders) {
       .join(' ');
 }
 
-String _railPlaceholderTextForLineBreaks(int lineBreakCount) {
+String _railPlaceholderTextForLineBreaks(
+  int lineBreakCount, {
+  String trailingText = '',
+}) {
   if (lineBreakCount <= 0) {
-    return '';
+    return trailingText;
   }
-  return List.filled(lineBreakCount, ' \n').join();
+  return '${List.filled(lineBreakCount, ' \n').join()}$trailingText';
 }
 
 String _formatRect(Rect? rect) {
