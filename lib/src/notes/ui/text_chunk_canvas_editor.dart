@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -16,7 +15,6 @@ const double _underlineFirstLaneInset = 0.5;
 const double _underlineLaneStep = 3.5;
 const String _placeholderLineBreakUnit = '\u200B\n';
 const String _placeholderIndentUnit = '\u00A0\u00A0';
-const Duration _selectionHandleReleaseGrace = Duration(milliseconds: 250);
 
 class _TextChunkNativePlaceholder {
   const _TextChunkNativePlaceholder({
@@ -225,7 +223,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   double _measuredRailHeight = _defaultRailHeight;
   List<_TagHighlightGeometry> _nativeTagGeometries = const [];
   bool _selectionHandleDragActive = false;
-  Timer? _selectionHandleReleaseTimer;
   int? _selectionHandlePointer;
 
   @override
@@ -250,7 +247,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
 
   @override
   void dispose() {
-    _cancelSelectionHandleReleaseTimer();
     _untrackSelectionHandlePointer();
     widget.controller.removeListener(_handleEditorChanged);
     widget.focusNode.removeListener(_handleEditorChanged);
@@ -605,7 +601,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   }
 
   void _startSelectionHandleDrag() {
-    _cancelSelectionHandleReleaseTimer();
     _editableTextKey.currentState?.hideToolbar(false);
     if (!_selectionHandleDragActive && mounted) {
       setState(() {
@@ -615,37 +610,19 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   }
 
   void _handleSelectionHandlePointerEnd(PointerUpEvent event) {
-    _scheduleSelectionHandleRelease(pointer: event.pointer);
+    _handleSelectionHandlePointerReleased(pointer: event.pointer);
   }
 
   void _handleSelectionHandlePointerRoute(PointerEvent event) {
-    if (event is PointerUpEvent) {
-      _scheduleSelectionHandleRelease(pointer: event.pointer);
+    if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _handleSelectionHandlePointerReleased(pointer: event.pointer);
     }
   }
 
-  void _scheduleSelectionHandleRelease({int? pointer}) {
+  void _handleSelectionHandlePointerReleased({int? pointer}) {
     if (pointer != null && pointer == _selectionHandlePointer) {
       _untrackSelectionHandlePointer();
     }
-    if (!_selectionHandleDragActive ||
-        (_selectionHandleReleaseTimer?.isActive ?? false)) {
-      return;
-    }
-    _selectionHandleReleaseTimer = Timer(_selectionHandleReleaseGrace, () {
-      if (!mounted) {
-        return;
-      }
-      _selectionHandleReleaseTimer = null;
-      setState(() {
-        _selectionHandleDragActive = false;
-      });
-    });
-  }
-
-  void _cancelSelectionHandleReleaseTimer() {
-    _selectionHandleReleaseTimer?.cancel();
-    _selectionHandleReleaseTimer = null;
   }
 
   void _trackSelectionHandlePointer(int pointer) {
@@ -680,7 +657,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   }
 
   void _cancelSelectionHandleDrag() {
-    _cancelSelectionHandleReleaseTimer();
     _untrackSelectionHandlePointer();
     if (_selectionHandleDragActive && mounted) {
       setState(() {

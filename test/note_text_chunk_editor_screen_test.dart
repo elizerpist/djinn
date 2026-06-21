@@ -327,6 +327,22 @@ void main() {
     );
 
     await gesture.up();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
+      reason:
+          'Raw handle release events are not a reliable drag-end signal; '
+          'the rail must stay hidden until a non-drag selection action '
+          'finishes the native handle interaction.',
+    );
+
+    final editable = _editableText(tester);
+    editable.onSelectionChanged?.call(
+      _editableTextState(tester).textEditingValue.selection,
+      SelectionChangedCause.tap,
+    );
     await tester.pumpAndSettle();
 
     expect(
@@ -512,6 +528,93 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'native handle release-like idle keeps rail hidden until non-drag selection',
+    (tester) async {
+      const text = 'Alpha\nBeta\nGamma\nDelta';
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+        ),
+      );
+
+      await tester.longPressAt(
+        _nativeEditableSubstringRect(tester, 'Alpha').center,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        _editableTextState(tester).textEditingValue.selection.isCollapsed,
+        isFalse,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsOneWidget,
+      );
+
+      final handle = find.byKey(
+        const ValueKey('note-text-native-selection-handle-right'),
+      );
+      expect(handle, findsOneWidget);
+
+      DebugConsole.clear();
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsNothing,
+      );
+
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsNothing,
+        reason:
+            'The old 250 ms release grace must not reinsert the rail while '
+            'the user is still holding a native selection handle and drag '
+            'updates are sparse.',
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsNothing,
+      );
+
+      final gammaEnd = text.indexOf('Gamma') + 'Gamma'.length;
+      await _simulateNativeSelectionDrag(
+        tester,
+        TextSelection(baseOffset: 0, extentOffset: gammaEnd),
+      );
+
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsNothing,
+      );
+
+      final editable = _editableText(tester);
+      editable.onSelectionChanged?.call(
+        TextSelection(baseOffset: 0, extentOffset: gammaEnd),
+        SelectionChangedCause.tap,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('rail spacer follows collapsed and expanded rail height', (
     tester,
