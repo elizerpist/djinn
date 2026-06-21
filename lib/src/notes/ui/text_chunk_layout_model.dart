@@ -388,12 +388,19 @@ double _textWidth({
   if (text.isEmpty) {
     return 0;
   }
+  const sentinel = '|';
   final painter = TextPainter(
-    text: TextSpan(text: text, style: textStyle),
+    text: TextSpan(text: '$text$sentinel', style: textStyle),
     textDirection: TextDirection.ltr,
     textScaler: textScaler,
   )..layout();
-  return painter.width;
+  final boxes = painter.getBoxesForSelection(
+    TextSelection(baseOffset: text.length, extentOffset: text.length + 1),
+  );
+  if (boxes.isEmpty) {
+    return 0;
+  }
+  return boxes.first.left;
 }
 
 List<({int start, int end})> _wrapSegment({
