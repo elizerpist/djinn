@@ -216,7 +216,7 @@ void main() {
     },
   );
 
-  testWidgets('selection handle drag hides rail until final range settles', (
+  testWidgets('selection handle drag keeps rail hidden until explicit release', (
     tester,
   ) async {
     const text = 'Alpha\nBeta\nGamma\nDelta';
@@ -258,7 +258,25 @@ void main() {
       findsNothing,
     );
 
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
+      reason:
+          'Sparse native drag updates must not let a timer reinsert the rail '
+          'while the handle is still being held.',
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+      findsNothing,
+    );
+
+    final editable = _editableText(tester);
+    editable.onSelectionChanged?.call(
+      TextSelection(baseOffset: 0, extentOffset: gammaEnd),
+      SelectionChangedCause.tap,
+    );
     await tester.pumpAndSettle();
 
     final gamma = _nativeEditableSubstringRect(tester, 'Gamma');
@@ -266,9 +284,58 @@ void main() {
     final rail = tester.getRect(
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
     );
-
     expect(rail.top, greaterThanOrEqualTo(gamma.bottom));
     expect(delta.top, greaterThanOrEqualTo(rail.bottom));
+  });
+
+  testWidgets('touching a native selection handle hides rail before drag', (
+    tester,
+  ) async {
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha\nBeta\nGamma\nDelta',
+      ),
+    );
+
+    const selection = TextSelection(baseOffset: 0, extentOffset: 5);
+    _setEditorSelection(tester, selection);
+    _editableText(tester).onSelectionChanged?.call(
+      selection,
+      SelectionChangedCause.longPress,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsOneWidget,
+    );
+
+    final handle = find.byKey(
+      const ValueKey('note-text-native-selection-handle-right'),
+    );
+    expect(handle, findsOneWidget);
+
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
+      reason:
+          'The rail should disappear as soon as the native handle is touched, '
+          'before the first drag selection delta arrives.',
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('rail spacer follows collapsed and expanded rail height', (
@@ -1026,6 +1093,61 @@ void main() {
   );
 
   testWidgets(
+    'stacked underline spacer preserves indented soft-wrap continuation',
+    (tester) async {
+      const text =
+          '    Holnap reggel holnap reggel holnap reggel reggel holnap reggel';
+      final rangeStart = text.indexOf('Holnap');
+      final rangeEnd = text.indexOf(' reggel reggel');
+      await _pumpTextChunkEditor(
+        tester,
+        NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+          rangeTags: [
+            NoteTextRangeTag(
+              id: 'range-holnap',
+              start: rangeStart,
+              end: rangeEnd,
+              tag: _tagsWithSecondary(5).first,
+              tags: _tagsWithSecondary(5),
+            ),
+          ],
+        ),
+        surfaceSize: const Size(300, 700),
+      );
+
+      final firstText = _nativeEditableRangeTightRect(
+        tester,
+        rangeStart,
+        rangeStart + 1,
+      );
+      final lineBounds = _nativeEditableNonEmptyLineBounds(tester);
+      final diagnostic =
+          'firstText=$firstText '
+          'bounds=${lineBounds.map((line) => '${line.left.toStringAsFixed(1)},${line.top.toStringAsFixed(1)},${line.right.toStringAsFixed(1)}').join(';')} '
+          'logs=${DebugConsole.allText}';
+
+      expect(lineBounds.length, greaterThan(1), reason: diagnostic);
+      expect(
+        DebugConsole.allText,
+        contains('underline-line-'),
+        reason: diagnostic,
+      );
+      for (final line in lineBounds) {
+        expect(
+          line.left,
+          greaterThanOrEqualTo(firstText.left - 1.5),
+          reason:
+              'Every real native row after an underline spacer must keep the '
+              'paragraph indent. $diagnostic',
+        );
+      }
+    },
+  );
+
+  testWidgets(
     'rail paragraph step indents every visual line in the active paragraph',
     (tester) async {
       NoteBlock? latest;
@@ -1365,6 +1487,24 @@ Rect _nativeEditableSubstringTightRect(WidgetTester tester, String text) {
   renderEditable.selectionHeightStyle = ui.BoxHeightStyle.tight;
   try {
     return _nativeEditableSubstringRect(tester, text);
+  } finally {
+    renderEditable.selectionWidthStyle = previousWidthStyle;
+    renderEditable.selectionHeightStyle = previousHeightStyle;
+  }
+}
+
+Rect _nativeEditableRangeTightRect(WidgetTester tester, int start, int end) {
+  final state = _editableTextState(tester);
+  final renderEditable = state.renderEditable;
+  final previousWidthStyle = renderEditable.selectionWidthStyle;
+  final previousHeightStyle = renderEditable.selectionHeightStyle;
+  renderEditable.selectionWidthStyle = ui.BoxWidthStyle.tight;
+  renderEditable.selectionHeightStyle = ui.BoxHeightStyle.tight;
+  try {
+    return _nativeEditableSelectionRect(
+      tester,
+      TextSelection(baseOffset: start, extentOffset: end),
+    );
   } finally {
     renderEditable.selectionWidthStyle = previousWidthStyle;
     renderEditable.selectionHeightStyle = previousHeightStyle;
