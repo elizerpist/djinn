@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -222,6 +223,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   double _measuredRailHeight = _defaultRailHeight;
   List<_TagHighlightGeometry> _nativeTagGeometries = const [];
   bool _selectionHandleDragActive = false;
+  bool _selectionHandleReleaseScheduled = false;
+  int? _selectionHandlePointer;
 
   @override
   void initState() {
@@ -245,6 +248,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
 
   @override
   void dispose() {
+    _untrackSelectionHandlePointer();
     widget.controller.removeListener(_handleEditorChanged);
     widget.focusNode.removeListener(_handleEditorChanged);
     super.dispose();
@@ -580,10 +584,16 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   }
 
   void _handleSelectionHandleDrag() {
-    _handleSelectionHandlePointerDown();
+    _startSelectionHandleDrag();
   }
 
-  void _handleSelectionHandlePointerDown() {
+  void _handleSelectionHandlePointerDown(PointerDownEvent event) {
+    _trackSelectionHandlePointer(event.pointer);
+    _startSelectionHandleDrag();
+  }
+
+  void _startSelectionHandleDrag() {
+    _selectionHandleReleaseScheduled = false;
     _editableTextKey.currentState?.hideToolbar(false);
     if (!_selectionHandleDragActive && mounted) {
       setState(() {
@@ -592,14 +602,29 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     }
   }
 
-  void _handleSelectionHandlePointerEnd() {
-    if (!_selectionHandleDragActive) {
+  void _handleSelectionHandlePointerEnd(PointerUpEvent event) {
+    _finishSelectionHandleDrag(pointer: event.pointer);
+  }
+
+  void _handleSelectionHandlePointerRoute(PointerEvent event) {
+    if (event is PointerUpEvent) {
+      _finishSelectionHandleDrag(pointer: event.pointer);
+    }
+  }
+
+  void _finishSelectionHandleDrag({int? pointer}) {
+    if (pointer != null && pointer == _selectionHandlePointer) {
+      _untrackSelectionHandlePointer();
+    }
+    if (!_selectionHandleDragActive || _selectionHandleReleaseScheduled) {
       return;
     }
+    _selectionHandleReleaseScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
+      _selectionHandleReleaseScheduled = false;
       setState(() {
         _selectionHandleDragActive = false;
       });
@@ -610,6 +635,30 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     });
   }
 
+  void _trackSelectionHandlePointer(int pointer) {
+    if (_selectionHandlePointer == pointer) {
+      return;
+    }
+    _untrackSelectionHandlePointer();
+    _selectionHandlePointer = pointer;
+    GestureBinding.instance.pointerRouter.addRoute(
+      pointer,
+      _handleSelectionHandlePointerRoute,
+    );
+  }
+
+  void _untrackSelectionHandlePointer() {
+    final pointer = _selectionHandlePointer;
+    if (pointer == null) {
+      return;
+    }
+    GestureBinding.instance.pointerRouter.removeRoute(
+      pointer,
+      _handleSelectionHandlePointerRoute,
+    );
+    _selectionHandlePointer = null;
+  }
+
   bool _usesControllerSelectionOffsets(TextSelection selection) {
     final textLength = widget.controller.text.length;
     return selection.isValid &&
@@ -618,6 +667,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   }
 
   void _cancelSelectionHandleDrag() {
+    _selectionHandleReleaseScheduled = false;
+    _untrackSelectionHandlePointer();
     if (_selectionHandleDragActive && mounted) {
       setState(() {
         _selectionHandleDragActive = false;
@@ -635,6 +686,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted ||
           !widget.focusNode.hasFocus ||
+          _selectionHandleDragActive ||
           widget.controller.selection.isCollapsed) {
         return;
       }
@@ -1079,8 +1131,8 @@ class _TextChunkSelectionControls extends MaterialTextSelectionControls
     required this.onHandlePointerEnd,
   });
 
-  final VoidCallback onHandlePointerDown;
-  final VoidCallback onHandlePointerEnd;
+  final ValueChanged<PointerDownEvent> onHandlePointerDown;
+  final ValueChanged<PointerUpEvent> onHandlePointerEnd;
 
   @override
   Widget buildHandle(
@@ -1092,9 +1144,9 @@ class _TextChunkSelectionControls extends MaterialTextSelectionControls
     return Listener(
       key: ValueKey('note-text-native-selection-handle-${type.name}'),
       behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) => onHandlePointerDown(),
-      onPointerUp: (_) => onHandlePointerEnd(),
-      onPointerCancel: (_) => onHandlePointerEnd(),
+      onPointerDown: onHandlePointerDown,
+      onPointerUp: onHandlePointerEnd,
+      onPointerCancel: (_) {},
       child: super.buildHandle(context, type, textLineHeight, onTap),
     );
   }

@@ -222,11 +222,7 @@ void main() {
     const text = 'Alpha\nBeta\nGamma\nDelta';
     await _pumpTextChunkEditor(
       tester,
-      const NoteBlock(
-        id: 'text-1',
-        type: NoteBlockType.paragraph,
-        text: text,
-      ),
+      const NoteBlock(id: 'text-1', type: NoteBlockType.paragraph, text: text),
     );
 
     _setEditorSelection(
@@ -338,6 +334,97 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'native handle pointer cancel keeps rail hidden through drag updates',
+    (tester) async {
+      const text = 'Alpha\nBeta\nGamma\nDelta';
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+        ),
+      );
+
+      await tester.longPressAt(
+        _nativeEditableSubstringRect(tester, 'Alpha').center,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        _editableTextState(tester).textEditingValue.selection.isCollapsed,
+        isFalse,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsOneWidget,
+      );
+
+      final handle = find.byKey(
+        const ValueKey('note-text-native-selection-handle-right'),
+      );
+      expect(handle, findsOneWidget);
+
+      DebugConsole.clear();
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsNothing,
+      );
+
+      await gesture.cancel();
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsNothing,
+        reason:
+            'A handle PointerCancel can be emitted while the native handle is '
+            'still being dragged; it must not restore the rail mid-gesture.',
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsNothing,
+      );
+
+      final gammaEnd = text.indexOf('Gamma') + 'Gamma'.length;
+      await _simulateNativeSelectionDrag(
+        tester,
+        TextSelection(baseOffset: 0, extentOffset: gammaEnd),
+      );
+
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsNothing,
+      );
+      expect(
+        DebugConsole.allText,
+        isNot(contains('nativeToolbar requested')),
+        reason: 'Native drag updates must not reopen the Android toolbar.',
+      );
+
+      final editable = _editableText(tester);
+      editable.onSelectionChanged?.call(
+        TextSelection(baseOffset: 0, extentOffset: gammaEnd),
+        SelectionChangedCause.tap,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('rail spacer follows collapsed and expanded rail height', (
     tester,
@@ -869,9 +956,8 @@ void main() {
     ].join(' ');
     final targetStart = text.indexOf(target);
 
-    Future<({Rect targetRect, Rect nextLine, String logs})> pumpWithSecondaryTags(
-      int secondaryCount,
-    ) async {
+    Future<({Rect targetRect, Rect nextLine, String logs})>
+    pumpWithSecondaryTags(int secondaryCount) async {
       DebugConsole.clear();
       final tags = _tagsWithSecondary(secondaryCount);
       await _pumpTextChunkEditor(
@@ -1329,6 +1415,92 @@ void main() {
           reason:
               'After returning to zero indent, every native wrapped row must '
               'start at the editor left edge. $diagnostic',
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'handle cancel after repeated paragraph stepping keeps native margin stable',
+    (tester) async {
+      NoteBlock? latest;
+      const text =
+          'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda '
+          'mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega';
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+        ),
+        surfaceSize: const Size(260, 700),
+        onChanged: (block) => latest = block,
+      );
+
+      _setEditorSelection(tester, const TextSelection.collapsed(offset: 2));
+      await tester.pumpAndSettle();
+      for (var index = 0; index < 8; index += 1) {
+        await tester.tap(find.byKey(const ValueKey('note-text-indent')));
+        await tester.pumpAndSettle();
+      }
+      for (var index = 0; index < 5; index += 1) {
+        await tester.tap(find.byKey(const ValueKey('note-text-outdent')));
+        await tester.pumpAndSettle();
+      }
+
+      final beforeBridgeLeft = tester
+          .getRect(find.byKey(const ValueKey('note-text-input-bridge')))
+          .left;
+      final beforeLineBounds = _nativeEditableNonEmptyLineBounds(tester);
+      final activeMarginLeft = beforeLineBounds.first.left;
+
+      expect(beforeLineBounds.length, greaterThan(2));
+      for (final line in beforeLineBounds) {
+        expect(line.left, greaterThanOrEqualTo(activeMarginLeft - 1.5));
+      }
+
+      await tester.longPressAt(
+        _nativeEditableSubstringRect(tester, 'Alpha').center,
+      );
+      await tester.pumpAndSettle();
+
+      final handle = find.byKey(
+        const ValueKey('note-text-native-selection-handle-right'),
+      );
+      expect(handle, findsOneWidget);
+
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await tester.pump();
+      await gesture.cancel();
+      await tester.pump();
+      await tester.pump();
+
+      final omegaEnd = latest!.text.indexOf('omega') + 'omega'.length;
+      await _simulateNativeSelectionDrag(
+        tester,
+        TextSelection(baseOffset: 0, extentOffset: omegaEnd),
+      );
+
+      final afterBridgeLeft = tester
+          .getRect(find.byKey(const ValueKey('note-text-input-bridge')))
+          .left;
+      final afterLineBounds = _nativeEditableNonEmptyLineBounds(tester);
+      final diagnostic =
+          'beforeBridge=$beforeBridgeLeft afterBridge=$afterBridgeLeft '
+          'activeMargin=$activeMarginLeft '
+          'bounds=${afterLineBounds.map((line) => '${line.left.toStringAsFixed(1)},${line.top.toStringAsFixed(1)},${line.right.toStringAsFixed(1)}').join(';')} '
+          'logs=${DebugConsole.allText}';
+
+      expect(afterBridgeLeft, closeTo(beforeBridgeLeft, 0.5));
+      expect(afterLineBounds.length, greaterThan(2), reason: diagnostic);
+      for (final line in afterLineBounds) {
+        expect(
+          line.left,
+          greaterThanOrEqualTo(activeMarginLeft - 1.5),
+          reason:
+              'Handle drag layout changes must not let any paragraph row '
+              'jump left of the active indent. $diagnostic',
         );
       }
     },
