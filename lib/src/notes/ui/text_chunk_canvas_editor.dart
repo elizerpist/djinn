@@ -12,7 +12,7 @@ import 'text_chunk_layout_model.dart';
 const double _railGap = 8;
 const double _defaultRailHeight = 105;
 const Duration _selectionDragSettleDelay = Duration(milliseconds: 160);
-const double _underlineFirstLaneInset = 2;
+const double _underlineFirstLaneInset = 0.5;
 const double _underlineLaneStep = 3.5;
 
 class _TextChunkNativePlaceholder {
@@ -540,7 +540,11 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     if (cause == null || controller is! TextChunkNativeEditingController) {
       return;
     }
-    final normalized = controller.normalizeNativeSelection(selection);
+    final normalized =
+        cause == SelectionChangedCause.drag &&
+            _usesControllerSelectionOffsets(selection)
+        ? selection
+        : controller.normalizeNativeSelection(selection);
     if (cause == SelectionChangedCause.drag) {
       _handleSelectionHandleDrag(normalized);
       if (normalized.baseOffset != selection.baseOffset ||
@@ -579,6 +583,13 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         SelectionChangedCause.drag,
       );
     });
+  }
+
+  bool _usesControllerSelectionOffsets(TextSelection selection) {
+    final textLength = widget.controller.text.length;
+    return selection.isValid &&
+        selection.baseOffset <= textLength &&
+        selection.extentOffset <= textLength;
   }
 
   void _cancelSelectionHandleDrag() {
