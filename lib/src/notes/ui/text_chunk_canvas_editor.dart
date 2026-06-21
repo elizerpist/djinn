@@ -288,10 +288,16 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         final railTargetSpacerHeight = railLine == null
             ? 0.0
             : railHeight + _railGap;
-        final railLineBreakCount = railLine == null
+        final railNativeLineCount = railLine == null
             ? 0
             : math.max(1, (railTargetSpacerHeight / lineHeight).ceil());
-        final railNativeSpacerHeight = railLineBreakCount * lineHeight;
+        final railHasLeadingUnderlineSpacer =
+            railInsertionOffset != null &&
+            underlineSpacerPlans.any(
+              (plan) => plan.offset == railInsertionOffset,
+            );
+        final railLineBreakCount = railLine == null ? 0 : railNativeLineCount;
+        final railNativeSpacerHeight = railNativeLineCount * lineHeight;
         final railPlaceholderText = railLine == null
             ? ''
             : _railPlaceholderTextForLineBreaks(railLineBreakCount);
@@ -338,6 +344,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           railTargetSpacerHeight: railTargetSpacerHeight,
           railNativeSpacerHeight: railNativeSpacerHeight,
           railPlaceholderCount: railPlaceholderCount,
+          railHasLeadingUnderlineSpacer: railHasLeadingUnderlineSpacer,
           baseLineHeight: baseLineHeight,
         );
         _logLayoutUpdate(
@@ -354,6 +361,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           railTargetSpacerHeight: railTargetSpacerHeight,
           railNativeSpacerHeight: railNativeSpacerHeight,
           railLineBreakCount: railLineBreakCount,
+          railHasLeadingUnderlineSpacer: railHasLeadingUnderlineSpacer,
           underlineSpacerPlans: underlineSpacerPlans,
           totalPlaceholderCount: totalPlaceholderCount,
           railPlaceholderCount: railPlaceholderCount,
@@ -549,6 +557,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     required double railTargetSpacerHeight,
     required double railNativeSpacerHeight,
     required int railPlaceholderCount,
+    required bool railHasLeadingUnderlineSpacer,
     required double baseLineHeight,
   }) {
     final signature = [
@@ -564,6 +573,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
       railTargetSpacerHeight.toStringAsFixed(1),
       railNativeSpacerHeight.toStringAsFixed(1),
       railPlaceholderCount,
+      railHasLeadingUnderlineSpacer,
       nativePlaceholders
           .map(
             (placeholder) =>
@@ -607,6 +617,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         'railNativeSpacer=${railNativeSpacerHeight.toStringAsFixed(1)} '
         'railRoundedGap=${(railNativeSpacerHeight - railTargetSpacerHeight).toStringAsFixed(1)} '
         'railPlaceholderCount=$railPlaceholderCount '
+        'railLeadingUnderlineSpacer=$railHasLeadingUnderlineSpacer '
         'placeholderCount=${nativePlaceholders.fold<int>(0, (total, placeholder) => total + placeholder.length)} '
         'placeholders=[${_placeholderSummary(nativePlaceholders)}] '
         'nativeOrigins=editable:${_formatOffset(renderOrigin)},layout:${_formatOffset(layoutOrigin)} '
@@ -782,6 +793,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     required double railTargetSpacerHeight,
     required double railNativeSpacerHeight,
     required int railLineBreakCount,
+    required bool railHasLeadingUnderlineSpacer,
     required List<_LineSpacerPlan> underlineSpacerPlans,
     required int totalPlaceholderCount,
     required int railPlaceholderCount,
@@ -848,6 +860,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
       'railRoundedGap=${railLine == null ? 'null' : (railNativeSpacerHeight - railTargetSpacerHeight).toStringAsFixed(1)} '
       'railNativeSpacerBottom=${railNativeSpacerBottom?.toStringAsFixed(1)} '
       'railLineBreaks=$railLineBreakCount '
+      'railLeadingUnderlineSpacer=$railHasLeadingUnderlineSpacer '
       'railPlaceholderCount=$railPlaceholderCount '
       'placeholderCount=$totalPlaceholderCount '
       'underlineSpacers=[${_lineSpacerSummary(underlineSpacerPlans)}] '
@@ -1072,18 +1085,23 @@ List<_LineSpacerPlan> _underlineSpacerPlans(
     if (lanes <= 0) {
       continue;
     }
-    final lineBreakCount = math.max(
+    final nativeLineCount = math.max(
       1,
       (_underlineExtraHeightForLanes(lanes) / baseLineHeight).ceil(),
     );
+    // The first inserted newline terminates the current visual row. The
+    // following newlines are the rows that create visible vertical space.
+    final placeholderLineBreakCount = nativeLineCount + 1;
     plans.add(
       _LineSpacerPlan(
         lineIndex: line.index,
         offset: _insertionOffsetForLine(line),
         underlineLanes: lanes,
-        lineBreakCount: lineBreakCount,
-        height: lineBreakCount * baseLineHeight,
-        placeholderText: _railPlaceholderTextForLineBreaks(lineBreakCount),
+        lineBreakCount: placeholderLineBreakCount,
+        height: nativeLineCount * baseLineHeight,
+        placeholderText: _railPlaceholderTextForLineBreaks(
+          placeholderLineBreakCount,
+        ),
       ),
     );
   }

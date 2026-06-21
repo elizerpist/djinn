@@ -119,6 +119,7 @@ void main() {
     expect(DebugConsole.allText, contains('railNativeSpacer='));
     expect(DebugConsole.allText, contains('railRoundedGap='));
     expect(DebugConsole.allText, contains('railLineBreaks='));
+    expect(DebugConsole.allText, contains('railLeadingUnderlineSpacer='));
     expect(DebugConsole.allText, contains('[TextChunkLayout] nativeGeometry'));
     expect(DebugConsole.allText, contains('nativeOrigins='));
     expect(DebugConsole.allText, contains('tightTagBoxes=true'));
@@ -678,6 +679,135 @@ void main() {
     expect(gamma.top, greaterThanOrEqualTo(lastUnderline.bottom + 1));
   });
 
+  testWidgets('stacked underline spacing opens the next soft-wrapped row', (
+    tester,
+  ) async {
+    const target = 'targetword';
+    final text = [
+      'alpha beta gamma delta epsilon zeta',
+      target,
+      'theta iota kappa lambda mu nu xi omicron pi rho sigma',
+    ].join(' ');
+    final targetStart = text.indexOf(target);
+    await _pumpTextChunkEditor(
+      tester,
+      NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: text,
+        rangeTags: [
+          NoteTextRangeTag(
+            id: 'range-target',
+            start: targetStart,
+            end: targetStart + target.length,
+            tag: _stackedTags().first,
+            tags: _stackedTags(),
+          ),
+        ],
+      ),
+      surfaceSize: const Size(260, 900),
+    );
+
+    final targetRect = _nativeEditableSubstringTightRect(tester, target);
+    final lastUnderline = tester.getRect(
+      find.byKey(
+        const ValueKey('note-text-secondary-underline-range-target-10-0'),
+      ),
+    );
+    final lineBounds = _nativeEditableNonEmptyLineBounds(tester);
+    final nextLine = lineBounds.firstWhere(
+      (line) => line.top > targetRect.top + 2,
+    );
+    final diagnostic =
+        'target=$targetRect lastUnderline=$lastUnderline nextLine=$nextLine '
+        'lineBounds=${lineBounds.map((line) => '${line.left.toStringAsFixed(1)},${line.top.toStringAsFixed(1)},${line.right.toStringAsFixed(1)},${line.bottom.toStringAsFixed(1)}').join(';')} '
+        'logs=${DebugConsole.allText}';
+
+    expect(lastUnderline.top, greaterThan(targetRect.bottom));
+    expect(
+      nextLine.top,
+      greaterThanOrEqualTo(lastUnderline.bottom + 1),
+      reason:
+          'Many underline lanes must create downward spacing before the next '
+          'soft-wrapped native row. $diagnostic',
+    );
+  });
+
+  testWidgets(
+    'rail opens below stacked underlines without covering following text',
+    (tester) async {
+      const target = 'targetword';
+      final text = [
+        'alpha beta gamma delta epsilon zeta',
+        target,
+        'theta iota kappa lambda mu nu xi omicron pi rho sigma',
+      ].join(' ');
+      final targetStart = text.indexOf(target);
+      await _pumpTextChunkEditor(
+        tester,
+        NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+          rangeTags: [
+            NoteTextRangeTag(
+              id: 'range-target',
+              start: targetStart,
+              end: targetStart + target.length,
+              tag: _stackedTags().first,
+              tags: _stackedTags(),
+            ),
+          ],
+        ),
+        surfaceSize: const Size(260, 900),
+      );
+
+      _setEditorSelection(
+        tester,
+        TextSelection(
+          baseOffset: targetStart,
+          extentOffset: targetStart + target.length,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final targetRect = _nativeEditableSubstringTightRect(tester, target);
+      final lastUnderline = tester.getRect(
+        find.byKey(
+          const ValueKey('note-text-secondary-underline-range-target-10-0'),
+        ),
+      );
+      final rail = tester.getRect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      );
+      final lineBounds = _nativeEditableNonEmptyLineBounds(tester);
+      final nextLine = lineBounds.firstWhere((line) => line.top > rail.top + 2);
+      final diagnostic =
+          'target=$targetRect lastUnderline=$lastUnderline rail=$rail '
+          'nextLine=$nextLine '
+          'lineBounds=${lineBounds.map((line) => '${line.left.toStringAsFixed(1)},${line.top.toStringAsFixed(1)},${line.right.toStringAsFixed(1)},${line.bottom.toStringAsFixed(1)}').join(';')} '
+          'logs=${DebugConsole.allText}';
+
+      expect(lastUnderline.top, greaterThan(targetRect.bottom));
+      expect(rail.top, greaterThanOrEqualTo(lastUnderline.bottom + 1));
+      expect(
+        nextLine.top,
+        greaterThanOrEqualTo(rail.bottom),
+        reason:
+            'Opening the inline rail after a line with stacked underlines must '
+            'move the following native text below the visible rail. '
+            '$diagnostic',
+      );
+      expect(
+        nextLine.top - rail.bottom,
+        lessThanOrEqualTo(24),
+        reason:
+            'The gap below the rail may round to the native line grid but must '
+            'not become a large fixed hole. $diagnostic',
+      );
+    },
+  );
+
   testWidgets(
     'rail paragraph step indents every visual line in the active paragraph',
     (tester) async {
@@ -959,6 +1089,22 @@ Rect _nativeEditableSubstringTightRect(WidgetTester tester, String text) {
     renderEditable.selectionWidthStyle = previousWidthStyle;
     renderEditable.selectionHeightStyle = previousHeightStyle;
   }
+}
+
+List<NoteKnowledgeTag> _stackedTags() {
+  return [
+    const NoteKnowledgeTag(
+      type: NoteKnowledgeTagTypes.state,
+      label: 'primary',
+      colorValue: 0xFFDC2626,
+    ),
+    for (var index = 1; index <= 10; index += 1)
+      NoteKnowledgeTag(
+        type: NoteKnowledgeTagTypes.custom,
+        label: 'secondary-$index',
+        colorValue: 0xFF2563EB + index,
+      ),
+  ];
 }
 
 List<double> _nativeEditableNonEmptyLineLefts(WidgetTester tester) {

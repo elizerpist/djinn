@@ -245,3 +245,12 @@ Source: user message on 2026-06-21 after the latest screenshot: underline positi
 | --- | --- | --- | --- | --- | --- |
 | TC-REQ-043 | User 2026-06-21: "ha sok underline van ... ez csak azokban a sorokban legyen ervenyes, ne az egesz bekezdesben" | `text_chunk_canvas_editor.dart`, native placeholder/underline spacing | Extra vertical space for secondary underline lanes is inserted only after visual lines that contain those underline lanes; untagged lines keep the normal native line distance. | Widget geometry test comparing unaffected line gaps and tagged-line underline clearance | DONE |
 | TC-REQ-044 | User 2026-06-21: "step innel ... a jobb oldali is beljebb kerul ... a szoveg jobb szele mindig a screen jobb szele" | `text_chunk_layout_model.dart`, `text_chunk_text_editing.dart` | Paragraph step-in changes the left indent only; wrapped native text still uses the full editor width and can reach the right screen/editor edge. | Widget/model tests using native glyph line bounds after step-in | DONE |
+
+## 2026-06-21 Fifth Native Rail/Underline Spacing Regression Checklist
+
+Source: user message on 2026-06-21 after screenshot `Screenshot_20260621-122833.png`: the rail is still miscalculating its opened gap, text is not split open correctly, and many secondary underline lanes can still run into the following line instead of increasing the spacing below the underline.
+
+| ID | Source | Intended Code Area | Acceptance Condition | Verification Method | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-REQ-045 | User 2026-06-21: "a rail nem jól számol, nem megfelelően nyílik szét a szöveg" | `text_chunk_canvas_editor.dart`, native placeholder/spacer host | When the inline rail opens under a selected visual line, the following native editable text starts at or below the visible rail bottom with only the expected rounded line-height slack. | Widget geometry test with native `EditableText` glyph rects, visible rail rect, and following soft-wrapped text rect | DONE |
+| TC-REQ-046 | User 2026-06-21: "beleér a sok aláhúzás az alatta lévő sorba ... nő meg az aláhúzás alatti sorköz" | `text_chunk_canvas_editor.dart`, secondary underline spacing | Multiple secondary underline lanes increase the vertical space below that exact visual line before any following native line or rail, including soft-wrapped lines. | Widget geometry test comparing the last underline rect to the next native visual line and to the rail rect when rail is visible | DONE |
