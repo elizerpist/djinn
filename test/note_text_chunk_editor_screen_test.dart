@@ -300,14 +300,15 @@ void main() {
       ),
     );
 
-    const selection = TextSelection(baseOffset: 0, extentOffset: 5);
-    _setEditorSelection(tester, selection);
-    _editableText(tester).onSelectionChanged?.call(
-      selection,
-      SelectionChangedCause.longPress,
+    await tester.longPressAt(
+      _nativeEditableSubstringRect(tester, 'Alpha').center,
     );
     await tester.pumpAndSettle();
 
+    expect(
+      _editableTextState(tester).textEditingValue.selection.isCollapsed,
+      isFalse,
+    );
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
       findsOneWidget,
@@ -1545,7 +1546,10 @@ List<Rect> _nativeEditableNonEmptyLineBounds(WidgetTester tester) {
   final lineTops = <double>[];
   for (var offset = 0; offset < plainText.length; offset += 1) {
     final codeUnit = plainText.codeUnitAt(offset);
-    if (codeUnit == 10 || codeUnit == 32 || codeUnit == 0xFFFC) {
+    if (codeUnit == 10 ||
+        codeUnit == 32 ||
+        codeUnit == 0x00A0 ||
+        codeUnit == 0xFFFC) {
       continue;
     }
     final boxes = renderEditable.getBoxesForSelection(

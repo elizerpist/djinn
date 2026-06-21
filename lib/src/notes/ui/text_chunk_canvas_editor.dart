@@ -12,6 +12,7 @@ const double _railGap = 8;
 const double _defaultRailHeight = 105;
 const double _underlineFirstLaneInset = 0.5;
 const double _underlineLaneStep = 3.5;
+const String _placeholderIndentUnit = '\u00A0\u00A0';
 
 class _TextChunkNativePlaceholder {
   const _TextChunkNativePlaceholder({
@@ -1262,7 +1263,7 @@ String _continuationIndentForLine(TextChunkVisualLine line) {
   if (line.indentLevel <= 0) {
     return '';
   }
-  return '  ' * line.indentLevel;
+  return _placeholderIndentUnit * line.indentLevel;
 }
 
 String _lineHeightSummary(
