@@ -27,15 +27,15 @@
 - Consumes: existing `_pumpTextChunkEditor`, `_setEditorSelection`, `_simulateNativeSelectionDrag`, `_nativeEditableSubstringRect`, `_nativeEditableNonEmptyLineBounds`.
 - Produces: failing tests for in-flow rail spacing and drag suppression.
 
-- [ ] **Step 1: Update settled rail expectations**
+- [x] **Step 1: Update settled rail expectations**
 
 Change tests that currently assert overlay behavior so they assert `lineBelow.top >= rail.bottom`, and expect `note-text-inline-selection-spacer` while settled selection is visible.
 
-- [ ] **Step 2: Add handle pointer tests**
+- [x] **Step 2: Add handle pointer tests**
 
 Add tests that long-press text, confirm native toolbar and rail are visible, touch `note-text-native-selection-handle-right`, and assert the rail/spacer disappears before drag deltas.
 
-- [ ] **Step 3: Run targeted tests red**
+- [x] **Step 3: Run targeted tests red**
 
 Run: `flutter test test/note_text_chunk_editor_screen_test.dart`
 
@@ -50,19 +50,19 @@ Expected: fail before production changes because the current code has no settled
 - Consumes: `buildTextChunkLayout(...)`, `_railTop(...)`, `_lineTop(...)`, `_LineMarker`.
 - Produces: settled rail placeholder and visual spacer only when `_selectionHandleDragActive == false`.
 
-- [ ] **Step 1: Compute rail spacer only outside drag**
+- [x] **Step 1: Compute rail spacer only outside drag**
 
 When a rail line exists and native handle drag is inactive, compute `railTargetSpacerHeight`, `railNativeLineCount`, `railLineBreakCount`, `railNativeSpacerHeight`, and a `rail-line-*` native placeholder at `_insertionOffsetForLine(railLine)`.
 
-- [ ] **Step 2: Shift editor line markers**
+- [x] **Step 2: Shift editor line markers**
 
 Pass `railLine?.index` and `railNativeSpacerHeight` to `_LineMarker` so markers below the selected visual line move down with the native spacer.
 
-- [ ] **Step 3: Render visible spacer and rail**
+- [x] **Step 3: Render visible spacer and rail**
 
 Render `note-text-inline-selection-spacer` from the selected line bottom through the rail slot, then render `note-text-inline-selection-rail` at `_railTop(...)`.
 
-- [ ] **Step 4: Keep spacer out of drag**
+- [x] **Step 4: Keep spacer out of drag**
 
 When `_selectionHandleDragActive` is true, `railLine` must be null, `railPlaceholderCount` must be zero, and the rail/spacer widgets must not exist.
 
@@ -75,19 +75,19 @@ When `_selectionHandleDragActive` is true, `railLine` must be null, `railPlaceho
 - Consumes: `EditableText.selectionControls`, `SelectionChangedCause.drag`.
 - Produces: `_TextChunkSelectionControls` wrapping native Material handles with pointer listeners.
 
-- [ ] **Step 1: Add pointer tracking**
+- [x] **Step 1: Add pointer tracking**
 
 Add `_selectionHandlePointer`, pointer router registration, and release cleanup. Pointer up schedules a post-frame settle that restores the rail from the final native selection; pointer cancel only untracks the pointer and keeps drag suppression active.
 
-- [ ] **Step 2: Wrap native handles**
+- [x] **Step 2: Wrap native handles**
 
 Replace `materialTextSelectionHandleControls` with `_TextChunkSelectionControls`, which extends `MaterialTextSelectionControls with TextSelectionHandleControls` and wraps `buildHandle(...)` in a `Listener`.
 
-- [ ] **Step 3: Suppress rail before drag**
+- [x] **Step 3: Suppress rail before drag**
 
 On handle pointer down/move and `SelectionChangedCause.drag`, call `_startSelectionHandleDrag()`. This hides the toolbar and sets `_selectionHandleDragActive`.
 
-- [ ] **Step 4: Settle only on non-drag selection changes**
+- [x] **Step 4: Settle only on non-drag selection changes**
 
 For `SelectionChangedCause.drag`, return without normalizing or writing `controller.selection`. For tap, long press, keyboard, and toolbar actions, cancel drag suppression, normalize selection, and allow toolbar display.
 
@@ -101,13 +101,15 @@ For `SelectionChangedCause.drag`, return without normalizing or writing `control
 - Consumes: acceptance checklist `TIR-001` through `TIR-005`.
 - Produces: checked-off local statuses, commit, branch push for GitHub Actions.
 
-- [ ] **Step 1: Run focused verification**
+- [x] **Step 1: Run focused verification**
 
 Run: `flutter test test/note_text_chunk_editor_screen_test.dart`
 
 Expected: all tests in the file pass.
 
-- [ ] **Step 2: Run broader verification**
+Verified in GitHub Actions run `27918209198`; local Flutter execution is blocked on the Termux/Android ARM64 host by the known TLS alignment error.
+
+- [x] **Step 2: Run broader verification**
 
 Run: `flutter analyze`
 
@@ -117,10 +119,12 @@ Run: `flutter test`
 
 Expected: all runnable tests pass; ObjectBox host-library skips are acceptable if they match existing environment skips.
 
-- [ ] **Step 3: Update checklist statuses**
+Verified in GitHub Actions run `27918209198`: `flutter analyze`, Flutter tests, debug APK build, and debug APK release publishing passed.
+
+- [x] **Step 3: Update checklist statuses**
 
 Mark TIR-001 through TIR-004 `DONE` if the tests pass. Leave TIR-005 `PARTIAL` until GitHub Actions confirms the Android build.
 
-- [ ] **Step 4: Commit and push**
+- [x] **Step 4: Commit and push**
 
 Commit all implementation, test, spec, and plan updates. Push the current branch so GitHub Actions can build the APK.
