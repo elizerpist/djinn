@@ -390,6 +390,13 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       textStyle: _textStyle,
       textScaler: MediaQuery.textScalerOf(context),
     );
+    DebugConsole.log(
+      '[TextChunkStep] delta=$delta offset=$offset '
+      'oldLen=${_block.text.length} newLen=${result.text.length} '
+      'oldRanges=${_block.rangeTags.length} newRanges=${result.rangeTags.length} '
+      'selection=${result.selectionOffset} '
+      'changed=${result.text != _block.text}',
+    );
     if (result.text == _block.text) {
       return;
     }

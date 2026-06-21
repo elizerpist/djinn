@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -135,13 +137,6 @@ class TextChunkNativeEditingController extends TextEditingController {
         tag.tags.first.resolvedColorValue,
       ).withValues(alpha: 0.18),
     );
-    if (tag.tags.length > 1) {
-      nextStyle = nextStyle.copyWith(
-        decoration: TextDecoration.underline,
-        decorationColor: Color(tag.tags[1].resolvedColorValue),
-        decorationThickness: 1.5,
-      );
-    }
     return nextStyle;
   }
 
@@ -179,6 +174,8 @@ class TextChunkCanvasEditor extends StatefulWidget {
 }
 
 class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
+  final GlobalKey<EditableTextState> _editableTextKey =
+      GlobalKey<EditableTextState>();
   String? _lastDebugSignature;
 
   @override
@@ -222,11 +219,19 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         final contentWidth = (constraints.maxWidth - 32)
             .clamp(1, double.infinity)
             .toDouble();
+        final maxUnderlineLanes = _maxUnderlineLanes();
+        final baseLineHeight = _lineHeight(context, widget.textStyle);
+        final effectiveTextStyle = _textStyleWithUnderlineLineHeight(
+          widget.textStyle,
+          baseLineHeight,
+          maxUnderlineLanes,
+        );
+        final lineHeight = _lineHeight(context, effectiveTextStyle);
         final selection = _visualSelection();
         final layout = buildTextChunkLayout(
           text: widget.controller.text,
           maxWidth: contentWidth,
-          textStyle: widget.textStyle,
+          textStyle: effectiveTextStyle,
           textScaler: textScaler,
           rangeTags: widget.rangeTags,
           selection: selection,
@@ -236,7 +241,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         final railInsertionOffset = railLine == null
             ? null
             : (railLine.hardBreakAfter ? railLine.end + 1 : railLine.end);
-        final lineHeight = _lineHeight(context);
         final contentHeight =
             (layout.lines.length * lineHeight) +
             (railLine == null ? 0 : _railReservedHeight) +
@@ -252,6 +256,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           railLine: railLine,
           railInsertionOffset: railInsertionOffset,
           lineHeight: lineHeight,
+          baseLineHeight: baseLineHeight,
+          maxUnderlineLanes: maxUnderlineLanes,
           contentWidth: contentWidth,
           contentHeight: contentHeight,
         );
@@ -272,6 +278,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                 children: [
                   for (final highlight in _tagHighlightGeometries(
                     layout,
+                    baseLineHeight,
                     lineHeight,
                     railLine?.index,
                   ))
@@ -280,23 +287,26 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                     left: 0,
                     right: 0,
                     top: 0,
-                    child: EditableText(
+                    child: KeyedSubtree(
                       key: const ValueKey('note-text-input-bridge'),
-                      controller: widget.controller,
-                      focusNode: widget.focusNode,
-                      style: widget.textStyle,
-                      cursorColor: const Color(0xFF2563EB),
-                      backgroundCursorColor: Colors.transparent,
-                      keyboardType: TextInputType.multiline,
-                      maxLines: null,
-                      showSelectionHandles: true,
-                      selectionColor: const Color(0x552563EB),
-                      selectionControls: materialTextSelectionHandleControls,
-                      contextMenuBuilder: (context, editableTextState) =>
-                          AdaptiveTextSelectionToolbar.editableText(
-                            editableTextState: editableTextState,
-                          ),
-                      onSelectionChanged: _handleNativeSelectionChanged,
+                      child: EditableText(
+                        key: _editableTextKey,
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
+                        style: effectiveTextStyle,
+                        cursorColor: const Color(0xFF2563EB),
+                        backgroundCursorColor: Colors.transparent,
+                        keyboardType: TextInputType.multiline,
+                        maxLines: null,
+                        showSelectionHandles: true,
+                        selectionColor: const Color(0x552563EB),
+                        selectionControls: materialTextSelectionHandleControls,
+                        contextMenuBuilder: (context, editableTextState) =>
+                            AdaptiveTextSelectionToolbar.editableText(
+                              editableTextState: editableTextState,
+                            ),
+                        onSelectionChanged: _handleNativeSelectionChanged,
+                      ),
                     ),
                   ),
                   if (railLine != null && widget.selectionRail != null)
@@ -347,6 +357,30 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     return null;
   }
 
+  int _maxUnderlineLanes() {
+    var lanes = 0;
+    for (final tag in widget.rangeTags) {
+      lanes = math.max(lanes, tag.resolvedTags.length - 1);
+    }
+    return lanes < 0 ? 0 : lanes;
+  }
+
+  TextStyle _textStyleWithUnderlineLineHeight(
+    TextStyle style,
+    double baseLineHeight,
+    int underlineLanes,
+  ) {
+    if (underlineLanes <= 0 || baseLineHeight <= 0) {
+      return style;
+    }
+    final extraHeight = 12 + ((underlineLanes - 1) * 4.0);
+    final targetLineHeight = baseLineHeight + extraHeight;
+    final baseMultiplier = style.height ?? 1.0;
+    return style.copyWith(
+      height: baseMultiplier * (targetLineHeight / baseLineHeight),
+    );
+  }
+
   void _configureController({
     required Widget? inlineRail,
     required int? railInsertionOffset,
@@ -376,6 +410,29 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         normalized.extentOffset != selection.extentOffset) {
       controller.selection = normalized;
     }
+    _showNativeToolbarForSelection(normalized, cause);
+  }
+
+  void _showNativeToolbarForSelection(
+    TextSelection selection,
+    SelectionChangedCause? cause,
+  ) {
+    if (selection.isCollapsed) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !widget.focusNode.hasFocus ||
+          widget.controller.selection.isCollapsed) {
+        return;
+      }
+      final shown = _editableTextKey.currentState?.showToolbar();
+      DebugConsole.log(
+        '[TextChunkLayout] nativeToolbar requested '
+        'selection=${widget.controller.selection.start}-${widget.controller.selection.end} '
+        'cause=$cause shown=$shown',
+      );
+    });
   }
 
   void _logLayoutUpdate({
@@ -384,6 +441,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     required TextChunkVisualLine? railLine,
     required int? railInsertionOffset,
     required double lineHeight,
+    required double baseLineHeight,
+    required int maxUnderlineLanes,
     required double contentWidth,
     required double contentHeight,
   }) {
@@ -422,6 +481,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
       'focus=${widget.focusNode.hasFocus} '
       'content=${contentWidth.toStringAsFixed(1)}x${contentHeight.toStringAsFixed(1)} '
       'lineHeight=${lineHeight.toStringAsFixed(1)} '
+      'baseLineHeight=${baseLineHeight.toStringAsFixed(1)} '
+      'maxUnderlineLanes=$maxUnderlineLanes '
       'lines=${layout.lines.length} paragraphs=${layout.paragraphs.length} '
       'railLine=${railLine?.index} railInsert=$railInsertionOffset '
       'railTop=${railTop?.toStringAsFixed(1)} '
@@ -506,9 +567,9 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     return result;
   }
 
-  double _lineHeight(BuildContext context) {
+  double _lineHeight(BuildContext context, TextStyle style) {
     final painter = TextPainter(
-      text: TextSpan(text: ' ', style: widget.textStyle),
+      text: TextSpan(text: ' ', style: style),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
     )..layout();
@@ -517,6 +578,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
 
   List<_TagHighlightGeometry> _tagHighlightGeometries(
     TextChunkLayout layout,
+    double baseLineHeight,
     double lineHeight,
     int? railLineIndex,
   ) {
@@ -546,7 +608,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
             left: left,
             top: top,
             width: width,
-            height: lineHeight,
+            height: baseLineHeight,
           ),
         );
         for (var tagIndex = 1; tagIndex < segment.tags.length; tagIndex += 1) {
@@ -557,7 +619,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
               ),
               color: Color(segment.tags[tagIndex].resolvedColorValue),
               left: left,
-              top: top + lineHeight + ((tagIndex - 1) * 4),
+              top: top + baseLineHeight + ((tagIndex - 1) * 4),
               width: width,
               height: 2,
             ),

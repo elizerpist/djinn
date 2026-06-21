@@ -155,9 +155,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final editable = tester.widget<EditableText>(
-        find.byKey(const ValueKey('note-text-input-bridge')),
-      );
+      final editable = _editableText(tester);
       expect(editable.controller.selection.start, lessThan(5));
       expect(editable.controller.selection.end, greaterThan(12));
       final rail = tester.getRect(
@@ -188,9 +186,7 @@ void main() {
       final editableRect = tester.getRect(
         find.byKey(const ValueKey('note-text-input-bridge')),
       );
-      final editable = tester.widget<EditableText>(
-        find.byKey(const ValueKey('note-text-input-bridge')),
-      );
+      final editable = _editableText(tester);
 
       expect(editableRect.height, greaterThan(20));
       expect(editable.focusNode.hasFocus, isTrue);
@@ -225,18 +221,14 @@ void main() {
     final editableRect = tester.getRect(
       find.byKey(const ValueKey('note-text-input-bridge')),
     );
-    final editable = tester.widget<EditableText>(
-      find.byKey(const ValueKey('note-text-input-bridge')),
-    );
+    final editable = _editableText(tester);
 
     expect(editableRect.height, greaterThan(20));
     expect(editable.showSelectionHandles, isTrue);
     expect(editable.selectionControls, isNotNull);
     expect(editable.selectionControls, isA<TextSelectionHandleControls>());
     expect(editable.contextMenuBuilder, isNotNull);
-    final editableState = tester.state<EditableTextState>(
-      find.byKey(const ValueKey('note-text-input-bridge')),
-    );
+    final editableState = _editableTextState(tester);
     expect(
       editableState.contextMenuButtonItems.map((item) => item.type),
       contains(ContextMenuButtonType.copy),
@@ -251,6 +243,30 @@ void main() {
     );
     expect(editable.controller.selection.start, 6);
     expect(editable.controller.selection.end, 10);
+  });
+
+  testWidgets('long press selection can show the native clipboard toolbar', (
+    tester,
+  ) async {
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha Beta Gamma',
+      ),
+    );
+
+    await tester.longPressAt(
+      _nativeEditableSubstringRect(tester, 'Beta').center,
+    );
+    await tester.pumpAndSettle();
+
+    final editableState = _editableTextState(tester);
+
+    expect(editableState.textEditingValue.selection.isCollapsed, isFalse);
+    expect(find.byType(AdaptiveTextSelectionToolbar), findsOneWidget);
+    expect(find.text('Copy'), findsOneWidget);
   });
 
   testWidgets('long text scrolls without clipping the final line', (
@@ -362,9 +378,7 @@ void main() {
     await tester.tapAt(_nativeEditableSubstringRect(tester, 'Alpha').center);
     await tester.pumpAndSettle();
 
-    final editable = tester.widget<EditableText>(
-      find.byKey(const ValueKey('note-text-input-bridge')),
-    );
+    final editable = _editableText(tester);
     expect(editable.focusNode.hasFocus, isTrue);
     expect(editable.controller.selection.isCollapsed, isTrue);
     expect(find.byKey(const ValueKey('note-text-caret-0')), findsNothing);
@@ -467,6 +481,52 @@ void main() {
     },
   );
 
+  testWidgets('stacked underlines push following native editable text down', (
+    tester,
+  ) async {
+    const text = 'Alpha\nBeta\nGamma';
+    final betaStart = text.indexOf('Beta');
+    final tags = [
+      const NoteKnowledgeTag(
+        type: NoteKnowledgeTagTypes.state,
+        label: 'primary',
+        colorValue: 0xFFDC2626,
+      ),
+      for (var index = 1; index <= 10; index += 1)
+        NoteKnowledgeTag(
+          type: NoteKnowledgeTagTypes.custom,
+          label: 'secondary-$index',
+          colorValue: 0xFF2563EB + index,
+        ),
+    ];
+    await _pumpTextChunkEditor(
+      tester,
+      NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: text,
+        rangeTags: [
+          NoteTextRangeTag(
+            id: 'range-beta',
+            start: betaStart,
+            end: betaStart + 4,
+            tag: tags.first,
+            tags: tags,
+          ),
+        ],
+      ),
+    );
+
+    final lastUnderline = tester.getRect(
+      find.byKey(
+        const ValueKey('note-text-secondary-underline-range-beta-10-1-0'),
+      ),
+    );
+    final gamma = _nativeEditableSubstringRect(tester, 'Gamma');
+
+    expect(gamma.top, greaterThanOrEqualTo(lastUnderline.bottom + 1));
+  });
+
   testWidgets(
     'rail paragraph step indents every visual line in the active paragraph',
     (tester) async {
@@ -509,6 +569,45 @@ void main() {
           )
           .length;
       expect(firstParagraphLines, greaterThan(1));
+    },
+  );
+
+  testWidgets(
+    'paragraph step indents every native wrapped row in the active paragraph',
+    (tester) async {
+      NoteBlock? latest;
+      const text =
+          'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda '
+          'mu nu xi omicron pi rho sigma tau';
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+        ),
+        surfaceSize: const Size(260, 700),
+        onChanged: (block) => latest = block,
+      );
+
+      _setEditorSelection(tester, const TextSelection.collapsed(offset: 2));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('note-text-indent')));
+      await tester.pumpAndSettle();
+
+      expect(latest!.text.startsWith('  Alpha'), isTrue);
+      expect(DebugConsole.allText, contains('[TextChunkStep] delta=1'));
+      expect(DebugConsole.allText, contains('changed=true'));
+      final editableLeft = tester
+          .getRect(find.byKey(const ValueKey('note-text-input-bridge')))
+          .left;
+      final lineLefts = _nativeEditableNonEmptyLineLefts(tester);
+
+      expect(lineLefts.length, greaterThan(2));
+      expect(lineLefts.first - editableLeft, greaterThanOrEqualTo(20));
+      for (final left in lineLefts.skip(1)) {
+        expect(left, greaterThanOrEqualTo(lineLefts.first - 1));
+      }
     },
   );
 
@@ -600,20 +699,31 @@ Future<void> _pumpTextChunkEditor(
 }
 
 void _setEditorSelection(WidgetTester tester, TextSelection selection) {
-  final editable = tester.widget<EditableText>(
-    find.byKey(const ValueKey('note-text-input-bridge')),
-  );
+  final editable = _editableText(tester);
   editable.controller.selection = selection;
   editable.focusNode.requestFocus();
+}
+
+Finder _editableTextFinder() {
+  return find.descendant(
+    of: find.byKey(const ValueKey('note-text-input-bridge')),
+    matching: find.byType(EditableText),
+  );
+}
+
+EditableText _editableText(WidgetTester tester) {
+  return tester.widget<EditableText>(_editableTextFinder());
+}
+
+EditableTextState _editableTextState(WidgetTester tester) {
+  return tester.state<EditableTextState>(_editableTextFinder());
 }
 
 Rect _nativeEditableSelectionRect(
   WidgetTester tester,
   TextSelection selection,
 ) {
-  final state = tester.state<EditableTextState>(
-    find.byKey(const ValueKey('note-text-input-bridge')),
-  );
+  final state = _editableTextState(tester);
   final renderEditable = state.renderEditable;
   final boxes = renderEditable.getBoxesForSelection(selection);
   expect(boxes, isNotEmpty);
@@ -625,9 +735,7 @@ Rect _nativeEditableSelectionRect(
 }
 
 Rect _nativeEditableSubstringRect(WidgetTester tester, String text) {
-  final state = tester.state<EditableTextState>(
-    find.byKey(const ValueKey('note-text-input-bridge')),
-  );
+  final state = _editableTextState(tester);
   final plainText = state.renderEditable.text!.toPlainText();
   final start = plainText.indexOf(text);
   expect(start, isNonNegative);
@@ -635,4 +743,43 @@ Rect _nativeEditableSubstringRect(WidgetTester tester, String text) {
     tester,
     TextSelection(baseOffset: start, extentOffset: start + text.length),
   );
+}
+
+List<double> _nativeEditableNonEmptyLineLefts(WidgetTester tester) {
+  final state = _editableTextState(tester);
+  final renderEditable = state.renderEditable;
+  final plainText = renderEditable.text!.toPlainText();
+  final lineLefts = <double>[];
+  final lineTops = <double>[];
+  for (var offset = 0; offset < plainText.length; offset += 1) {
+    final codeUnit = plainText.codeUnitAt(offset);
+    if (codeUnit == 10 || codeUnit == 32 || codeUnit == 0xFFFC) {
+      continue;
+    }
+    final boxes = renderEditable.getBoxesForSelection(
+      TextSelection(baseOffset: offset, extentOffset: offset + 1),
+    );
+    if (boxes.isEmpty) {
+      continue;
+    }
+    final rect = boxes.first.toRect().shift(
+      renderEditable.localToGlobal(Offset.zero),
+    );
+    final existingLine = lineTops.indexWhere(
+      (top) => (top - rect.top).abs() < 2,
+    );
+    if (existingLine >= 0) {
+      if (rect.left < lineLefts[existingLine]) {
+        lineLefts[existingLine] = rect.left;
+      }
+      continue;
+    }
+    lineTops.add(rect.top);
+    lineLefts.add(rect.left);
+  }
+  final ordered = [
+    for (var index = 0; index < lineLefts.length; index += 1)
+      (top: lineTops[index], left: lineLefts[index]),
+  ]..sort((a, b) => a.top.compareTo(b.top));
+  return [for (final line in ordered) line.left];
 }

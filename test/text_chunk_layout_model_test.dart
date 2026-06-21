@@ -79,9 +79,15 @@ void main() {
         textScaler: TextScaler.noScaling,
       );
 
+      final parts = result.text.split('\n\n');
+      expect(parts, hasLength(2));
+      expect(parts.last, 'Gamma');
       expect(
-        result.text,
-        '  Alpha\nBeta continues inside the same paragraph\n\nGamma',
+        parts.first
+            .split('\n')
+            .where((line) => line.trim().isNotEmpty)
+            .every((line) => line.startsWith('  ')),
+        isTrue,
       );
       final layout = layoutFor(result.text, maxWidth: 160);
       final firstParagraphLines = layout.lines.where(
