@@ -14,7 +14,7 @@ When the user drags a native selection handle, `EditableText` owns the interacti
 
 ## Recommended Architecture
 
-Keep the native `EditableText` text span pure. Do not insert rail placeholders or rail spacer text into `TextChunkNativeEditingController.buildTextSpan`.
+Keep the native `EditableText` text span pure while native handle drag is active. A settled in-flow rail may use a temporary invisible native spacer because a single `EditableText` cannot move only the rows below the selected visual line without native layout space. That spacer must be removed before and during native handle drag.
 
 Represent the rail as an editor-layout item, not as native text. The canvas layout computes visual line rectangles from the same wrapping model used for markers and tag decoration. For a settled selection, it reserves a vertical slot after `textChunkRailLineIndexForSelection(...)` and positions later editor-layer items below that slot.
 
@@ -40,7 +40,7 @@ Option C, in-flow rail when settled and native-only drag while moving: approved.
 | TIR-001 | User: "a rail nem overlay... ket sor koze ekelodjon be" | `lib/src/notes/ui/text_chunk_canvas_editor.dart`, layout model tests | After a settled text selection, the rail is rendered after the selected visual line and content below that line is shifted down by the rail height plus gap. | Widget test compares selected line, rail rect, and following line rect. | NOT DONE |
 | TIR-002 | User: "nativ... handlerwkkel expandalni rendesen... szabadon mozgatni" | `TextChunkCanvasEditor` selection handling | During native handle drag, the editor does not write controller selection, does not add native placeholders, does not request toolbar, and does not recompute/move the in-flow rail per drag update. | Widget tests simulate drag callbacks and assert rail is hidden or frozen, plain text is unchanged, and selection updates stay native-owned. | NOT DONE |
 | TIR-003 | User: "user kijelol, megjelenik a rail, es a nativ vagolap gombok" | `EditableText` configuration and toolbar path | A settled selection shows native selection handles, native clipboard toolbar, and the in-flow rail together before any handle drag starts. | Widget test long-presses text and asserts non-collapsed native selection, toolbar presence, and rail presence. | NOT DONE |
-| TIR-004 | User logs showing `placeholderDelta=0` but persistent ticking | `TextChunkNativeEditingController`, debug logs | Rail insertion must not be represented as hidden text in the native text span. `placeholderDelta` remains zero for rail-only selections and handle drags. | Existing and new regression tests inspect native plain text and debug logs. | NOT DONE |
+| TIR-004 | User logs showing `placeholderDelta=0` but persistent ticking | `TextChunkNativeEditingController`, debug logs | Settled rail may create a `rail-line-*` spacer, but handle drag must remove it. During handle drag, `placeholderDelta` remains zero and no `rail-line-*` placeholder is logged. | Existing and new regression tests inspect native plain text and debug logs. | NOT DONE |
 | TIR-005 | Project constraint: Flutter APK builds are not local on Termux | GitHub Actions workflow after implementation | Local verification runs targeted Flutter tests/analyze where possible; Android APK build is verified through GitHub Actions after commit and push. | Command output plus Actions URL. | NOT DONE |
 
 ## Testing Plan

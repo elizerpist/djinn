@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -222,8 +223,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   double _measuredRailHeight = _defaultRailHeight;
   List<_TagHighlightGeometry> _nativeTagGeometries = const [];
   bool _selectionHandleDragActive = false;
-  TextRange? _settledRailSelection;
-  TextRange? _dragRailSelection;
+  int? _selectionHandlePointer;
 
   @override
   void initState() {
@@ -247,6 +247,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
 
   @override
   void dispose() {
+    _untrackSelectionHandlePointer();
     widget.controller.removeListener(_handleEditorChanged);
     widget.focusNode.removeListener(_handleEditorChanged);
     super.dispose();
@@ -284,36 +285,52 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         final railInsertionOffset = railLine == null
             ? null
             : _insertionOffsetForLine(railLine);
-        final controllerSelection = widget.controller.selection;
-        final nativeSelectionActive =
-            _selectionHandleDragActive ||
-            (controllerSelection.isValid && !controllerSelection.isCollapsed);
         final visualUnderlineSpacerPlans = _underlineSpacerPlans(
           layout.lines,
           lineHeight,
+          trailingIndentSuppressedOffset: railInsertionOffset,
         );
-        final underlineSpacerPlans = nativeSelectionActive
+        final underlineSpacerPlans = _selectionHandleDragActive
             ? const <_LineSpacerPlan>[]
             : visualUnderlineSpacerPlans;
         final underlineSpacerHeights = {
           for (final plan in underlineSpacerPlans) plan.lineIndex: plan.height,
         };
-        final visualUnderlineSpacerHeights = {
-          for (final plan in visualUnderlineSpacerPlans)
-            plan.lineIndex: plan.height,
-        };
         final railHeight = railLine == null ? 0.0 : _measuredRailHeight;
-        const railTargetSpacerHeight = 0.0;
-        const railNativeLineCount = 0;
-        const railHasLeadingUnderlineSpacer = false;
-        const railNeedsSoftWrapTerminator = false;
-        const railLineBreakCount = 0;
-        const railNativeSpacerHeight = 0.0;
-        const railPlaceholderCount = 0;
+        final railTargetSpacerHeight = railLine == null
+            ? 0.0
+            : railHeight + _railGap;
+        final railNativeLineCount = railLine == null
+            ? 0
+            : math.max(1, (railTargetSpacerHeight / lineHeight).ceil());
+        final railHasLeadingUnderlineSpacer =
+            railInsertionOffset != null &&
+            underlineSpacerPlans.any(
+              (plan) => plan.offset == railInsertionOffset,
+            );
+        final railNeedsSoftWrapTerminator =
+            railLine != null &&
+            !railLine.hardBreakAfter &&
+            !railHasLeadingUnderlineSpacer;
+        final railLineBreakCount = railLine == null
+            ? 0
+            : railNativeLineCount + (railNeedsSoftWrapTerminator ? 1 : 0);
+        final railNativeSpacerHeight = railNativeLineCount * lineHeight;
+        final railPlaceholderText = railLine == null
+            ? ''
+            : _railPlaceholderTextForLineBreaks(
+                railLineBreakCount,
+                trailingText: railLine.hardBreakAfter
+                    ? ''
+                    : _continuationIndentForLine(railLine),
+              );
+        final railPlaceholderCount = railPlaceholderText.length;
         final occupiedPlaceholderOffsets = <int>{
           for (final plan in underlineSpacerPlans) plan.offset,
+          if (railInsertionOffset != null && railPlaceholderText.isNotEmpty)
+            railInsertionOffset,
         };
-        final softWrapIndentPlaceholders = nativeSelectionActive
+        final softWrapIndentPlaceholders = _selectionHandleDragActive
             ? const <_TextChunkNativePlaceholder>[]
             : _softWrapIndentPlaceholders(
                 layout.lines,
@@ -328,6 +345,12 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                   'underline-line-${plan.lineIndex}-lanes-${plan.underlineLanes}',
             ),
           ...softWrapIndentPlaceholders,
+          if (railLine != null && railPlaceholderText.isNotEmpty)
+            _TextChunkNativePlaceholder(
+              offset: railInsertionOffset ?? 0,
+              text: railPlaceholderText,
+              label: 'rail-line-${railLine.index}',
+            ),
         ];
         final underlineNativeSpacerHeight = underlineSpacerPlans.fold<double>(
           0,
@@ -418,7 +441,13 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                         maxLines: null,
                         showSelectionHandles: true,
                         selectionColor: const Color(0x552563EB),
-                        selectionControls: materialTextSelectionHandleControls,
+                        selectionControls: _TextChunkSelectionControls(
+                          onHandlePointerDown:
+                              _handleSelectionHandlePointerDown,
+                          onHandlePointerMove:
+                              _handleSelectionHandlePointerMove,
+                          onHandlePointerEnd: _handleSelectionHandlePointerEnd,
+                        ),
                         contextMenuBuilder: (context, editableTextState) =>
                             AdaptiveTextSelectionToolbar.editableText(
                               editableTextState: editableTextState,
@@ -427,9 +456,28 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                       ),
                     ),
                   ),
-                  if (railLine != null &&
-                      widget.selectionRail != null &&
-                      !_selectionHandleDragActive)
+                  if (railLine != null)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top:
+                          _railTop(
+                            railLine,
+                            lineTops,
+                            lineHeight,
+                            underlineSpacerHeights,
+                          ) -
+                          _railGap,
+                      child: IgnorePointer(
+                        child: SizedBox(
+                          key: const ValueKey(
+                            'note-text-inline-selection-spacer',
+                          ),
+                          height: railTargetSpacerHeight,
+                        ),
+                      ),
+                    ),
+                  if (railLine != null && widget.selectionRail != null)
                     Positioned(
                       left: 0,
                       right: 0,
@@ -437,7 +485,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                         railLine,
                         lineTops,
                         lineHeight,
-                        visualUnderlineSpacerHeights,
+                        underlineSpacerHeights,
                       ),
                       child: KeyedSubtree(
                         key: _railMeasureKey,
@@ -454,8 +502,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                       line: line,
                       lineHeight: lineHeight,
                       lineTops: lineTops,
-                      railLineIndex: null,
-                      railSpacerHeight: 0,
+                      railLineIndex: railLine?.index,
+                      railSpacerHeight: railNativeSpacerHeight,
                     ),
                 ],
               ),
@@ -468,14 +516,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
 
   TextRange? _visualSelection() {
     if (_selectionHandleDragActive) {
-      return _dragRailSelection ?? _settledRailSelection;
+      return null;
     }
-    final selection = _controllerVisualSelection();
-    _settledRailSelection = selection;
-    return selection;
-  }
-
-  TextRange? _controllerVisualSelection() {
     final selection = widget.controller.selection;
     if (selection.isValid) {
       return TextRange(
@@ -543,9 +585,19 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     _startSelectionHandleDrag();
   }
 
+  void _handleSelectionHandlePointerDown(PointerDownEvent event) {
+    _trackSelectionHandlePointer(event.pointer);
+    _startSelectionHandleDrag();
+  }
+
+  void _handleSelectionHandlePointerMove(PointerMoveEvent event) {
+    if (_selectionHandlePointer == null ||
+        _selectionHandlePointer == event.pointer) {
+      _startSelectionHandleDrag();
+    }
+  }
+
   void _startSelectionHandleDrag() {
-    _dragRailSelection ??=
-        _settledRailSelection ?? _controllerVisualSelection();
     _editableTextKey.currentState?.hideToolbar(false);
     if (!_selectionHandleDragActive && mounted) {
       setState(() {
@@ -554,8 +606,72 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     }
   }
 
+  void _handleSelectionHandlePointerEnd(PointerUpEvent event) {
+    _handleSelectionHandlePointerReleased(pointer: event.pointer, settle: true);
+  }
+
+  void _handleSelectionHandlePointerRoute(PointerEvent event) {
+    if (event is PointerUpEvent) {
+      _handleSelectionHandlePointerReleased(
+        pointer: event.pointer,
+        settle: true,
+      );
+    } else if (event is PointerCancelEvent) {
+      _handleSelectionHandlePointerReleased(pointer: event.pointer);
+    }
+  }
+
+  void _handleSelectionHandlePointerReleased({
+    int? pointer,
+    bool settle = false,
+  }) {
+    if (pointer != null && pointer == _selectionHandlePointer) {
+      _untrackSelectionHandlePointer();
+      if (settle) {
+        _settleSelectionHandleDrag();
+      }
+    }
+  }
+
+  void _settleSelectionHandleDrag() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _selectionHandlePointer != null) {
+        return;
+      }
+      if (_selectionHandleDragActive) {
+        setState(() {
+          _selectionHandleDragActive = false;
+        });
+      }
+    });
+  }
+
+  void _trackSelectionHandlePointer(int pointer) {
+    if (_selectionHandlePointer == pointer) {
+      return;
+    }
+    _untrackSelectionHandlePointer();
+    _selectionHandlePointer = pointer;
+    GestureBinding.instance.pointerRouter.addRoute(
+      pointer,
+      _handleSelectionHandlePointerRoute,
+    );
+  }
+
+  void _untrackSelectionHandlePointer() {
+    final pointer = _selectionHandlePointer;
+    if (pointer == null) {
+      return;
+    }
+    GestureBinding.instance.pointerRouter.removeRoute(
+      pointer,
+      _handleSelectionHandlePointerRoute,
+    );
+    _selectionHandlePointer = null;
+  }
+
   void _cancelSelectionHandleDrag() {
-    _dragRailSelection = null;
+    _untrackSelectionHandlePointer();
     if (_selectionHandleDragActive && mounted) {
       setState(() {
         _selectionHandleDragActive = false;
@@ -1008,6 +1124,37 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
       textScaler: MediaQuery.textScalerOf(context),
     )..layout();
     return painter.height;
+  }
+}
+
+class _TextChunkSelectionControls extends MaterialTextSelectionControls
+    with TextSelectionHandleControls {
+  _TextChunkSelectionControls({
+    required this.onHandlePointerDown,
+    required this.onHandlePointerMove,
+    required this.onHandlePointerEnd,
+  });
+
+  final ValueChanged<PointerDownEvent> onHandlePointerDown;
+  final ValueChanged<PointerMoveEvent> onHandlePointerMove;
+  final ValueChanged<PointerUpEvent> onHandlePointerEnd;
+
+  @override
+  Widget buildHandle(
+    BuildContext context,
+    TextSelectionHandleType type,
+    double textLineHeight, [
+    VoidCallback? onTap,
+  ]) {
+    return Listener(
+      key: ValueKey('note-text-native-selection-handle-${type.name}'),
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: onHandlePointerDown,
+      onPointerMove: onHandlePointerMove,
+      onPointerUp: onHandlePointerEnd,
+      onPointerCancel: (_) {},
+      child: super.buildHandle(context, type, textLineHeight, onTap),
+    );
   }
 }
 
