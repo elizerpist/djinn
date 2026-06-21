@@ -40,7 +40,7 @@
 - Produces: `NativeSelectionRailController`, `NativeSelectionRailState`, `NativeSelectionRailAction`, `NativeSelectionRailTag`.
 - Consumes later: `NoteTextChunkEditorScreen` calls `setStateModel(...)`, `dispose()`, and assigns `onAction`.
 
-- [ ] **Step 1: Write failing serialization and action tests**
+- [x] **Step 1: Write failing serialization and action tests**
 
 Add tests that:
 
@@ -86,16 +86,16 @@ await testerBinding.defaultBinaryMessenger.handlePlatformMessage(
 expect(action, NativeSelectionRailAction.indent);
 ```
 
-- [ ] **Step 2: Run bridge tests red**
+- [x] **Step 2: Run bridge tests red**
 
 Run: `flutter test test/native_selection_rail_bridge_test.dart`
 Expected: fails because the bridge file does not exist.
 
-- [ ] **Step 3: Implement minimal bridge**
+- [x] **Step 3: Implement minimal bridge**
 
 Create immutable state/tag classes, action enum parser, `MethodChannel.setMethodCallHandler`, and `setStateModel`/`hide` methods.
 
-- [ ] **Step 4: Run bridge tests green**
+- [x] **Step 4: Run bridge tests green**
 
 Run: `flutter test test/native_selection_rail_bridge_test.dart`
 Expected: pass.
@@ -110,7 +110,7 @@ Expected: pass.
 - Consumes: `NativeSelectionRailController`, `NativeSelectionRailState`, `NativeSelectionRailAction`.
 - Produces: active rail state sent to native bridge; existing action methods invoked from native callbacks.
 
-- [ ] **Step 1: Write failing widget tests**
+- [x] **Step 1: Write failing widget tests**
 
 Add tests with a mocked native rail channel:
 
@@ -120,20 +120,20 @@ Add tests with a mocked native rail channel:
 - native action `indent` changes paragraph indentation through existing `_changeParagraphIndent`;
 - inline rail widget is absent.
 
-- [ ] **Step 2: Run targeted tests red**
+- [x] **Step 2: Run targeted tests red**
 
 Run: `flutter test test/note_text_chunk_editor_screen_test.dart`
 Expected: new tests fail because the screen still renders inline rail and has no native bridge.
 
-- [ ] **Step 3: Wire controller into screen**
+- [x] **Step 3: Wire controller into screen**
 
 Instantiate `NativeSelectionRailController`, assign `onAction`, update native state from `_updateSelectionState`, `_handleControllerChanged`, range tag mutations, style toggles, and `dispose()`.
 
-- [ ] **Step 4: Replace inline rail output**
+- [x] **Step 4: Replace inline rail output**
 
 Pass `selectionRail: null` to `TextChunkCanvasEditor`. Use `_activeRailRange` only for native rail state and selected-tag action state.
 
-- [ ] **Step 5: Run targeted tests green**
+- [x] **Step 5: Run targeted tests green**
 
 Run: `flutter test test/note_text_chunk_editor_screen_test.dart test/native_selection_rail_bridge_test.dart`
 Expected: pass.
@@ -148,20 +148,20 @@ Expected: pass.
 - Consumes: no `selectionRail` use from screen.
 - Produces: no rail-line placeholders or inline rail widgets; underline spacer code remains.
 
-- [ ] **Step 1: Write or update regression assertions**
+- [x] **Step 1: Write or update regression assertions**
 
 Assert there is no `note-text-inline-selection-rail`, no `note-text-inline-selection-spacer`, and logs do not include `rail-line-` or nonzero `placeholderDelta` for rail cases. Keep existing underline tests passing.
 
-- [ ] **Step 2: Run tests red if inline rail remains**
+- [x] **Step 2: Run tests red if inline rail remains**
 
 Run: `flutter test test/note_text_chunk_editor_screen_test.dart`
 Expected: fails while inline rail code remains.
 
-- [ ] **Step 3: Remove rail placeholder/widget code**
+- [x] **Step 3: Remove rail placeholder/widget code**
 
 Delete rail target spacer, rail native spacer, rail placeholder creation, inline rail `Positioned` widgets, and rail-specific line marker offsets. Keep underline placeholder planning.
 
-- [ ] **Step 4: Run tests green**
+- [x] **Step 4: Run tests green**
 
 Run: `flutter test test/note_text_chunk_editor_screen_test.dart test/text_chunk_layout_model_test.dart`
 Expected: pass.
@@ -177,15 +177,15 @@ Expected: pass.
 - Consumes: method channel `djinn.selection_rail/native`, method `setState`, native action method `performAction`.
 - Produces: native keyboard-attached rail view with action buttons and tag pills.
 
-- [ ] **Step 1: Add native channel registration**
+- [x] **Step 1: Add native channel registration**
 
 Register `NativeSelectionRailBridge(this, flutterEngine.dartExecutor.binaryMessenger)` from `MainActivity.configureFlutterEngine`.
 
-- [ ] **Step 2: Implement state parsing and native view**
+- [x] **Step 2: Implement state parsing and native view**
 
 Use a `FrameLayout` container added to `android.R.id.content`. Render action buttons with fixed IDs matching Dart enum names. Render tag pills from serialized `tags`.
 
-- [ ] **Step 3: Implement keyboard-synchronized positioning**
+- [x] **Step 3: Implement keyboard-synchronized positioning**
 
 On Android R+, install `WindowInsetsAnimation.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE)` on the content root. On each `onProgress`, read `WindowInsets.Type.ime()` bottom and position the native rail against the keyboard top in the same native frame. Also handle `onApplyWindowInsets` fallback for non-animated or older paths.
 
@@ -203,7 +203,7 @@ Local Android build is not required on Termux. GitHub Actions must compile Kotli
 - Consumes: NKR acceptance checklist.
 - Produces: verified branch and Android debug APK.
 
-- [ ] **Step 1: Run available local checks**
+- [x] **Step 1: Run available local checks**
 
 Run what works locally. If Flutter fails due Termux TLS alignment, record that exact limitation and rely on Actions.
 
@@ -218,4 +218,3 @@ Run Android native build workflow on the branch. Wait for success or inspect log
 - [ ] **Step 4: Update checklist**
 
 Mark NKR-001 through NKR-009 honestly based on tests, inspection, and Actions. Do not mark complete if any required behavior is unverified.
-

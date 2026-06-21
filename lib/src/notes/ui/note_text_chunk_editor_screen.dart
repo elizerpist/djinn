@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
+import 'native_selection_rail_bridge.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
 import 'tag_manager_sheet.dart';
@@ -45,12 +46,14 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
     required this.onChanged,
     this.availableTags = const [],
     this.onDelete,
+    this.nativeSelectionRailController,
   });
 
   final NoteBlock block;
   final ValueChanged<NoteBlock> onChanged;
   final List<NoteKnowledgeTag> availableTags;
   final VoidCallback? onDelete;
+  final NativeSelectionRailController? nativeSelectionRailController;
 
   @override
   State<NoteTextChunkEditorScreen> createState() =>
@@ -61,6 +64,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late NoteBlock _block;
   late final TextChunkNativeEditingController _controller;
   late final FocusNode _focusNode;
+  late final NativeSelectionRailController _nativeSelectionRailController;
+  late final bool _ownsNativeSelectionRailController;
   bool _syncingController = false;
   bool _railBottomExpanded = true;
   bool _railRoundedCard = false;
@@ -78,6 +83,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     _controller = TextChunkNativeEditingController(text: widget.block.text)
       ..addListener(_handleControllerChanged);
     _focusNode = FocusNode();
+    _nativeSelectionRailController =
+        widget.nativeSelectionRailController ?? NativeSelectionRailController();
+    _ownsNativeSelectionRailController =
+        widget.nativeSelectionRailController == null;
+    _nativeSelectionRailController.onAction = _handleNativeRailAction;
+    _syncNativeRailState();
   }
 
   @override
@@ -110,10 +121,16 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _activeRailRange = null;
       _selectionCanDeleteTag = false;
     }
+    _syncNativeRailState();
   }
 
   @override
   void dispose() {
+    _nativeSelectionRailController.onAction = null;
+    _sendNativeRailUpdate(_nativeSelectionRailController.hide());
+    if (_ownsNativeSelectionRailController) {
+      _nativeSelectionRailController.dispose();
+    }
     _controller
       ..removeListener(_handleControllerChanged)
       ..dispose();
@@ -160,6 +177,78 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     _updateSelectionState();
   }
 
+  void _sendNativeRailUpdate(Future<void> update) {
+    unawaited(update.catchError((_) {}));
+  }
+
+  void _syncNativeRailState() {
+    final range = _activeRailRange;
+    if (range == null) {
+      _sendNativeRailUpdate(_nativeSelectionRailController.hide());
+      return;
+    }
+    _sendNativeRailUpdate(
+      _nativeSelectionRailController.setStateModel(
+        NativeSelectionRailState.visible(
+          rangeStart: range.start,
+          rangeEnd: range.end,
+          tags: _nativeRailTagsForRange(range),
+          canDeleteTag: _selectionCanDeleteTag,
+          hasTaggedRanges: _block.rangeTags.isNotEmpty,
+          bottomRowExpanded: _railBottomExpanded,
+          roundedCard: _railRoundedCard,
+          greyBackground: _railGreyBackground,
+          borderVisible: _railBorderVisible,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleNativeRailAction(NativeSelectionRailAction action) async {
+    switch (action.type) {
+      case NativeSelectionRailActionType.toggleTags:
+        setState(() => _railBottomExpanded = !_railBottomExpanded);
+        _syncNativeRailState();
+        return;
+      case NativeSelectionRailActionType.outdent:
+        _changeParagraphIndent(-1);
+        return;
+      case NativeSelectionRailActionType.indent:
+        _changeParagraphIndent(1);
+        return;
+      case NativeSelectionRailActionType.tagSelection:
+        unawaited(_tagSelection());
+        return;
+      case NativeSelectionRailActionType.clearTags:
+        _deleteSelectedTag();
+        return;
+      case NativeSelectionRailActionType.previousTag:
+        _focusTaggedRange(-1);
+        return;
+      case NativeSelectionRailActionType.nextTag:
+        _focusTaggedRange(1);
+        return;
+      case NativeSelectionRailActionType.toggleRounded:
+        setState(() => _railRoundedCard = !_railRoundedCard);
+        _syncNativeRailState();
+        return;
+      case NativeSelectionRailActionType.toggleGrey:
+        setState(() => _railGreyBackground = !_railGreyBackground);
+        _syncNativeRailState();
+        return;
+      case NativeSelectionRailActionType.toggleBorder:
+        setState(() => _railBorderVisible = !_railBorderVisible);
+        _syncNativeRailState();
+        return;
+      case NativeSelectionRailActionType.deleteTag:
+        final tag = _tagById(action.tagId);
+        if (tag != null) {
+          _deleteSingleSelectedTag(tag);
+        }
+        return;
+    }
+  }
+
   TextChunkTextEdit _editFromTextChange(String oldText, String newText) {
     var prefix = 0;
     while (prefix < oldText.length &&
@@ -188,6 +277,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _block = _block.copyWith(title: value.trim(), clearIndex: true);
     });
     widget.onChanged(_block);
+    _syncNativeRailState();
   }
 
   Future<void> _tagChunk() async {
@@ -214,6 +304,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       );
     });
     widget.onChanged(_block);
+    _syncNativeRailState();
   }
 
   Future<void> _tagSelection() async {
@@ -256,6 +347,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _selectionCanDeleteTag = true;
     });
     widget.onChanged(_block);
+    _syncNativeRailState();
   }
 
   NoteTextRangeTag? _exactRangeTag(TextRange range) {
@@ -302,12 +394,14 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     final nextCanDelete = nextRange != null && _rangeHasTag(nextRange);
     if (_sameRange(_activeRailRange, nextRange) &&
         nextCanDelete == _selectionCanDeleteTag) {
+      _syncNativeRailState();
       return;
     }
     setState(() {
       _activeRailRange = nextRange;
       _selectionCanDeleteTag = nextCanDelete;
     });
+    _syncNativeRailState();
   }
 
   bool _sameRange(TextRange? a, TextRange? b) {
@@ -325,6 +419,34 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
 
   List<NoteKnowledgeTag> _selectionTags() {
     final range = _selectionTargetRange();
+    return _tagsForRange(range);
+  }
+
+  List<NativeSelectionRailTag> _nativeRailTagsForRange(TextRange range) {
+    return _tagsForRange(range)
+        .map(
+          (tag) => NativeSelectionRailTag(
+            id: tag.metadataText,
+            label: tag.label,
+            colorValue: tag.colorValue,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  NoteKnowledgeTag? _tagById(String? tagId) {
+    if (tagId == null) {
+      return null;
+    }
+    for (final tag in _tagsForRange(_activeRailRange)) {
+      if (tag.metadataText == tagId) {
+        return tag;
+      }
+    }
+    return null;
+  }
+
+  List<NoteKnowledgeTag> _tagsForRange(TextRange? range) {
     if (range == null) {
       return const [];
     }
@@ -357,6 +479,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _selectionCanDeleteTag = false;
     });
     widget.onChanged(_block);
+    _syncNativeRailState();
   }
 
   void _deleteSingleSelectedTag(NoteKnowledgeTag tag) {
@@ -392,6 +515,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           _rangeHasTag(_selectionTargetRange()!);
     });
     widget.onChanged(_block);
+    _syncNativeRailState();
   }
 
   void _focusTaggedRange(int direction) {
@@ -423,6 +547,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       );
     });
     _focusNode.requestFocus();
+    _syncNativeRailState();
   }
 
   void _changeParagraphIndent(int delta) {
@@ -468,107 +593,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _syncingController = false;
     }
     widget.onChanged(_block);
-  }
-
-  Widget _buildSelectionRail() {
-    const compactConstraints = BoxConstraints.tightFor(width: 34, height: 34);
-    const compactPadding = EdgeInsets.zero;
-    return NoteSelectionActionRail(
-      key: const ValueKey('note-text-selection-rail'),
-      tags: _selectionTags(),
-      pillPrefix: 'note-text-selection-rail-pill',
-      bottomRowExpanded: _railBottomExpanded,
-      onToggleBottomRow: () =>
-          setState(() => _railBottomExpanded = !_railBottomExpanded),
-      onDeleteTag: _deleteSingleSelectedTag,
-      roundedCard: _railRoundedCard,
-      transparentBackground: _railGreyBackground,
-      showBorder: _railBorderVisible,
-      showBottomBorder: false,
-      contentPadding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
-      actions: [
-        IconButton(
-          key: const ValueKey('note-text-selection-rail-outdent'),
-          tooltip: 'Bekezdés kijjebb',
-          onPressed: () => _changeParagraphIndent(-1),
-          constraints: compactConstraints,
-          padding: compactPadding,
-          icon: const Icon(Icons.format_indent_decrease, size: 20),
-        ),
-        IconButton(
-          key: const ValueKey('note-text-selection-rail-indent'),
-          tooltip: 'Bekezdés beljebb',
-          onPressed: () => _changeParagraphIndent(1),
-          constraints: compactConstraints,
-          padding: compactPadding,
-          icon: const Icon(Icons.format_indent_increase, size: 20),
-        ),
-        IconButton(
-          key: const ValueKey('note-text-selection-rail-tag'),
-          tooltip: 'Kijelölt rész tagelése',
-          onPressed: () => unawaited(_tagSelection()),
-          constraints: compactConstraints,
-          padding: compactPadding,
-          icon: const Icon(Icons.sell_outlined, size: 20),
-        ),
-        IconButton(
-          key: const ValueKey('note-text-selection-rail-clear-tags'),
-          tooltip: 'Minden tag törlése',
-          onPressed: _selectionCanDeleteTag ? _deleteSelectedTag : null,
-          constraints: compactConstraints,
-          padding: compactPadding,
-          icon: const Icon(Icons.delete_outline, size: 20),
-        ),
-        IconButton(
-          key: const ValueKey('note-text-selection-rail-prev'),
-          tooltip: 'Előző tag',
-          onPressed: _block.rangeTags.isEmpty
-              ? null
-              : () => _focusTaggedRange(-1),
-          constraints: compactConstraints,
-          padding: compactPadding,
-          icon: const Icon(Icons.chevron_left, size: 20),
-        ),
-        IconButton(
-          key: const ValueKey('note-text-selection-rail-next'),
-          tooltip: 'Következő tag',
-          onPressed: _block.rangeTags.isEmpty
-              ? null
-              : () => _focusTaggedRange(1),
-          constraints: compactConstraints,
-          padding: compactPadding,
-          icon: const Icon(Icons.chevron_right, size: 20),
-        ),
-        IconButton(
-          key: const ValueKey('note-text-rail-toggle-rounded'),
-          tooltip: _railRoundedCard ? 'Vonalas rail' : 'Cellaszerű rail',
-          onPressed: () => setState(() => _railRoundedCard = !_railRoundedCard),
-          constraints: compactConstraints,
-          padding: compactPadding,
-          icon: const Icon(Icons.crop_square_outlined, size: 18),
-        ),
-        IconButton(
-          key: const ValueKey('note-text-rail-toggle-grey'),
-          tooltip: _railGreyBackground
-              ? 'Fehér rail háttér'
-              : 'Szürke rail háttér',
-          onPressed: () =>
-              setState(() => _railGreyBackground = !_railGreyBackground),
-          constraints: compactConstraints,
-          padding: compactPadding,
-          icon: const Icon(Icons.opacity, size: 18),
-        ),
-        IconButton(
-          key: const ValueKey('note-text-rail-toggle-border'),
-          tooltip: _railBorderVisible ? 'Rail border nélkül' : 'Rail borderrel',
-          onPressed: () =>
-              setState(() => _railBorderVisible = !_railBorderVisible),
-          constraints: compactConstraints,
-          padding: compactPadding,
-          icon: const Icon(Icons.border_outer, size: 18),
-        ),
-      ],
-    );
+    _syncNativeRailState();
   }
 
   void _deleteChunk() {
@@ -628,9 +653,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 focusNode: _focusNode,
                 rangeTags: _block.rangeTags,
                 activeRange: _activeRailRange,
-                selectionRail: _activeRailRange == null
-                    ? null
-                    : _buildSelectionRail(),
                 textStyle: _textStyle,
               ),
             ),

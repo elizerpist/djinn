@@ -1,52 +1,341 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
+import 'package:djinn/src/notes/ui/native_selection_rail_bridge.dart';
 import 'package:djinn/src/notes/ui/note_text_chunk_editor_screen.dart';
 
 void main() {
   setUp(DebugConsole.clear);
 
-  testWidgets('single-line selection inserts the rail below that visual line', (
+  const nativeRailChannel = MethodChannel('test.djinn.selection_rail/native');
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeRailChannel, null);
+  });
+
+  testWidgets('selection sends native rail state and no inline rail', (
     tester,
   ) async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeRailChannel, (call) async {
+          calls.add(call);
+          return null;
+        });
+    final controller = NativeSelectionRailController(
+      methodChannel: nativeRailChannel,
+    );
+    addTearDown(controller.dispose);
+
     await _pumpTextChunkEditor(
       tester,
       const NoteBlock(
         id: 'text-1',
         type: NoteBlockType.paragraph,
-        text: 'Alpha\nBeta\nGamma',
+        text: 'Alpha Beta Gamma',
       ),
+      nativeSelectionRailController: controller,
     );
 
     _setEditorSelection(
       tester,
-      const TextSelection(baseOffset: 1, extentOffset: 4),
+      const TextSelection(baseOffset: 6, extentOffset: 10),
     );
     await tester.pumpAndSettle();
 
-    final line0 = tester.getRect(
-      find.byKey(const ValueKey('note-text-line-0')),
-    );
-    final line1 = tester.getRect(
-      find.byKey(const ValueKey('note-text-line-1')),
-    );
-    final rail = tester.getRect(
+    final state = _lastNativeRailState(calls);
+    expect(state, containsPair('visible', true));
+    expect(state, containsPair('rangeStart', 6));
+    expect(state, containsPair('rangeEnd', 10));
+    expect(
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
     );
-
-    expect(rail.top, greaterThanOrEqualTo(line0.bottom));
-    expect(line1.top, greaterThanOrEqualTo(rail.bottom));
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
-  testWidgets('settled rail pushes actual native editable text below itself', (
+  testWidgets('collapsed cursor inside tagged range sends native rail state', (
+    tester,
+  ) async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeRailChannel, (call) async {
+          calls.add(call);
+          return null;
+        });
+    final controller = NativeSelectionRailController(
+      methodChannel: nativeRailChannel,
+    );
+    addTearDown(controller.dispose);
+
+    await _pumpTextChunkEditor(
+      tester,
+      NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha Beta Gamma',
+        rangeTags: const [
+          NoteTextRangeTag(
+            id: 'range-alpha',
+            start: 0,
+            end: 5,
+            tag: NoteKnowledgeTag(
+              type: NoteKnowledgeTagTypes.topic,
+              label: 'Alpha',
+              colorValue: 0xFF2563EB,
+            ),
+          ),
+        ],
+      ),
+      nativeSelectionRailController: controller,
+    );
+
+    _setEditorSelection(tester, const TextSelection.collapsed(offset: 2));
+    await tester.pumpAndSettle();
+
+    final state = _lastNativeRailState(calls);
+    expect(state, containsPair('visible', true));
+    expect(state, containsPair('rangeStart', 0));
+    expect(state, containsPair('rangeEnd', 5));
+    expect(state['tags'], [
+      {'id': 'topic:Alpha', 'label': 'Alpha', 'colorValue': 0xFF2563EB},
+    ]);
+  });
+
+  testWidgets('ordinary untagged typing keeps native rail hidden', (
+    tester,
+  ) async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeRailChannel, (call) async {
+          calls.add(call);
+          return null;
+        });
+    final controller = NativeSelectionRailController(
+      methodChannel: nativeRailChannel,
+    );
+    addTearDown(controller.dispose);
+
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(id: 'text-1', type: NoteBlockType.paragraph, text: ''),
+      nativeSelectionRailController: controller,
+    );
+
+    await tester.enterText(_editableTextFinder(), 'Alpha Beta');
+    await tester.pumpAndSettle();
+
+    final state = _lastNativeRailState(calls);
+    expect(state, containsPair('visible', false));
+    expect(
+      calls.where(
+        (call) =>
+            call.method == 'setState' &&
+            (call.arguments as Map<Object?, Object?>)['visible'] == true,
+      ),
+      isEmpty,
+    );
+  });
+
+  testWidgets('native indent action uses paragraph indentation', (
+    tester,
+  ) async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeRailChannel, (call) async {
+          calls.add(call);
+          return null;
+        });
+    final controller = NativeSelectionRailController(
+      methodChannel: nativeRailChannel,
+    );
+    addTearDown(controller.dispose);
+    NoteBlock? latest;
+
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha Beta Gamma',
+      ),
+      onChanged: (block) => latest = block,
+      nativeSelectionRailController: controller,
+    );
+    _setEditorSelection(
+      tester,
+      const TextSelection(baseOffset: 0, extentOffset: 5),
+    );
+    await tester.pumpAndSettle();
+
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+          nativeRailChannel.name,
+          nativeRailChannel.codec.encodeMethodCall(
+            const MethodCall('performAction', {'action': 'indent'}),
+          ),
+          (_) {},
+        );
+    await tester.pumpAndSettle();
+
+    expect(latest?.text, startsWith('  '));
+    expect(DebugConsole.allText, contains('[TextChunkStep] delta=1'));
+  });
+
+  testWidgets('native outdent action uses paragraph indentation', (
+    tester,
+  ) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeRailChannel, (_) async => null);
+    final controller = NativeSelectionRailController(
+      methodChannel: nativeRailChannel,
+    );
+    addTearDown(controller.dispose);
+    NoteBlock? latest;
+
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: '  Alpha Beta Gamma',
+      ),
+      onChanged: (block) => latest = block,
+      nativeSelectionRailController: controller,
+    );
+    _setEditorSelection(
+      tester,
+      const TextSelection(baseOffset: 2, extentOffset: 7),
+    );
+    await tester.pumpAndSettle();
+
+    await _performNativeRailAction(nativeRailChannel, 'outdent');
+    await tester.pumpAndSettle();
+
+    expect(latest?.text, startsWith('Alpha'));
+    expect(DebugConsole.allText, contains('[TextChunkStep] delta=-1'));
+  });
+
+  testWidgets(
+    'native clear and delete tag actions update selected range tags',
+    (tester) async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeRailChannel, (_) async => null);
+      final controller = NativeSelectionRailController(
+        methodChannel: nativeRailChannel,
+      );
+      addTearDown(controller.dispose);
+      NoteBlock? latest;
+      const primary = NoteKnowledgeTag(
+        type: NoteKnowledgeTagTypes.topic,
+        label: 'Primary',
+        colorValue: 0xFF2563EB,
+      );
+      const secondary = NoteKnowledgeTag(
+        type: NoteKnowledgeTagTypes.state,
+        label: 'Secondary',
+        colorValue: 0xFFDC2626,
+      );
+
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: 'Alpha Beta Gamma',
+          rangeTags: [
+            NoteTextRangeTag(
+              id: 'range-beta',
+              start: 6,
+              end: 10,
+              tag: primary,
+              tags: [primary, secondary],
+            ),
+          ],
+        ),
+        onChanged: (block) => latest = block,
+        nativeSelectionRailController: controller,
+      );
+      _setEditorSelection(tester, const TextSelection.collapsed(offset: 7));
+      await tester.pumpAndSettle();
+
+      await _performNativeRailAction(
+        nativeRailChannel,
+        'deleteTag',
+        tagId: primary.metadataText,
+      );
+      await tester.pumpAndSettle();
+
+      expect(latest?.rangeTags, hasLength(1));
+      expect(latest!.rangeTags.single.resolvedTags, [secondary]);
+
+      await _performNativeRailAction(nativeRailChannel, 'clearTags');
+      await tester.pumpAndSettle();
+
+      expect(latest?.rangeTags, isEmpty);
+    },
+  );
+
+  testWidgets('native previous and next actions focus tagged ranges', (
+    tester,
+  ) async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeRailChannel, (call) async {
+          calls.add(call);
+          return null;
+        });
+    final controller = NativeSelectionRailController(
+      methodChannel: nativeRailChannel,
+    );
+    addTearDown(controller.dispose);
+    const tag = NoteKnowledgeTag(
+      type: NoteKnowledgeTagTypes.topic,
+      label: 'Tag',
+      colorValue: 0xFF2563EB,
+    );
+
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha Beta Gamma',
+        rangeTags: [
+          NoteTextRangeTag(id: 'range-alpha', start: 0, end: 5, tag: tag),
+          NoteTextRangeTag(id: 'range-gamma', start: 11, end: 16, tag: tag),
+        ],
+      ),
+      nativeSelectionRailController: controller,
+    );
+    _setEditorSelection(tester, const TextSelection.collapsed(offset: 2));
+    await tester.pumpAndSettle();
+
+    await _performNativeRailAction(nativeRailChannel, 'nextTag');
+    await tester.pumpAndSettle();
+
+    var state = _lastNativeRailState(calls);
+    expect(state, containsPair('rangeStart', 11));
+    expect(state, containsPair('rangeEnd', 16));
+
+    await _performNativeRailAction(nativeRailChannel, 'previousTag');
+    await tester.pumpAndSettle();
+
+    state = _lastNativeRailState(calls);
+    expect(state, containsPair('rangeStart', 0));
+    expect(state, containsPair('rangeEnd', 5));
+  });
+
+  testWidgets('selection does not insert an inline rail into text layout', (
     tester,
   ) async {
     const text = 'Alpha\nBeta\nGamma';
@@ -61,27 +350,49 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final alpha = _nativeEditableSubstringRect(tester, 'Alpha');
-    final beta = _nativeEditableSubstringRect(tester, 'Beta');
-    final rail = tester.getRect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-    );
-    final spacer = tester.getRect(
-      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-    );
-
-    expect(spacer.height, closeTo(rail.height + 8, 2));
-    expect(rail.top, greaterThanOrEqualTo(alpha.bottom));
-    expect(beta.top, greaterThanOrEqualTo(rail.bottom));
+    expect(_nativeEditablePlainText(tester), text);
+    expect(DebugConsole.allText, isNot(contains('rail-line-')));
+    expect(DebugConsole.allText, contains('placeholderDelta=0'));
     expect(
-      beta.top - rail.bottom,
-      lessThanOrEqualTo(24),
-      reason: 'Native rail spacer may round to the line grid only.',
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
     );
-    expect(DebugConsole.allText, contains('rail-line-'));
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+      findsNothing,
+    );
   });
 
-  testWidgets('soft-wrapped rail opens enough native space below itself', (
+  testWidgets(
+    'selection keeps native editable text geometry unshifted by rail',
+    (tester) async {
+      const text = 'Alpha\nBeta\nGamma';
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+        ),
+      );
+
+      _setEditorSelection(
+        tester,
+        const TextSelection(baseOffset: 1, extentOffset: 4),
+      );
+      await tester.pumpAndSettle();
+
+      final alpha = _nativeEditableSubstringRect(tester, 'Alpha');
+      final beta = _nativeEditableSubstringRect(tester, 'Beta');
+
+      expect(beta.top, greaterThanOrEqualTo(alpha.bottom));
+      expect(beta.top - alpha.bottom, lessThanOrEqualTo(24));
+      expect(DebugConsole.allText, isNot(contains('rail-line-')));
+      expect(DebugConsole.allText, contains('placeholderDelta=0'));
+    },
+  );
+
+  testWidgets('soft-wrapped selection does not create rail placeholders', (
     tester,
   ) async {
     const target = 'targetword';
@@ -107,32 +418,23 @@ void main() {
     await tester.pumpAndSettle();
 
     final targetRect = _nativeEditableSubstringTightRect(tester, target);
-    final rail = tester.getRect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-    );
     final lineBounds = _nativeEditableNonEmptyLineBounds(tester);
-    final nextLine = lineBounds.firstWhere((line) => line.top > rail.top + 2);
     final diagnostic =
-        'target=$targetRect rail=$rail nextLine=$nextLine '
+        'target=$targetRect '
         'lineBounds=${lineBounds.map((line) => '${line.left.toStringAsFixed(1)},${line.top.toStringAsFixed(1)},${line.right.toStringAsFixed(1)},${line.bottom.toStringAsFixed(1)}').join(';')} '
         'logs=${DebugConsole.allText}';
 
-    expect(rail.top, greaterThanOrEqualTo(targetRect.bottom));
+    expect(targetRect.width, greaterThan(0), reason: diagnostic);
+    expect(lineBounds, isNotEmpty, reason: diagnostic);
+    expect(DebugConsole.allText, isNot(contains('rail-line-')));
+    expect(DebugConsole.allText, contains('placeholderDelta=0'));
     expect(
-      nextLine.top,
-      greaterThanOrEqualTo(rail.bottom),
-      reason:
-          'A settled rail inserted after a soft-wrapped visual line must '
-          'reserve native space before the next visible row. $diagnostic',
-    );
-    expect(
-      nextLine.top - rail.bottom,
-      lessThanOrEqualTo(24),
-      reason: 'The native spacer may round to the line grid only. $diagnostic',
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -156,27 +458,28 @@ void main() {
 
     expect(DebugConsole.allText, contains('[TextChunkLayout] textLen='));
     expect(DebugConsole.allText, contains('selection=1-4'));
-    expect(DebugConsole.allText, contains('railLine=0'));
+    expect(DebugConsole.allText, contains('railLine=null'));
     expect(DebugConsole.allText, contains('placeholderCount='));
-    expect(DebugConsole.allText, contains('railGap='));
-    expect(DebugConsole.allText, contains('railHeight='));
-    expect(DebugConsole.allText, contains('railTargetSpacer='));
-    expect(DebugConsole.allText, contains('railNativeSpacer='));
-    expect(DebugConsole.allText, contains('railRoundedGap='));
-    expect(DebugConsole.allText, contains('railLineBreaks='));
-    expect(DebugConsole.allText, contains('railLeadingUnderlineSpacer='));
-    expect(DebugConsole.allText, contains('railSoftWrapTerminator='));
-    expect(DebugConsole.allText, contains('railNativeLines='));
-    expect(DebugConsole.allText, contains('railPlaceholderBreaks='));
+    expect(DebugConsole.allText, contains('railGap=null'));
+    expect(DebugConsole.allText, contains('railHeight=null'));
+    expect(DebugConsole.allText, contains('railTargetSpacer=null'));
+    expect(DebugConsole.allText, contains('railNativeSpacer=null'));
+    expect(DebugConsole.allText, contains('railRoundedGap=null'));
+    expect(DebugConsole.allText, contains('railLineBreaks=0'));
+    expect(DebugConsole.allText, contains('railLeadingUnderlineSpacer=false'));
+    expect(DebugConsole.allText, contains('railSoftWrapTerminator=false'));
+    expect(DebugConsole.allText, contains('railNativeLines=0'));
+    expect(DebugConsole.allText, contains('railPlaceholderBreaks=0'));
     expect(DebugConsole.allText, contains('[TextChunkLayout] nativeGeometry'));
     expect(DebugConsole.allText, contains('nativeOrigins='));
     expect(DebugConsole.allText, contains('tightTagBoxes=true'));
     expect(DebugConsole.allText, contains('underlineRects='));
-    expect(DebugConsole.allText, contains('placeholderDelta='));
+    expect(DebugConsole.allText, contains('placeholderDelta=0'));
+    expect(DebugConsole.allText, isNot(contains('rail-line-')));
   });
 
   testWidgets(
-    'multi-line selection inserts the rail below the lowest selected line',
+    'multi-line selection keeps rail out of the Flutter text layout',
     (tester) async {
       await _pumpTextChunkEditor(
         tester,
@@ -193,26 +496,24 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final line1 = tester.getRect(
-        find.byKey(const ValueKey('note-text-line-1')),
-      );
       final line2 = tester.getRect(
         find.byKey(const ValueKey('note-text-line-2')),
       );
-      final rail = tester.getRect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      );
 
-      expect(rail.top, greaterThanOrEqualTo(line1.bottom));
-      expect(line2.top, greaterThanOrEqualTo(rail.bottom));
+      expect(line2.height, greaterThan(0));
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsNothing,
+      );
       expect(
         find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsOneWidget,
+        findsNothing,
       );
+      expect(DebugConsole.allText, isNot(contains('rail-line-')));
     },
   );
 
-  testWidgets('selection handle drag keeps rail hidden until explicit release', (
+  testWidgets('selection handle drag keeps Flutter text layout rail-free', (
     tester,
   ) async {
     const text = 'Alpha\nBeta\nGamma\nDelta';
@@ -229,7 +530,7 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      findsOneWidget,
+      findsNothing,
     );
     final gammaEnd = text.indexOf('Gamma') + 'Gamma'.length;
     await _simulateNativeSelectionDrag(
@@ -279,18 +580,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final gamma = _nativeEditableSubstringRect(tester, 'Gamma');
-    final rail = tester.getRect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+    expect(
+      _nativeEditableSubstringRect(tester, 'Gamma').height,
+      greaterThan(0),
     );
-    expect(rail.top, greaterThanOrEqualTo(gamma.bottom));
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
-  testWidgets('touching a native selection handle hides rail before drag', (
+  testWidgets('touching a native selection handle keeps inline rail absent', (
     tester,
   ) async {
     await _pumpTextChunkEditor(
@@ -317,11 +621,11 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      findsOneWidget,
+      findsNothing,
     );
 
     final handle = find.byKey(
@@ -348,74 +652,66 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      findsOneWidget,
-      reason:
-          'Pointer up settles the native drag and restores the rail at the '
-          'final native selection.',
+      findsNothing,
+      reason: 'The rail is native Android UI, not a Flutter inline widget.',
     );
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
-  testWidgets(
-    'native handle drag uses real text without rail placeholders',
-    (tester) async {
-      const text =
-          'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda '
-          'mu nu xi omicron';
-      await _pumpTextChunkEditor(
-        tester,
-        const NoteBlock(
-          id: 'text-1',
-          type: NoteBlockType.paragraph,
-          text: text,
-        ),
-        surfaceSize: Size(420, 900),
-      );
+  testWidgets('native handle drag uses real text without rail placeholders', (
+    tester,
+  ) async {
+    const text =
+        'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda '
+        'mu nu xi omicron';
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(id: 'text-1', type: NoteBlockType.paragraph, text: text),
+      surfaceSize: Size(420, 900),
+    );
 
-      await tester.longPressAt(
-        _nativeEditableSubstringRect(tester, 'gamma').center,
-      );
-      await tester.pumpAndSettle();
+    await tester.longPressAt(
+      _nativeEditableSubstringRect(tester, 'gamma').center,
+    );
+    await tester.pumpAndSettle();
 
-      expect(
-        _editableTextState(tester).textEditingValue.selection.isCollapsed,
-        isFalse,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsOneWidget,
-        reason:
-            'A settled rail is in-flow and reserves native space before drag.',
-      );
-      expect(DebugConsole.allText, contains('rail-line-'));
+    expect(
+      _editableTextState(tester).textEditingValue.selection.isCollapsed,
+      isFalse,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+      findsNothing,
+      reason: 'Rail no longer reserves native text-layout space.',
+    );
+    expect(DebugConsole.allText, isNot(contains('rail-line-')));
 
-      DebugConsole.clear();
-      final selection = _editableTextState(tester).textEditingValue.selection;
-      await _simulateNativeSelectionDrag(
-        tester,
-        TextSelection(baseOffset: selection.start, extentOffset: text.length),
-      );
+    DebugConsole.clear();
+    final selection = _editableTextState(tester).textEditingValue.selection;
+    await _simulateNativeSelectionDrag(
+      tester,
+      TextSelection(baseOffset: selection.start, extentOffset: text.length),
+    );
 
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsNothing,
-      );
-      expect(_nativeEditablePlainText(tester), text);
-      expect(DebugConsole.allText, isNot(contains('rail-line-')));
-      expect(DebugConsole.allText, contains('placeholderDelta=0'));
-    },
-  );
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+      findsNothing,
+    );
+    expect(_nativeEditablePlainText(tester), text);
+    expect(DebugConsole.allText, isNot(contains('rail-line-')));
+    expect(DebugConsole.allText, contains('placeholderDelta=0'));
+  });
 
   testWidgets(
     'native drag callback does not mutate selection or editable presentation',
@@ -463,8 +759,18 @@ void main() {
   );
 
   testWidgets(
-    'rail height changes resize the settled in-flow native gap',
+    'native rail row toggle does not resize the editable text layout',
     (tester) async {
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeRailChannel, (call) async {
+            calls.add(call);
+            return null;
+          });
+      final controller = NativeSelectionRailController(
+        methodChannel: nativeRailChannel,
+      );
+      addTearDown(controller.dispose);
       const text = 'Alpha\nBeta\nGamma';
       await _pumpTextChunkEditor(
         tester,
@@ -473,6 +779,7 @@ void main() {
           type: NoteBlockType.paragraph,
           text: text,
         ),
+        nativeSelectionRailController: controller,
       );
 
       _setEditorSelection(
@@ -481,36 +788,37 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final expandedRail = tester.getRect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      );
       final expandedBeta = _nativeEditableSubstringRect(tester, 'Beta');
       expect(
         find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsOneWidget,
+        findsNothing,
       );
 
-      await tester.tap(
-        find.byKey(const ValueKey('note-selection-rail-toggle-tags')),
-      );
+      await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .handlePlatformMessage(
+            nativeRailChannel.name,
+            nativeRailChannel.codec.encodeMethodCall(
+              const MethodCall('performAction', {'action': 'toggleTags'}),
+            ),
+            (_) {},
+          );
       await tester.pumpAndSettle();
 
-      final collapsedRail = tester.getRect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      );
       final collapsedBeta = _nativeEditableSubstringRect(tester, 'Beta');
+      final state = _lastNativeRailState(calls);
+      final style = state['style'] as Map<Object?, Object?>;
 
-      expect(collapsedRail.height, lessThan(expandedRail.height));
-      expect(collapsedBeta.top, lessThan(expandedBeta.top));
+      expect(style['bottomRowExpanded'], false);
+      expect(collapsedBeta.top, expandedBeta.top);
       expect(
         find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsOneWidget,
+        findsNothing,
       );
     },
   );
 
   testWidgets(
-    'continuous selection spans paragraphs and anchors rail at the last line',
+    'continuous selection spans paragraphs without inline rail anchoring',
     (tester) async {
       await _pumpTextChunkEditor(
         tester,
@@ -530,13 +838,14 @@ void main() {
       final editable = _editableText(tester);
       expect(editable.controller.selection.start, lessThan(5));
       expect(editable.controller.selection.end, greaterThan(12));
-      final rail = tester.getRect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      );
       final selectedLine = tester.getRect(
         find.byKey(const ValueKey('note-text-line-3')),
       );
-      expect(rail.top, greaterThanOrEqualTo(selectedLine.bottom));
+      expect(selectedLine.height, greaterThan(0));
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsNothing,
+      );
     },
   );
 
@@ -665,8 +974,14 @@ void main() {
   });
 
   testWidgets(
-    'rail tag button saves primary and secondary tags to the selected range',
+    'native tag action saves primary and secondary tags to the selected range',
     (tester) async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeRailChannel, (_) async => null);
+      final controller = NativeSelectionRailController(
+        methodChannel: nativeRailChannel,
+      );
+      addTearDown(controller.dispose);
       NoteBlock? latest;
       await _pumpTextChunkEditor(
         tester,
@@ -676,6 +991,7 @@ void main() {
           text: 'Alpha Beta Gamma',
         ),
         onChanged: (block) => latest = block,
+        nativeSelectionRailController: controller,
       );
 
       _setEditorSelection(
@@ -683,9 +999,7 @@ void main() {
         const TextSelection(baseOffset: 6, extentOffset: 10),
       );
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey('note-text-selection-rail-tag')),
-      );
+      await _performNativeRailAction(nativeRailChannel, 'tagSelection');
       await tester.pumpAndSettle();
 
       await tester.enterText(
@@ -717,6 +1031,12 @@ void main() {
   testWidgets('tapping text after tagging focuses input and shows caret', (
     tester,
   ) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeRailChannel, (_) async => null);
+    final controller = NativeSelectionRailController(
+      methodChannel: nativeRailChannel,
+    );
+    addTearDown(controller.dispose);
     NoteBlock? latest;
     await _pumpTextChunkEditor(
       tester,
@@ -726,6 +1046,7 @@ void main() {
         text: 'Alpha Beta Gamma',
       ),
       onChanged: (block) => latest = block,
+      nativeSelectionRailController: controller,
     );
 
     _setEditorSelection(
@@ -733,9 +1054,7 @@ void main() {
       const TextSelection(baseOffset: 6, extentOffset: 10),
     );
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('note-text-selection-rail-tag')),
-    );
+    await _performNativeRailAction(nativeRailChannel, 'tagSelection');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('tag-manager-name')),
@@ -756,7 +1075,7 @@ void main() {
     expect(find.byKey(const ValueKey('note-text-caret-0')), findsNothing);
   });
 
-  testWidgets('rail is hosted by the native editable text layout', (
+  testWidgets('rail is not hosted by the Flutter editable text layout', (
     tester,
   ) async {
     await _pumpTextChunkEditor(
@@ -780,7 +1099,7 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('note-text-custom-visible-layout')),
@@ -1141,7 +1460,7 @@ void main() {
   });
 
   testWidgets(
-    'rail inserts below stacked underlines and pushes following native row',
+    'stacked underlines keep spacing while rail stays outside text layout',
     (tester) async {
       const target = 'targetword';
       final text = [
@@ -1184,30 +1503,25 @@ void main() {
           const ValueKey('note-text-secondary-underline-range-target-10-0'),
         ),
       );
-      final rail = tester.getRect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      );
       final lineBounds = _nativeEditableNonEmptyLineBounds(tester);
-      final nextLine = lineBounds.firstWhere((line) => line.top > rail.top + 2);
       final diagnostic =
-          'target=$targetRect lastUnderline=$lastUnderline rail=$rail '
-          'nextLine=$nextLine '
+          'target=$targetRect lastUnderline=$lastUnderline '
           'lineBounds=${lineBounds.map((line) => '${line.left.toStringAsFixed(1)},${line.top.toStringAsFixed(1)},${line.right.toStringAsFixed(1)},${line.bottom.toStringAsFixed(1)}').join(';')} '
           'logs=${DebugConsole.allText}';
 
       expect(lastUnderline.top, greaterThan(targetRect.bottom));
-      expect(rail.top, greaterThanOrEqualTo(lastUnderline.bottom + 1));
       expect(
-        nextLine.top,
-        greaterThanOrEqualTo(rail.bottom),
-        reason:
-            'Opening the rail during settled selection must insert enough '
-            'native space after stacked underlines. '
-            '$diagnostic',
+        lineBounds.any((line) => line.top > lastUnderline.bottom),
+        isTrue,
+        reason: diagnostic,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsOneWidget,
+        findsNothing,
       );
     },
   );
@@ -1268,8 +1582,14 @@ void main() {
   );
 
   testWidgets(
-    'rail paragraph step indents every visual line in the active paragraph',
+    'native rail paragraph step indents every visual line in the active paragraph',
     (tester) async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeRailChannel, (_) async => null);
+      final controller = NativeSelectionRailController(
+        methodChannel: nativeRailChannel,
+      );
+      addTearDown(controller.dispose);
       NoteBlock? latest;
       const text =
           'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda\n'
@@ -1284,6 +1604,7 @@ void main() {
         ),
         surfaceSize: const Size(320, 700),
         onChanged: (block) => latest = block,
+        nativeSelectionRailController: controller,
       );
 
       _setEditorSelection(
@@ -1291,9 +1612,7 @@ void main() {
         const TextSelection(baseOffset: 2, extentOffset: 6),
       );
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey('note-text-selection-rail-indent')),
-      );
+      await _performNativeRailAction(nativeRailChannel, 'indent');
       await tester.pumpAndSettle();
 
       expect(latest!.text.startsWith('  Alpha'), isTrue);
@@ -1500,11 +1819,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsOneWidget,
+        findsNothing,
       );
 
       final omegaEnd = latest!.text.indexOf('omega') + 'omega'.length;
@@ -1552,9 +1871,19 @@ void main() {
     },
   );
 
-  testWidgets('text rail exposes table-like design toggles and scroll row', (
+  testWidgets('native rail style toggles update serialized style state', (
     tester,
   ) async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(nativeRailChannel, (call) async {
+          calls.add(call);
+          return null;
+        });
+    final controller = NativeSelectionRailController(
+      methodChannel: nativeRailChannel,
+    );
+    addTearDown(controller.dispose);
     await _pumpTextChunkEditor(
       tester,
       const NoteBlock(
@@ -1563,6 +1892,7 @@ void main() {
         text: 'Alpha Beta Gamma',
       ),
       surfaceSize: const Size(260, 700),
+      nativeSelectionRailController: controller,
     );
 
     _setEditorSelection(
@@ -1571,48 +1901,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('note-selection-action-row')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('note-selection-action-rail-white')),
-      findsOneWidget,
-    );
-
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('note-text-rail-toggle-rounded')),
-    );
-    await tester.tap(
-      find.byKey(const ValueKey('note-text-rail-toggle-rounded')),
-    );
+    await _performNativeRailAction(nativeRailChannel, 'toggleRounded');
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('note-selection-action-rail-rounded')),
-      findsOneWidget,
-    );
+    var style = _lastNativeRailState(calls)['style'] as Map<Object?, Object?>;
+    expect(style['roundedCard'], true);
 
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('note-text-rail-toggle-grey')),
-    );
-    await tester.tap(find.byKey(const ValueKey('note-text-rail-toggle-grey')));
+    await _performNativeRailAction(nativeRailChannel, 'toggleGrey');
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('note-selection-action-rail-grey')),
-      findsOneWidget,
-    );
+    style = _lastNativeRailState(calls)['style'] as Map<Object?, Object?>;
+    expect(style['greyBackground'], true);
 
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('note-text-rail-toggle-border')),
-    );
-    await tester.tap(
-      find.byKey(const ValueKey('note-text-rail-toggle-border')),
-    );
+    await _performNativeRailAction(nativeRailChannel, 'toggleBorder');
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('note-selection-action-rail-borderless')),
-      findsOneWidget,
-    );
+    style = _lastNativeRailState(calls)['style'] as Map<Object?, Object?>;
+    expect(style['borderVisible'], false);
   });
 }
 
@@ -1620,6 +1922,7 @@ Future<void> _pumpTextChunkEditor(
   WidgetTester tester,
   NoteBlock block, {
   ValueChanged<NoteBlock>? onChanged,
+  NativeSelectionRailController? nativeSelectionRailController,
   Size surfaceSize = const Size(420, 900),
 }) async {
   tester.view.devicePixelRatio = 1;
@@ -1633,10 +1936,36 @@ Future<void> _pumpTextChunkEditor(
       home: NoteTextChunkEditorScreen(
         block: block,
         onChanged: onChanged ?? (_) {},
+        nativeSelectionRailController: nativeSelectionRailController,
       ),
     ),
   );
   await tester.pumpAndSettle();
+}
+
+Map<Object?, Object?> _lastNativeRailState(List<MethodCall> calls) {
+  final setStateCalls = calls
+      .where((call) => call.method == 'setState')
+      .toList(growable: false);
+  expect(setStateCalls, isNotEmpty);
+  return setStateCalls.last.arguments as Map<Object?, Object?>;
+}
+
+Future<void> _performNativeRailAction(
+  MethodChannel channel,
+  String action, {
+  String? tagId,
+}) {
+  final payload = <String, String>{'action': action};
+  if (tagId != null) {
+    payload['tagId'] = tagId;
+  }
+  return TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .handlePlatformMessage(
+        channel.name,
+        channel.codec.encodeMethodCall(MethodCall('performAction', payload)),
+        (_) {},
+      );
 }
 
 void _setEditorSelection(WidgetTester tester, TextSelection selection) {
