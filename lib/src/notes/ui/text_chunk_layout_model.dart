@@ -114,6 +114,7 @@ TextChunkLayout buildTextChunkLayout({
   required List<NoteTextRangeTag> rangeTags,
   TextRange? selection,
   double railHeight = 0,
+  bool reserveLeadingIndentWidth = true,
 }) {
   final paragraphs = _paragraphsForText(text);
   final lines = <TextChunkVisualLine>[];
@@ -132,6 +133,7 @@ TextChunkLayout buildTextChunkLayout({
       textScaler: textScaler,
       rangeTags: rangeTags,
       selection: selection,
+      reserveLeadingIndentWidth: reserveLeadingIndentWidth,
     );
     lines.addAll(paragraphLines);
     final nextParagraphStart = paragraphIndex + 1 < paragraphs.length
@@ -255,6 +257,7 @@ List<TextChunkVisualLine> _visualLinesForParagraph({
   required TextScaler textScaler,
   required List<NoteTextRangeTag> rangeTags,
   required TextRange? selection,
+  required bool reserveLeadingIndentWidth,
 }) {
   final lines = <TextChunkVisualLine>[];
   final range = paragraph.range;
@@ -265,11 +268,13 @@ List<TextChunkVisualLine> _visualLinesForParagraph({
     final manualEnd = newline < 0 || newline > range.end ? range.end : newline;
     final hasHardBreak = newline >= 0 && newline < range.end;
     final visibleStart = _skipParagraphIndent(text, manualStart, manualEnd);
-    final leadingIndentWidth = _textWidth(
-      text: text.substring(manualStart, visibleStart),
-      textStyle: textStyle,
-      textScaler: textScaler,
-    );
+    final leadingIndentWidth = reserveLeadingIndentWidth
+        ? _textWidth(
+            text: text.substring(manualStart, visibleStart),
+            textStyle: textStyle,
+            textScaler: textScaler,
+          )
+        : 0.0;
     final layoutMaxWidth = (maxWidth - leadingIndentWidth)
         .clamp(1, double.infinity)
         .toDouble();

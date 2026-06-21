@@ -149,6 +149,7 @@ ParagraphStepResult applyTextChunkParagraphStep({
     maxWidth: layoutMaxWidth,
     textStyle: textStyle,
     textScaler: textScaler,
+    reserveLeadingIndentWidth: false,
   );
   final edits = _paragraphIndentEdits(
     text: normalized.text,

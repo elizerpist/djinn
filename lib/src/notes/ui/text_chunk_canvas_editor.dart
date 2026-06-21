@@ -319,6 +319,15 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                     : _continuationIndentForLine(railLine),
               );
         final railPlaceholderCount = railPlaceholderText.length;
+        final occupiedPlaceholderOffsets = <int>{
+          for (final plan in underlineSpacerPlans) plan.offset,
+          if (railInsertionOffset != null && railPlaceholderText.isNotEmpty)
+            railInsertionOffset,
+        };
+        final softWrapIndentPlaceholders = _softWrapIndentPlaceholders(
+          layout.lines,
+          occupiedOffsets: occupiedPlaceholderOffsets,
+        );
         final nativePlaceholders = [
           for (final plan in underlineSpacerPlans)
             _TextChunkNativePlaceholder(
@@ -327,6 +336,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
               label:
                   'underline-line-${plan.lineIndex}-lanes-${plan.underlineLanes}',
             ),
+          ...softWrapIndentPlaceholders,
           if (railLine != null && railPlaceholderText.isNotEmpty)
             _TextChunkNativePlaceholder(
               offset: railInsertionOffset ?? 0,
@@ -1210,6 +1220,41 @@ Map<int, double> _lineTops(
     top += baseLineHeight + (underlineSpacerHeights[line.index] ?? 0);
   }
   return result;
+}
+
+List<_TextChunkNativePlaceholder> _softWrapIndentPlaceholders(
+  List<TextChunkVisualLine> lines, {
+  required Set<int> occupiedOffsets,
+}) {
+  final placeholders = <_TextChunkNativePlaceholder>[];
+  for (var index = 0; index + 1 < lines.length; index += 1) {
+    final line = lines[index];
+    final nextLine = lines[index + 1];
+    if (line.indentLevel <= 0 ||
+        line.hardBreakAfter ||
+        occupiedOffsets.contains(line.end)) {
+      continue;
+    }
+    final isSoftWrapContinuation =
+        nextLine.paragraphIndex == line.paragraphIndex &&
+        nextLine.lineIndexInParagraph == line.lineIndexInParagraph + 1 &&
+        nextLine.start == line.end;
+    if (!isSoftWrapContinuation) {
+      continue;
+    }
+    final indent = _continuationIndentForLine(line);
+    if (indent.isEmpty) {
+      continue;
+    }
+    placeholders.add(
+      _TextChunkNativePlaceholder(
+        offset: line.end,
+        text: _railPlaceholderTextForLineBreaks(1, trailingText: indent),
+        label: 'indent-soft-wrap-${line.index}',
+      ),
+    );
+  }
+  return placeholders;
 }
 
 List<_LineSpacerPlan> _underlineSpacerPlans(
