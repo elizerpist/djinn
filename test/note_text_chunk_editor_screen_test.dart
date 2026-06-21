@@ -1549,6 +1549,7 @@ List<Rect> _nativeEditableNonEmptyLineBounds(WidgetTester tester) {
     if (codeUnit == 10 ||
         codeUnit == 32 ||
         codeUnit == 0x00A0 ||
+        codeUnit == 0x200B ||
         codeUnit == 0xFFFC) {
       continue;
     }

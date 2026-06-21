@@ -12,6 +12,7 @@ const double _railGap = 8;
 const double _defaultRailHeight = 105;
 const double _underlineFirstLaneInset = 0.5;
 const double _underlineLaneStep = 3.5;
+const String _placeholderLineBreakUnit = '\u200B\n';
 const String _placeholderIndentUnit = '\u00A0\u00A0';
 
 class _TextChunkNativePlaceholder {
@@ -1308,7 +1309,11 @@ String _railPlaceholderTextForLineBreaks(
   if (lineBreakCount <= 0) {
     return trailingText;
   }
-  return '${List.filled(lineBreakCount, ' \n').join()}$trailingText';
+  final lineBreaks = List.filled(
+    lineBreakCount,
+    _placeholderLineBreakUnit,
+  ).join();
+  return '$lineBreaks$trailingText';
 }
 
 String _formatRect(Rect? rect) {
