@@ -10,40 +10,8 @@ import 'package:djinn/src/notes/ui/note_text_chunk_editor_screen.dart';
 void main() {
   setUp(DebugConsole.clear);
 
-  testWidgets('single-line selection inserts the rail below that visual line', (
-    tester,
-  ) async {
-    await _pumpTextChunkEditor(
-      tester,
-      const NoteBlock(
-        id: 'text-1',
-        type: NoteBlockType.paragraph,
-        text: 'Alpha\nBeta\nGamma',
-      ),
-    );
-
-    _setEditorSelection(
-      tester,
-      const TextSelection(baseOffset: 1, extentOffset: 4),
-    );
-    await tester.pumpAndSettle();
-
-    final line0 = tester.getRect(
-      find.byKey(const ValueKey('note-text-line-0')),
-    );
-    final line1 = tester.getRect(
-      find.byKey(const ValueKey('note-text-line-1')),
-    );
-    final rail = tester.getRect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-    );
-
-    expect(rail.top, greaterThanOrEqualTo(line0.bottom));
-    expect(line1.top, greaterThanOrEqualTo(rail.bottom));
-  });
-
   testWidgets(
-    'rail gap pushes the actual native editable text below the rail',
+    'single-line selection overlays the rail below that visual line',
     (tester) async {
       await _pumpTextChunkEditor(
         tester,
@@ -60,38 +28,58 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final alpha = _nativeEditableSubstringRect(tester, 'Alpha');
-      final beta = _nativeEditableSubstringRect(tester, 'Beta');
+      final line0 = tester.getRect(
+        find.byKey(const ValueKey('note-text-line-0')),
+      );
+      final line1 = tester.getRect(
+        find.byKey(const ValueKey('note-text-line-1')),
+      );
       final rail = tester.getRect(
         find.byKey(const ValueKey('note-text-inline-selection-rail')),
       );
 
+      expect(rail.top, greaterThanOrEqualTo(line0.bottom));
+      expect(line1.top, lessThan(rail.bottom));
       expect(
         find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsOneWidget,
-      );
-      final spacer = tester.getRect(
-        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      );
-      expect(
-        spacer.height,
-        closeTo(rail.height + 8, 2),
-        reason: 'The inline spacer must match the visible rail plus gap.',
-      );
-
-      expect(rail.top, greaterThanOrEqualTo(alpha.bottom));
-      expect(beta.top, greaterThanOrEqualTo(rail.bottom));
-      expect(
-        beta.top - rail.bottom,
-        lessThanOrEqualTo(20),
-        reason:
-            'The native newline spacer may round up by one line, but must not '
-            'leave a large fixed gap.',
+        findsNothing,
       );
     },
   );
 
-  testWidgets('soft-wrapped rail opens enough native space below itself', (
+  testWidgets('rail overlay leaves the actual native editable text unchanged', (
+    tester,
+  ) async {
+    const text = 'Alpha\nBeta\nGamma';
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(id: 'text-1', type: NoteBlockType.paragraph, text: text),
+    );
+
+    _setEditorSelection(
+      tester,
+      const TextSelection(baseOffset: 1, extentOffset: 4),
+    );
+    await tester.pumpAndSettle();
+
+    final alpha = _nativeEditableSubstringRect(tester, 'Alpha');
+    final beta = _nativeEditableSubstringRect(tester, 'Beta');
+    final rail = tester.getRect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+    );
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+      findsNothing,
+    );
+
+    expect(rail.top, greaterThanOrEqualTo(alpha.bottom));
+    expect(beta.top, lessThan(rail.bottom));
+    expect(_nativeEditablePlainText(tester), text);
+    expect(DebugConsole.allText, contains('placeholderDelta=0'));
+  });
+
+  testWidgets('soft-wrapped rail overlays without native text spacer', (
     tester,
   ) async {
     const target = 'targetword';
@@ -130,18 +118,16 @@ void main() {
     expect(rail.top, greaterThanOrEqualTo(targetRect.bottom));
     expect(
       nextLine.top,
-      greaterThanOrEqualTo(rail.bottom),
+      lessThan(rail.bottom),
       reason:
-          'A rail inserted after a soft-wrapped visual line must reserve one '
-          'terminating native line plus the measured rail rows. $diagnostic',
+          'The rail is an overlay; it must not insert native line breaks into '
+          'EditableText during selection. $diagnostic',
     );
     expect(
-      nextLine.top - rail.bottom,
-      lessThanOrEqualTo(24),
-      reason:
-          'The rail gap may round to the native line grid but must not leave '
-          'a large stale spacer. $diagnostic',
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+      findsNothing,
     );
+    expect(_nativeEditablePlainText(tester), text);
   });
 
   testWidgets('textchunk layout writes detailed debug geometry logs', (
@@ -184,7 +170,7 @@ void main() {
   });
 
   testWidgets(
-    'multi-line selection inserts the rail below the lowest selected visual line',
+    'multi-line selection overlays the rail below the lowest selected line',
     (tester) async {
       await _pumpTextChunkEditor(
         tester,
@@ -212,7 +198,11 @@ void main() {
       );
 
       expect(rail.top, greaterThanOrEqualTo(line1.bottom));
-      expect(line2.top, greaterThanOrEqualTo(rail.bottom));
+      expect(line2.top, lessThan(rail.bottom));
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsNothing,
+      );
     },
   );
 
@@ -252,10 +242,10 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      findsOneWidget,
+      findsNothing,
       reason:
-          'The native editable layout stays stable during drag; only the rail '
-          'widget is visually hidden.',
+          'During native handle drag the EditableText span must contain only '
+          'the real text; hidden rail placeholders break handle movement.',
     );
     expect(
       _nativeEditablePlainText(tester),
@@ -274,7 +264,7 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(_nativeEditablePlainText(tester), beforePlainText);
 
@@ -287,12 +277,14 @@ void main() {
     await tester.pumpAndSettle();
 
     final gamma = _nativeEditableSubstringRect(tester, 'Gamma');
-    final delta = _nativeEditableSubstringRect(tester, 'Delta');
     final rail = tester.getRect(
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
     );
     expect(rail.top, greaterThanOrEqualTo(gamma.bottom));
-    expect(delta.top, greaterThanOrEqualTo(rail.bottom));
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+      findsNothing,
+    );
   });
 
   testWidgets('native selection handles are not wrapped by custom listeners', (
@@ -328,6 +320,67 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets(
+    'native selection and drag use real text without rail placeholders',
+    (tester) async {
+      const text =
+          'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda '
+          'mu nu xi omicron';
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+        ),
+        surfaceSize: Size(420, 900),
+      );
+
+      await tester.longPressAt(
+        _nativeEditableSubstringRect(tester, 'gamma').center,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        _editableTextState(tester).textEditingValue.selection.isCollapsed,
+        isFalse,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsNothing,
+        reason:
+            'The rail may be visible as an overlay, but it must not reserve '
+            'native text span space while Android handles are active.',
+      );
+      expect(_nativeEditablePlainText(tester), text);
+      expect(DebugConsole.allText, isNot(contains('rail-line-')));
+      expect(DebugConsole.allText, contains('placeholderDelta=0'));
+
+      DebugConsole.clear();
+      final selection = _editableTextState(tester).textEditingValue.selection;
+      await _simulateNativeSelectionDrag(
+        tester,
+        TextSelection(baseOffset: selection.start, extentOffset: text.length),
+      );
+
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsNothing,
+      );
+      expect(_nativeEditablePlainText(tester), text);
+      expect(DebugConsole.allText, isNot(contains('rail-line-')));
+      expect(DebugConsole.allText, contains('placeholderDelta=0'));
+    },
+  );
 
   testWidgets(
     'native drag callback does not mutate selection or editable presentation',
@@ -375,52 +428,54 @@ void main() {
     },
   );
 
-  testWidgets('rail spacer follows collapsed and expanded rail height', (
-    tester,
-  ) async {
-    await _pumpTextChunkEditor(
-      tester,
-      const NoteBlock(
-        id: 'text-1',
-        type: NoteBlockType.paragraph,
-        text: 'Alpha\nBeta\nGamma',
-      ),
-    );
+  testWidgets(
+    'rail overlay height changes without changing native text layout',
+    (tester) async {
+      const text = 'Alpha\nBeta\nGamma';
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: text,
+        ),
+      );
 
-    _setEditorSelection(
-      tester,
-      const TextSelection(baseOffset: 1, extentOffset: 4),
-    );
-    await tester.pumpAndSettle();
+      _setEditorSelection(
+        tester,
+        const TextSelection(baseOffset: 1, extentOffset: 4),
+      );
+      await tester.pumpAndSettle();
 
-    final expandedRail = tester.getRect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-    );
-    final expandedSpacer = tester.getRect(
-      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-    );
-    final expandedBeta = _nativeEditableSubstringRect(tester, 'Beta');
+      final expandedRail = tester.getRect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      );
+      final expandedBeta = _nativeEditableSubstringRect(tester, 'Beta');
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsNothing,
+      );
+      expect(_nativeEditablePlainText(tester), text);
 
-    await tester.tap(
-      find.byKey(const ValueKey('note-selection-rail-toggle-tags')),
-    );
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('note-selection-rail-toggle-tags')),
+      );
+      await tester.pumpAndSettle();
 
-    final collapsedRail = tester.getRect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-    );
-    final collapsedSpacer = tester.getRect(
-      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-    );
-    final collapsedBeta = _nativeEditableSubstringRect(tester, 'Beta');
+      final collapsedRail = tester.getRect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      );
+      final collapsedBeta = _nativeEditableSubstringRect(tester, 'Beta');
 
-    expect(collapsedRail.height, lessThan(expandedRail.height));
-    expect(collapsedSpacer.height, closeTo(collapsedRail.height + 8, 2));
-    expect(expandedSpacer.height, closeTo(expandedRail.height + 8, 2));
-    expect(collapsedBeta.top, lessThan(expandedBeta.top));
-    expect(collapsedBeta.top, greaterThanOrEqualTo(collapsedRail.bottom));
-    expect(collapsedBeta.top - collapsedRail.bottom, lessThanOrEqualTo(20));
-  });
+      expect(collapsedRail.height, lessThan(expandedRail.height));
+      expect(collapsedBeta.top, closeTo(expandedBeta.top, 1));
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsNothing,
+      );
+      expect(_nativeEditablePlainText(tester), text);
+    },
+  );
 
   testWidgets(
     'continuous selection spans paragraphs and anchors rail at the last line',
@@ -508,7 +563,7 @@ void main() {
     );
     final editable = _editableText(tester);
 
-    expect(editableRect.height, greaterThan(20));
+    expect(editableRect.height, greaterThan(0));
     expect(editable.showSelectionHandles, isTrue);
     expect(editable.selectionControls, isNotNull);
     expect(
@@ -1058,7 +1113,7 @@ void main() {
   });
 
   testWidgets(
-    'rail opens below stacked underlines without covering following text',
+    'rail overlays below stacked underlines without native text spacer',
     (tester) async {
       const target = 'targetword';
       final text = [
@@ -1116,18 +1171,15 @@ void main() {
       expect(rail.top, greaterThanOrEqualTo(lastUnderline.bottom + 1));
       expect(
         nextLine.top,
-        greaterThanOrEqualTo(rail.bottom),
+        lessThan(rail.bottom),
         reason:
-            'Opening the inline rail after a line with stacked underlines must '
-            'move the following native text below the visible rail. '
+            'Opening the rail during selection must not insert native text '
+            'spacers, even when stacked underlines are present. '
             '$diagnostic',
       );
       expect(
-        nextLine.top - rail.bottom,
-        lessThanOrEqualTo(24),
-        reason:
-            'The gap below the rail may round to the native line grid but must '
-            'not become a large fixed hole. $diagnostic',
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsNothing,
       );
     },
   );

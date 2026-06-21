@@ -284,52 +284,41 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         final railInsertionOffset = railLine == null
             ? null
             : _insertionOffsetForLine(railLine);
-        final underlineSpacerPlans = _underlineSpacerPlans(
+        final controllerSelection = widget.controller.selection;
+        final nativeSelectionActive =
+            _selectionHandleDragActive ||
+            (controllerSelection.isValid && !controllerSelection.isCollapsed);
+        final visualUnderlineSpacerPlans = _underlineSpacerPlans(
           layout.lines,
           lineHeight,
-          trailingIndentSuppressedOffset: railInsertionOffset,
         );
+        final underlineSpacerPlans = nativeSelectionActive
+            ? const <_LineSpacerPlan>[]
+            : visualUnderlineSpacerPlans;
         final underlineSpacerHeights = {
           for (final plan in underlineSpacerPlans) plan.lineIndex: plan.height,
         };
+        final visualUnderlineSpacerHeights = {
+          for (final plan in visualUnderlineSpacerPlans)
+            plan.lineIndex: plan.height,
+        };
         final railHeight = railLine == null ? 0.0 : _measuredRailHeight;
-        final railTargetSpacerHeight = railLine == null
-            ? 0.0
-            : railHeight + _railGap;
-        final railNativeLineCount = railLine == null
-            ? 0
-            : math.max(1, (railTargetSpacerHeight / lineHeight).ceil());
-        final railHasLeadingUnderlineSpacer =
-            railInsertionOffset != null &&
-            underlineSpacerPlans.any(
-              (plan) => plan.offset == railInsertionOffset,
-            );
-        final railNeedsSoftWrapTerminator =
-            railLine != null &&
-            !railLine.hardBreakAfter &&
-            !railHasLeadingUnderlineSpacer;
-        final railLineBreakCount = railLine == null
-            ? 0
-            : railNativeLineCount + (railNeedsSoftWrapTerminator ? 1 : 0);
-        final railNativeSpacerHeight = railNativeLineCount * lineHeight;
-        final railPlaceholderText = railLine == null
-            ? ''
-            : _railPlaceholderTextForLineBreaks(
-                railLineBreakCount,
-                trailingText: railLine.hardBreakAfter
-                    ? ''
-                    : _continuationIndentForLine(railLine),
-              );
-        final railPlaceholderCount = railPlaceholderText.length;
+        const railTargetSpacerHeight = 0.0;
+        const railNativeLineCount = 0;
+        const railHasLeadingUnderlineSpacer = false;
+        const railNeedsSoftWrapTerminator = false;
+        const railLineBreakCount = 0;
+        const railNativeSpacerHeight = 0.0;
+        const railPlaceholderCount = 0;
         final occupiedPlaceholderOffsets = <int>{
           for (final plan in underlineSpacerPlans) plan.offset,
-          if (railInsertionOffset != null && railPlaceholderText.isNotEmpty)
-            railInsertionOffset,
         };
-        final softWrapIndentPlaceholders = _softWrapIndentPlaceholders(
-          layout.lines,
-          occupiedOffsets: occupiedPlaceholderOffsets,
-        );
+        final softWrapIndentPlaceholders = nativeSelectionActive
+            ? const <_TextChunkNativePlaceholder>[]
+            : _softWrapIndentPlaceholders(
+                layout.lines,
+                occupiedOffsets: occupiedPlaceholderOffsets,
+              );
         final nativePlaceholders = [
           for (final plan in underlineSpacerPlans)
             _TextChunkNativePlaceholder(
@@ -339,12 +328,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                   'underline-line-${plan.lineIndex}-lanes-${plan.underlineLanes}',
             ),
           ...softWrapIndentPlaceholders,
-          if (railLine != null && railPlaceholderText.isNotEmpty)
-            _TextChunkNativePlaceholder(
-              offset: railInsertionOffset ?? 0,
-              text: railPlaceholderText,
-              label: 'rail-line-${railLine.index}',
-            ),
         ];
         final underlineNativeSpacerHeight = underlineSpacerPlans.fold<double>(
           0,
@@ -444,27 +427,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                       ),
                     ),
                   ),
-                  if (railLine != null)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top:
-                          _railTop(
-                            railLine,
-                            lineTops,
-                            lineHeight,
-                            underlineSpacerHeights,
-                          ) -
-                          _railGap,
-                      child: IgnorePointer(
-                        child: SizedBox(
-                          key: const ValueKey(
-                            'note-text-inline-selection-spacer',
-                          ),
-                          height: railTargetSpacerHeight,
-                        ),
-                      ),
-                    ),
                   if (railLine != null &&
                       widget.selectionRail != null &&
                       !_selectionHandleDragActive)
@@ -475,7 +437,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                         railLine,
                         lineTops,
                         lineHeight,
-                        underlineSpacerHeights,
+                        visualUnderlineSpacerHeights,
                       ),
                       child: KeyedSubtree(
                         key: _railMeasureKey,
@@ -492,8 +454,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                       line: line,
                       lineHeight: lineHeight,
                       lineTops: lineTops,
-                      railLineIndex: railLine?.index,
-                      railSpacerHeight: railNativeSpacerHeight,
+                      railLineIndex: null,
+                      railSpacerHeight: 0,
                     ),
                 ],
               ),
