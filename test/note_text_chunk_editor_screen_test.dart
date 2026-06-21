@@ -426,6 +426,93 @@ void main() {
     },
   );
 
+  testWidgets('native handle pointer up before drag update keeps rail hidden', (
+    tester,
+  ) async {
+    const text = 'Alpha\nBeta\nGamma\nDelta';
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(id: 'text-1', type: NoteBlockType.paragraph, text: text),
+    );
+
+    await tester.longPressAt(
+      _nativeEditableSubstringRect(tester, 'Alpha').center,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      _editableTextState(tester).textEditingValue.selection.isCollapsed,
+      isFalse,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsOneWidget,
+    );
+
+    final handle = find.byKey(
+      const ValueKey('note-text-native-selection-handle-right'),
+    );
+    expect(handle, findsOneWidget);
+
+    DebugConsole.clear();
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
+    );
+
+    await gesture.up();
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
+      reason:
+          'A release-like handle event may arrive before native drag deltas; '
+          'it must not restore the rail while the native handle is still '
+          'controlling selection.',
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+      findsNothing,
+    );
+
+    final gammaEnd = text.indexOf('Gamma') + 'Gamma'.length;
+    await _simulateNativeSelectionDrag(
+      tester,
+      TextSelection(baseOffset: 0, extentOffset: gammaEnd),
+    );
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+      findsNothing,
+    );
+    expect(
+      DebugConsole.allText,
+      isNot(contains('nativeToolbar requested')),
+      reason: 'Native drag updates must not reopen the Android toolbar.',
+    );
+
+    final editable = _editableText(tester);
+    editable.onSelectionChanged?.call(
+      TextSelection(baseOffset: 0, extentOffset: gammaEnd),
+      SelectionChangedCause.tap,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('rail spacer follows collapsed and expanded rail height', (
     tester,
   ) async {
