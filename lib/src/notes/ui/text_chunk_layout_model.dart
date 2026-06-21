@@ -271,7 +271,7 @@ List<TextChunkVisualLine> _visualLinesForParagraph({
       text: text,
       start: visibleStart,
       end: manualEnd,
-      maxWidth: maxWidth - (paragraph.indentLevel * textChunkIndentWidth),
+      maxWidth: maxWidth,
       textStyle: textStyle,
       textScaler: textScaler,
     );

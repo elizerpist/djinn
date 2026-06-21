@@ -616,6 +616,68 @@ void main() {
     expect(gamma.top, greaterThanOrEqualTo(lastUnderline.bottom + 1));
   });
 
+  testWidgets('stacked underline spacing is local to the tagged visual line', (
+    tester,
+  ) async {
+    const text = 'Alpha\nBeta\nGamma';
+    final betaStart = text.indexOf('Beta');
+    final tags = [
+      const NoteKnowledgeTag(
+        type: NoteKnowledgeTagTypes.state,
+        label: 'primary',
+        colorValue: 0xFFDC2626,
+      ),
+      for (var index = 1; index <= 10; index += 1)
+        NoteKnowledgeTag(
+          type: NoteKnowledgeTagTypes.custom,
+          label: 'secondary-$index',
+          colorValue: 0xFF2563EB + index,
+        ),
+    ];
+    await _pumpTextChunkEditor(
+      tester,
+      NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: text,
+        rangeTags: [
+          NoteTextRangeTag(
+            id: 'range-beta',
+            start: betaStart,
+            end: betaStart + 4,
+            tag: tags.first,
+            tags: tags,
+          ),
+        ],
+      ),
+    );
+
+    final alpha = _nativeEditableSubstringRect(tester, 'Alpha');
+    final beta = _nativeEditableSubstringRect(tester, 'Beta');
+    final gamma = _nativeEditableSubstringRect(tester, 'Gamma');
+    final firstUnderline = tester.getRect(
+      find.byKey(
+        const ValueKey('note-text-secondary-underline-range-beta-1-0'),
+      ),
+    );
+    final lastUnderline = tester.getRect(
+      find.byKey(
+        const ValueKey('note-text-secondary-underline-range-beta-10-0'),
+      ),
+    );
+
+    expect(
+      beta.top - alpha.top,
+      lessThanOrEqualTo(28),
+      reason:
+          'Underline spacing belongs below the tagged line only; the line '
+          'above it must keep the normal native line distance.',
+    );
+    expect(firstUnderline.top, greaterThan(beta.top + 15));
+    expect(lastUnderline.top, greaterThan(firstUnderline.top));
+    expect(gamma.top, greaterThanOrEqualTo(lastUnderline.bottom + 1));
+  });
+
   testWidgets(
     'rail paragraph step indents every visual line in the active paragraph',
     (tester) async {
@@ -699,6 +761,53 @@ void main() {
       expect(lineLefts.first - editableLeft, greaterThanOrEqualTo(20));
       for (final left in lineLefts.skip(1)) {
         expect(left, greaterThanOrEqualTo(lineLefts.first - 1));
+      }
+    },
+  );
+
+  testWidgets(
+    'paragraph step keeps the right wrap edge at the editor right edge',
+    (tester) async {
+      NoteBlock? latest;
+      final text = List.filled(180, 'm').join();
+      await _pumpTextChunkEditor(
+        tester,
+        NoteBlock(id: 'text-1', type: NoteBlockType.paragraph, text: text),
+        surfaceSize: const Size(260, 700),
+        onChanged: (block) => latest = block,
+      );
+
+      _setEditorSelection(tester, const TextSelection.collapsed(offset: 2));
+      await tester.pumpAndSettle();
+      for (var index = 0; index < 3; index += 1) {
+        await tester.tap(find.byKey(const ValueKey('note-text-indent')));
+        await tester.pumpAndSettle();
+      }
+
+      expect(latest!.text.startsWith('      m'), isTrue);
+      expect(
+        latest!.text.split('\n').map((line) => line.trimLeft()).join(),
+        text,
+        reason: 'Synthetic paragraph wrap lines must not insert spaces.',
+      );
+      final editableRect = tester.getRect(
+        find.byKey(const ValueKey('note-text-input-bridge')),
+      );
+      final lineBounds = _nativeEditableNonEmptyLineBounds(tester);
+      final diagnostic =
+          'editable=$editableRect '
+          'bounds=${lineBounds.map((line) => '${line.left.toStringAsFixed(1)}-${line.right.toStringAsFixed(1)}').join(',')} '
+          'textLen=${latest!.text.length}';
+
+      expect(lineBounds.length, greaterThan(2));
+      for (final line in lineBounds.take(lineBounds.length - 1)) {
+        expect(
+          line.right,
+          greaterThanOrEqualTo(editableRect.right - 18),
+          reason:
+              'Step-in must move only the left margin; each full wrapped row '
+              'must still be able to reach the editor right edge. $diagnostic',
+        );
       }
     },
   );
@@ -853,10 +962,16 @@ Rect _nativeEditableSubstringTightRect(WidgetTester tester, String text) {
 }
 
 List<double> _nativeEditableNonEmptyLineLefts(WidgetTester tester) {
+  return [
+    for (final line in _nativeEditableNonEmptyLineBounds(tester)) line.left,
+  ];
+}
+
+List<Rect> _nativeEditableNonEmptyLineBounds(WidgetTester tester) {
   final state = _editableTextState(tester);
   final renderEditable = state.renderEditable;
   final plainText = renderEditable.text!.toPlainText();
-  final lineLefts = <double>[];
+  final lineRects = <Rect>[];
   final lineTops = <double>[];
   for (var offset = 0; offset < plainText.length; offset += 1) {
     final codeUnit = plainText.codeUnitAt(offset);
@@ -876,17 +991,15 @@ List<double> _nativeEditableNonEmptyLineLefts(WidgetTester tester) {
       (top) => (top - rect.top).abs() < 2,
     );
     if (existingLine >= 0) {
-      if (rect.left < lineLefts[existingLine]) {
-        lineLefts[existingLine] = rect.left;
-      }
+      lineRects[existingLine] = lineRects[existingLine].expandToInclude(rect);
       continue;
     }
     lineTops.add(rect.top);
-    lineLefts.add(rect.left);
+    lineRects.add(rect);
   }
   final ordered = [
-    for (var index = 0; index < lineLefts.length; index += 1)
-      (top: lineTops[index], left: lineLefts[index]),
+    for (var index = 0; index < lineRects.length; index += 1)
+      (top: lineTops[index], rect: lineRects[index]),
   ]..sort((a, b) => a.top.compareTo(b.top));
-  return [for (final line in ordered) line.left];
+  return [for (final line in ordered) line.rect];
 }

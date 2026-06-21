@@ -135,12 +135,18 @@ ParagraphStepResult applyTextChunkParagraphStep({
   if (normalizedParagraph == null) {
     return normalized;
   }
+  final indentWidth = _indentTextWidth(
+    indentLevel: nextIndent,
+    textStyle: textStyle,
+    textScaler: textScaler,
+  );
+  final layoutMaxWidth = (maxWidth - indentWidth)
+      .clamp(1, double.infinity)
+      .toDouble();
   final layout = buildTextChunkLayout(
     text: normalized.text,
     rangeTags: normalized.rangeTags,
-    maxWidth: (maxWidth - (nextIndent * textChunkIndentWidth))
-        .clamp(1, double.infinity)
-        .toDouble(),
+    maxWidth: layoutMaxWidth,
     textStyle: textStyle,
     textScaler: textScaler,
   );
@@ -155,7 +161,9 @@ ParagraphStepResult applyTextChunkParagraphStep({
     'nextIndent=$nextIndent paragraph=${paragraph.start}-${paragraph.end} '
     'normalizedParagraph=${normalizedParagraph.start}-${normalizedParagraph.end} '
     'maxWidth=${maxWidth.toStringAsFixed(1)} '
-    'layoutMaxWidth=${(maxWidth - (nextIndent * textChunkIndentWidth)).clamp(1, double.infinity).toStringAsFixed(1)} '
+    'indentGlyphWidth=${indentWidth.toStringAsFixed(1)} '
+    'layoutMaxWidth=${layoutMaxWidth.toStringAsFixed(1)} '
+    'rightEdgePolicy=fullWidthMinusIndentGlyphs '
     'layoutLines=${layout.lines.length} indentEdits=${edits.length} '
     'oldLen=${text.length} normalizedLen=${normalized.text.length}',
   );
@@ -199,19 +207,12 @@ TextChunkEditResult _removeParagraphSoftWraps({
     final nextStart = newline + 1;
     if (nextStart + indent.length <= paragraph.end &&
         text.startsWith(indent, nextStart)) {
-      final before = newline > paragraph.start
-          ? text.codeUnitAt(newline - 1)
-          : 32;
       final afterOffset = nextStart + indent.length;
-      final after = afterOffset < paragraph.end
-          ? text.codeUnitAt(afterOffset)
-          : 32;
-      final needsSpace = before != 32 && after != 32 && after != 10;
       edits.add(
         TextChunkTextEdit(
           offset: newline,
           deleteCount: 1 + indent.length,
-          insertText: needsSpace ? ' ' : '',
+          insertText: '',
         ),
       );
       offset = afterOffset;
@@ -345,6 +346,22 @@ TextChunkEditResult _applyTextChunkTextEdits({
 
 int _indentLevelAt(String text, int start, int end) {
   return _leadingSpacesAt(text, start, end) ~/ 2;
+}
+
+double _indentTextWidth({
+  required int indentLevel,
+  required TextStyle textStyle,
+  required TextScaler textScaler,
+}) {
+  if (indentLevel <= 0) {
+    return 0;
+  }
+  final painter = TextPainter(
+    text: TextSpan(text: '  ' * indentLevel, style: textStyle),
+    textDirection: TextDirection.ltr,
+    textScaler: textScaler,
+  )..layout();
+  return painter.width;
 }
 
 int _leadingSpacesAt(String text, int start, int end) {
