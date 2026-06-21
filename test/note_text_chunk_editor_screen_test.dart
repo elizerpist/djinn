@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/ui/note_text_chunk_editor_screen.dart';
 
 void main() {
+  setUp(DebugConsole.clear);
+
   testWidgets('single-line selection inserts the rail below that visual line', (
     tester,
   ) async {
@@ -35,6 +38,70 @@ void main() {
 
     expect(rail.top, greaterThanOrEqualTo(line0.bottom));
     expect(line1.top, greaterThanOrEqualTo(rail.bottom));
+  });
+
+  testWidgets(
+    'rail gap pushes the actual native editable text below the rail',
+    (tester) async {
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: 'Alpha\nBeta\nGamma',
+        ),
+      );
+
+      _setEditorSelection(
+        tester,
+        const TextSelection(baseOffset: 1, extentOffset: 4),
+      );
+      await tester.pumpAndSettle();
+
+      final alpha = _nativeEditableSubstringRect(tester, 'Alpha');
+      final beta = _nativeEditableSubstringRect(tester, 'Beta');
+      final rail = tester.getRect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      );
+
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsOneWidget,
+      );
+      final spacer = tester.getRect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+      );
+      expect(spacer.height, greaterThanOrEqualTo(160));
+
+      expect(rail.top, greaterThanOrEqualTo(alpha.bottom));
+      expect(beta.top, greaterThanOrEqualTo(rail.bottom));
+    },
+  );
+
+  testWidgets('textchunk layout writes detailed debug geometry logs', (
+    tester,
+  ) async {
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha\nBeta\nGamma',
+      ),
+    );
+
+    _setEditorSelection(
+      tester,
+      const TextSelection(baseOffset: 1, extentOffset: 4),
+    );
+    await tester.pumpAndSettle();
+
+    expect(DebugConsole.allText, contains('[TextChunkLayout] textLen='));
+    expect(DebugConsole.allText, contains('selection=1-4'));
+    expect(DebugConsole.allText, contains('railLine=0'));
+    expect(DebugConsole.allText, contains('placeholderCount=7'));
+    expect(DebugConsole.allText, contains('[TextChunkLayout] nativeGeometry'));
+    expect(DebugConsole.allText, contains('placeholderDelta=7'));
   });
 
   testWidgets(
@@ -163,8 +230,17 @@ void main() {
     );
 
     expect(editableRect.height, greaterThan(20));
+    expect(editable.showSelectionHandles, isTrue);
     expect(editable.selectionControls, isNotNull);
+    expect(editable.selectionControls, isA<TextSelectionHandleControls>());
     expect(editable.contextMenuBuilder, isNotNull);
+    final editableState = tester.state<EditableTextState>(
+      find.byKey(const ValueKey('note-text-input-bridge')),
+    );
+    expect(
+      editableState.contextMenuButtonItems.map((item) => item.type),
+      contains(ContextMenuButtonType.copy),
+    );
     expect(
       find.byKey(const ValueKey('note-text-selection-handle-start')),
       findsNothing,
@@ -283,7 +359,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(latest!.rangeTags, hasLength(1));
-    await tester.tap(find.byKey(const ValueKey('note-text-input-bridge')));
+    await tester.tapAt(_nativeEditableSubstringRect(tester, 'Alpha').center);
     await tester.pumpAndSettle();
 
     final editable = tester.widget<EditableText>(
@@ -529,4 +605,34 @@ void _setEditorSelection(WidgetTester tester, TextSelection selection) {
   );
   editable.controller.selection = selection;
   editable.focusNode.requestFocus();
+}
+
+Rect _nativeEditableSelectionRect(
+  WidgetTester tester,
+  TextSelection selection,
+) {
+  final state = tester.state<EditableTextState>(
+    find.byKey(const ValueKey('note-text-input-bridge')),
+  );
+  final renderEditable = state.renderEditable;
+  final boxes = renderEditable.getBoxesForSelection(selection);
+  expect(boxes, isNotEmpty);
+  final localRect = boxes
+      .map((box) => box.toRect())
+      .reduce((value, element) => value.expandToInclude(element));
+  final topLeft = renderEditable.localToGlobal(Offset.zero);
+  return localRect.shift(topLeft);
+}
+
+Rect _nativeEditableSubstringRect(WidgetTester tester, String text) {
+  final state = tester.state<EditableTextState>(
+    find.byKey(const ValueKey('note-text-input-bridge')),
+  );
+  final plainText = state.renderEditable.text!.toPlainText();
+  final start = plainText.indexOf(text);
+  expect(start, isNonNegative);
+  return _nativeEditableSelectionRect(
+    tester,
+    TextSelection(baseOffset: start, extentOffset: start + text.length),
+  );
 }

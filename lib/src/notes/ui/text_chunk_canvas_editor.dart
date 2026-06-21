@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
+import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
 import 'text_chunk_layout_model.dart';
 
-const double _railReservedHeight = 118;
+const double _railReservedHeight = 168;
+const int _railPlaceholderCount = 7;
 
 class TextChunkNativeEditingController extends TextEditingController {
   TextChunkNativeEditingController({super.text});
@@ -34,7 +37,9 @@ class TextChunkNativeEditingController extends TextEditingController {
       if (offset < 0) {
         return offset;
       }
-      final normalized = offset > insertionOffset ? offset - 1 : offset;
+      final normalized = offset > insertionOffset
+          ? offset - _railPlaceholderCount
+          : offset;
       return normalized.clamp(0, text.length).toInt();
     }
 
@@ -74,7 +79,7 @@ class TextChunkNativeEditingController extends TextEditingController {
       final start = sortedBreakpoints[index];
       final end = sortedBreakpoints[index + 1];
       if (railOffset == start) {
-        children.add(_railSpan());
+        children.addAll(_railSpans());
       }
       if (start >= end) {
         continue;
@@ -87,7 +92,7 @@ class TextChunkNativeEditingController extends TextEditingController {
       );
     }
     if (railOffset == text.length) {
-      children.add(_railSpan());
+      children.addAll(_railSpans());
     }
 
     return TextSpan(style: baseStyle, children: children);
@@ -102,15 +107,22 @@ class TextChunkNativeEditingController extends TextEditingController {
     return offset.clamp(0, text.length).toInt();
   }
 
-  InlineSpan _railSpan() {
-    return WidgetSpan(
-      alignment: PlaceholderAlignment.middle,
-      child: SizedBox(
-        key: const ValueKey('note-text-inline-selection-spacer'),
-        width: _railWidth <= 0 ? 1 : _railWidth,
-        height: _railReservedHeight,
-      ),
-    );
+  List<InlineSpan> _railSpans() {
+    return [
+      for (var index = 0; index < _railPlaceholderCount; index += 1)
+        WidgetSpan(
+          alignment: PlaceholderAlignment.top,
+          child: SizedBox(
+            key: ValueKey(
+              index == 0
+                  ? 'note-text-inline-selection-spacer'
+                  : 'note-text-inline-selection-spacer-$index',
+            ),
+            width: _railWidth <= 0 ? 1 : _railWidth,
+            height: _railReservedHeight,
+          ),
+        ),
+    ];
   }
 
   TextStyle _styleForRange(TextStyle baseStyle, int start, int end) {
@@ -167,6 +179,8 @@ class TextChunkCanvasEditor extends StatefulWidget {
 }
 
 class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
+  String? _lastDebugSignature;
+
   @override
   void initState() {
     super.initState();
@@ -219,7 +233,9 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           railHeight: _railReservedHeight,
         );
         final railLine = _railLine(layout);
-        final railInsertionOffset = railLine?.end;
+        final railInsertionOffset = railLine == null
+            ? null
+            : (railLine.hardBreakAfter ? railLine.end + 1 : railLine.end);
         final lineHeight = _lineHeight(context);
         final contentHeight =
             (layout.lines.length * lineHeight) +
@@ -229,6 +245,15 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           inlineRail: railLine == null ? null : widget.selectionRail,
           railInsertionOffset: railInsertionOffset,
           railWidth: contentWidth,
+        );
+        _logLayoutUpdate(
+          layout: layout,
+          selection: selection,
+          railLine: railLine,
+          railInsertionOffset: railInsertionOffset,
+          lineHeight: lineHeight,
+          contentWidth: contentWidth,
+          contentHeight: contentHeight,
         );
 
         return GestureDetector(
@@ -264,8 +289,9 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                       backgroundCursorColor: Colors.transparent,
                       keyboardType: TextInputType.multiline,
                       maxLines: null,
+                      showSelectionHandles: true,
                       selectionColor: const Color(0x552563EB),
-                      selectionControls: materialTextSelectionControls,
+                      selectionControls: materialTextSelectionHandleControls,
                       contextMenuBuilder: (context, editableTextState) =>
                           AdaptiveTextSelectionToolbar.editableText(
                             editableTextState: editableTextState,
@@ -350,6 +376,134 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         normalized.extentOffset != selection.extentOffset) {
       controller.selection = normalized;
     }
+  }
+
+  void _logLayoutUpdate({
+    required TextChunkLayout layout,
+    required TextRange? selection,
+    required TextChunkVisualLine? railLine,
+    required int? railInsertionOffset,
+    required double lineHeight,
+    required double contentWidth,
+    required double contentHeight,
+  }) {
+    final signature = [
+      widget.controller.text.length,
+      selection?.start,
+      selection?.end,
+      railLine?.index,
+      railInsertionOffset,
+      widget.rangeTags.length,
+      contentWidth.toStringAsFixed(1),
+    ].join('|');
+    if (_lastDebugSignature == signature) {
+      return;
+    }
+    _lastDebugSignature = signature;
+
+    final lineSummary = layout.lines
+        .map(
+          (line) =>
+              '#${line.index}{p=${line.paragraphIndex},'
+              'r=${line.start}-${line.end},'
+              'indent=${line.indentLevel},'
+              'hard=${line.hardBreakAfter},'
+              'tags=${line.tagSegments.length},'
+              'ul=${line.underlineLanes.length}}',
+        )
+        .join(' ');
+    final railTop = railLine == null
+        ? null
+        : _railTop(railLine.index, lineHeight);
+    final railBottom = railTop == null ? null : railTop + _railReservedHeight;
+    DebugConsole.log(
+      '[TextChunkLayout] textLen=${widget.controller.text.length} '
+      'selection=${selection == null ? 'null' : '${selection.start}-${selection.end}'} '
+      'focus=${widget.focusNode.hasFocus} '
+      'content=${contentWidth.toStringAsFixed(1)}x${contentHeight.toStringAsFixed(1)} '
+      'lineHeight=${lineHeight.toStringAsFixed(1)} '
+      'lines=${layout.lines.length} paragraphs=${layout.paragraphs.length} '
+      'railLine=${railLine?.index} railInsert=$railInsertionOffset '
+      'railTop=${railTop?.toStringAsFixed(1)} '
+      'railBottom=${railBottom?.toStringAsFixed(1)} '
+      'placeholderCount=$_railPlaceholderCount '
+      'rangeTags=${widget.rangeTags.length} lines=[$lineSummary]',
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastDebugSignature != signature) {
+        return;
+      }
+      final renderEditable = _findRenderEditable(context.findRenderObject());
+      final railBox = _findRenderBoxByKey(
+        context.findRenderObject(),
+        const ValueKey('note-text-inline-selection-rail'),
+      );
+      if (renderEditable == null) {
+        DebugConsole.log(
+          '[TextChunkLayout] nativeGeometry renderEditable=null',
+        );
+        return;
+      }
+      final plainText = renderEditable.text?.toPlainText() ?? '';
+      Rect? selectionRect;
+      final nativeSelection = widget.controller.selection;
+      if (nativeSelection.isValid && !nativeSelection.isCollapsed) {
+        final boxes = renderEditable.getBoxesForSelection(nativeSelection);
+        if (boxes.isNotEmpty) {
+          selectionRect = boxes
+              .map((box) => box.toRect())
+              .reduce((value, element) => value.expandToInclude(element));
+        }
+      }
+      final editableSize = renderEditable.size;
+      final railRect = railBox == null
+          ? null
+          : MatrixUtils.transformRect(
+              railBox.getTransformTo(renderEditable),
+              Offset.zero & railBox.size,
+            );
+      DebugConsole.log(
+        '[TextChunkLayout] nativeGeometry '
+        'editable=${editableSize.width.toStringAsFixed(1)}x${editableSize.height.toStringAsFixed(1)} '
+        'plainLen=${plainText.length} controllerLen=${widget.controller.text.length} '
+        'placeholderDelta=${plainText.length - widget.controller.text.length} '
+        'nativeSelection=${nativeSelection.start}-${nativeSelection.end} '
+        'selectionRect=${_formatRect(selectionRect)} '
+        'railRect=${_formatRect(railRect)}',
+      );
+    });
+  }
+
+  RenderEditable? _findRenderEditable(RenderObject? root) {
+    if (root == null) {
+      return null;
+    }
+    if (root is RenderEditable) {
+      return root;
+    }
+    RenderEditable? result;
+    root.visitChildren((child) {
+      result ??= _findRenderEditable(child);
+    });
+    return result;
+  }
+
+  RenderBox? _findRenderBoxByKey(RenderObject? root, Key key) {
+    if (root == null) {
+      return null;
+    }
+    final debugCreator = root.debugCreator;
+    if (root is RenderBox &&
+        debugCreator is DebugCreator &&
+        debugCreator.element.widget.key == key) {
+      return root;
+    }
+    RenderBox? result;
+    root.visitChildren((child) {
+      result ??= _findRenderBoxByKey(child, key);
+    });
+    return result;
   }
 
   double _lineHeight(BuildContext context) {
@@ -557,4 +711,14 @@ double _lineTop(int lineIndex, double lineHeight, int? railLineIndex) {
 
 double _railTop(int lineIndex, double lineHeight) {
   return (lineIndex * lineHeight) + lineHeight + 8;
+}
+
+String _formatRect(Rect? rect) {
+  if (rect == null) {
+    return 'null';
+  }
+  return '(${rect.left.toStringAsFixed(1)},'
+      '${rect.top.toStringAsFixed(1)},'
+      '${rect.width.toStringAsFixed(1)}x'
+      '${rect.height.toStringAsFixed(1)})';
 }

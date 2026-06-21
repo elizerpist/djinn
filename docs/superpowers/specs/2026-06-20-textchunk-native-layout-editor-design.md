@@ -202,3 +202,13 @@ Source: user message on 2026-06-20 after external research. This section superse
 | TC-REQ-027 | User 2026-06-20: hybrid rail/spacer compromise | styled controller/editor span | The rail is inserted into the editable layout through a widget span/spacer at the selected visual line boundary, pushing following text instead of covering selected text. | Widget rect/order test | DONE |
 | TC-REQ-028 | User 2026-06-20: selection must remain usable after inline rail insertion | editor selection normalization | Tapping/selecting text after the inserted rail keeps controller selection offsets valid for the underlying text value. | Widget test | DONE |
 | TC-REQ-029 | User 2026-06-20: do not lose blank Enter behavior | layout/editor | Repeated Enter still renders reachable empty lines in the visible native editor. | Widget test | DONE |
+
+## 2026-06-21 Native Rail Regression Checklist
+
+Source: user message on 2026-06-21 after testing APK `6c3eaf7`: the text does not split open, the rail prints over lower lines, native Android copy/selection handles are still not visible, and the cursor still looks like the previous custom behavior. User also requested detailed debug logs after the fix.
+
+| ID | Source | Intended Code Area | Acceptance Condition | Verification Method | Status |
+| --- | --- | --- | --- | --- | --- |
+| TC-REQ-030 | User 2026-06-21: "nem válik szét a szöveg, a rail az alsó sorokra ráprintel" | `text_chunk_canvas_editor.dart`, text layout/rail host | The actual visible text below the selected visual line is laid out below the rail gap; verification must inspect native editable/rendered text geometry, not only helper line markers. | Widget test using native editable geometry | DONE |
+| TC-REQ-031 | User 2026-06-21: "natív android textet sem látom, nem lehet másolni, kijelölést módosítani" | native text editor surface and selection wiring | The active visible editor remains a real `EditableText`/`RenderEditable` path with Flutter selection controls and context menu available; the implementation must not rely on custom cursor/handle widgets. | Widget/code inspection and focused interaction test | DONE |
+| TC-REQ-032 | User 2026-06-21: "ha kész a fix adj hozzá részletes debug logokat" | `text_chunk_canvas_editor.dart`, debug console | Log selection range, visual line list, rail line/index/top/bottom/height, native editable geometry, text/layout widths, line gaps, and rail overlap diagnostics whenever the textchunk layout updates. | Code inspection and test/log smoke check | DONE |
