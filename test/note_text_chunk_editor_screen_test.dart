@@ -235,6 +235,7 @@ void main() {
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
       findsOneWidget,
     );
+    final beforePlainText = _nativeEditablePlainText(tester);
 
     final gammaEnd = text.indexOf('Gamma') + 'Gamma'.length;
     await _simulateNativeSelectionDrag(
@@ -251,7 +252,15 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      findsNothing,
+      findsOneWidget,
+      reason:
+          'The native editable layout stays stable during drag; only the rail '
+          'widget is visually hidden.',
+    );
+    expect(
+      _nativeEditablePlainText(tester),
+      beforePlainText,
+      reason: 'Drag hiding must not change EditableText presentation.',
     );
 
     await tester.pump(const Duration(milliseconds: 350));
@@ -265,12 +274,14 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      findsNothing,
+      findsOneWidget,
     );
+    expect(_nativeEditablePlainText(tester), beforePlainText);
 
     final editable = _editableText(tester);
+    final nativeGammaEnd = beforePlainText.indexOf('Gamma') + 'Gamma'.length;
     editable.onSelectionChanged?.call(
-      TextSelection(baseOffset: 0, extentOffset: gammaEnd),
+      TextSelection(baseOffset: 0, extentOffset: nativeGammaEnd),
       SelectionChangedCause.tap,
     );
     await tester.pumpAndSettle();
@@ -284,7 +295,7 @@ void main() {
     expect(delta.top, greaterThanOrEqualTo(rail.bottom));
   });
 
-  testWidgets('touching a native selection handle hides rail before drag', (
+  testWidgets('native selection handles are not wrapped by custom listeners', (
     tester,
   ) async {
     await _pumpTextChunkEditor(
@@ -306,53 +317,20 @@ void main() {
       isFalse,
     );
     expect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      findsOneWidget,
-    );
-
-    final handle = find.byKey(
-      const ValueKey('note-text-native-selection-handle-right'),
-    );
-    expect(handle, findsOneWidget);
-
-    final gesture = await tester.startGesture(tester.getCenter(handle));
-    await tester.pump();
-
-    expect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      find.byKey(const ValueKey('note-text-native-selection-handle-left')),
       findsNothing,
       reason:
-          'The rail should disappear as soon as the native handle is touched, '
-          'before the first drag selection delta arrives.',
+          'Native Flutter handle widgets must not be wrapped with our own '
+          'pointer Listener; handle dragging belongs to EditableText.',
     );
-
-    await gesture.up();
-    await tester.pump();
-
     expect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      find.byKey(const ValueKey('note-text-native-selection-handle-right')),
       findsNothing,
-      reason:
-          'Raw handle release events are not a reliable drag-end signal; '
-          'the rail must stay hidden until a non-drag selection action '
-          'finishes the native handle interaction.',
-    );
-
-    final editable = _editableText(tester);
-    editable.onSelectionChanged?.call(
-      _editableTextState(tester).textEditingValue.selection,
-      SelectionChangedCause.tap,
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      findsOneWidget,
     );
   });
 
   testWidgets(
-    'native handle pointer cancel keeps rail hidden through drag updates',
+    'native drag callback does not mutate selection or editable presentation',
     (tester) async {
       const text = 'Alpha\nBeta\nGamma\nDelta';
       await _pumpTextChunkEditor(
@@ -364,254 +342,35 @@ void main() {
         ),
       );
 
-      await tester.longPressAt(
-        _nativeEditableSubstringRect(tester, 'Alpha').center,
+      _setEditorSelection(
+        tester,
+        const TextSelection(baseOffset: 0, extentOffset: 5),
       );
       await tester.pumpAndSettle();
-
-      expect(
-        _editableTextState(tester).textEditingValue.selection.isCollapsed,
-        isFalse,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsOneWidget,
-      );
-
-      final handle = find.byKey(
-        const ValueKey('note-text-native-selection-handle-right'),
-      );
-      expect(handle, findsOneWidget);
-
-      DebugConsole.clear();
-      final gesture = await tester.startGesture(tester.getCenter(handle));
-      await tester.pump();
-
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsNothing,
-      );
-
-      await gesture.cancel();
-      await tester.pump();
-      await tester.pump();
-
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsNothing,
-        reason:
-            'A handle PointerCancel can be emitted while the native handle is '
-            'still being dragged; it must not restore the rail mid-gesture.',
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsNothing,
-      );
-
-      final gammaEnd = text.indexOf('Gamma') + 'Gamma'.length;
-      await _simulateNativeSelectionDrag(
-        tester,
-        TextSelection(baseOffset: 0, extentOffset: gammaEnd),
-      );
-
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsNothing,
-      );
-      expect(
-        DebugConsole.allText,
-        isNot(contains('nativeToolbar requested')),
-        reason: 'Native drag updates must not reopen the Android toolbar.',
-      );
 
       final editable = _editableText(tester);
+      final beforeSelection = editable.controller.selection;
+      final beforePlainText = _nativeEditablePlainText(tester);
+
       editable.onSelectionChanged?.call(
-        TextSelection(baseOffset: 0, extentOffset: gammaEnd),
-        SelectionChangedCause.tap,
+        TextSelection(baseOffset: 0, extentOffset: beforePlainText.length),
+        SelectionChangedCause.drag,
       );
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets('native handle pointer up before drag update keeps rail hidden', (
-    tester,
-  ) async {
-    const text = 'Alpha\nBeta\nGamma\nDelta';
-    await _pumpTextChunkEditor(
-      tester,
-      const NoteBlock(id: 'text-1', type: NoteBlockType.paragraph, text: text),
-    );
-
-    await tester.longPressAt(
-      _nativeEditableSubstringRect(tester, 'Alpha').center,
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      _editableTextState(tester).textEditingValue.selection.isCollapsed,
-      isFalse,
-    );
-    expect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      findsOneWidget,
-    );
-
-    final handle = find.byKey(
-      const ValueKey('note-text-native-selection-handle-right'),
-    );
-    expect(handle, findsOneWidget);
-
-    DebugConsole.clear();
-    final gesture = await tester.startGesture(tester.getCenter(handle));
-    await tester.pump();
-
-    expect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      findsNothing,
-    );
-
-    await gesture.up();
-    await tester.pump();
-    await tester.pump();
-
-    expect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      findsNothing,
-      reason:
-          'A release-like handle event may arrive before native drag deltas; '
-          'it must not restore the rail while the native handle is still '
-          'controlling selection.',
-    );
-    expect(
-      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      findsNothing,
-    );
-
-    final gammaEnd = text.indexOf('Gamma') + 'Gamma'.length;
-    await _simulateNativeSelectionDrag(
-      tester,
-      TextSelection(baseOffset: 0, extentOffset: gammaEnd),
-    );
-
-    expect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-      findsNothing,
-    );
-    expect(
-      DebugConsole.allText,
-      isNot(contains('nativeToolbar requested')),
-      reason: 'Native drag updates must not reopen the Android toolbar.',
-    );
-
-    final editable = _editableText(tester);
-    editable.onSelectionChanged?.call(
-      TextSelection(baseOffset: 0, extentOffset: gammaEnd),
-      SelectionChangedCause.tap,
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('note-text-inline-selection-rail')),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets(
-    'native handle release-like idle keeps rail hidden until non-drag selection',
-    (tester) async {
-      const text = 'Alpha\nBeta\nGamma\nDelta';
-      await _pumpTextChunkEditor(
-        tester,
-        const NoteBlock(
-          id: 'text-1',
-          type: NoteBlockType.paragraph,
-          text: text,
-        ),
-      );
-
-      await tester.longPressAt(
-        _nativeEditableSubstringRect(tester, 'Alpha').center,
-      );
-      await tester.pumpAndSettle();
-
-      expect(
-        _editableTextState(tester).textEditingValue.selection.isCollapsed,
-        isFalse,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsOneWidget,
-      );
-
-      final handle = find.byKey(
-        const ValueKey('note-text-native-selection-handle-right'),
-      );
-      expect(handle, findsOneWidget);
-
-      DebugConsole.clear();
-      final gesture = await tester.startGesture(tester.getCenter(handle));
       await tester.pump();
 
       expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsNothing,
-      );
-
-      await gesture.up();
-      await tester.pump(const Duration(milliseconds: 350));
-      await tester.pump();
-
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsNothing,
+        editable.controller.selection,
+        beforeSelection,
         reason:
-            'The old 250 ms release grace must not reinsert the rail while '
-            'the user is still holding a native selection handle and drag '
-            'updates are sparse.',
+            'During native handle drag, Flutter owns selection updates. The '
+            'editor must not normalize and write controller.selection back.',
       );
       expect(
-        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsNothing,
-      );
-
-      final gammaEnd = text.indexOf('Gamma') + 'Gamma'.length;
-      await _simulateNativeSelectionDrag(
-        tester,
-        TextSelection(baseOffset: 0, extentOffset: gammaEnd),
-      );
-
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
-        findsNothing,
-      );
-
-      final editable = _editableText(tester);
-      editable.onSelectionChanged?.call(
-        TextSelection(baseOffset: 0, extentOffset: gammaEnd),
-        SelectionChangedCause.tap,
-      );
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('note-text-inline-selection-rail')),
-        findsOneWidget,
+        _nativeEditablePlainText(tester),
+        beforePlainText,
+        reason:
+            'During native handle drag, hiding rail UI must not change the '
+            'EditableText text span/plain text presentation.',
       );
     },
   );
@@ -752,6 +511,10 @@ void main() {
     expect(editableRect.height, greaterThan(20));
     expect(editable.showSelectionHandles, isTrue);
     expect(editable.selectionControls, isNotNull);
+    expect(
+      editable.selectionControls,
+      same(materialTextSelectionHandleControls),
+    );
     expect(editable.selectionControls, isA<TextSelectionHandleControls>());
     expect(editable.contextMenuBuilder, isNotNull);
     final editableState = _editableTextState(tester);
@@ -1611,7 +1374,7 @@ void main() {
   );
 
   testWidgets(
-    'handle cancel after repeated paragraph stepping keeps native margin stable',
+    'native drag after repeated paragraph stepping keeps native margin stable',
     (tester) async {
       NoteBlock? latest;
       const text =
@@ -1650,26 +1413,32 @@ void main() {
         expect(line.left, greaterThanOrEqualTo(activeMarginLeft - 1.5));
       }
 
-      await tester.longPressAt(
-        _nativeEditableSubstringRect(tester, 'Alpha').center,
+      _setEditorSelection(
+        tester,
+        const TextSelection(baseOffset: 0, extentOffset: 5),
       );
       await tester.pumpAndSettle();
-
-      final handle = find.byKey(
-        const ValueKey('note-text-native-selection-handle-right'),
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsOneWidget,
       );
-      expect(handle, findsOneWidget);
-
-      final gesture = await tester.startGesture(tester.getCenter(handle));
-      await tester.pump();
-      await gesture.cancel();
-      await tester.pump();
-      await tester.pump();
 
       final omegaEnd = latest!.text.indexOf('omega') + 'omega'.length;
+      final beforePlainText = _nativeEditablePlainText(tester);
       await _simulateNativeSelectionDrag(
         tester,
         TextSelection(baseOffset: 0, extentOffset: omegaEnd),
+      );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-rail')),
+        findsNothing,
+      );
+      expect(
+        _nativeEditablePlainText(tester),
+        beforePlainText,
+        reason:
+            'Native drag must not change the EditableText placeholder/plain '
+            'text presentation after paragraph step reflow.',
       );
 
       final afterBridgeLeft = tester
@@ -1813,6 +1582,10 @@ EditableText _editableText(WidgetTester tester) {
 
 EditableTextState _editableTextState(WidgetTester tester) {
   return tester.state<EditableTextState>(_editableTextFinder());
+}
+
+String _nativeEditablePlainText(WidgetTester tester) {
+  return _editableTextState(tester).renderEditable.text!.toPlainText();
 }
 
 Rect _nativeEditableSelectionRect(
