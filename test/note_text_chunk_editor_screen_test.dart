@@ -1128,7 +1128,6 @@ void main() {
       final diagnostic =
           'firstText=$firstText '
           'bounds=${lineBounds.map((line) => '${line.left.toStringAsFixed(1)},${line.top.toStringAsFixed(1)},${line.right.toStringAsFixed(1)}').join(';')} '
-          'native=${_nativeEditableCodeUnitDebug(tester)} '
           'logs=${DebugConsole.allText}';
 
       expect(lineBounds.length, greaterThan(1), reason: diagnostic);
@@ -1537,34 +1536,6 @@ List<double> _nativeEditableNonEmptyLineLefts(WidgetTester tester) {
   return [
     for (final line in _nativeEditableNonEmptyLineBounds(tester)) line.left,
   ];
-}
-
-String _nativeEditableCodeUnitDebug(WidgetTester tester) {
-  final state = _editableTextState(tester);
-  final renderEditable = state.renderEditable;
-  final plainText = renderEditable.text!.toPlainText();
-  final origin = renderEditable.localToGlobal(Offset.zero);
-  final entries = <String>[];
-  for (var offset = 0; offset < plainText.length; offset += 1) {
-    final codeUnit = plainText.codeUnitAt(offset);
-    if (codeUnit == 10) {
-      entries.add('$offset:LF');
-      continue;
-    }
-    final boxes = renderEditable.getBoxesForSelection(
-      TextSelection(baseOffset: offset, extentOffset: offset + 1),
-    );
-    if (boxes.isEmpty) {
-      entries.add('$offset:$codeUnit@none');
-      continue;
-    }
-    final rect = boxes.first.toRect().shift(origin);
-    entries.add(
-      '$offset:$codeUnit@'
-      '${rect.left.toStringAsFixed(1)},${rect.top.toStringAsFixed(1)}',
-    );
-  }
-  return entries.join('|');
 }
 
 List<Rect> _nativeEditableNonEmptyLineBounds(WidgetTester tester) {
