@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -71,10 +73,21 @@ void main() {
       final spacer = tester.getRect(
         find.byKey(const ValueKey('note-text-inline-selection-spacer')),
       );
-      expect(spacer.height, greaterThanOrEqualTo(160));
+      expect(
+        spacer.height,
+        closeTo(rail.height + 8, 2),
+        reason: 'The inline spacer must match the visible rail plus gap.',
+      );
 
       expect(rail.top, greaterThanOrEqualTo(alpha.bottom));
       expect(beta.top, greaterThanOrEqualTo(rail.bottom));
+      expect(
+        beta.top - rail.bottom,
+        lessThanOrEqualTo(20),
+        reason:
+            'The native newline spacer may round up by one line, but must not '
+            'leave a large fixed gap.',
+      );
     },
   );
 
@@ -99,9 +112,18 @@ void main() {
     expect(DebugConsole.allText, contains('[TextChunkLayout] textLen='));
     expect(DebugConsole.allText, contains('selection=1-4'));
     expect(DebugConsole.allText, contains('railLine=0'));
-    expect(DebugConsole.allText, contains('placeholderCount=7'));
+    expect(DebugConsole.allText, contains('placeholderCount='));
+    expect(DebugConsole.allText, contains('railGap='));
+    expect(DebugConsole.allText, contains('railHeight='));
+    expect(DebugConsole.allText, contains('railTargetSpacer='));
+    expect(DebugConsole.allText, contains('railNativeSpacer='));
+    expect(DebugConsole.allText, contains('railRoundedGap='));
+    expect(DebugConsole.allText, contains('railLineBreaks='));
     expect(DebugConsole.allText, contains('[TextChunkLayout] nativeGeometry'));
-    expect(DebugConsole.allText, contains('placeholderDelta=7'));
+    expect(DebugConsole.allText, contains('nativeOrigins='));
+    expect(DebugConsole.allText, contains('tightTagBoxes=true'));
+    expect(DebugConsole.allText, contains('underlineRects='));
+    expect(DebugConsole.allText, contains('placeholderDelta='));
   });
 
   testWidgets(
@@ -136,6 +158,53 @@ void main() {
       expect(line2.top, greaterThanOrEqualTo(rail.bottom));
     },
   );
+
+  testWidgets('rail spacer follows collapsed and expanded rail height', (
+    tester,
+  ) async {
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha\nBeta\nGamma',
+      ),
+    );
+
+    _setEditorSelection(
+      tester,
+      const TextSelection(baseOffset: 1, extentOffset: 4),
+    );
+    await tester.pumpAndSettle();
+
+    final expandedRail = tester.getRect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+    );
+    final expandedSpacer = tester.getRect(
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+    );
+    final expandedBeta = _nativeEditableSubstringRect(tester, 'Beta');
+
+    await tester.tap(
+      find.byKey(const ValueKey('note-selection-rail-toggle-tags')),
+    );
+    await tester.pumpAndSettle();
+
+    final collapsedRail = tester.getRect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+    );
+    final collapsedSpacer = tester.getRect(
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+    );
+    final collapsedBeta = _nativeEditableSubstringRect(tester, 'Beta');
+
+    expect(collapsedRail.height, lessThan(expandedRail.height));
+    expect(collapsedSpacer.height, closeTo(collapsedRail.height + 8, 2));
+    expect(expandedSpacer.height, closeTo(expandedRail.height + 8, 2));
+    expect(collapsedBeta.top, lessThan(expandedBeta.top));
+    expect(collapsedBeta.top, greaterThanOrEqualTo(collapsedRail.bottom));
+    expect(collapsedBeta.top - collapsedRail.bottom, lessThanOrEqualTo(20));
+  });
 
   testWidgets(
     'continuous selection spans paragraphs and anchors rail at the last line',
@@ -417,9 +486,9 @@ void main() {
   });
 
   testWidgets(
-    'primary highlight and secondary underlines are scoped to tagged text',
+    'tag decoration uses native text geometry without duplicate highlight',
     (tester) async {
-      const text = 'Alpha Beta Gamma';
+      const text = 'Alpha\nBeta\nGamma';
       final betaStart = text.indexOf('Beta');
       await _pumpTextChunkEditor(
         tester,
@@ -459,25 +528,36 @@ void main() {
         ),
       );
 
-      final highlight = tester.getRect(
+      _setEditorSelection(
+        tester,
+        const TextSelection(baseOffset: 0, extentOffset: 5),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
         find.byKey(
           const ValueKey('note-text-primary-highlight-range-beta-0-1'),
         ),
+        findsNothing,
+        reason: 'Primary tag background must come from native TextSpan only.',
       );
       final firstUnderline = tester.getRect(
         find.byKey(
-          const ValueKey('note-text-secondary-underline-range-beta-1-0-1'),
+          const ValueKey('note-text-secondary-underline-range-beta-1-0'),
         ),
       );
       final secondUnderline = tester.getRect(
         find.byKey(
-          const ValueKey('note-text-secondary-underline-range-beta-2-0-1'),
+          const ValueKey('note-text-secondary-underline-range-beta-2-0'),
         ),
       );
+      final beta = _nativeEditableSubstringTightRect(tester, 'Beta');
 
-      expect(firstUnderline.left, closeTo(highlight.left, 1));
-      expect(firstUnderline.width, closeTo(highlight.width, 1));
+      expect(firstUnderline.left, closeTo(beta.left, 1));
+      expect(firstUnderline.width, closeTo(beta.width, 1));
+      expect(firstUnderline.top, greaterThan(beta.top + 15));
       expect(secondUnderline.top, greaterThan(firstUnderline.top));
+      expect(firstUnderline.top, lessThan(beta.bottom + 16));
     },
   );
 
@@ -519,11 +599,20 @@ void main() {
 
     final lastUnderline = tester.getRect(
       find.byKey(
-        const ValueKey('note-text-secondary-underline-range-beta-10-1-0'),
+        const ValueKey('note-text-secondary-underline-range-beta-10-0'),
       ),
     );
+    final firstUnderline = tester.getRect(
+      find.byKey(
+        const ValueKey('note-text-secondary-underline-range-beta-1-0'),
+      ),
+    );
+    final beta = _nativeEditableSubstringRect(tester, 'Beta');
     final gamma = _nativeEditableSubstringRect(tester, 'Gamma');
 
+    expect(firstUnderline.top, greaterThan(beta.top + 15));
+    expect(lastUnderline.top, greaterThan(firstUnderline.top));
+    expect(lastUnderline.top, lessThan(beta.bottom + 48));
     expect(gamma.top, greaterThanOrEqualTo(lastUnderline.bottom + 1));
   });
 
@@ -597,6 +686,9 @@ void main() {
 
       expect(latest!.text.startsWith('  Alpha'), isTrue);
       expect(DebugConsole.allText, contains('[TextChunkStep] delta=1'));
+      expect(DebugConsole.allText, contains('[TextChunkStepReflow] delta=1'));
+      expect(DebugConsole.allText, contains('layoutLines='));
+      expect(DebugConsole.allText, contains('indentEdits='));
       expect(DebugConsole.allText, contains('changed=true'));
       final editableLeft = tester
           .getRect(find.byKey(const ValueKey('note-text-input-bridge')))
@@ -743,6 +835,21 @@ Rect _nativeEditableSubstringRect(WidgetTester tester, String text) {
     tester,
     TextSelection(baseOffset: start, extentOffset: start + text.length),
   );
+}
+
+Rect _nativeEditableSubstringTightRect(WidgetTester tester, String text) {
+  final state = _editableTextState(tester);
+  final renderEditable = state.renderEditable;
+  final previousWidthStyle = renderEditable.selectionWidthStyle;
+  final previousHeightStyle = renderEditable.selectionHeightStyle;
+  renderEditable.selectionWidthStyle = ui.BoxWidthStyle.tight;
+  renderEditable.selectionHeightStyle = ui.BoxHeightStyle.tight;
+  try {
+    return _nativeEditableSubstringRect(tester, text);
+  } finally {
+    renderEditable.selectionWidthStyle = previousWidthStyle;
+    renderEditable.selectionHeightStyle = previousHeightStyle;
+  }
 }
 
 List<double> _nativeEditableNonEmptyLineLefts(WidgetTester tester) {

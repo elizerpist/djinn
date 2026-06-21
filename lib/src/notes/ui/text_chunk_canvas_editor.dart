@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -7,8 +8,8 @@ import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
 import 'text_chunk_layout_model.dart';
 
-const double _railReservedHeight = 168;
-const int _railPlaceholderCount = 7;
+const double _railGap = 8;
+const double _defaultRailHeight = 105;
 
 class TextChunkNativeEditingController extends TextEditingController {
   TextChunkNativeEditingController({super.text});
@@ -16,18 +17,20 @@ class TextChunkNativeEditingController extends TextEditingController {
   List<NoteTextRangeTag> _rangeTags = const [];
   Widget? _inlineRail;
   int? _railInsertionOffset;
-  double _railWidth = 0;
+  String _railPlaceholderText = '';
+  int _railPlaceholderCount = 0;
 
   void configureTextChunkPresentation({
     required List<NoteTextRangeTag> rangeTags,
     required Widget? inlineRail,
     required int? railInsertionOffset,
-    required double railWidth,
+    required String railPlaceholderText,
   }) {
     _rangeTags = rangeTags;
     _inlineRail = inlineRail;
     _railInsertionOffset = railInsertionOffset;
-    _railWidth = railWidth;
+    _railPlaceholderText = railPlaceholderText;
+    _railPlaceholderCount = railPlaceholderText.length;
   }
 
   TextSelection normalizeNativeSelection(TextSelection selection) {
@@ -81,7 +84,7 @@ class TextChunkNativeEditingController extends TextEditingController {
       final start = sortedBreakpoints[index];
       final end = sortedBreakpoints[index + 1];
       if (railOffset == start) {
-        children.addAll(_railSpans());
+        children.addAll(_railSpans(baseStyle));
       }
       if (start >= end) {
         continue;
@@ -94,7 +97,7 @@ class TextChunkNativeEditingController extends TextEditingController {
       );
     }
     if (railOffset == text.length) {
-      children.addAll(_railSpans());
+      children.addAll(_railSpans(baseStyle));
     }
 
     return TextSpan(style: baseStyle, children: children);
@@ -109,21 +112,18 @@ class TextChunkNativeEditingController extends TextEditingController {
     return offset.clamp(0, text.length).toInt();
   }
 
-  List<InlineSpan> _railSpans() {
+  List<InlineSpan> _railSpans(TextStyle baseStyle) {
+    if (_railPlaceholderText.isEmpty) {
+      return const [];
+    }
     return [
-      for (var index = 0; index < _railPlaceholderCount; index += 1)
-        WidgetSpan(
-          alignment: PlaceholderAlignment.top,
-          child: SizedBox(
-            key: ValueKey(
-              index == 0
-                  ? 'note-text-inline-selection-spacer'
-                  : 'note-text-inline-selection-spacer-$index',
-            ),
-            width: _railWidth <= 0 ? 1 : _railWidth,
-            height: _railReservedHeight,
-          ),
+      TextSpan(
+        text: _railPlaceholderText,
+        style: baseStyle.copyWith(
+          color: Colors.transparent,
+          backgroundColor: Colors.transparent,
         ),
+      ),
     ];
   }
 
@@ -176,7 +176,12 @@ class TextChunkCanvasEditor extends StatefulWidget {
 class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   final GlobalKey<EditableTextState> _editableTextKey =
       GlobalKey<EditableTextState>();
+  final GlobalKey _layoutKey = GlobalKey();
+  final GlobalKey _railMeasureKey = GlobalKey();
   String? _lastDebugSignature;
+  String? _lastNativeGeometrySignature;
+  double _measuredRailHeight = _defaultRailHeight;
+  List<_TagHighlightGeometry> _nativeTagGeometries = const [];
 
   @override
   void initState() {
@@ -235,20 +240,39 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           textScaler: textScaler,
           rangeTags: widget.rangeTags,
           selection: selection,
-          railHeight: _railReservedHeight,
+          railHeight: _measuredRailHeight,
         );
         final railLine = _railLine(layout);
         final railInsertionOffset = railLine == null
             ? null
             : (railLine.hardBreakAfter ? railLine.end + 1 : railLine.end);
+        final railHeight = railLine == null ? 0.0 : _measuredRailHeight;
+        final railTargetSpacerHeight = railLine == null
+            ? 0.0
+            : railHeight + _railGap;
+        final railLineBreakCount = railLine == null
+            ? 0
+            : math.max(1, (railTargetSpacerHeight / lineHeight).ceil());
+        final railNativeSpacerHeight = railLineBreakCount * lineHeight;
+        final railPlaceholderText = railLine == null
+            ? ''
+            : _railPlaceholderTextForLineBreaks(railLineBreakCount);
+        final railPlaceholderCount = railPlaceholderText.length;
         final contentHeight =
-            (layout.lines.length * lineHeight) +
-            (railLine == null ? 0 : _railReservedHeight) +
-            48;
+            (layout.lines.length * lineHeight) + railNativeSpacerHeight + 48;
         _configureController(
           inlineRail: railLine == null ? null : widget.selectionRail,
           railInsertionOffset: railInsertionOffset,
-          railWidth: contentWidth,
+          railPlaceholderText: railPlaceholderText,
+        );
+        _scheduleNativeGeometrySync(
+          railLine: railLine,
+          railInsertionOffset: railInsertionOffset,
+          railHeight: railHeight,
+          railTargetSpacerHeight: railTargetSpacerHeight,
+          railNativeSpacerHeight: railNativeSpacerHeight,
+          railPlaceholderCount: railPlaceholderCount,
+          baseLineHeight: baseLineHeight,
         );
         _logLayoutUpdate(
           layout: layout,
@@ -260,6 +284,11 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           maxUnderlineLanes: maxUnderlineLanes,
           contentWidth: contentWidth,
           contentHeight: contentHeight,
+          railHeight: railHeight,
+          railTargetSpacerHeight: railTargetSpacerHeight,
+          railNativeSpacerHeight: railNativeSpacerHeight,
+          railLineBreakCount: railLineBreakCount,
+          railPlaceholderCount: railPlaceholderCount,
         );
 
         return GestureDetector(
@@ -274,14 +303,10 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
               width: contentWidth,
               height: contentHeight,
               child: Stack(
+                key: _layoutKey,
                 clipBehavior: Clip.none,
                 children: [
-                  for (final highlight in _tagHighlightGeometries(
-                    layout,
-                    baseLineHeight,
-                    lineHeight,
-                    railLine?.index,
-                  ))
+                  for (final highlight in _nativeTagGeometries)
                     highlight.toWidget(),
                   Positioned(
                     left: 0,
@@ -309,14 +334,33 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                       ),
                     ),
                   ),
+                  if (railLine != null)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: _railTop(railLine.index, lineHeight) - _railGap,
+                      child: IgnorePointer(
+                        child: SizedBox(
+                          key: const ValueKey(
+                            'note-text-inline-selection-spacer',
+                          ),
+                          height: railTargetSpacerHeight,
+                        ),
+                      ),
+                    ),
                   if (railLine != null && widget.selectionRail != null)
                     Positioned(
                       left: 0,
                       right: 0,
                       top: _railTop(railLine.index, lineHeight),
                       child: KeyedSubtree(
-                        key: const ValueKey('note-text-inline-selection-rail'),
-                        child: widget.selectionRail!,
+                        key: _railMeasureKey,
+                        child: KeyedSubtree(
+                          key: const ValueKey(
+                            'note-text-inline-selection-rail',
+                          ),
+                          child: widget.selectionRail!,
+                        ),
                       ),
                     ),
                   for (final line in layout.lines)
@@ -324,6 +368,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                       line: line,
                       lineHeight: lineHeight,
                       railLineIndex: railLine?.index,
+                      railSpacerHeight: railNativeSpacerHeight,
                     ),
                 ],
               ),
@@ -373,7 +418,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     if (underlineLanes <= 0 || baseLineHeight <= 0) {
       return style;
     }
-    final extraHeight = 12 + ((underlineLanes - 1) * 4.0);
+    final extraHeight = 30 + ((underlineLanes - 1) * 4.0);
     final targetLineHeight = baseLineHeight + extraHeight;
     final baseMultiplier = style.height ?? 1.0;
     return style.copyWith(
@@ -384,7 +429,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   void _configureController({
     required Widget? inlineRail,
     required int? railInsertionOffset,
-    required double railWidth,
+    required String railPlaceholderText,
   }) {
     final controller = widget.controller;
     if (controller is TextChunkNativeEditingController) {
@@ -392,7 +437,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         rangeTags: widget.rangeTags,
         inlineRail: inlineRail,
         railInsertionOffset: railInsertionOffset,
-        railWidth: railWidth,
+        railPlaceholderText: railPlaceholderText,
       );
     }
   }
@@ -435,6 +480,222 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     });
   }
 
+  void _scheduleNativeGeometrySync({
+    required TextChunkVisualLine? railLine,
+    required int? railInsertionOffset,
+    required double railHeight,
+    required double railTargetSpacerHeight,
+    required double railNativeSpacerHeight,
+    required int railPlaceholderCount,
+    required double baseLineHeight,
+  }) {
+    final signature = [
+      widget.controller.text.length,
+      widget.controller.selection.start,
+      widget.controller.selection.end,
+      widget.rangeTags
+          .map((tag) => '${tag.id}:${tag.start}-${tag.end}:${tag.tags.length}')
+          .join(','),
+      railLine?.index,
+      railInsertionOffset,
+      railHeight.toStringAsFixed(1),
+      railTargetSpacerHeight.toStringAsFixed(1),
+      railNativeSpacerHeight.toStringAsFixed(1),
+      railPlaceholderCount,
+      baseLineHeight.toStringAsFixed(1),
+    ].join('|');
+    _lastNativeGeometrySignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastNativeGeometrySignature != signature) {
+        return;
+      }
+      final measuredRailHeight = _measureRailHeight() ?? railHeight;
+      final renderEditable = _findRenderEditable(
+        _layoutKey.currentContext?.findRenderObject(),
+      );
+      final layoutBox = _layoutKey.currentContext?.findRenderObject();
+      final renderOrigin = renderEditable?.localToGlobal(Offset.zero);
+      final layoutOrigin = layoutBox is RenderBox
+          ? layoutBox.localToGlobal(Offset.zero)
+          : null;
+      final nextGeometries = renderEditable == null || layoutBox is! RenderBox
+          ? const <_TagHighlightGeometry>[]
+          : _nativeUnderlineGeometries(
+              renderEditable: renderEditable,
+              layoutBox: layoutBox,
+              railInsertionOffset: railInsertionOffset,
+              railPlaceholderCount: railPlaceholderCount,
+            );
+      final nextSignature = _geometrySignature(nextGeometries);
+      final currentSignature = _geometrySignature(_nativeTagGeometries);
+      final railChanged =
+          (measuredRailHeight - _measuredRailHeight).abs() > 0.5;
+      final geometryChanged = nextSignature != currentSignature;
+      DebugConsole.log(
+        '[TextChunkLayout] nativeTagGeometry '
+        'rangeTags=${widget.rangeTags.length} '
+        'rects=${nextGeometries.length} '
+        'railMeasured=${measuredRailHeight.toStringAsFixed(1)} '
+        'railTargetSpacer=${railTargetSpacerHeight.toStringAsFixed(1)} '
+        'railNativeSpacer=${railNativeSpacerHeight.toStringAsFixed(1)} '
+        'railRoundedGap=${(railNativeSpacerHeight - railTargetSpacerHeight).toStringAsFixed(1)} '
+        'placeholderCount=$railPlaceholderCount '
+        'nativeOrigins=editable:${_formatOffset(renderOrigin)},layout:${_formatOffset(layoutOrigin)} '
+        'tightTagBoxes=true '
+        'changedRail=$railChanged changedRects=$geometryChanged '
+        'underlineRects=[$nextSignature]',
+      );
+      if (!railChanged && !geometryChanged) {
+        return;
+      }
+      setState(() {
+        if (railChanged) {
+          _measuredRailHeight = measuredRailHeight;
+        }
+        if (geometryChanged) {
+          _nativeTagGeometries = nextGeometries;
+        }
+      });
+    });
+  }
+
+  double? _measureRailHeight() {
+    final renderObject = _railMeasureKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    return renderObject.size.height;
+  }
+
+  List<_TagHighlightGeometry> _nativeUnderlineGeometries({
+    required RenderEditable renderEditable,
+    required RenderBox layoutBox,
+    required int? railInsertionOffset,
+    required int railPlaceholderCount,
+  }) {
+    final renderEditableOrigin = renderEditable.localToGlobal(Offset.zero);
+    final layoutOrigin = layoutBox.localToGlobal(Offset.zero);
+    final geometries = <_TagHighlightGeometry>[];
+    for (final rawTag in widget.rangeTags) {
+      final tag = rawTag.clampToTextLength(widget.controller.text.length);
+      final tags = tag.resolvedTags;
+      if (!tag.isValid || tags.length <= 1) {
+        continue;
+      }
+      final rects = _nativeRectsForControllerRange(
+        renderEditable: renderEditable,
+        renderEditableOrigin: renderEditableOrigin,
+        layoutOrigin: layoutOrigin,
+        railInsertionOffset: railInsertionOffset,
+        railPlaceholderCount: railPlaceholderCount,
+        start: tag.start,
+        end: tag.end,
+      );
+      for (var rectIndex = 0; rectIndex < rects.length; rectIndex += 1) {
+        final rect = rects[rectIndex];
+        for (var tagIndex = 1; tagIndex < tags.length; tagIndex += 1) {
+          geometries.add(
+            _TagHighlightGeometry(
+              key: ValueKey(
+                'note-text-secondary-underline-${tag.id}-$tagIndex-$rectIndex',
+              ),
+              color: Color(tags[tagIndex].resolvedColorValue),
+              left: rect.left,
+              top: rect.bottom + 2 + ((tagIndex - 1) * 4),
+              width: rect.width.clamp(1, double.infinity).toDouble(),
+              height: 2,
+            ),
+          );
+        }
+      }
+    }
+    return geometries;
+  }
+
+  List<Rect> _nativeRectsForControllerRange({
+    required RenderEditable renderEditable,
+    required Offset renderEditableOrigin,
+    required Offset layoutOrigin,
+    required int? railInsertionOffset,
+    required int railPlaceholderCount,
+    required int start,
+    required int end,
+  }) {
+    if (start >= end) {
+      return const [];
+    }
+    final ranges = <({int start, int end})>[];
+    if (railInsertionOffset != null &&
+        start < railInsertionOffset &&
+        end > railInsertionOffset) {
+      ranges
+        ..add((start: start, end: railInsertionOffset))
+        ..add((start: railInsertionOffset, end: end));
+    } else {
+      ranges.add((start: start, end: end));
+    }
+    final rects = <Rect>[];
+    for (final range in ranges) {
+      if (range.start >= range.end) {
+        continue;
+      }
+      final nativeStart = _nativeOffsetForControllerOffset(
+        range.start,
+        railInsertionOffset,
+        railPlaceholderCount,
+      );
+      final nativeEnd = _nativeOffsetForControllerOffset(
+        range.end,
+        railInsertionOffset,
+        railPlaceholderCount,
+      );
+      final previousWidthStyle = renderEditable.selectionWidthStyle;
+      final previousHeightStyle = renderEditable.selectionHeightStyle;
+      renderEditable.selectionWidthStyle = ui.BoxWidthStyle.tight;
+      renderEditable.selectionHeightStyle = ui.BoxHeightStyle.tight;
+      final List<TextBox> boxes;
+      try {
+        boxes = renderEditable.getBoxesForSelection(
+          TextSelection(baseOffset: nativeStart, extentOffset: nativeEnd),
+        );
+      } finally {
+        renderEditable.selectionWidthStyle = previousWidthStyle;
+        renderEditable.selectionHeightStyle = previousHeightStyle;
+      }
+      for (final box in boxes) {
+        final rect = box.toRect().shift(renderEditableOrigin - layoutOrigin);
+        if (rect.width > 0 && rect.height > 0) {
+          rects.add(rect);
+        }
+      }
+    }
+    return rects;
+  }
+
+  int _nativeOffsetForControllerOffset(
+    int offset,
+    int? railInsertionOffset,
+    int railPlaceholderCount,
+  ) {
+    if (railInsertionOffset == null || offset < railInsertionOffset) {
+      return offset;
+    }
+    return offset + railPlaceholderCount;
+  }
+
+  String _geometrySignature(List<_TagHighlightGeometry> geometries) {
+    return geometries
+        .map(
+          (geometry) =>
+              '${geometry.key}:'
+              '${geometry.left.toStringAsFixed(1)},'
+              '${geometry.top.toStringAsFixed(1)},'
+              '${geometry.width.toStringAsFixed(1)}x'
+              '${geometry.height.toStringAsFixed(1)}',
+        )
+        .join(' ');
+  }
+
   void _logLayoutUpdate({
     required TextChunkLayout layout,
     required TextRange? selection,
@@ -445,6 +706,11 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     required int maxUnderlineLanes,
     required double contentWidth,
     required double contentHeight,
+    required double railHeight,
+    required double railTargetSpacerHeight,
+    required double railNativeSpacerHeight,
+    required int railLineBreakCount,
+    required int railPlaceholderCount,
   }) {
     final signature = [
       widget.controller.text.length,
@@ -474,7 +740,10 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     final railTop = railLine == null
         ? null
         : _railTop(railLine.index, lineHeight);
-    final railBottom = railTop == null ? null : railTop + _railReservedHeight;
+    final railBottom = railTop == null ? null : railTop + railHeight;
+    final railNativeSpacerBottom = railTop == null
+        ? null
+        : railTop + railNativeSpacerHeight;
     DebugConsole.log(
       '[TextChunkLayout] textLen=${widget.controller.text.length} '
       'selection=${selection == null ? 'null' : '${selection.start}-${selection.end}'} '
@@ -487,7 +756,14 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
       'railLine=${railLine?.index} railInsert=$railInsertionOffset '
       'railTop=${railTop?.toStringAsFixed(1)} '
       'railBottom=${railBottom?.toStringAsFixed(1)} '
-      'placeholderCount=$_railPlaceholderCount '
+      'railGap=${railLine == null ? 'null' : _railGap.toStringAsFixed(1)} '
+      'railHeight=${railLine == null ? 'null' : railHeight.toStringAsFixed(1)} '
+      'railTargetSpacer=${railLine == null ? 'null' : railTargetSpacerHeight.toStringAsFixed(1)} '
+      'railNativeSpacer=${railLine == null ? 'null' : railNativeSpacerHeight.toStringAsFixed(1)} '
+      'railRoundedGap=${railLine == null ? 'null' : (railNativeSpacerHeight - railTargetSpacerHeight).toStringAsFixed(1)} '
+      'railNativeSpacerBottom=${railNativeSpacerBottom?.toStringAsFixed(1)} '
+      'railLineBreaks=$railLineBreakCount '
+      'placeholderCount=$railPlaceholderCount '
       'rangeTags=${widget.rangeTags.length} lines=[$lineSummary]',
     );
 
@@ -575,115 +851,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     )..layout();
     return painter.height;
   }
-
-  List<_TagHighlightGeometry> _tagHighlightGeometries(
-    TextChunkLayout layout,
-    double baseLineHeight,
-    double lineHeight,
-    int? railLineIndex,
-  ) {
-    final geometries = <_TagHighlightGeometry>[];
-    for (final line in layout.lines) {
-      final pieces = _piecesForLine(line);
-      for (final piece in pieces) {
-        final segment = piece.segment;
-        if (segment == null || segment.tags.isEmpty) {
-          continue;
-        }
-        final left =
-            (line.indentLevel * textChunkIndentWidth) +
-            _textWidth(line.text.substring(0, piece.start - line.start));
-        final width = _textWidth(
-          piece.text,
-        ).clamp(1, double.infinity).toDouble();
-        final top = _lineTop(line.index, lineHeight, railLineIndex);
-        geometries.add(
-          _TagHighlightGeometry(
-            key: ValueKey(
-              'note-text-primary-highlight-${segment.rangeId}-${line.index}-${piece.index}',
-            ),
-            color: Color(
-              segment.tags.first.resolvedColorValue,
-            ).withValues(alpha: 0.18),
-            left: left,
-            top: top,
-            width: width,
-            height: baseLineHeight,
-          ),
-        );
-        for (var tagIndex = 1; tagIndex < segment.tags.length; tagIndex += 1) {
-          geometries.add(
-            _TagHighlightGeometry(
-              key: ValueKey(
-                'note-text-secondary-underline-${segment.rangeId}-$tagIndex-${line.index}-${piece.index}',
-              ),
-              color: Color(segment.tags[tagIndex].resolvedColorValue),
-              left: left,
-              top: top + baseLineHeight + ((tagIndex - 1) * 4),
-              width: width,
-              height: 2,
-            ),
-          );
-        }
-      }
-    }
-    return geometries;
-  }
-
-  List<_LinePiece> _piecesForLine(TextChunkVisualLine line) {
-    if (line.start >= line.end) {
-      return const [];
-    }
-    final breakpoints = <int>{line.start, line.end};
-    for (final segment in line.tagSegments) {
-      breakpoints
-        ..add(segment.start)
-        ..add(segment.end);
-    }
-    final sorted = breakpoints.toList()..sort();
-    final pieces = <_LinePiece>[];
-    for (var index = 0; index < sorted.length - 1; index += 1) {
-      final start = sorted[index];
-      final end = sorted[index + 1];
-      if (start >= end) {
-        continue;
-      }
-      pieces.add(
-        _LinePiece(
-          index: pieces.length,
-          start: start,
-          end: end,
-          text: line.text.substring(start - line.start, end - line.start),
-          segment: _segmentForRange(line.tagSegments, start, end),
-        ),
-      );
-    }
-    return pieces;
-  }
-
-  TextChunkTagSegment? _segmentForRange(
-    List<TextChunkTagSegment> segments,
-    int start,
-    int end,
-  ) {
-    for (final segment in segments) {
-      if (segment.start <= start && segment.end >= end) {
-        return segment;
-      }
-    }
-    return null;
-  }
-
-  double _textWidth(String text) {
-    if (text.isEmpty) {
-      return 1;
-    }
-    final painter = TextPainter(
-      text: TextSpan(text: text, style: widget.textStyle),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    return painter.width;
-  }
 }
 
 class _LineMarker extends StatelessWidget {
@@ -691,16 +858,18 @@ class _LineMarker extends StatelessWidget {
     required this.line,
     required this.lineHeight,
     required this.railLineIndex,
+    required this.railSpacerHeight,
   });
 
   final TextChunkVisualLine line;
   final double lineHeight;
   final int? railLineIndex;
+  final double railSpacerHeight;
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      top: _lineTop(line.index, lineHeight, railLineIndex),
+      top: _lineTop(line.index, lineHeight, railLineIndex, railSpacerHeight),
       left: 0,
       right: 0,
       child: IgnorePointer(
@@ -748,31 +917,27 @@ class _TagHighlightGeometry {
   }
 }
 
-class _LinePiece {
-  const _LinePiece({
-    required this.index,
-    required this.start,
-    required this.end,
-    required this.text,
-    required this.segment,
-  });
-
-  final int index;
-  final int start;
-  final int end;
-  final String text;
-  final TextChunkTagSegment? segment;
-}
-
-double _lineTop(int lineIndex, double lineHeight, int? railLineIndex) {
+double _lineTop(
+  int lineIndex,
+  double lineHeight,
+  int? railLineIndex,
+  double railSpacerHeight,
+) {
   final railOffset = railLineIndex != null && lineIndex > railLineIndex
-      ? _railReservedHeight
+      ? railSpacerHeight
       : 0;
   return (lineIndex * lineHeight) + railOffset;
 }
 
 double _railTop(int lineIndex, double lineHeight) {
-  return (lineIndex * lineHeight) + lineHeight + 8;
+  return (lineIndex * lineHeight) + lineHeight + _railGap;
+}
+
+String _railPlaceholderTextForLineBreaks(int lineBreakCount) {
+  if (lineBreakCount <= 0) {
+    return '';
+  }
+  return List.filled(lineBreakCount, ' \n').join();
 }
 
 String _formatRect(Rect? rect) {
@@ -783,4 +948,11 @@ String _formatRect(Rect? rect) {
       '${rect.top.toStringAsFixed(1)},'
       '${rect.width.toStringAsFixed(1)}x'
       '${rect.height.toStringAsFixed(1)})';
+}
+
+String _formatOffset(Offset? offset) {
+  if (offset == null) {
+    return 'null';
+  }
+  return '(${offset.dx.toStringAsFixed(1)},${offset.dy.toStringAsFixed(1)})';
 }

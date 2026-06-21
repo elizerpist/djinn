@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
 import 'text_chunk_layout_model.dart';
 
@@ -120,9 +121,23 @@ ParagraphStepResult applyTextChunkParagraphStep({
       selectionOffset: offset,
     );
   }
-  final layout = buildTextChunkLayout(
+  final normalized = _removeParagraphSoftWraps(
     text: text,
     rangeTags: rangeTags,
+    paragraph: paragraph,
+    indentLevel: currentIndent,
+    selectionOffset: offset,
+  );
+  final normalizedParagraph = textChunkParagraphRangeForOffset(
+    normalized.text,
+    normalized.selectionOffset,
+  );
+  if (normalizedParagraph == null) {
+    return normalized;
+  }
+  final layout = buildTextChunkLayout(
+    text: normalized.text,
+    rangeTags: normalized.rangeTags,
     maxWidth: (maxWidth - (nextIndent * textChunkIndentWidth))
         .clamp(1, double.infinity)
         .toDouble(),
@@ -130,24 +145,106 @@ ParagraphStepResult applyTextChunkParagraphStep({
     textScaler: textScaler,
   );
   final edits = _paragraphIndentEdits(
-    text: text,
-    paragraph: paragraph,
+    text: normalized.text,
+    paragraph: normalizedParagraph,
     layout: layout,
     indentLevel: nextIndent,
   );
+  DebugConsole.log(
+    '[TextChunkStepReflow] delta=$delta currentIndent=$currentIndent '
+    'nextIndent=$nextIndent paragraph=${paragraph.start}-${paragraph.end} '
+    'normalizedParagraph=${normalizedParagraph.start}-${normalizedParagraph.end} '
+    'maxWidth=${maxWidth.toStringAsFixed(1)} '
+    'layoutMaxWidth=${(maxWidth - (nextIndent * textChunkIndentWidth)).clamp(1, double.infinity).toStringAsFixed(1)} '
+    'layoutLines=${layout.lines.length} indentEdits=${edits.length} '
+    'oldLen=${text.length} normalizedLen=${normalized.text.length}',
+  );
   if (edits.isEmpty) {
     return TextChunkEditResult(
-      text: text,
-      rangeTags: rangeTags,
-      selectionOffset: offset,
+      text: normalized.text,
+      rangeTags: normalized.rangeTags,
+      selectionOffset: normalized.selectionOffset,
     );
   }
   return _applyTextChunkTextEdits(
+    text: normalized.text,
+    rangeTags: normalized.rangeTags,
+    edits: edits,
+    selectionOffset: normalized.selectionOffset,
+  );
+}
+
+TextChunkEditResult _removeParagraphSoftWraps({
+  required String text,
+  required List<NoteTextRangeTag> rangeTags,
+  required TextRange paragraph,
+  required int indentLevel,
+  required int selectionOffset,
+}) {
+  if (indentLevel <= 0 || paragraph.start >= paragraph.end) {
+    return TextChunkEditResult(
+      text: text,
+      rangeTags: rangeTags,
+      selectionOffset: selectionOffset,
+    );
+  }
+  final indent = '  ' * indentLevel;
+  final edits = <TextChunkTextEdit>[];
+  var offset = paragraph.start;
+  while (offset < paragraph.end) {
+    final newline = text.indexOf('\n', offset);
+    if (newline < 0 || newline >= paragraph.end) {
+      break;
+    }
+    final nextStart = newline + 1;
+    if (nextStart + indent.length <= paragraph.end &&
+        text.startsWith(indent, nextStart)) {
+      final before = newline > paragraph.start
+          ? text.codeUnitAt(newline - 1)
+          : 32;
+      final afterOffset = nextStart + indent.length;
+      final after = afterOffset < paragraph.end
+          ? text.codeUnitAt(afterOffset)
+          : 32;
+      final needsSpace = before != 32 && after != 32 && after != 10;
+      edits.add(
+        TextChunkTextEdit(
+          offset: newline,
+          deleteCount: 1 + indent.length,
+          insertText: needsSpace ? ' ' : '',
+        ),
+      );
+      offset = afterOffset;
+      continue;
+    }
+    offset = nextStart;
+  }
+  if (edits.isEmpty) {
+    DebugConsole.log(
+      '[TextChunkStepNormalize] paragraph=${paragraph.start}-${paragraph.end} '
+      'indent=$indentLevel softWrapEdits=0 oldLen=${text.length} '
+      'newLen=${text.length} selection=$selectionOffset->$selectionOffset',
+    );
+    return TextChunkEditResult(
+      text: text,
+      rangeTags: rangeTags,
+      selectionOffset: selectionOffset,
+    );
+  }
+  edits.sort((a, b) => b.offset.compareTo(a.offset));
+  final result = _applyTextChunkTextEdits(
     text: text,
     rangeTags: rangeTags,
     edits: edits,
-    selectionOffset: offset,
+    selectionOffset: selectionOffset,
   );
+  DebugConsole.log(
+    '[TextChunkStepNormalize] paragraph=${paragraph.start}-${paragraph.end} '
+    'indent=$indentLevel softWrapEdits=${edits.length} '
+    'oldLen=${text.length} newLen=${result.text.length} '
+    'selection=$selectionOffset->${result.selectionOffset}',
+  );
+  return result;
 }
 
 List<TextChunkTextEdit> _paragraphIndentEdits({

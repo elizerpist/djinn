@@ -108,6 +108,39 @@ void main() {
     },
   );
 
+  test('paragraph step out removes stale auto-wrap fragments', () {
+    const text =
+        'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda '
+        'mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega';
+
+    final steppedIn = applyTextChunkParagraphStep(
+      text: text,
+      rangeTags: const [],
+      offset: text.length,
+      delta: 1,
+      maxWidth: 180,
+      textStyle: textStyle,
+      textScaler: TextScaler.noScaling,
+    );
+    final steppedOut = applyTextChunkParagraphStep(
+      text: steppedIn.text,
+      rangeTags: steppedIn.rangeTags,
+      offset: steppedIn.selectionOffset,
+      delta: -1,
+      maxWidth: 180,
+      textStyle: textStyle,
+      textScaler: TextScaler.noScaling,
+    );
+
+    expect(
+      steppedOut.text,
+      text,
+      reason:
+          'Auto-wrap newline fragments inserted for paragraph step must not '
+          'stick after the margin returns to zero.',
+    );
+  });
+
   test('paragraph outdent removes only the paragraph leading indent', () {
     const text = '  Alpha\nBeta\n\n  Gamma';
 
