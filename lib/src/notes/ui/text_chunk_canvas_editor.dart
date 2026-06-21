@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -10,6 +11,9 @@ import 'text_chunk_layout_model.dart';
 
 const double _railGap = 8;
 const double _defaultRailHeight = 105;
+const Duration _selectionDragSettleDelay = Duration(milliseconds: 160);
+const double _underlineFirstLaneInset = 2;
+const double _underlineLaneStep = 3.5;
 
 class _TextChunkNativePlaceholder {
   const _TextChunkNativePlaceholder({
@@ -217,6 +221,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   String? _lastNativeGeometrySignature;
   double _measuredRailHeight = _defaultRailHeight;
   List<_TagHighlightGeometry> _nativeTagGeometries = const [];
+  Timer? _selectionDragSettleTimer;
+  bool _selectionHandleDragActive = false;
 
   @override
   void initState() {
@@ -240,6 +246,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
 
   @override
   void dispose() {
+    _selectionDragSettleTimer?.cancel();
     widget.controller.removeListener(_handleEditorChanged);
     widget.focusNode.removeListener(_handleEditorChanged);
     super.dispose();
@@ -480,6 +487,9 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   }
 
   TextRange? _visualSelection() {
+    if (_selectionHandleDragActive) {
+      return null;
+    }
     final selection = widget.controller.selection;
     if (selection.isValid) {
       return TextRange(
@@ -531,11 +541,54 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
       return;
     }
     final normalized = controller.normalizeNativeSelection(selection);
+    if (cause == SelectionChangedCause.drag) {
+      _handleSelectionHandleDrag(normalized);
+      if (normalized.baseOffset != selection.baseOffset ||
+          normalized.extentOffset != selection.extentOffset) {
+        controller.selection = normalized;
+      }
+      return;
+    }
+    _cancelSelectionHandleDrag();
     if (normalized.baseOffset != selection.baseOffset ||
         normalized.extentOffset != selection.extentOffset) {
       controller.selection = normalized;
     }
     _showNativeToolbarForSelection(normalized, cause);
+  }
+
+  void _handleSelectionHandleDrag(TextSelection selection) {
+    _selectionDragSettleTimer?.cancel();
+    if (!_selectionHandleDragActive && mounted) {
+      setState(() {
+        _selectionHandleDragActive = true;
+      });
+    }
+    _selectionDragSettleTimer = Timer(_selectionDragSettleDelay, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectionHandleDragActive = false;
+      });
+      final settledSelection = widget.controller.selection.isValid
+          ? widget.controller.selection
+          : selection;
+      _showNativeToolbarForSelection(
+        settledSelection,
+        SelectionChangedCause.drag,
+      );
+    });
+  }
+
+  void _cancelSelectionHandleDrag() {
+    _selectionDragSettleTimer?.cancel();
+    _selectionDragSettleTimer = null;
+    if (_selectionHandleDragActive && mounted) {
+      setState(() {
+        _selectionHandleDragActive = false;
+      });
+    }
   }
 
   void _showNativeToolbarForSelection(
@@ -702,7 +755,10 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
               ),
               color: Color(tags[tagIndex].resolvedColorValue),
               left: rect.left,
-              top: rect.bottom + 2 + ((tagIndex - 1) * 4),
+              top:
+                  rect.bottom -
+                  _underlineFirstLaneInset +
+                  ((tagIndex - 1) * _underlineLaneStep),
               width: rect.width.clamp(1, double.infinity).toDouble(),
               height: 2,
             ),
@@ -833,6 +889,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           .map((tag) => '${tag.id}:${tag.start}-${tag.end}:${tag.tags.length}')
           .join(','),
       contentWidth.toStringAsFixed(1),
+      _selectionHandleDragActive,
     ].join('|');
     if (_lastDebugSignature == signature) {
       return;
@@ -868,6 +925,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     DebugConsole.log(
       '[TextChunkLayout] textLen=${widget.controller.text.length} '
       'selection=${selection == null ? 'null' : '${selection.start}-${selection.end}'} '
+      'selectionDragActive=$_selectionHandleDragActive '
       'focus=${widget.focusNode.hasFocus} '
       'content=${contentWidth.toStringAsFixed(1)}x${contentHeight.toStringAsFixed(1)} '
       'lineHeight=${lineHeight.toStringAsFixed(1)} '
@@ -1109,13 +1167,10 @@ List<_LineSpacerPlan> _underlineSpacerPlans(
   final plans = <_LineSpacerPlan>[];
   for (final line in lines) {
     final lanes = line.underlineLanes.length;
-    if (lanes <= 0) {
+    final nativeLineCount = _underlineNativeLineCountForLanes(lanes);
+    if (nativeLineCount <= 0) {
       continue;
     }
-    final nativeLineCount = math.max(
-      1,
-      (_underlineExtraHeightForLanes(lanes) / baseLineHeight).ceil(),
-    );
     // The first inserted newline terminates the current visual row. The
     // following newlines are the rows that create visible vertical space.
     final placeholderLineBreakCount = nativeLineCount + 1;
@@ -1135,11 +1190,11 @@ List<_LineSpacerPlan> _underlineSpacerPlans(
   return plans;
 }
 
-double _underlineExtraHeightForLanes(int lanes) {
-  if (lanes <= 0) {
+int _underlineNativeLineCountForLanes(int lanes) {
+  if (lanes <= 1) {
     return 0;
   }
-  return 4 + (lanes * 4.0);
+  return ((lanes - 2) ~/ 4) + 1;
 }
 
 int _insertionOffsetForLine(TextChunkVisualLine line) {

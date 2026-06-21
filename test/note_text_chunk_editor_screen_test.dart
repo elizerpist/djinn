@@ -216,6 +216,61 @@ void main() {
     },
   );
 
+  testWidgets('selection handle drag hides rail until final range settles', (
+    tester,
+  ) async {
+    const text = 'Alpha\nBeta\nGamma\nDelta';
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: text,
+      ),
+    );
+
+    _setEditorSelection(
+      tester,
+      const TextSelection(baseOffset: 0, extentOffset: 5),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsOneWidget,
+    );
+
+    final gammaEnd = text.indexOf('Gamma') + 'Gamma'.length;
+    await _simulateNativeSelectionDrag(
+      tester,
+      TextSelection(baseOffset: 0, extentOffset: gammaEnd),
+    );
+
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+      findsNothing,
+      reason:
+          'While a native selection handle is being dragged, the rail must not '
+          'reserve space or move underneath the handle.',
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+      findsNothing,
+    );
+
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+
+    final gamma = _nativeEditableSubstringRect(tester, 'Gamma');
+    final delta = _nativeEditableSubstringRect(tester, 'Delta');
+    final rail = tester.getRect(
+      find.byKey(const ValueKey('note-text-inline-selection-rail')),
+    );
+
+    expect(rail.top, greaterThanOrEqualTo(gamma.bottom));
+    expect(delta.top, greaterThanOrEqualTo(rail.bottom));
+  });
+
   testWidgets('rail spacer follows collapsed and expanded rail height', (
     tester,
   ) async {
@@ -746,9 +801,10 @@ void main() {
     ].join(' ');
     final targetStart = text.indexOf(target);
 
-    Future<(Rect targetRect, Rect nextLine)> pumpWithSecondaryTags(
+    Future<({Rect targetRect, Rect nextLine, String logs})> pumpWithSecondaryTags(
       int secondaryCount,
     ) async {
+      DebugConsole.clear();
       final tags = _tagsWithSecondary(secondaryCount);
       await _pumpTextChunkEditor(
         tester,
@@ -773,48 +829,66 @@ void main() {
       final nextLine = lineBounds.firstWhere(
         (line) => line.top > targetRect.top + 2,
       );
-      return (targetRect, nextLine);
+      return (
+        targetRect: targetRect,
+        nextLine: nextLine,
+        logs: DebugConsole.allText,
+      );
     }
 
-    final many = await pumpWithSecondaryTags(10);
-    expect(
-      DebugConsole.allText,
-      contains('underline-line-'),
-      reason: 'The many-tag state must use native underline spacers.',
-    );
-    DebugConsole.clear();
-
-    final one = await pumpWithSecondaryTags(1);
-    final oneLogs = DebugConsole.allText;
-    DebugConsole.clear();
-
     final none = await pumpWithSecondaryTags(0);
-    final noneLogs = DebugConsole.allText;
-    final manyGap = many.$2.top - many.$1.top;
-    final oneGap = one.$2.top - one.$1.top;
-    final noneGap = none.$2.top - none.$1.top;
+    final one = await pumpWithSecondaryTags(1);
+    final five = await pumpWithSecondaryTags(5);
+    final eight = await pumpWithSecondaryTags(8);
+    final noneGap = none.nextLine.top - none.targetRect.top;
+    final oneGap = one.nextLine.top - one.targetRect.top;
+    final fiveGap = five.nextLine.top - five.targetRect.top;
+    final eightGap = eight.nextLine.top - eight.targetRect.top;
     final diagnostic =
-        'manyGap=${manyGap.toStringAsFixed(1)} '
-        'oneGap=${oneGap.toStringAsFixed(1)} '
         'noneGap=${noneGap.toStringAsFixed(1)} '
-        'oneLogs=$oneLogs noneLogs=$noneLogs';
+        'oneGap=${oneGap.toStringAsFixed(1)} '
+        'fiveGap=${fiveGap.toStringAsFixed(1)} '
+        'eightGap=${eightGap.toStringAsFixed(1)} '
+        'noneLogs=${none.logs} oneLogs=${one.logs} '
+        'fiveLogs=${five.logs} eightLogs=${eight.logs}';
 
     expect(
       oneGap,
-      lessThan(manyGap),
+      closeTo(noneGap, 2),
       reason:
-          'Removing most secondary underline lanes must shrink the native '
-          'line gap. $diagnostic',
+          'One secondary underline fits below the word and must not stretch '
+          'the following native text line. $diagnostic',
     );
     expect(
-      noneGap,
-      lessThanOrEqualTo(oneGap),
+      one.logs,
+      isNot(contains('underline-line-')),
       reason:
-          'Removing the final secondary underline must not keep the old '
-          'larger spacer. $diagnostic',
+          'A single underline must be drawn without an underline placeholder. '
+          '$diagnostic',
     );
     expect(
-      noneLogs,
+      fiveGap,
+      greaterThan(oneGap),
+      reason:
+          'Five underline lanes need some native spacing below the tagged '
+          'line. $diagnostic',
+    );
+    expect(
+      eightGap,
+      greaterThan(fiveGap),
+      reason:
+          'Reducing many lanes down to five must shrink the reserved native '
+          'spacing immediately. $diagnostic',
+    );
+    expect(
+      five.logs,
+      contains('underline-line-'),
+      reason:
+          'Five underline lanes should still use a native spacer, just a '
+          'smaller one than eight lanes. $diagnostic',
+    );
+    expect(
+      none.logs,
       isNot(contains('underline-line-')),
       reason:
           'With only the primary tag left, there must be no underline '
@@ -1228,6 +1302,17 @@ void _setEditorSelection(WidgetTester tester, TextSelection selection) {
   final editable = _editableText(tester);
   editable.controller.selection = selection;
   editable.focusNode.requestFocus();
+}
+
+Future<void> _simulateNativeSelectionDrag(
+  WidgetTester tester,
+  TextSelection selection,
+) async {
+  final editable = _editableText(tester);
+  editable.controller.selection = selection;
+  editable.focusNode.requestFocus();
+  editable.onSelectionChanged?.call(selection, SelectionChangedCause.drag);
+  await tester.pump();
 }
 
 Finder _editableTextFinder() {
