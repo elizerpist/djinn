@@ -264,14 +264,20 @@ List<TextChunkVisualLine> _visualLinesForParagraph({
     final newline = text.indexOf('\n', manualStart);
     final manualEnd = newline < 0 || newline > range.end ? range.end : newline;
     final hasHardBreak = newline >= 0 && newline < range.end;
-    final visibleStart = manualStart == range.start
-        ? _skipParagraphIndent(text, manualStart, manualEnd)
-        : manualStart;
+    final visibleStart = _skipParagraphIndent(text, manualStart, manualEnd);
+    final leadingIndentWidth = _textWidth(
+      text: text.substring(manualStart, visibleStart),
+      textStyle: textStyle,
+      textScaler: textScaler,
+    );
+    final layoutMaxWidth = (maxWidth - leadingIndentWidth)
+        .clamp(1, double.infinity)
+        .toDouble();
     final visualSegments = _wrapSegment(
       text: text,
       start: visibleStart,
       end: manualEnd,
-      maxWidth: maxWidth,
+      maxWidth: layoutMaxWidth,
       textStyle: textStyle,
       textScaler: textScaler,
     );
@@ -372,6 +378,22 @@ int _skipParagraphIndent(String text, int start, int end) {
     offset += 1;
   }
   return offset;
+}
+
+double _textWidth({
+  required String text,
+  required TextStyle textStyle,
+  required TextScaler textScaler,
+}) {
+  if (text.isEmpty) {
+    return 0;
+  }
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: textStyle),
+    textDirection: TextDirection.ltr,
+    textScaler: textScaler,
+  )..layout();
+  return painter.width;
 }
 
 List<({int start, int end})> _wrapSegment({
