@@ -1502,9 +1502,12 @@ void main() {
         find.byKey(const ValueKey('note-text-inline-selection-rail')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsOneWidget,
+      );
 
       final omegaEnd = latest!.text.indexOf('omega') + 'omega'.length;
-      final beforePlainText = _nativeEditablePlainText(tester);
       await _simulateNativeSelectionDrag(
         tester,
         TextSelection(baseOffset: 0, extentOffset: omegaEnd),
@@ -1514,11 +1517,15 @@ void main() {
         findsNothing,
       );
       expect(
+        find.byKey(const ValueKey('note-text-inline-selection-spacer')),
+        findsNothing,
+      );
+      expect(
         _nativeEditablePlainText(tester),
-        beforePlainText,
+        latest!.text,
         reason:
-            'Native drag must not change the EditableText placeholder/plain '
-            'text presentation after paragraph step reflow.',
+            'Native drag must remove the rail placeholder and keep only the '
+            'real editor text after paragraph step reflow.',
       );
 
       final afterBridgeLeft = tester
