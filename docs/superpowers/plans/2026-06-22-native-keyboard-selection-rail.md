@@ -189,7 +189,7 @@ Use a `FrameLayout` container added to `android.R.id.content`. Render action but
 
 On Android R+, install `WindowInsetsAnimation.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE)` on the content root. On each `onProgress`, read `WindowInsets.Type.ime()` bottom and position the native rail against the keyboard top in the same native frame. Also handle `onApplyWindowInsets` fallback for non-animated or older paths.
 
-- [ ] **Step 4: Compile through CI**
+- [x] **Step 4: Compile through CI**
 
 Local Android build is not required on Termux. GitHub Actions must compile Kotlin and build the APK.
 
@@ -207,14 +207,14 @@ Local Android build is not required on Termux. GitHub Actions must compile Kotli
 
 Run what works locally. If Flutter fails due Termux TLS alignment, record that exact limitation and rely on Actions.
 
-- [ ] **Step 2: Commit and push**
+- [x] **Step 2: Commit and push**
 
 Commit focused implementation and tests. Push `fix/textchunk-rail-dynamic-spacing`.
 
-- [ ] **Step 3: Trigger GitHub Actions**
+- [x] **Step 3: Trigger GitHub Actions**
 
 Run Android native build workflow on the branch. Wait for success or inspect logs and fix failures.
 
-- [ ] **Step 4: Update checklist**
+- [x] **Step 4: Update checklist**
 
 Mark NKR-001 through NKR-009 honestly based on tests, inspection, and Actions. Do not mark complete if any required behavior is unverified.
