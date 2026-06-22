@@ -4,34 +4,32 @@ import 'package:flutter/rendering.dart';
 import '../models/note_document.dart';
 
 class NoteTaggedTextVisualStyle {
-  const NoteTaggedTextVisualStyle({
-    required this.primaryBackground,
-  });
+  const NoteTaggedTextVisualStyle({required this.primaryBackground});
 
   final Color? primaryBackground;
 }
 
-enum NoteTaggedTextCountMarkerMode { fixedCorner, adaptiveClamp }
+enum NoteTaggedTextCountMarkerMode { fixedCorner, adaptiveClamp, countOnly }
 
 class NoteTaggedTextCountMarkerRun {
   const NoteTaggedTextCountMarkerRun({
     required this.start,
     required this.end,
     required this.tagCount,
+    required this.colorValue,
   });
 
   final int start;
   final int end;
   final int tagCount;
+  final int colorValue;
 }
 
 NoteTaggedTextVisualStyle noteTaggedTextVisualStyle(
   List<NoteKnowledgeTag> tags,
 ) {
   if (tags.isEmpty) {
-    return const NoteTaggedTextVisualStyle(
-      primaryBackground: null,
-    );
+    return const NoteTaggedTextVisualStyle(primaryBackground: null);
   }
   return NoteTaggedTextVisualStyle(
     primaryBackground: Color(tags.first.resolvedColorValue),
@@ -79,9 +77,7 @@ TextSpan noteTaggedEditableTextSpan({
     children.add(
       TextSpan(
         text: text.substring(rangeTag.start, rangeTag.end),
-        style: TextStyle(
-          backgroundColor: primary?.withValues(alpha: alpha),
-        ),
+        style: TextStyle(backgroundColor: primary?.withValues(alpha: alpha)),
       ),
     );
     cursor = rangeTag.end;
@@ -107,6 +103,7 @@ List<NoteTaggedTextCountMarkerRun> noteTaggedTextCountMarkerRuns({
         start: rangeTag.start,
         end: rangeTag.end,
         tagCount: tagCount,
+        colorValue: rangeTag.resolvedTags.first.resolvedColorValue,
       ),
     );
   }
@@ -121,6 +118,9 @@ String noteTaggedTextCountMarkerLabel({
   if (tagCount <= 1) {
     return '';
   }
+  if (mode == NoteTaggedTextCountMarkerMode.countOnly) {
+    return '$tagCount';
+  }
   if (mode == NoteTaggedTextCountMarkerMode.fixedCorner) {
     return '$tagCount+';
   }
@@ -131,6 +131,13 @@ String noteTaggedTextCountMarkerLabel({
     return '+';
   }
   return '•';
+}
+
+Color noteTaggedTextCountMarkerFillColor(
+  NoteTaggedTextCountMarkerRun run, {
+  double alpha = 0.72,
+}) {
+  return Color(run.colorValue).withValues(alpha: alpha);
 }
 
 class NoteTaggedTextEditingController extends TextEditingController {
@@ -309,11 +316,11 @@ void _paintCountMarkerBoxes({
     return;
   }
   final rect = Rect.fromLTWH(left, top, width, height);
-  final rrect = RRect.fromRectAndRadius(
-    rect,
-    const Radius.circular(999),
+  final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(999));
+  canvas.drawRRect(
+    rrect,
+    Paint()..color = noteTaggedTextCountMarkerFillColor(run),
   );
-  canvas.drawRRect(rrect, Paint()..color = const Color(0xFF111827));
   textPainter.paint(
     canvas,
     Offset(

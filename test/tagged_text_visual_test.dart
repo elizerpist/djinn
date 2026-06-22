@@ -96,5 +96,42 @@ void main() {
       ),
       '•',
     );
+    expect(
+      noteTaggedTextCountMarkerLabel(
+        mode: NoteTaggedTextCountMarkerMode.countOnly,
+        tagCount: 4,
+        rangeWidth: 8,
+      ),
+      '4',
+    );
+  });
+
+  test('count marker runs carry the first tag color for softer badges', () {
+    const text = 'Alpha Beta Gamma';
+    const rangeTags = [
+      NoteTextRangeTag(
+        id: 'range-1',
+        start: 6,
+        end: 10,
+        tag: NoteKnowledgeTag(
+          type: NoteKnowledgeTagTypes.state,
+          label: 'sulyos',
+          colorValue: 0xFFDC2626,
+        ),
+        tags: tags,
+      ),
+    ];
+
+    final runs = noteTaggedTextCountMarkerRuns(
+      text: text,
+      rangeTags: rangeTags,
+    );
+
+    expect(runs, hasLength(1));
+    expect(runs.single.colorValue, 0xFFDC2626);
+    expect(
+      noteTaggedTextCountMarkerFillColor(runs.single),
+      const Color(0xFFDC2626).withValues(alpha: 0.72),
+    );
   });
 }

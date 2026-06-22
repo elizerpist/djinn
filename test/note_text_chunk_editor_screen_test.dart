@@ -269,76 +269,77 @@ void main() {
     );
   });
 
-  testWidgets('range tags paint first tag background and no secondary underlines', (
-    tester,
-  ) async {
-    await _pumpTextChunkEditor(
-      tester,
-      const NoteBlock(
-        id: 'text-1',
-        type: NoteBlockType.paragraph,
-        text: 'Alpha Beta Gamma',
-        rangeTags: [
-          NoteTextRangeTag(
-            id: 'range-1',
-            start: 6,
-            end: 10,
-            tag: NoteKnowledgeTag(
-              type: NoteKnowledgeTagTypes.state,
-              label: 'sulyos',
-              colorValue: 0xFFDC2626,
-            ),
-            tags: [
-              NoteKnowledgeTag(
+  testWidgets(
+    'range tags paint first tag background and no secondary underlines',
+    (tester) async {
+      await _pumpTextChunkEditor(
+        tester,
+        const NoteBlock(
+          id: 'text-1',
+          type: NoteBlockType.paragraph,
+          text: 'Alpha Beta Gamma',
+          rangeTags: [
+            NoteTextRangeTag(
+              id: 'range-1',
+              start: 6,
+              end: 10,
+              tag: NoteKnowledgeTag(
                 type: NoteKnowledgeTagTypes.state,
                 label: 'sulyos',
                 colorValue: 0xFFDC2626,
               ),
-              NoteKnowledgeTag(
-                type: NoteKnowledgeTagTypes.topic,
-                label: 'legzes',
-                colorValue: 0xFF2563EB,
-              ),
-              NoteKnowledgeTag(
-                type: NoteKnowledgeTagTypes.symbol,
-                label: 'DO2',
-                colorValue: 0xFF0D9488,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+              tags: [
+                NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.state,
+                  label: 'sulyos',
+                  colorValue: 0xFFDC2626,
+                ),
+                NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.topic,
+                  label: 'legzes',
+                  colorValue: 0xFF2563EB,
+                ),
+                NoteKnowledgeTag(
+                  type: NoteKnowledgeTagTypes.symbol,
+                  label: 'DO2',
+                  colorValue: 0xFF0D9488,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
 
-    final field = tester.widget<TextField>(
-      find.byKey(const ValueKey('note-text-plain-field')),
-    );
-    expect(field.controller?.text, 'Alpha Beta Gamma');
-    expect(field.strutStyle?.height, isNull);
-    final span = field.controller!.buildTextSpan(
-      context: tester.element(
+      final field = tester.widget<TextField>(
         find.byKey(const ValueKey('note-text-plain-field')),
-      ),
-      style: const TextStyle(fontSize: 16),
-      withComposing: false,
-    );
-    expect(span.toPlainText(), 'Alpha Beta Gamma');
-    final taggedSpan = span.children![1] as TextSpan;
-    expect(taggedSpan.text, 'Beta');
-    expect(
-      taggedSpan.style?.backgroundColor,
-      const Color(0xFFDC2626).withValues(alpha: 0.22),
-    );
-    expect(taggedSpan.style?.decoration, isNull);
-    expect(taggedSpan.style?.height, isNull);
-    expect(
-      find.byKey(const ValueKey('note-text-range-underline-layer')),
-      findsNothing,
-    );
-    expect(DebugConsole.allText, contains('[TextChunkVisual]'));
-    expect(DebugConsole.allText, contains('countMarkers=[6-10/x3]'));
-    expect(DebugConsole.allText, isNot(contains('runs=[6-10/u2]')));
-  });
+      );
+      expect(field.controller?.text, 'Alpha Beta Gamma');
+      expect(field.strutStyle?.height, isNull);
+      final span = field.controller!.buildTextSpan(
+        context: tester.element(
+          find.byKey(const ValueKey('note-text-plain-field')),
+        ),
+        style: const TextStyle(fontSize: 16),
+        withComposing: false,
+      );
+      expect(span.toPlainText(), 'Alpha Beta Gamma');
+      final taggedSpan = span.children![1] as TextSpan;
+      expect(taggedSpan.text, 'Beta');
+      expect(
+        taggedSpan.style?.backgroundColor,
+        const Color(0xFFDC2626).withValues(alpha: 0.22),
+      );
+      expect(taggedSpan.style?.decoration, isNull);
+      expect(taggedSpan.style?.height, isNull);
+      expect(
+        find.byKey(const ValueKey('note-text-range-underline-layer')),
+        findsNothing,
+      );
+      expect(DebugConsole.allText, contains('[TextChunkVisual]'));
+      expect(DebugConsole.allText, contains('countMarkers=[6-10/x3]'));
+      expect(DebugConsole.allText, isNot(contains('runs=[6-10/u2]')));
+    },
+  );
 
   testWidgets('overflow menu switches tag count corner marker modes', (
     tester,
@@ -416,6 +417,10 @@ void main() {
       find.byKey(const ValueKey('note-text-menu-count-marker-adaptive')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('note-text-menu-count-marker-count-only')),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('note-text-menu-count-marker-adaptive')),
@@ -423,6 +428,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(markerPainter().mode, NoteTaggedTextCountMarkerMode.adaptiveClamp);
     expect(field.controller?.text, text);
+
+    await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('note-text-menu-count-marker-count-only')),
+    );
+    await tester.pumpAndSettle();
+    expect(markerPainter().mode, NoteTaggedTextCountMarkerMode.countOnly);
+    expect(
+      noteTaggedTextCountMarkerLabel(
+        mode: markerPainter().mode,
+        tagCount: markerPainter().runs.single.tagCount,
+        rangeWidth: 8,
+      ),
+      '4',
+    );
 
     await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
     await tester.pumpAndSettle();
@@ -458,6 +479,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(latest?.tags.map((tag) => tag.label), ['fontos']);
+    expect(
+      find.byKey(const ValueKey('note-text-chunk-tag-row')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-chunk-tag-pill-fontos')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('step buttons update paragraph metadata without mutating text', (

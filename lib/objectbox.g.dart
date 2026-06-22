@@ -1485,6 +1485,121 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(23, 7469367796428991767),
+    name: 'NoteTagEntity',
+    lastPropertyId: const obx_int.IdUid(9, 8903859151849211328),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 3557379923020220399),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 3555684918237459564),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(58, 5042727556746944198),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 493600643439734312),
+        name: 'label',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 4204946153599626423),
+        name: 'normalizedLabel',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(59, 4435911918220011029),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 6249742760762474547),
+        name: 'colorSlotId',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 3465500054192296667),
+        name: 'folderPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(60, 7415564982900148450),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 8028877364368740608),
+        name: 'type',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 3497132384302238658),
+        name: 'createdAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 8903859151849211328),
+        name: 'updatedAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(24, 7376934422974102123),
+    name: 'NoteTagFolderEntity',
+    lastPropertyId: const obx_int.IdUid(6, 2843925836153195435),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 5726077266794034193),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 7075866253459932875),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(61, 2808349216821298004),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 6415276675828305331),
+        name: 'label',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 6865192284832061180),
+        name: 'normalizedLabel',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(62, 1537118345979258299),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 8052477248783493252),
+        name: 'createdAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 2843925836153195435),
+        name: 'updatedAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -1530,8 +1645,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(22, 2610622360413787757),
-    lastIndexId: const obx_int.IdUid(57, 4476825770952347571),
+    lastEntityId: const obx_int.IdUid(24, 7376934422974102123),
+    lastIndexId: const obx_int.IdUid(62, 1537118345979258299),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -3421,6 +3536,156 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    NoteTagEntity: obx_int.EntityDefinition<NoteTagEntity>(
+      model: _entities[22],
+      toOneRelations: (NoteTagEntity object) => [],
+      toManyRelations: (NoteTagEntity object) => {},
+      getId: (NoteTagEntity object) => object.id,
+      setId: (NoteTagEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (NoteTagEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final labelOffset = fbb.writeString(object.label);
+        final normalizedLabelOffset = fbb.writeString(object.normalizedLabel);
+        final folderPublicIdOffset = object.folderPublicId == null
+            ? null
+            : fbb.writeString(object.folderPublicId!);
+        final typeOffset = fbb.writeString(object.type);
+        fbb.startTable(10);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, labelOffset);
+        fbb.addOffset(3, normalizedLabelOffset);
+        fbb.addInt64(4, object.colorSlotId);
+        fbb.addOffset(5, folderPublicIdOffset);
+        fbb.addOffset(6, typeOffset);
+        fbb.addInt64(7, object.createdAtMillis);
+        fbb.addInt64(8, object.updatedAtMillis);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final labelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final normalizedLabelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final colorSlotIdParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          12,
+          0,
+        );
+        final folderPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 14);
+        final typeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 16, '');
+        final createdAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          18,
+          0,
+        );
+        final updatedAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          20,
+          0,
+        );
+        final object = NoteTagEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          label: labelParam,
+          normalizedLabel: normalizedLabelParam,
+          colorSlotId: colorSlotIdParam,
+          folderPublicId: folderPublicIdParam,
+          type: typeParam,
+          createdAtMillis: createdAtMillisParam,
+          updatedAtMillis: updatedAtMillisParam,
+        );
+
+        return object;
+      },
+    ),
+    NoteTagFolderEntity: obx_int.EntityDefinition<NoteTagFolderEntity>(
+      model: _entities[23],
+      toOneRelations: (NoteTagFolderEntity object) => [],
+      toManyRelations: (NoteTagFolderEntity object) => {},
+      getId: (NoteTagFolderEntity object) => object.id,
+      setId: (NoteTagFolderEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (NoteTagFolderEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final labelOffset = fbb.writeString(object.label);
+        final normalizedLabelOffset = fbb.writeString(object.normalizedLabel);
+        fbb.startTable(7);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, labelOffset);
+        fbb.addOffset(3, normalizedLabelOffset);
+        fbb.addInt64(4, object.createdAtMillis);
+        fbb.addInt64(5, object.updatedAtMillis);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final labelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final normalizedLabelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final createdAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          12,
+          0,
+        );
+        final updatedAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          14,
+          0,
+        );
+        final object = NoteTagFolderEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          label: labelParam,
+          normalizedLabel: normalizedLabelParam,
+          createdAtMillis: createdAtMillisParam,
+          updatedAtMillis: updatedAtMillisParam,
+        );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -4480,5 +4745,86 @@ class VisualObjectEntity_ {
   /// See [VisualObjectEntity.confidence].
   static final confidence = obx.QueryDoubleProperty<VisualObjectEntity>(
     _entities[21].properties[7],
+  );
+}
+
+/// [NoteTagEntity] entity fields to define ObjectBox queries.
+class NoteTagEntity_ {
+  /// See [NoteTagEntity.id].
+  static final id = obx.QueryIntegerProperty<NoteTagEntity>(
+    _entities[22].properties[0],
+  );
+
+  /// See [NoteTagEntity.publicId].
+  static final publicId = obx.QueryStringProperty<NoteTagEntity>(
+    _entities[22].properties[1],
+  );
+
+  /// See [NoteTagEntity.label].
+  static final label = obx.QueryStringProperty<NoteTagEntity>(
+    _entities[22].properties[2],
+  );
+
+  /// See [NoteTagEntity.normalizedLabel].
+  static final normalizedLabel = obx.QueryStringProperty<NoteTagEntity>(
+    _entities[22].properties[3],
+  );
+
+  /// See [NoteTagEntity.colorSlotId].
+  static final colorSlotId = obx.QueryIntegerProperty<NoteTagEntity>(
+    _entities[22].properties[4],
+  );
+
+  /// See [NoteTagEntity.folderPublicId].
+  static final folderPublicId = obx.QueryStringProperty<NoteTagEntity>(
+    _entities[22].properties[5],
+  );
+
+  /// See [NoteTagEntity.type].
+  static final type = obx.QueryStringProperty<NoteTagEntity>(
+    _entities[22].properties[6],
+  );
+
+  /// See [NoteTagEntity.createdAtMillis].
+  static final createdAtMillis = obx.QueryIntegerProperty<NoteTagEntity>(
+    _entities[22].properties[7],
+  );
+
+  /// See [NoteTagEntity.updatedAtMillis].
+  static final updatedAtMillis = obx.QueryIntegerProperty<NoteTagEntity>(
+    _entities[22].properties[8],
+  );
+}
+
+/// [NoteTagFolderEntity] entity fields to define ObjectBox queries.
+class NoteTagFolderEntity_ {
+  /// See [NoteTagFolderEntity.id].
+  static final id = obx.QueryIntegerProperty<NoteTagFolderEntity>(
+    _entities[23].properties[0],
+  );
+
+  /// See [NoteTagFolderEntity.publicId].
+  static final publicId = obx.QueryStringProperty<NoteTagFolderEntity>(
+    _entities[23].properties[1],
+  );
+
+  /// See [NoteTagFolderEntity.label].
+  static final label = obx.QueryStringProperty<NoteTagFolderEntity>(
+    _entities[23].properties[2],
+  );
+
+  /// See [NoteTagFolderEntity.normalizedLabel].
+  static final normalizedLabel = obx.QueryStringProperty<NoteTagFolderEntity>(
+    _entities[23].properties[3],
+  );
+
+  /// See [NoteTagFolderEntity.createdAtMillis].
+  static final createdAtMillis = obx.QueryIntegerProperty<NoteTagFolderEntity>(
+    _entities[23].properties[4],
+  );
+
+  /// See [NoteTagFolderEntity.updatedAtMillis].
+  static final updatedAtMillis = obx.QueryIntegerProperty<NoteTagFolderEntity>(
+    _entities[23].properties[5],
   );
 }

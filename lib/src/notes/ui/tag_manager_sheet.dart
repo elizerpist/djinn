@@ -62,6 +62,7 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
   String _folderFilter = _allFolderFilter;
   int _colorSlotId = 0;
   String? _editingTagId;
+  bool _creatingFolder = false;
   bool _loading = true;
 
   @override
@@ -153,6 +154,19 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
     if (label.isEmpty) {
       return;
     }
+    if (_creatingFolder) {
+      final folder = await widget.tagRepository.createFolder(label);
+      await _refreshRegistry();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _folderFilter = folder.id;
+        _creatingFolder = false;
+        _labelController.clear();
+      });
+      return;
+    }
     final folderId = _newTagFolderId;
     final definition = await widget.tagRepository.upsertTag(
       id: _editingTagId,
@@ -176,6 +190,7 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
       }
       _labelController.clear();
       _editingTagId = null;
+      _creatingFolder = false;
       _colorSlotId = _nextUnusedColorSlotId();
     });
     _emitSelection();
@@ -191,6 +206,7 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
 
   void _editTag(NoteTagDefinition tag) {
     setState(() {
+      _creatingFolder = false;
       _editingTagId = tag.id;
       _labelController.text = tag.label;
       _labelController.selection = TextSelection.collapsed(
@@ -219,44 +235,11 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
   }
 
   Future<void> _createFolder() async {
-    final controller = TextEditingController();
-    final label = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Új mappa'),
-        content: TextField(
-          key: const ValueKey('tag-folder-name-field'),
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Mappa neve',
-            border: OutlineInputBorder(),
-          ),
-          onSubmitted: (value) => Navigator.of(context).pop(value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Mégse'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Létrehozás'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    final trimmed = label?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return;
-    }
-    final folder = await widget.tagRepository.createFolder(trimmed);
-    await _refreshRegistry();
-    if (!mounted) {
-      return;
-    }
-    setState(() => _folderFilter = folder.id);
+    setState(() {
+      _creatingFolder = true;
+      _editingTagId = null;
+      _labelController.clear();
+    });
   }
 
   Future<void> _moveTagToFolder(NoteTagDefinition tag, String? folderId) async {
@@ -290,15 +273,17 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
   }
 
   List<NoteTagDefinition> get _filteredTags {
-    return _registryTags.where((tag) {
-      if (_folderFilter == _allFolderFilter) {
-        return true;
-      }
-      if (_folderFilter == _unfiledFolderFilter) {
-        return tag.folderId == null || tag.folderId!.trim().isEmpty;
-      }
-      return tag.folderId == _folderFilter;
-    }).toList(growable: false);
+    return _registryTags
+        .where((tag) {
+          if (_folderFilter == _allFolderFilter) {
+            return true;
+          }
+          if (_folderFilter == _unfiledFolderFilter) {
+            return tag.folderId == null || tag.folderId!.trim().isEmpty;
+          }
+          return tag.folderId == _folderFilter;
+        })
+        .toList(growable: false);
   }
 
   @override
@@ -309,14 +294,18 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
     final visibleHeight = sheetMaxHeight - mediaQuery.viewInsets.bottom;
     final minHeight = sheetMaxHeight < 120 ? sheetMaxHeight : 120.0;
     final maxHeight = visibleHeight.clamp(minHeight, sheetMaxHeight).toDouble();
+    final pillMaxHeight = (maxHeight - 260).clamp(72.0, maxHeight).toDouble();
     return Padding(
       key: const ValueKey('tag-manager-sheet'),
       padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
-        child: SizedBox(
-          height: maxHeight,
+        child: Material(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          clipBehavior: Clip.antiAlias,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
@@ -333,8 +322,7 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
                     ),
                     IconButton(
                       key: const ValueKey('tag-manager-close'),
-                      onPressed: () =>
-                          Navigator.of(context).pop(_selectedTags),
+                      onPressed: () => Navigator.of(context).pop(_selectedTags),
                       icon: const Icon(Icons.close),
                       tooltip: 'Bezárás',
                     ),
@@ -349,9 +337,13 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
                 onMoveTag: _moveTagToFolder,
               ),
               const Divider(height: 1),
-              Expanded(
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: pillMaxHeight),
                 child: _loading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const SizedBox(
+                        height: 96,
+                        child: Center(child: CircularProgressIndicator()),
+                      )
                     : SingleChildScrollView(
                         key: const ValueKey('tag-manager-pill-scroll'),
                         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -378,6 +370,7 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
                 labelController: _labelController,
                 colorSlotId: _colorSlotId,
                 editing: _editingTagId != null,
+                creatingFolder: _creatingFolder,
                 onColorChanged: (value) => setState(() => _colorSlotId = value),
                 onSubmit: _addOrUpdateTag,
               ),
@@ -402,10 +395,8 @@ class _FolderBar extends StatelessWidget {
   final String selectedFilter;
   final ValueChanged<String> onSelected;
   final VoidCallback onCreateFolder;
-  final Future<void> Function(
-    NoteTagDefinition tag,
-    String? folderId,
-  ) onMoveTag;
+  final Future<void> Function(NoteTagDefinition tag, String? folderId)
+  onMoveTag;
 
   @override
   Widget build(BuildContext context) {
@@ -626,6 +617,7 @@ class _TagEditor extends StatelessWidget {
     required this.labelController,
     required this.colorSlotId,
     required this.editing,
+    required this.creatingFolder,
     required this.onColorChanged,
     required this.onSubmit,
   });
@@ -633,13 +625,16 @@ class _TagEditor extends StatelessWidget {
   final TextEditingController labelController;
   final int colorSlotId;
   final bool editing;
+  final bool creatingFolder;
   final ValueChanged<int> onColorChanged;
   final Future<void> Function() onSubmit;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      key: const ValueKey('tag-manager-editor'),
+      key: ValueKey(
+        creatingFolder ? 'tag-folder-create-mode' : 'tag-manager-editor',
+      ),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -649,32 +644,40 @@ class _TagEditor extends StatelessWidget {
             key: const ValueKey('tag-manager-name'),
             controller: labelController,
             textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              labelText: 'Név',
+            decoration: InputDecoration(
+              labelText: creatingFolder ? 'Mappa neve' : 'Név',
               border: OutlineInputBorder(),
             ),
             onSubmitted: (_) => unawaited(onSubmit()),
           ),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (var index = 0; index < noteTagColorSlots.length; index++)
-                _ColorSlotButton(
-                  key: ValueKey('tag-color-slot-$index'),
-                  colorValue: noteTagColorSlots[index],
-                  selected: colorSlotId == index,
-                  onTap: () => onColorChanged(index),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
+          if (!creatingFolder) ...[
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (var index = 0; index < noteTagColorSlots.length; index++)
+                  _ColorSlotButton(
+                    key: ValueKey('tag-color-slot-$index'),
+                    colorValue: noteTagColorSlots[index],
+                    selected: colorSlotId == index,
+                    onTap: () => onColorChanged(index),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           FilledButton.icon(
             key: const ValueKey('tag-manager-add'),
             onPressed: () => unawaited(onSubmit()),
-            icon: Icon(editing ? Icons.check : Icons.add),
-            label: Text(editing ? 'Tag frissítése' : 'Új tag hozzáadása'),
+            icon: Icon(editing || creatingFolder ? Icons.check : Icons.add),
+            label: Text(
+              creatingFolder
+                  ? 'Mappa létrehozása'
+                  : editing
+                  ? 'Tag frissítése'
+                  : 'Új tag hozzáadása',
+            ),
           ),
         ],
       ),

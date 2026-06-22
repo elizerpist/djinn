@@ -324,6 +324,17 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     _focusNode.requestFocus();
   }
 
+  void _deleteChunkTag(NoteKnowledgeTag tag) {
+    _emitBlock(
+      _block.copyWith(
+        tags: _block.tags
+            .where((current) => current.metadataText != tag.metadataText)
+            .toList(growable: false),
+        clearIndex: true,
+      ),
+    );
+  }
+
   Future<void> _tagSelection() async {
     final target = _selectionTargetRange();
     if (target == null) {
@@ -644,6 +655,11 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           () => _countMarkerMode = NoteTaggedTextCountMarkerMode.adaptiveClamp,
         );
         break;
+      case 'count-marker-count-only':
+        setState(
+          () => _countMarkerMode = NoteTaggedTextCountMarkerMode.countOnly,
+        );
+        break;
     }
   }
 
@@ -655,10 +671,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final railVisible = _shouldShowRail;
     final railHeight = railVisible ? (_railBottomExpanded ? 113.0 : 64.0) : 0.0;
-    const editorTextStyle = TextStyle(
-      color: Color(0xFF111827),
-      fontSize: 16,
-    );
+    const editorTextStyle = TextStyle(color: Color(0xFF111827), fontSize: 16);
     final countMarkerRuns = noteTaggedTextCountMarkerRuns(
       text: _controller.text,
       rangeTags: _block.rangeTags,
@@ -699,6 +712,15 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
               label: 'Tag jel: adaptív +',
             ),
           ),
+          PopupMenuItem(
+            key: const ValueKey('note-text-menu-count-marker-count-only'),
+            value: 'count-marker-count-only',
+            child: _CountMarkerModeMenuItem(
+              selected:
+                  _countMarkerMode == NoteTaggedTextCountMarkerMode.countOnly,
+              label: 'Tag jel: csak szám',
+            ),
+          ),
         ],
         trailingActions: [
           IconButton(
@@ -718,118 +740,142 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       body: Container(
         key: const ValueKey('note-text-chunk-body'),
         color: Colors.white,
-        child: Stack(
+        child: Column(
           children: [
-            Positioned.fill(
-              child: AnimatedPadding(
-                duration: const Duration(milliseconds: 120),
-                curve: Curves.easeOutCubic,
-                padding: EdgeInsets.only(bottom: bottomInset + railHeight),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  child: Padding(
-                    padding: EdgeInsets.only(left: paragraphInset),
-                    child: Stack(
-                      children: [
-                        SizedBox.expand(
-                          key: _textFieldHostKey,
-                          child: TextField(
-                            key: const ValueKey('note-text-plain-field'),
-                            controller: _controller,
-                            focusNode: _focusNode,
-                            scrollController: _textScrollController,
-                            autofocus: true,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.newline,
-                            minLines: null,
-                            maxLines: null,
-                            expands: true,
-                            textAlignVertical: TextAlignVertical.top,
-                            style: editorTextStyle,
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              hintText: 'Írj valamit...',
-                              isCollapsed: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: SizedBox.expand(
-                              key: _tagOverlayKey,
-                              child: CustomPaint(
-                                key: const ValueKey(
-                                  'note-text-range-count-marker-layer',
-                                ),
-                                foregroundPainter:
-                                    NoteTaggedTextCountMarkerPainter(
-                                      text: _controller.text,
-                                      runs: countMarkerRuns,
-                                      mode: _countMarkerMode,
-                                      textStyle: editorTextStyle,
-                                      textDirection: Directionality.of(context),
-                                      scrollOffset: _textScrollOffset,
-                                      renderEditable: _tagRenderEditable,
-                                      editableOffset: _tagEditableOffset,
-                                    ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+            if (_block.tags.isNotEmpty)
+              Padding(
+                key: const ValueKey('note-text-chunk-tag-row'),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: NoteTagPills(
+                    tags: _block.tags,
+                    prefix: 'note-text-chunk-tag-pill',
+                    onDeleted: _deleteChunkTag,
                   ),
                 ),
               ),
-            ),
-            if (railVisible)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: AnimatedPadding(
-                  key: const ValueKey('note-text-keyboard-rail-padding'),
-                  duration: const Duration(milliseconds: 120),
-                  curve: Curves.easeOutCubic,
-                  padding: EdgeInsets.only(bottom: bottomInset),
-                  child: SafeArea(
-                    top: false,
-                    child: KeyedSubtree(
-                      key: const ValueKey('note-text-keyboard-rail'),
-                      child: _TextKeyboardRail(
-                        tags: _activeRangeTags,
-                        bottomRowExpanded: _railBottomExpanded,
-                        roundedCard: _railRoundedCard,
-                        transparentBackground: _railTransparentBackground,
-                        showBorder: _railBorderVisible,
-                        onToggleBottomRow: () => setState(
-                          () => _railBottomExpanded = !_railBottomExpanded,
-                        ),
-                        onTag: () => unawaited(_tagSelection()),
-                        onClearTags: _activeRangeTags.isEmpty
-                            ? null
-                            : _deleteSelectedTag,
-                        onDeleteTag: _deleteRailTag,
-                        onPreviousTagged: () => _selectTaggedRange(-1),
-                        onNextTagged: () => _selectTaggedRange(1),
-                        onOutdent: () => _stepParagraphs(-1),
-                        onIndent: () => _stepParagraphs(1),
-                        onToggleRounded: () => setState(
-                          () => _railRoundedCard = !_railRoundedCard,
-                        ),
-                        onToggleTransparent: () => setState(
-                          () => _railTransparentBackground =
-                              !_railTransparentBackground,
-                        ),
-                        onToggleBorder: () => setState(
-                          () => _railBorderVisible = !_railBorderVisible,
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: AnimatedPadding(
+                      duration: const Duration(milliseconds: 120),
+                      curve: Curves.easeOutCubic,
+                      padding: EdgeInsets.only(
+                        bottom: bottomInset + railHeight,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                        child: Padding(
+                          padding: EdgeInsets.only(left: paragraphInset),
+                          child: Stack(
+                            children: [
+                              SizedBox.expand(
+                                key: _textFieldHostKey,
+                                child: TextField(
+                                  key: const ValueKey('note-text-plain-field'),
+                                  controller: _controller,
+                                  focusNode: _focusNode,
+                                  scrollController: _textScrollController,
+                                  autofocus: true,
+                                  keyboardType: TextInputType.multiline,
+                                  textInputAction: TextInputAction.newline,
+                                  minLines: null,
+                                  maxLines: null,
+                                  expands: true,
+                                  textAlignVertical: TextAlignVertical.top,
+                                  style: editorTextStyle,
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    hintText: 'Írj valamit...',
+                                    isCollapsed: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                ),
+                              ),
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  child: SizedBox.expand(
+                                    key: _tagOverlayKey,
+                                    child: CustomPaint(
+                                      key: const ValueKey(
+                                        'note-text-range-count-marker-layer',
+                                      ),
+                                      foregroundPainter:
+                                          NoteTaggedTextCountMarkerPainter(
+                                            text: _controller.text,
+                                            runs: countMarkerRuns,
+                                            mode: _countMarkerMode,
+                                            textStyle: editorTextStyle,
+                                            textDirection: Directionality.of(
+                                              context,
+                                            ),
+                                            scrollOffset: _textScrollOffset,
+                                            renderEditable: _tagRenderEditable,
+                                            editableOffset: _tagEditableOffset,
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                  if (railVisible)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: AnimatedPadding(
+                        key: const ValueKey('note-text-keyboard-rail-padding'),
+                        duration: const Duration(milliseconds: 120),
+                        curve: Curves.easeOutCubic,
+                        padding: EdgeInsets.only(bottom: bottomInset),
+                        child: SafeArea(
+                          top: false,
+                          child: KeyedSubtree(
+                            key: const ValueKey('note-text-keyboard-rail'),
+                            child: _TextKeyboardRail(
+                              tags: _activeRangeTags,
+                              bottomRowExpanded: _railBottomExpanded,
+                              roundedCard: _railRoundedCard,
+                              transparentBackground: _railTransparentBackground,
+                              showBorder: _railBorderVisible,
+                              onToggleBottomRow: () => setState(
+                                () =>
+                                    _railBottomExpanded = !_railBottomExpanded,
+                              ),
+                              onTag: () => unawaited(_tagSelection()),
+                              onClearTags: _activeRangeTags.isEmpty
+                                  ? null
+                                  : _deleteSelectedTag,
+                              onDeleteTag: _deleteRailTag,
+                              onPreviousTagged: () => _selectTaggedRange(-1),
+                              onNextTagged: () => _selectTaggedRange(1),
+                              onOutdent: () => _stepParagraphs(-1),
+                              onIndent: () => _stepParagraphs(1),
+                              onToggleRounded: () => setState(
+                                () => _railRoundedCard = !_railRoundedCard,
+                              ),
+                              onToggleTransparent: () => setState(
+                                () => _railTransparentBackground =
+                                    !_railTransparentBackground,
+                              ),
+                              onToggleBorder: () => setState(
+                                () => _railBorderVisible = !_railBorderVisible,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
+            ),
           ],
         ),
       ),
@@ -838,10 +884,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
 }
 
 class _CountMarkerModeMenuItem extends StatelessWidget {
-  const _CountMarkerModeMenuItem({
-    required this.selected,
-    required this.label,
-  });
+  const _CountMarkerModeMenuItem({required this.selected, required this.label});
 
   final bool selected;
   final String label;
