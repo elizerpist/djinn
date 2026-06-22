@@ -314,6 +314,7 @@ void main() {
       find.byKey(const ValueKey('note-text-plain-field')),
     );
     expect(field.controller?.text, 'Alpha Beta Gamma');
+    expect(field.strutStyle?.height, greaterThan(2.0));
     final span = field.controller!.buildTextSpan(
       context: tester.element(
         find.byKey(const ValueKey('note-text-plain-field')),
@@ -388,21 +389,33 @@ void main() {
       extentOffset: 28,
     );
     await tester.pumpAndSettle();
+    final fieldFinder = find.byKey(const ValueKey('note-text-plain-field'));
+    final beforeLeft = tester.getTopLeft(fieldFinder).dx;
+    final beforeRight = tester.getTopRight(fieldFinder).dx;
     await tester.tap(find.byKey(const ValueKey('note-text-rail-indent')));
     await tester.pumpAndSettle();
+    final indentedLeft = tester.getTopLeft(fieldFinder).dx;
+    final indentedRight = tester.getTopRight(fieldFinder).dx;
 
     expect(latest?.text, text);
     expect(latest?.paragraphStyles, hasLength(1));
     expect(latest?.paragraphStyles.single.start, 0);
     expect(latest?.paragraphStyles.single.end, 27);
     expect(latest?.paragraphStyles.single.level, 1);
+    expect(indentedLeft, greaterThan(beforeLeft));
+    expect(indentedRight, moreOrLessEquals(beforeRight, epsilon: 0.1));
     expect(DebugConsole.allText, contains('[TextChunkParagraph] delta=1'));
     expect(DebugConsole.allText, contains('affected=[0-27]'));
+    expect(DebugConsole.allText, contains('paragraphInset='));
 
     await tester.tap(find.byKey(const ValueKey('note-text-rail-outdent')));
     await tester.pumpAndSettle();
+    final outdentedLeft = tester.getTopLeft(fieldFinder).dx;
+    final outdentedRight = tester.getTopRight(fieldFinder).dx;
     expect(latest?.text, text);
     expect(latest?.paragraphStyles, isEmpty);
+    expect(outdentedLeft, moreOrLessEquals(beforeLeft, epsilon: 0.1));
+    expect(outdentedRight, moreOrLessEquals(beforeRight, epsilon: 0.1));
     expect(DebugConsole.allText, contains('[TextChunkParagraph] delta=-1'));
   });
 }

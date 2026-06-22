@@ -30,6 +30,8 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
 }
 
 class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
+  static const double _paragraphIndentWidth = 24;
+
   late NoteBlock _block;
   late final NoteTaggedTextEditingController _controller;
   late final FocusNode _focusNode;
@@ -221,6 +223,11 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       text: _controller.text,
       rangeTags: _block.rangeTags,
     );
+    final maxUnderlineLanes = _maxUnderlineLaneCount(runs);
+    final lineHeight = noteTaggedRangeLineHeightForUnderlineCount(
+      maxUnderlineLanes,
+    );
+    final paragraphInset = _visibleParagraphInset();
     final runLabel = runs
         .map((run) => '${run.start}-${run.end}/u${run.colors.length}')
         .join(' ');
@@ -247,6 +254,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         '${editableOffset.dx.toStringAsFixed(1)},'
         '${editableOffset.dy.toStringAsFixed(1)}|'
         '${_textScrollOffset.toStringAsFixed(1)}|'
+        '${lineHeight?.toStringAsFixed(2) ?? 'null'}|'
+        '${paragraphInset.toStringAsFixed(1)}|'
         '${_paragraphStylesLabel(_block.paragraphStyles)}|$boxesLabel';
     if (signature == _lastVisualLogSignature) {
       return;
@@ -260,6 +269,9 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       'editableOffset=(${editableOffset.dx.toStringAsFixed(1)},'
       '${editableOffset.dy.toStringAsFixed(1)}) '
       'scroll=${_textScrollOffset.toStringAsFixed(1)} '
+      'maxUnderlineLanes=$maxUnderlineLanes '
+      'nativeLineHeight=${lineHeight?.toStringAsFixed(2) ?? 'null'} '
+      'paragraphInset=${paragraphInset.toStringAsFixed(1)} '
       'paragraphStyles=[${_paragraphStylesLabel(_block.paragraphStyles)}] '
       'boxes=[$boxesLabel]',
     );
@@ -540,6 +552,43 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     return null;
   }
 
+  int _maxUnderlineLaneCount(List<NoteTaggedTextUnderlineRun> runs) {
+    var maxCount = 0;
+    for (final run in runs) {
+      if (run.colors.length > maxCount) {
+        maxCount = run.colors.length;
+      }
+    }
+    return maxCount;
+  }
+
+  StrutStyle? _editorStrutStyle(
+    TextStyle textStyle,
+    List<NoteTaggedTextUnderlineRun> runs,
+  ) {
+    final lineHeight = noteTaggedRangeLineHeightForUnderlineCount(
+      _maxUnderlineLaneCount(runs),
+    );
+    if (lineHeight == null) {
+      return null;
+    }
+    return StrutStyle(
+      fontSize: textStyle.fontSize,
+      height: lineHeight,
+      forceStrutHeight: false,
+    );
+  }
+
+  double _visibleParagraphInset() {
+    var level = 0;
+    for (final style in _block.paragraphStyles) {
+      if (style.isValid && style.level > level) {
+        level = style.level;
+      }
+    }
+    return level * _paragraphIndentWidth;
+  }
+
   List<TextRange> _affectedParagraphs() {
     final paragraphs = _paragraphRanges(_controller.text);
     if (paragraphs.isEmpty) {
@@ -618,6 +667,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       color: Color(0xFF111827),
       fontSize: 16,
     );
+    final underlineRuns = noteTaggedTextUnderlineRuns(
+      text: _controller.text,
+      rangeTags: _block.rangeTags,
+    );
+    final editorStrutStyle = _editorStrutStyle(editorTextStyle, underlineRuns);
+    final paragraphInset = _visibleParagraphInset();
     _scheduleTagGeometryRefresh();
     return Scaffold(
       key: const ValueKey('note-text-chunk-editor'),
@@ -658,56 +713,57 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 padding: EdgeInsets.only(bottom: bottomInset + railHeight),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  child: Stack(
-                    children: [
-                      SizedBox.expand(
-                        key: _textFieldHostKey,
-                        child: TextField(
-                          key: const ValueKey('note-text-plain-field'),
-                          controller: _controller,
-                          focusNode: _focusNode,
-                          scrollController: _textScrollController,
-                          autofocus: true,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.newline,
-                          minLines: null,
-                          maxLines: null,
-                          expands: true,
-                          textAlignVertical: TextAlignVertical.top,
-                          style: editorTextStyle,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            hintText: 'Írj valamit...',
-                            isCollapsed: true,
-                            contentPadding: EdgeInsets.zero,
+                  child: Padding(
+                    padding: EdgeInsets.only(left: paragraphInset),
+                    child: Stack(
+                      children: [
+                        SizedBox.expand(
+                          key: _textFieldHostKey,
+                          child: TextField(
+                            key: const ValueKey('note-text-plain-field'),
+                            controller: _controller,
+                            focusNode: _focusNode,
+                            scrollController: _textScrollController,
+                            autofocus: true,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            minLines: null,
+                            maxLines: null,
+                            expands: true,
+                            textAlignVertical: TextAlignVertical.top,
+                            style: editorTextStyle,
+                            strutStyle: editorStrutStyle,
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              hintText: 'Írj valamit...',
+                              isCollapsed: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
                           ),
                         ),
-                      ),
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: SizedBox.expand(
-                            key: _underlineLayerKey,
-                            child: CustomPaint(
-                              key: const ValueKey(
-                                'note-text-range-underline-layer',
-                              ),
-                              foregroundPainter: NoteTaggedTextUnderlinePainter(
-                                text: _controller.text,
-                                runs: noteTaggedTextUnderlineRuns(
-                                  text: _controller.text,
-                                  rangeTags: _block.rangeTags,
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: SizedBox.expand(
+                              key: _underlineLayerKey,
+                              child: CustomPaint(
+                                key: const ValueKey(
+                                  'note-text-range-underline-layer',
                                 ),
-                                textStyle: editorTextStyle,
-                                textDirection: Directionality.of(context),
-                                scrollOffset: _textScrollOffset,
-                                renderEditable: _tagRenderEditable,
-                                editableOffset: _tagEditableOffset,
+                                foregroundPainter: NoteTaggedTextUnderlinePainter(
+                                  text: _controller.text,
+                                  runs: underlineRuns,
+                                  textStyle: editorTextStyle,
+                                  textDirection: Directionality.of(context),
+                                  scrollOffset: _textScrollOffset,
+                                  renderEditable: _tagRenderEditable,
+                                  editableOffset: _tagEditableOffset,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

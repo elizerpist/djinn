@@ -316,11 +316,17 @@ TextSpan _underlineLayoutTextSpan({
   return TextSpan(style: baseStyle, children: children);
 }
 
-double? _taggedRangeHeight(List<Color> secondaryUnderlineColors) {
-  if (secondaryUnderlineColors.isEmpty) {
+double? noteTaggedRangeLineHeightForUnderlineCount(int secondaryUnderlineCount) {
+  if (secondaryUnderlineCount <= 0) {
     return null;
   }
-  return 1.34 + secondaryUnderlineColors.length * 0.42;
+  return 1.34 + secondaryUnderlineCount * 0.42;
+}
+
+double? _taggedRangeHeight(List<Color> secondaryUnderlineColors) {
+  return noteTaggedRangeLineHeightForUnderlineCount(
+    secondaryUnderlineColors.length,
+  );
 }
 
 class NoteSecondaryTagUnderlines extends StatelessWidget {
