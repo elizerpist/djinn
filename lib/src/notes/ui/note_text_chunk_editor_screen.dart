@@ -44,6 +44,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   bool _railRoundedCard = false;
   bool _railTransparentBackground = false;
   bool _railBorderVisible = true;
+  NoteTaggedTextCountMarkerMode _countMarkerMode =
+      NoteTaggedTextCountMarkerMode.fixedCorner;
   bool _tagGeometryRefreshScheduled = false;
   double _textScrollOffset = 0;
   RenderEditable? _tagRenderEditable;
@@ -655,6 +657,21 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     Navigator.of(context).maybePop();
   }
 
+  void _handleExtraMenuSelection(String value) {
+    switch (value) {
+      case 'count-marker-fixed':
+        setState(
+          () => _countMarkerMode = NoteTaggedTextCountMarkerMode.fixedCorner,
+        );
+        break;
+      case 'count-marker-adaptive':
+        setState(
+          () => _countMarkerMode = NoteTaggedTextCountMarkerMode.adaptiveClamp,
+        );
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = _block.title?.trim().isNotEmpty == true
@@ -668,6 +685,10 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       fontSize: 16,
     );
     final underlineRuns = noteTaggedTextUnderlineRuns(
+      text: _controller.text,
+      rangeTags: _block.rangeTags,
+    );
+    final countMarkerRuns = noteTaggedTextCountMarkerRuns(
       text: _controller.text,
       rangeTags: _block.rangeTags,
     );
@@ -686,6 +707,29 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         onDeleteSelectedTag: _deleteSelectedTag,
         onDeleteChunk: _deleteChunk,
         canDeleteSelectedTag: _activeRangeTags.isNotEmpty,
+        onExtraMenuSelected: _handleExtraMenuSelection,
+        extraMenuItems: [
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            key: const ValueKey('note-text-menu-count-marker-fixed'),
+            value: 'count-marker-fixed',
+            child: _CountMarkerModeMenuItem(
+              selected:
+                  _countMarkerMode == NoteTaggedTextCountMarkerMode.fixedCorner,
+              label: 'Tag jel: sarok 4+',
+            ),
+          ),
+          PopupMenuItem(
+            key: const ValueKey('note-text-menu-count-marker-adaptive'),
+            value: 'count-marker-adaptive',
+            child: _CountMarkerModeMenuItem(
+              selected:
+                  _countMarkerMode ==
+                  NoteTaggedTextCountMarkerMode.adaptiveClamp,
+              label: 'Tag jel: adaptív +',
+            ),
+          ),
+        ],
         trailingActions: [
           IconButton(
             key: const ValueKey('note-text-header-outdent'),
@@ -762,6 +806,26 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                             ),
                           ),
                         ),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              key: const ValueKey(
+                                'note-text-range-count-marker-layer',
+                              ),
+                              foregroundPainter:
+                                  NoteTaggedTextCountMarkerPainter(
+                                    text: _controller.text,
+                                    runs: countMarkerRuns,
+                                    mode: _countMarkerMode,
+                                    textStyle: editorTextStyle,
+                                    textDirection: Directionality.of(context),
+                                    scrollOffset: _textScrollOffset,
+                                    renderEditable: _tagRenderEditable,
+                                    editableOffset: _tagEditableOffset,
+                                  ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -818,6 +882,31 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CountMarkerModeMenuItem extends StatelessWidget {
+  const _CountMarkerModeMenuItem({
+    required this.selected,
+    required this.label,
+  });
+
+  final bool selected;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          selected ? Icons.check : Icons.check_box_outline_blank,
+          size: 18,
+        ),
+        const SizedBox(width: 10),
+        Text(label),
+      ],
     );
   }
 }

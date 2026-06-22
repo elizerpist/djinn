@@ -98,4 +98,39 @@ void main() {
     expect(find.byKey(const ValueKey('sample-secondary-underline-2')), findsOneWidget);
     expect(find.byKey(const ValueKey('sample-secondary-underline-3')), findsNothing);
   });
+
+  test('count marker label keeps fixed mode full and clamps adaptive mode', () {
+    expect(
+      noteTaggedTextCountMarkerLabel(
+        mode: NoteTaggedTextCountMarkerMode.fixedCorner,
+        tagCount: 4,
+        rangeWidth: 8,
+      ),
+      '4+',
+    );
+    expect(
+      noteTaggedTextCountMarkerLabel(
+        mode: NoteTaggedTextCountMarkerMode.adaptiveClamp,
+        tagCount: 4,
+        rangeWidth: 52,
+      ),
+      '4+',
+    );
+    expect(
+      noteTaggedTextCountMarkerLabel(
+        mode: NoteTaggedTextCountMarkerMode.adaptiveClamp,
+        tagCount: 4,
+        rangeWidth: 18,
+      ),
+      '+',
+    );
+    expect(
+      noteTaggedTextCountMarkerLabel(
+        mode: NoteTaggedTextCountMarkerMode.adaptiveClamp,
+        tagCount: 4,
+        rangeWidth: 8,
+      ),
+      '•',
+    );
+  });
 }

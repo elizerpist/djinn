@@ -347,6 +347,100 @@ void main() {
     expect(DebugConsole.allText, contains('runs=[6-10/u2]'));
   });
 
+  testWidgets('overflow menu switches tag count corner marker modes', (
+    tester,
+  ) async {
+    const text = 'Alpha Beta Gamma Delta';
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: text,
+        rangeTags: [
+          NoteTextRangeTag(
+            id: 'range-1',
+            start: 6,
+            end: 10,
+            tag: NoteKnowledgeTag(
+              type: NoteKnowledgeTagTypes.state,
+              label: 'sulyos',
+              colorValue: 0xFFDC2626,
+            ),
+            tags: [
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.state,
+                label: 'sulyos',
+                colorValue: 0xFFDC2626,
+              ),
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.topic,
+                label: 'legzes',
+                colorValue: 0xFF2563EB,
+              ),
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.symbol,
+                label: 'DO2',
+                colorValue: 0xFF0D9488,
+              ),
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.custom,
+                label: 'forras',
+                colorValue: 0xFF7C3AED,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-plain-field')),
+    );
+    expect(field.controller?.text, text);
+
+    NoteTaggedTextCountMarkerPainter markerPainter() {
+      final markerPaint = tester.widget<CustomPaint>(
+        find.byKey(const ValueKey('note-text-range-count-marker-layer')),
+      );
+      expect(
+        markerPaint.foregroundPainter,
+        isA<NoteTaggedTextCountMarkerPainter>(),
+      );
+      return markerPaint.foregroundPainter! as NoteTaggedTextCountMarkerPainter;
+    }
+
+    expect(markerPainter().mode, NoteTaggedTextCountMarkerMode.fixedCorner);
+    expect(markerPainter().runs.single.tagCount, 4);
+
+    await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('note-text-menu-count-marker-fixed')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-text-menu-count-marker-adaptive')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('note-text-menu-count-marker-adaptive')),
+    );
+    await tester.pumpAndSettle();
+    expect(markerPainter().mode, NoteTaggedTextCountMarkerMode.adaptiveClamp);
+    expect(field.controller?.text, text);
+
+    await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('note-text-menu-count-marker-fixed')),
+    );
+    await tester.pumpAndSettle();
+    expect(markerPainter().mode, NoteTaggedTextCountMarkerMode.fixedCorner);
+    expect(field.controller?.text, text);
+  });
+
   testWidgets('header global tag action saves chunk tags', (tester) async {
     NoteBlock? latest;
     await _pumpTextChunkEditor(
