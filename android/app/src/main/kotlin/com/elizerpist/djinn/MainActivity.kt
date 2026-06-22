@@ -1,6 +1,5 @@
 package com.elizerpist.djinn
 
-import com.elizerpist.djinn.rail.NativeSelectionRailBridge
 import com.elizerpist.djinn.voice.NativeSpeechBridge
 import com.elizerpist.djinn.voice.VoiceChannels
 import io.flutter.embedding.engine.FlutterEngine
@@ -9,8 +8,6 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private var selectionRailBridge: NativeSelectionRailBridge? = null
-
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val bridge = NativeSpeechBridge(this)
@@ -18,9 +15,5 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler(bridge)
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, VoiceChannels.EVENTS)
             .setStreamHandler(bridge)
-        selectionRailBridge = NativeSelectionRailBridge(
-            this,
-            flutterEngine.dartExecutor.binaryMessenger
-        )
     }
 }

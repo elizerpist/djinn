@@ -120,10 +120,7 @@ void main() {
       );
 
       await tester.enterText(
-        find.descendant(
-          of: find.byKey(const ValueKey('note-text-native-editor')),
-          matching: find.byType(EditableText),
-        ),
+        find.byKey(const ValueKey('note-text-plain-field')),
         'Új szöveg',
       );
       await tester.pump();
