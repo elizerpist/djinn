@@ -54,4 +54,4 @@
 - [x] Run `flutter analyze`.
 - [x] Run old-symbol scan for deleted textchunk/native rail artifacts.
 - [x] Update checklist statuses honestly.
-- [ ] Commit and push the branch, then check GitHub Actions Android build.
+- [x] Commit and push the branch, then check GitHub Actions Android build.
