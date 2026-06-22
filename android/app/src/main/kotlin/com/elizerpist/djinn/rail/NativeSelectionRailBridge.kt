@@ -30,9 +30,19 @@ class NativeSelectionRailBridge(
     private val visibleFrame = Rect()
     private val railContainer = FrameLayout(activity)
     private val railContent = LinearLayout(activity)
+    private val actionScroll = HorizontalScrollView(activity)
     private val actionRow = LinearLayout(activity)
+    private val rowDivider = View(activity)
     private val tagScroll = HorizontalScrollView(activity)
     private val tagRow = LinearLayout(activity)
+    private val materialIconTypeface: Typeface? by lazy {
+        runCatching {
+            Typeface.createFromAsset(
+                activity.assets,
+                "flutter_assets/fonts/MaterialIcons-Regular.otf"
+            )
+        }.getOrNull()
+    }
 
     private var currentState: RailState = RailState.hidden()
     private var attached = false
@@ -65,37 +75,55 @@ class NativeSelectionRailBridge(
         railContainer.setPadding(0, 0, 0, 0)
 
         railContent.orientation = LinearLayout.VERTICAL
-        railContent.setPadding(dp(10), dp(8), dp(10), dp(8))
+        railContent.setPadding(0, 0, 0, 0)
 
+        actionScroll.isHorizontalScrollBarEnabled = false
+        actionScroll.overScrollMode = View.OVER_SCROLL_NEVER
         actionRow.orientation = LinearLayout.HORIZONTAL
         actionRow.gravity = Gravity.CENTER_VERTICAL
+        actionRow.setPadding(dp(10), dp(8), dp(6), dp(8))
+        actionScroll.addView(
+            actionRow,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
 
+        rowDivider.setBackgroundColor(Color.rgb(229, 231, 235))
         tagScroll.isHorizontalScrollBarEnabled = false
+        tagScroll.overScrollMode = View.OVER_SCROLL_NEVER
         tagRow.orientation = LinearLayout.HORIZONTAL
         tagRow.gravity = Gravity.CENTER_VERTICAL
+        tagRow.setPadding(dp(10), dp(7), dp(6), dp(7))
         tagScroll.addView(
             tagRow,
             ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
 
         railContent.addView(
-            actionRow,
+            actionScroll,
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                dp(64)
+            )
+        )
+        railContent.addView(
+            rowDivider,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(1)
             )
         )
         railContent.addView(
             tagScroll,
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                topMargin = dp(6)
-            }
+                dp(48)
+            )
         )
         railContainer.addView(
             railContent,
@@ -188,55 +216,59 @@ class NativeSelectionRailBridge(
         actionRow.addView(
             actionButton(
                 "toggleTags",
-                if (state.bottomRowExpanded) "^" else "v",
+                if (state.bottomRowExpanded) ICON_KEYBOARD_ARROW_UP else ICON_KEYBOARD_ARROW_DOWN,
                 state.actionEnabled("toggleTags")
             )
         )
-        actionRow.addView(actionButton("outdent", "<", state.actionEnabled("outdent")))
-        actionRow.addView(actionButton("indent", ">", state.actionEnabled("indent")))
-        actionRow.addView(actionButton("tagSelection", "Tag", state.actionEnabled("tagSelection")))
-        actionRow.addView(actionButton("clearTags", "Del", state.actionEnabled("clearTags")))
-        actionRow.addView(actionButton("previousTag", "Prev", state.actionEnabled("previousTag")))
-        actionRow.addView(actionButton("nextTag", "Next", state.actionEnabled("nextTag")))
-        actionRow.addView(actionButton("toggleRounded", "R", state.actionEnabled("toggleRounded")))
-        actionRow.addView(actionButton("toggleGrey", "G", state.actionEnabled("toggleGrey")))
-        actionRow.addView(actionButton("toggleBorder", "B", state.actionEnabled("toggleBorder")))
+        actionRow.addView(actionButton("outdent", ICON_FORMAT_INDENT_DECREASE, state.actionEnabled("outdent")))
+        actionRow.addView(actionButton("indent", ICON_FORMAT_INDENT_INCREASE, state.actionEnabled("indent")))
+        actionRow.addView(actionButton("tagSelection", ICON_SELL_OUTLINED, state.actionEnabled("tagSelection")))
+        actionRow.addView(actionButton("clearTags", ICON_DELETE_OUTLINE, state.actionEnabled("clearTags")))
+        actionRow.addView(actionButton("previousTag", ICON_CHEVRON_LEFT, state.actionEnabled("previousTag")))
+        actionRow.addView(actionButton("nextTag", ICON_CHEVRON_RIGHT, state.actionEnabled("nextTag")))
+        actionRow.addView(actionButton("toggleRounded", ICON_CROP_SQUARE_OUTLINED, state.actionEnabled("toggleRounded")))
+        actionRow.addView(actionButton("toggleGrey", ICON_OPACITY, state.actionEnabled("toggleGrey")))
+        actionRow.addView(actionButton("toggleBorder", ICON_BORDER_OUTER, state.actionEnabled("toggleBorder")))
     }
 
     private fun renderTags(state: RailState) {
         tagRow.removeAllViews()
-        tagScroll.visibility = if (state.bottomRowExpanded && state.tags.isNotEmpty()) {
-            View.VISIBLE
-        } else {
-            View.GONE
+        rowDivider.visibility = if (state.bottomRowExpanded) View.VISIBLE else View.GONE
+        tagScroll.visibility = if (state.bottomRowExpanded) View.VISIBLE else View.GONE
+        if (!state.bottomRowExpanded) {
+            return
+        }
+        if (state.tags.isEmpty()) {
+            tagRow.addView(emptyTagLabel())
+            return
         }
         for (tag in state.tags) {
             tagRow.addView(tagPill(tag))
         }
     }
 
-    private fun actionButton(action: String, label: String, enabled: Boolean): TextView {
+    private fun actionButton(action: String, iconCodePoint: Int, enabled: Boolean): TextView {
         return TextView(activity).apply {
-            text = label
-            textSize = 13f
-            typeface = Typeface.DEFAULT_BOLD
+            text = String(Character.toChars(iconCodePoint))
+            textSize = 20f
+            typeface = materialIconTypeface ?: Typeface.DEFAULT
             gravity = Gravity.CENTER
             isEnabled = enabled
             isClickable = enabled
             alpha = if (enabled) 1f else 0.35f
             setTextColor(Color.rgb(17, 24, 39))
-            setPadding(dp(10), 0, dp(10), 0)
-            minWidth = dp(40)
+            includeFontPadding = false
+            setPadding(0, 0, 0, 0)
+            minWidth = dp(34)
             minHeight = dp(34)
-            background = buttonBackground()
             setOnClickListener {
                 invokeAction(action)
             }
             layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(34),
                 dp(34)
             ).apply {
-                rightMargin = dp(6)
+                rightMargin = dp(4)
             }
         }
     }
@@ -245,22 +277,38 @@ class NativeSelectionRailBridge(
         val color = tag.colorValue ?: Color.rgb(37, 99, 235)
         return TextView(activity).apply {
             text = tag.label
-            textSize = 13f
+            textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setTextColor(color)
-            setPadding(dp(12), 0, dp(12), 0)
-            minHeight = dp(30)
+            setTextColor(Color.WHITE)
+            includeFontPadding = false
+            setPadding(dp(9), 0, dp(9), 0)
+            minHeight = dp(28)
             background = pillBackground(color)
             setOnClickListener {
                 invokeAction("deleteTag", tag.id)
             }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                dp(30)
+                dp(28)
             ).apply {
-                rightMargin = dp(6)
+                rightMargin = dp(8)
             }
+        }
+    }
+
+    private fun emptyTagLabel(): TextView {
+        return TextView(activity).apply {
+            text = "Nincs tag"
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER_VERTICAL
+            setTextColor(Color.rgb(107, 114, 128))
+            includeFontPadding = false
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
         }
     }
 
@@ -288,35 +336,30 @@ class NativeSelectionRailBridge(
         }
     }
 
-    private fun buttonBackground(): GradientDrawable {
-        return GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(7).toFloat()
-            setColor(Color.rgb(249, 250, 251))
-            setStroke(dp(1), Color.rgb(229, 231, 235))
-        }
-    }
-
     private fun pillBackground(color: Int): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(15).toFloat()
-            setColor(adjustAlpha(color, 0.12f))
-            setStroke(dp(1), adjustAlpha(color, 0.28f))
+            cornerRadius = dp(999).toFloat()
+            setColor(color)
         }
-    }
-
-    private fun adjustAlpha(color: Int, factor: Float): Int {
-        return Color.argb(
-            (Color.alpha(color) * factor).toInt().coerceIn(0, 255),
-            Color.red(color),
-            Color.green(color),
-            Color.blue(color)
-        )
     }
 
     private fun dp(value: Int): Int {
         return (value * activity.resources.displayMetrics.density).toInt()
+    }
+
+    private companion object {
+        private const val ICON_BORDER_OUTER = 0xe0fe
+        private const val ICON_CHEVRON_LEFT = 0xe15e
+        private const val ICON_CHEVRON_RIGHT = 0xe15f
+        private const val ICON_CROP_SQUARE_OUTLINED = 0xef9d
+        private const val ICON_DELETE_OUTLINE = 0xe1bb
+        private const val ICON_FORMAT_INDENT_DECREASE = 0xe2b4
+        private const val ICON_FORMAT_INDENT_INCREASE = 0xe2b5
+        private const val ICON_KEYBOARD_ARROW_DOWN = 0xe353
+        private const val ICON_KEYBOARD_ARROW_UP = 0xe356
+        private const val ICON_OPACITY = 0xe459
+        private const val ICON_SELL_OUTLINED = 0xf353
     }
 }
 

@@ -8,8 +8,10 @@ import 'native_selection_rail_bridge.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
 import 'tag_manager_sheet.dart';
-import 'text_chunk_canvas_editor.dart';
-import 'text_chunk_text_editing.dart';
+import 'text_chunk/text_chunk_controller.dart';
+import 'text_chunk/text_chunk_editor.dart';
+import 'text_chunk/text_chunk_rail_state.dart';
+import 'text_chunk/text_chunk_ranges.dart';
 
 String _editorBlockSignature(NoteBlock block) {
   return [
@@ -62,7 +64,7 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
 
 class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late NoteBlock _block;
-  late final TextChunkNativeEditingController _controller;
+  late final TextChunkEditingController _controller;
   late final FocusNode _focusNode;
   late final NativeSelectionRailController _nativeSelectionRailController;
   late final bool _ownsNativeSelectionRailController;
@@ -80,7 +82,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   void initState() {
     super.initState();
     _block = widget.block;
-    _controller = TextChunkNativeEditingController(text: widget.block.text)
+    _controller = TextChunkEditingController(text: widget.block.text)
       ..addListener(_handleControllerChanged);
     _focusNode = FocusNode();
     _nativeSelectionRailController =
@@ -183,18 +185,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
 
   void _syncNativeRailState() {
     final range = _activeRailRange;
-    if (range == null) {
-      _sendNativeRailUpdate(_nativeSelectionRailController.hide());
-      return;
-    }
     _sendNativeRailUpdate(
       _nativeSelectionRailController.setStateModel(
-        NativeSelectionRailState.visible(
-          rangeStart: range.start,
-          rangeEnd: range.end,
-          tags: _nativeRailTagsForRange(range),
+        textChunkNativeRailState(
+          activeRange: range,
+          rangeTags: _block.rangeTags,
           canDeleteTag: _selectionCanDeleteTag,
-          hasTaggedRanges: _block.rangeTags.isNotEmpty,
           bottomRowExpanded: _railBottomExpanded,
           roundedCard: _railRoundedCard,
           greyBackground: _railGreyBackground,
@@ -363,30 +359,11 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   TextRange? _selectionTargetRange() {
-    final selection = _controller.selection;
-    if (!selection.isValid || _block.text.isEmpty) {
-      return null;
-    }
-    if (!selection.isCollapsed) {
-      final start = selection.start < selection.end
-          ? selection.start
-          : selection.end;
-      final end = selection.start < selection.end
-          ? selection.end
-          : selection.start;
-      return TextRange(
-        start: start.clamp(0, _block.text.length).toInt(),
-        end: end.clamp(0, _block.text.length).toInt(),
-      );
-    }
-    final offset = selection.extentOffset.clamp(0, _block.text.length).toInt();
-    for (final tag in _block.rangeTags) {
-      final range = tag.clampToTextLength(_block.text.length);
-      if (range.isValid && offset >= range.start && offset < range.end) {
-        return TextRange(start: range.start, end: range.end);
-      }
-    }
-    return null;
+    return textChunkTargetRangeForSelection(
+      selection: _controller.selection,
+      text: _block.text,
+      rangeTags: _block.rangeTags,
+    );
   }
 
   void _updateSelectionState() {
@@ -412,26 +389,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   bool _rangeHasTag(TextRange range) {
-    return _block.rangeTags.any(
-      (tag) => tag.start < range.end && tag.end > range.start,
-    );
+    return textChunkRangeHasTag(range: range, rangeTags: _block.rangeTags);
   }
 
   List<NoteKnowledgeTag> _selectionTags() {
     final range = _selectionTargetRange();
     return _tagsForRange(range);
-  }
-
-  List<NativeSelectionRailTag> _nativeRailTagsForRange(TextRange range) {
-    return _tagsForRange(range)
-        .map(
-          (tag) => NativeSelectionRailTag(
-            id: tag.metadataText,
-            label: tag.label,
-            colorValue: tag.colorValue,
-          ),
-        )
-        .toList(growable: false);
   }
 
   NoteKnowledgeTag? _tagById(String? tagId) {
@@ -447,21 +410,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   List<NoteKnowledgeTag> _tagsForRange(TextRange? range) {
-    if (range == null) {
-      return const [];
-    }
-    final tags = <NoteKnowledgeTag>[];
-    for (final rangeTag in _block.rangeTags) {
-      if (rangeTag.start >= range.end || rangeTag.end <= range.start) {
-        continue;
-      }
-      for (final tag in rangeTag.resolvedTags) {
-        if (!tags.any((current) => current.metadataText == tag.metadataText)) {
-          tags.add(tag);
-        }
-      }
-    }
-    return tags;
+    return textChunkTagsForRange(range: range, rangeTags: _block.rangeTags);
   }
 
   void _deleteSelectedTag() {
@@ -555,17 +504,14 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     final offset =
         _activeRailRange?.start ??
         (selection.isValid ? selection.extentOffset : 0);
-    final result = applyTextChunkParagraphStep(
+    final result = applyTextChunkParagraphMarginStep(
       text: _block.text,
       rangeTags: _block.rangeTags,
       offset: offset,
       delta: delta,
-      maxWidth: MediaQuery.sizeOf(context).width - 32,
-      textStyle: _textStyle,
-      textScaler: MediaQuery.textScalerOf(context),
     );
     DebugConsole.log(
-      '[TextChunkStep] delta=$delta offset=$offset '
+      '[TextChunkMargin] delta=$delta offset=$offset '
       'oldLen=${_block.text.length} newLen=${result.text.length} '
       'oldRanges=${_block.rangeTags.length} newRanges=${result.rangeTags.length} '
       'selection=${result.selectionOffset} '
@@ -648,12 +594,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 ),
               ),
             Expanded(
-              child: TextChunkCanvasEditor(
+              child: NativeTextChunkEditor(
                 controller: _controller,
                 focusNode: _focusNode,
                 rangeTags: _block.rangeTags,
-                activeRange: _activeRailRange,
                 textStyle: _textStyle,
+                onSelectionChanged: (_, _) => _updateSelectionState(),
               ),
             ),
           ],

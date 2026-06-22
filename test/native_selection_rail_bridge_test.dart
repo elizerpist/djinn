@@ -61,6 +61,56 @@ void main() {
     },
   );
 
+  test('visible state includes table-style action and row flags', () async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return null;
+        });
+
+    final controller = NativeSelectionRailController(methodChannel: channel);
+
+    await controller.setStateModel(
+      NativeSelectionRailState.visible(
+        rangeStart: 0,
+        rangeEnd: 5,
+        tags: const [],
+        canDeleteTag: false,
+        hasTaggedRanges: true,
+        bottomRowExpanded: false,
+        roundedCard: true,
+        greyBackground: true,
+        borderVisible: false,
+      ),
+    );
+
+    final arguments = calls.single.arguments as Map<Object?, Object?>;
+    expect((arguments['actions'] as Map<Object?, Object?>).keys, [
+      'toggleTags',
+      'outdent',
+      'indent',
+      'tagSelection',
+      'clearTags',
+      'previousTag',
+      'nextTag',
+      'toggleRounded',
+      'toggleGrey',
+      'toggleBorder',
+    ]);
+    expect(arguments['actions'], containsPair('clearTags', false));
+    expect(arguments['actions'], containsPair('previousTag', true));
+    expect(arguments['actions'], containsPair('nextTag', true));
+    expect(arguments['style'], {
+      'bottomRowExpanded': false,
+      'roundedCard': true,
+      'greyBackground': true,
+      'borderVisible': false,
+    });
+
+    controller.dispose();
+  });
+
   test('hide sends a hidden rail state', () async {
     final calls = <MethodCall>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
