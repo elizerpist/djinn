@@ -448,6 +448,40 @@ void main() {
     expect(parsed.plainTextForIndexing, contains('  Alpont'));
   });
 
+  test('knowledge tag preserves registry fields while reading legacy json', () {
+    final legacy = NoteKnowledgeTag.fromJson({
+      'type': 'topic',
+      'label': 'Légzés',
+      'colorValue': 0xFF2563EB,
+    });
+
+    expect(legacy.id, isNull);
+    expect(legacy.colorSlotId, isNull);
+    expect(legacy.folderId, isNull);
+    expect(legacy.resolvedColorValue, 0xFF2563EB);
+
+    const registered = NoteKnowledgeTag(
+      id: 'tag-1',
+      type: NoteKnowledgeTagTypes.custom,
+      label: 'Légzés',
+      colorSlotId: 2,
+      folderId: 'folder-1',
+      colorValue: 0xFF7C3AED,
+    );
+    final json = registered.toJson();
+
+    expect(json['id'], 'tag-1');
+    expect(json['colorSlotId'], 2);
+    expect(json['folderId'], 'folder-1');
+    expect(json['type'], NoteKnowledgeTagTypes.custom);
+
+    final parsed = NoteKnowledgeTag.fromJson(json);
+    expect(parsed.id, 'tag-1');
+    expect(parsed.colorSlotId, 2);
+    expect(parsed.folderId, 'folder-1');
+    expect(parsed.resolvedColorValue, noteTagColorSlots[2]);
+  });
+
   test('flowchart node stores canvas coordinates', () {
     const node = NoteFlowchartNode(
       id: 'n1',

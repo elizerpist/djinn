@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../debug/debug_console.dart';
+import '../data/tag_repository.dart';
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
@@ -14,12 +15,14 @@ class NoteTableEditorScreen extends StatefulWidget {
     super.key,
     required this.block,
     this.availableTags = const [],
+    this.tagRepository,
     this.onChanged,
     this.onDelete,
   });
 
   final NoteBlock block;
   final List<NoteKnowledgeTag> availableTags;
+  final TagRepository? tagRepository;
   final ValueChanged<NoteBlock>? onChanged;
   final VoidCallback? onDelete;
 
@@ -28,6 +31,8 @@ class NoteTableEditorScreen extends StatefulWidget {
 }
 
 class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
+  late final TagRepository _tagRepository =
+      widget.tagRepository ?? MemoryTagRepository();
   late NoteBlock _block;
   late List<List<String>> _rows;
   late List<double> _columnWidths;
@@ -454,17 +459,17 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
   }
 
   Future<void> _tagChunk() async {
-    final tags = await showTagManagerSheet(
+    await showTagManagerSheet(
       context,
       initialTags: _block.tags,
+      tagRepository: _tagRepository,
+      onChanged: (tags) {
+        setState(() => _block = _block.copyWith(tags: tags, clearIndex: true));
+        widget.onChanged?.call(_block);
+      },
       availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Chunk tagjei',
     );
-    if (tags == null) {
-      return;
-    }
-    setState(() => _block = _block.copyWith(tags: tags, clearIndex: true));
-    widget.onChanged?.call(_block);
   }
 
   void _deleteChunkTag(NoteKnowledgeTag tag) {
@@ -490,15 +495,20 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
       );
       return;
     }
-    final tags = await showTagManagerSheet(
+    await showTagManagerSheet(
       context,
       initialTags: _tagsForSelection(selection),
+      tagRepository: _tagRepository,
+      onChanged: (tags) => _applySelectionTags(selection, tags),
       availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Kijelölt táblázatrész tagjei',
     );
-    if (tags == null) {
-      return;
-    }
+  }
+
+  void _applySelectionTags(
+    _TableSelection selection,
+    List<NoteKnowledgeTag> tags,
+  ) {
     final affectedTargets = _affectedTargetsForSelection(selection);
     final targetsToWrite = _targetsToWriteForSelection(selection);
     setState(() {
@@ -512,7 +522,9 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
           if (tags.isNotEmpty)
             for (final target in targetsToWrite)
               NoteScopedTagAssignment(
-                id: 'table-tag-${DateTime.now().microsecondsSinceEpoch}-${target.rowIndex ?? 'x'}-${target.columnIndex ?? 'x'}',
+                id:
+                    'table-tag-${DateTime.now().microsecondsSinceEpoch}-'
+                    '${target.rowIndex ?? 'x'}-${target.columnIndex ?? 'x'}',
                 target: target,
                 tags: tags,
               ),
@@ -2261,8 +2273,6 @@ class _CellFieldState extends State<_CellField> {
       onChanged: widget.onChanged,
       onFieldSubmitted: (_) => widget.onSubmitted(),
     );
-    final hasSecondaryTags = widget.tags.length > 1;
-
     return Listener(
       behavior: HitTestBehavior.opaque,
       onPointerDown: _handlePointerDown,
@@ -2304,20 +2314,7 @@ class _CellFieldState extends State<_CellField> {
                     : ValueKey(
                         'note-table-cell-highlight-${widget.row}-${widget.column}',
                       ),
-                child: hasSecondaryTags
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          field,
-                          NoteSecondaryTagUnderlines(
-                            tags: widget.tags,
-                            prefix:
-                                'note-table-cell-${widget.row}-${widget.column}',
-                          ),
-                        ],
-                      )
-                    : field,
+                child: field,
               ),
             ),
           ],

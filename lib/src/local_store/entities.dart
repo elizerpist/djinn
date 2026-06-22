@@ -695,6 +695,67 @@ class CaseDocumentLinkEntity {
 }
 
 @Entity()
+class NoteTagEntity {
+  NoteTagEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.label,
+    required this.normalizedLabel,
+    required this.colorSlotId,
+    this.folderPublicId,
+    required this.type,
+    required this.createdAtMillis,
+    required this.updatedAtMillis,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  String label;
+
+  @Index()
+  String normalizedLabel;
+
+  int colorSlotId;
+
+  @Index()
+  String? folderPublicId;
+
+  String type;
+  int createdAtMillis;
+  int updatedAtMillis;
+}
+
+@Entity()
+class NoteTagFolderEntity {
+  NoteTagFolderEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.label,
+    required this.normalizedLabel,
+    required this.createdAtMillis,
+    required this.updatedAtMillis,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  String label;
+
+  @Index()
+  String normalizedLabel;
+
+  int createdAtMillis;
+  int updatedAtMillis;
+}
+
+@Entity()
 class AppSettingsEntity {
   AppSettingsEntity({
     this.id = 0,

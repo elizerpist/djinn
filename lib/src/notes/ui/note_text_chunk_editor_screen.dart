@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../debug/debug_console.dart';
+import '../data/tag_repository.dart';
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
@@ -16,12 +17,14 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
     required this.block,
     required this.onChanged,
     this.availableTags = const [],
+    this.tagRepository,
     this.onDelete,
   });
 
   final NoteBlock block;
   final ValueChanged<NoteBlock> onChanged;
   final List<NoteKnowledgeTag> availableTags;
+  final TagRepository? tagRepository;
   final VoidCallback? onDelete;
 
   @override
@@ -32,12 +35,14 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
 class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   static const double _paragraphIndentWidth = 24;
 
+  late final TagRepository _tagRepository =
+      widget.tagRepository ?? MemoryTagRepository();
   late NoteBlock _block;
   late final NoteTaggedTextEditingController _controller;
   late final FocusNode _focusNode;
   late final ScrollController _textScrollController;
   final GlobalKey _textFieldHostKey = GlobalKey();
-  final GlobalKey _underlineLayerKey = GlobalKey();
+  final GlobalKey _tagOverlayKey = GlobalKey();
   TextSelection _selection = const TextSelection.collapsed(offset: -1);
   bool _syncingController = false;
   bool _railBottomExpanded = true;
@@ -189,7 +194,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       final editable = _findRenderEditable(
         _textFieldHostKey.currentContext?.findRenderObject(),
       );
-      final layerBox = _underlineLayerKey.currentContext?.findRenderObject();
+      final layerBox = _tagOverlayKey.currentContext?.findRenderObject();
       var nextOffset = Offset.zero;
       if (editable != null && layerBox is RenderBox && editable.attached) {
         nextOffset =
@@ -221,21 +226,17 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   void _logVisualGeometry(RenderEditable? editable, Offset editableOffset) {
-    final runs = noteTaggedTextUnderlineRuns(
+    final countMarkerRuns = noteTaggedTextCountMarkerRuns(
       text: _controller.text,
       rangeTags: _block.rangeTags,
     );
-    final maxUnderlineLanes = _maxUnderlineLaneCount(runs);
-    final lineHeight = noteTaggedRangeLineHeightForUnderlineCount(
-      maxUnderlineLanes,
-    );
     final paragraphInset = _visibleParagraphInset();
-    final runLabel = runs
-        .map((run) => '${run.start}-${run.end}/u${run.colors.length}')
+    final markerLabel = countMarkerRuns
+        .map((run) => '${run.start}-${run.end}/x${run.tagCount}')
         .join(' ');
     final boxesLabel = editable == null
         ? 'none'
-        : runs
+        : countMarkerRuns
               .map((run) {
                 final boxes = editable.getBoxesForSelection(
                   TextSelection(baseOffset: run.start, extentOffset: run.end),
@@ -252,11 +253,10 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
               .join(' ');
     final signature =
         '${_controller.text.length}|${_selectionLabel(_selection)}|'
-        '${_block.rangeTags.length}|$runLabel|'
+        '${_block.rangeTags.length}|$markerLabel|'
         '${editableOffset.dx.toStringAsFixed(1)},'
         '${editableOffset.dy.toStringAsFixed(1)}|'
         '${_textScrollOffset.toStringAsFixed(1)}|'
-        '${lineHeight?.toStringAsFixed(2) ?? 'null'}|'
         '${paragraphInset.toStringAsFixed(1)}|'
         '${_paragraphStylesLabel(_block.paragraphStyles)}|$boxesLabel';
     if (signature == _lastVisualLogSignature) {
@@ -266,13 +266,11 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     DebugConsole.log(
       '[TextChunkVisual] textLen=${_controller.text.length} '
       'selection=${_selectionLabel(_selection)} '
-      'ranges=${_block.rangeTags.length} runs=[$runLabel] '
+      'ranges=${_block.rangeTags.length} countMarkers=[$markerLabel] '
       'editable=${editable != null} '
       'editableOffset=(${editableOffset.dx.toStringAsFixed(1)},'
       '${editableOffset.dy.toStringAsFixed(1)}) '
       'scroll=${_textScrollOffset.toStringAsFixed(1)} '
-      'maxUnderlineLanes=$maxUnderlineLanes '
-      'nativeLineHeight=${lineHeight?.toStringAsFixed(2) ?? 'null'} '
       'paragraphInset=${paragraphInset.toStringAsFixed(1)} '
       'paragraphStyles=[${_paragraphStylesLabel(_block.paragraphStyles)}] '
       'boxes=[$boxesLabel]',
@@ -310,16 +308,19 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   Future<void> _tagChunk() async {
-    final tags = await showTagManagerSheet(
+    await showTagManagerSheet(
       context,
       initialTags: _block.tags,
+      tagRepository: _tagRepository,
+      onChanged: (tags) {
+        _emitBlock(_block.copyWith(tags: tags, clearIndex: true));
+      },
       availableTags: widget.availableTags,
       title: 'Chunk tagek',
     );
-    if (tags == null || !mounted) {
+    if (!mounted) {
       return;
     }
-    _emitBlock(_block.copyWith(tags: tags, clearIndex: true));
     _focusNode.requestFocus();
   }
 
@@ -329,16 +330,17 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       return;
     }
     final initialTags = _tagsForRange(target);
-    final tags = await showTagManagerSheet(
+    await showTagManagerSheet(
       context,
       initialTags: initialTags,
+      tagRepository: _tagRepository,
+      onChanged: (tags) => _replaceRangeTags(target, tags),
       availableTags: widget.availableTags,
       title: 'Kijelölt szöveg tagek',
     );
-    if (tags == null || !mounted) {
+    if (!mounted) {
       return;
     }
-    _replaceRangeTags(target, tags);
     _focusNode.requestFocus();
   }
 
@@ -554,33 +556,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     return null;
   }
 
-  int _maxUnderlineLaneCount(List<NoteTaggedTextUnderlineRun> runs) {
-    var maxCount = 0;
-    for (final run in runs) {
-      if (run.colors.length > maxCount) {
-        maxCount = run.colors.length;
-      }
-    }
-    return maxCount;
-  }
-
-  StrutStyle? _editorStrutStyle(
-    TextStyle textStyle,
-    List<NoteTaggedTextUnderlineRun> runs,
-  ) {
-    final lineHeight = noteTaggedRangeLineHeightForUnderlineCount(
-      _maxUnderlineLaneCount(runs),
-    );
-    if (lineHeight == null) {
-      return null;
-    }
-    return StrutStyle(
-      fontSize: textStyle.fontSize,
-      height: lineHeight,
-      forceStrutHeight: false,
-    );
-  }
-
   double _visibleParagraphInset() {
     var level = 0;
     for (final style in _block.paragraphStyles) {
@@ -684,15 +659,10 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       color: Color(0xFF111827),
       fontSize: 16,
     );
-    final underlineRuns = noteTaggedTextUnderlineRuns(
-      text: _controller.text,
-      rangeTags: _block.rangeTags,
-    );
     final countMarkerRuns = noteTaggedTextCountMarkerRuns(
       text: _controller.text,
       rangeTags: _block.rangeTags,
     );
-    final editorStrutStyle = _editorStrutStyle(editorTextStyle, underlineRuns);
     final paragraphInset = _visibleParagraphInset();
     _scheduleTagGeometryRefresh();
     return Scaffold(
@@ -776,7 +746,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                             expands: true,
                             textAlignVertical: TextAlignVertical.top,
                             style: editorTextStyle,
-                            strutStyle: editorStrutStyle,
                             decoration: const InputDecoration(
                               border: InputBorder.none,
                               hintText: 'Írj valamit...',
@@ -788,41 +757,23 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                         Positioned.fill(
                           child: IgnorePointer(
                             child: SizedBox.expand(
-                              key: _underlineLayerKey,
+                              key: _tagOverlayKey,
                               child: CustomPaint(
                                 key: const ValueKey(
-                                  'note-text-range-underline-layer',
+                                  'note-text-range-count-marker-layer',
                                 ),
-                                foregroundPainter: NoteTaggedTextUnderlinePainter(
-                                  text: _controller.text,
-                                  runs: underlineRuns,
-                                  textStyle: editorTextStyle,
-                                  textDirection: Directionality.of(context),
-                                  scrollOffset: _textScrollOffset,
-                                  renderEditable: _tagRenderEditable,
-                                  editableOffset: _tagEditableOffset,
-                                ),
+                                foregroundPainter:
+                                    NoteTaggedTextCountMarkerPainter(
+                                      text: _controller.text,
+                                      runs: countMarkerRuns,
+                                      mode: _countMarkerMode,
+                                      textStyle: editorTextStyle,
+                                      textDirection: Directionality.of(context),
+                                      scrollOffset: _textScrollOffset,
+                                      renderEditable: _tagRenderEditable,
+                                      editableOffset: _tagEditableOffset,
+                                    ),
                               ),
-                            ),
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: CustomPaint(
-                              key: const ValueKey(
-                                'note-text-range-count-marker-layer',
-                              ),
-                              foregroundPainter:
-                                  NoteTaggedTextCountMarkerPainter(
-                                    text: _controller.text,
-                                    runs: countMarkerRuns,
-                                    mode: _countMarkerMode,
-                                    textStyle: editorTextStyle,
-                                    textDirection: Directionality.of(context),
-                                    scrollOffset: _textScrollOffset,
-                                    renderEditable: _tagRenderEditable,
-                                    editableOffset: _tagEditableOffset,
-                                  ),
                             ),
                           ),
                         ),

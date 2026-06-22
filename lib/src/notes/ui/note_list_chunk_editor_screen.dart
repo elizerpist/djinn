@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/tag_repository.dart';
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
@@ -12,12 +13,14 @@ class NoteListChunkEditorScreen extends StatefulWidget {
     required this.block,
     required this.onChanged,
     this.availableTags = const [],
+    this.tagRepository,
     this.onDelete,
   });
 
   final NoteBlock block;
   final ValueChanged<NoteBlock> onChanged;
   final List<NoteKnowledgeTag> availableTags;
+  final TagRepository? tagRepository;
   final VoidCallback? onDelete;
 
   @override
@@ -26,6 +29,8 @@ class NoteListChunkEditorScreen extends StatefulWidget {
 }
 
 class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
+  late final TagRepository _tagRepository =
+      widget.tagRepository ?? MemoryTagRepository();
   late NoteBlock _block;
   late List<NoteListItem> _items;
   late final TextEditingController _titleController;
@@ -124,17 +129,17 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
   }
 
   Future<void> _tagChunk() async {
-    final tags = await showTagManagerSheet(
+    await showTagManagerSheet(
       context,
       initialTags: _block.tags,
+      tagRepository: _tagRepository,
+      onChanged: (tags) {
+        setState(() => _block = _block.copyWith(tags: tags, clearIndex: true));
+        widget.onChanged(_block);
+      },
       availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Chunk tagjei',
     );
-    if (tags == null) {
-      return;
-    }
-    setState(() => _block = _block.copyWith(tags: tags, clearIndex: true));
-    widget.onChanged(_block);
   }
 
   void _deleteChunkTag(NoteKnowledgeTag tag) {
@@ -168,16 +173,14 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
   }
 
   Future<void> _tagItem(NoteListItem item) async {
-    final tags = await showTagManagerSheet(
+    await showTagManagerSheet(
       context,
       initialTags: item.tags,
+      tagRepository: _tagRepository,
+      onChanged: (tags) => _replaceItem(item.copyWith(tags: tags)),
       availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Listaelem tagjei',
     );
-    if (tags == null) {
-      return;
-    }
-    _replaceItem(item.copyWith(tags: tags));
   }
 
   bool get _selectedItemHasTags {
@@ -574,34 +577,24 @@ class _ListItemRow extends StatelessWidget {
                                 'note-list-item-tag-highlight-${item.id}',
                               ),
                         padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            TextFormField(
-                              key: ValueKey('note-list-item-${item.id}'),
-                              focusNode: focusNode,
-                              initialValue: item.text,
-                              autofocus: selected && item.text.isEmpty,
-                              minLines: 1,
-                              maxLines: null,
-                              keyboardType: TextInputType.text,
-                              textInputAction: TextInputAction.next,
-                              decoration: const InputDecoration(
-                                hintText: 'Listaelem',
-                                border: InputBorder.none,
-                              ),
-                              style: noteTaggedEditableTextStyle(item.tags),
-                              onTap: onSelect,
-                              onChanged: (value) =>
-                                  onChanged(item.copyWith(text: value)),
-                              onFieldSubmitted: (_) => onSubmit(),
-                            ),
-                            NoteSecondaryTagUnderlines(
-                              tags: item.tags,
-                              prefix: 'note-list-item-${item.id}',
-                            ),
-                          ],
+                        child: TextFormField(
+                          key: ValueKey('note-list-item-${item.id}'),
+                          focusNode: focusNode,
+                          initialValue: item.text,
+                          autofocus: selected && item.text.isEmpty,
+                          minLines: 1,
+                          maxLines: null,
+                          keyboardType: TextInputType.text,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            hintText: 'Listaelem',
+                            border: InputBorder.none,
+                          ),
+                          style: noteTaggedEditableTextStyle(item.tags),
+                          onTap: onSelect,
+                          onChanged: (value) =>
+                              onChanged(item.copyWith(text: value)),
+                          onFieldSubmitted: (_) => onSubmit(),
                         ),
                       ),
                     ),

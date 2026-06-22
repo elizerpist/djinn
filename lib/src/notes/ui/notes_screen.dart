@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -13,6 +14,7 @@ import '../../shared/chunks/chunk_validation_card.dart';
 import '../../shared/ui/draggable_bottom_card.dart';
 import '../data/note_chunk_builder.dart';
 import '../data/note_repository.dart';
+import '../data/tag_repository.dart';
 import '../models/note_document.dart';
 import '../models/note_folder.dart';
 import '../models/note_item.dart';
@@ -27,10 +29,12 @@ class NotesScreen extends StatefulWidget {
   const NotesScreen({
     super.key,
     required this.repository,
+    this.tagRepository,
     this.importNotesForTest,
   });
 
   final NoteRepository repository;
+  final TagRepository? tagRepository;
   final ImportNotesForTest? importNotesForTest;
 
   @override
@@ -38,6 +42,8 @@ class NotesScreen extends StatefulWidget {
 }
 
 class _NotesScreenState extends State<NotesScreen> {
+  late final TagRepository _tagRepository =
+      widget.tagRepository ?? MemoryTagRepository();
   List<NoteFolder> _folders = const [];
   List<NoteItem> _notes = const [];
   Set<String> _selectedNoteIds = <String>{};
@@ -171,6 +177,7 @@ class _NotesScreenState extends State<NotesScreen> {
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) => NoteEditorRoute(
           repository: widget.repository,
+          tagRepository: _tagRepository,
           initialNote: target,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -433,20 +440,43 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   Future<void> _showNoteTagDialog(NoteItem note) async {
-    final tags = await showTagManagerSheet(
+    Future<void>? pendingUpdate;
+    final closedTags = await showTagManagerSheet(
       context,
       initialTags: note.document.tags,
+      tagRepository: _tagRepository,
+      onChanged: (tags) {
+        final updatedDocument = note.document.copyWith(tags: tags);
+        setState(() {
+          _notes = [
+            for (final current in _notes)
+              if (current.id == note.id)
+                current.copyWithDocument(document: updatedDocument)
+              else
+                current,
+          ];
+        });
+        final update = widget.repository.updateNoteDocument(
+          note.id,
+          title: note.title,
+          document: updatedDocument,
+        );
+        pendingUpdate = update;
+        unawaited(update);
+      },
       availableTags: note.document.knownTags,
       title: 'Jegyzet tagek',
     );
-    if (tags == null) {
+    if (closedTags == null || !mounted) {
       return;
     }
-    await widget.repository.updateNoteDocument(
-      note.id,
-      title: note.title,
-      document: note.document.copyWith(tags: tags),
-    );
+    final update = pendingUpdate;
+    if (update != null) {
+      await update;
+    }
+    if (!mounted) {
+      return;
+    }
     _exitSelection();
     await _load();
   }

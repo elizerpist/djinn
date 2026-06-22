@@ -160,7 +160,9 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    expect(find.byKey(const ValueKey('tag-manager-save')), findsNothing);
+    expect(find.byKey(const ValueKey('tag-manager-type')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('tag-manager-close')));
     await tester.pumpAndSettle();
 
     final saved = (await repository.listNotes()).single;

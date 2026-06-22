@@ -384,7 +384,7 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'súlyos');
     await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.tap(find.byKey(const ValueKey('tag-manager-close')));
     await tester.pumpAndSettle();
 
     expect(latest, isNotNull);
@@ -432,7 +432,7 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'igen ág');
     await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.tap(find.byKey(const ValueKey('tag-manager-close')));
     await tester.pumpAndSettle();
 
     expect(latest, isNotNull);

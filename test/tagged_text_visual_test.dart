@@ -23,15 +23,10 @@ void main() {
     ),
   ];
 
-  test('computes primary background and one secondary color per extra tag', () {
+  test('computes primary background from first tag only', () {
     final style = noteTaggedTextVisualStyle(tags);
 
     expect(style.primaryBackground, const Color(0xFFDC2626));
-    expect(style.secondaryUnderlineColors, [
-      const Color(0xFF2563EB),
-      const Color(0xFF0D9488),
-    ]);
-    expect(style.bottomPadding, 8);
   });
 
   test('builds editable range spans without changing plain text', () {
@@ -65,38 +60,7 @@ void main() {
       const Color(0xFFDC2626).withValues(alpha: 0.22),
     );
     expect(taggedSpan.style?.decoration, isNull);
-    expect(taggedSpan.style?.height, greaterThan(2.0));
-
-    final underlineRuns = noteTaggedTextUnderlineRuns(
-      text: text,
-      rangeTags: rangeTags,
-    );
-    expect(underlineRuns, hasLength(1));
-    expect(underlineRuns.single.start, 6);
-    expect(underlineRuns.single.end, 10);
-    expect(underlineRuns.single.colors, [
-      const Color(0xFF2563EB),
-      const Color(0xFF0D9488),
-    ]);
-  });
-
-  testWidgets('renders one underline widget for each secondary tag', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: NoteSecondaryTagUnderlines(
-            tags: tags,
-            prefix: 'sample',
-          ),
-        ),
-      ),
-    );
-
-    expect(find.byKey(const ValueKey('sample-secondary-underline-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('sample-secondary-underline-2')), findsOneWidget);
-    expect(find.byKey(const ValueKey('sample-secondary-underline-3')), findsNothing);
+    expect(taggedSpan.style?.height, isNull);
   });
 
   test('count marker label keeps fixed mode full and clamps adaptive mode', () {

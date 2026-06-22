@@ -98,7 +98,7 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.tap(find.byKey(const ValueKey('tag-manager-close')));
     await tester.pumpAndSettle();
 
     expect(latest, isNotNull);
@@ -235,7 +235,7 @@ void main() {
     },
   );
 
-  testWidgets('list item secondary tags render as underline styling', (
+  testWidgets('list item secondary tags do not render underline styling', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -284,7 +284,7 @@ void main() {
       find.byKey(
         const ValueKey('note-list-item-item-1-secondary-underline-1'),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(

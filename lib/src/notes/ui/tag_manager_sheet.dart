@@ -1,10 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../data/tag_repository.dart';
 import '../models/note_document.dart';
+import '../models/note_tag_registry.dart';
+
+const _allFolderFilter = '__all__';
+const _unfiledFolderFilter = '__unfiled__';
 
 Future<List<NoteKnowledgeTag>?> showTagManagerSheet(
   BuildContext context, {
   required List<NoteKnowledgeTag> initialTags,
+  TagRepository? tagRepository,
+  ValueChanged<List<NoteKnowledgeTag>>? onChanged,
   List<NoteKnowledgeTag> availableTags = const [],
   bool singleSelection = false,
   String title = 'Tagek',
@@ -16,6 +25,8 @@ Future<List<NoteKnowledgeTag>?> showTagManagerSheet(
     builder: (context) => _TagManagerSheet(
       initialTags: initialTags,
       availableTags: availableTags,
+      tagRepository: tagRepository ?? MemoryTagRepository(),
+      onChanged: onChanged,
       singleSelection: singleSelection,
       title: title,
     ),
@@ -26,12 +37,16 @@ class _TagManagerSheet extends StatefulWidget {
   const _TagManagerSheet({
     required this.initialTags,
     required this.availableTags,
+    required this.tagRepository,
+    required this.onChanged,
     required this.singleSelection,
     required this.title,
   });
 
   final List<NoteKnowledgeTag> initialTags;
   final List<NoteKnowledgeTag> availableTags;
+  final TagRepository tagRepository;
+  final ValueChanged<List<NoteKnowledgeTag>>? onChanged;
   final bool singleSelection;
   final String title;
 
@@ -40,30 +55,20 @@ class _TagManagerSheet extends StatefulWidget {
 }
 
 class _TagManagerSheetState extends State<_TagManagerSheet> {
-  late final Map<String, NoteKnowledgeTag> _registry;
-  late List<NoteKnowledgeTag> _tags;
-  late List<NoteKnowledgeTag> _availableTags;
   late final TextEditingController _labelController;
-  String _type = NoteKnowledgeTagTypes.topic;
-  int _colorValue = noteTagColorSlots.first;
-  String? _editingKey;
+  List<NoteKnowledgeTag> _selectedTags = const [];
+  List<NoteTagDefinition> _registryTags = const [];
+  List<NoteTagFolder> _folders = const [];
+  String _folderFilter = _allFolderFilter;
+  int _colorSlotId = 0;
+  String? _editingTagId;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _registry = <String, NoteKnowledgeTag>{};
-    _tags = [...widget.initialTags];
-    for (final tag in [...widget.availableTags, ...widget.initialTags]) {
-      _rememberTag(tag);
-    }
-    _availableTags = _sortedRegisteredTags();
     _labelController = TextEditingController();
-    if (_tags.isNotEmpty) {
-      _type = NoteKnowledgeTagTypes.normalize(_tags.last.type);
-      _colorValue = _tags.last.resolvedColorValue;
-    } else {
-      _colorValue = _nextUnusedColorValue();
-    }
+    unawaited(_load());
   }
 
   @override
@@ -72,246 +77,606 @@ class _TagManagerSheetState extends State<_TagManagerSheet> {
     super.dispose();
   }
 
-  void _addTag() {
+  Future<void> _load() async {
+    await widget.tagRepository.rememberEmbeddedTags(widget.availableTags);
+    final selected = await widget.tagRepository.rememberEmbeddedTags(
+      widget.initialTags,
+    );
+    final tags = await widget.tagRepository.listTags();
+    final folders = await widget.tagRepository.listFolders();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedTags = selected;
+      _registryTags = tags;
+      _folders = folders;
+      _colorSlotId = _nextUnusedColorSlotId();
+      _loading = false;
+    });
+  }
+
+  Future<void> _refreshRegistry() async {
+    final tags = await widget.tagRepository.listTags();
+    final folders = await widget.tagRepository.listFolders();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _registryTags = tags;
+      _folders = folders;
+      if (_folderFilter != _allFolderFilter &&
+          _folderFilter != _unfiledFolderFilter &&
+          !_folders.any((folder) => folder.id == _folderFilter)) {
+        _folderFilter = _allFolderFilter;
+      }
+    });
+  }
+
+  void _emitSelection() {
+    widget.onChanged?.call(List.unmodifiable(_selectedTags));
+  }
+
+  bool _isSelected(NoteTagDefinition tag) {
+    return _selectedTags.any((selected) => _sameTag(selected, tag));
+  }
+
+  bool _sameTag(NoteKnowledgeTag selected, NoteTagDefinition tag) {
+    final selectedId = selected.id?.trim();
+    if (selectedId != null && selectedId.isNotEmpty) {
+      return selectedId == tag.id;
+    }
+    return normalizeNoteTagLabel(selected.label) == tag.normalizedLabel;
+  }
+
+  void _toggleTag(NoteTagDefinition tag) {
+    final selected = _isSelected(tag);
+    setState(() {
+      if (selected) {
+        _selectedTags = _selectedTags
+            .where((existing) => !_sameTag(existing, tag))
+            .toList(growable: false);
+      } else if (widget.singleSelection) {
+        _selectedTags = [tag.toKnowledgeTag()];
+      } else {
+        _selectedTags = [
+          ..._selectedTags.where((existing) => !_sameTag(existing, tag)),
+          tag.toKnowledgeTag(),
+        ];
+      }
+    });
+    _emitSelection();
+  }
+
+  Future<void> _addOrUpdateTag() async {
     final label = _labelController.text.trim();
     if (label.isEmpty) {
       return;
     }
-    final tag = NoteKnowledgeTag(
-      type: _type,
+    final folderId = _newTagFolderId;
+    final definition = await widget.tagRepository.upsertTag(
+      id: _editingTagId,
       label: label,
-      colorValue: _colorValue,
+      colorSlotId: _colorSlotId,
+      folderId: folderId,
     );
-    final editedKey = _editingKey;
-    if (editedKey != null) {
-      _registry.remove(editedKey);
+    await _refreshRegistry();
+    if (!mounted) {
+      return;
     }
-    _rememberTag(tag);
     setState(() {
-      _availableTags = _sortedRegisteredTags();
+      final asTag = definition.toKnowledgeTag();
       if (widget.singleSelection) {
-        _tags = [tag];
+        _selectedTags = [asTag];
       } else {
-        _tags = [
-          ..._tags.where((existing) => existing.metadataText != tag.metadataText && existing.metadataText != editedKey),
-          tag,
+        _selectedTags = [
+          ..._selectedTags.where((existing) => !_sameTag(existing, definition)),
+          asTag,
         ];
       }
       _labelController.clear();
-      _editingKey = null;
-      _colorValue = _nextUnusedColorValue();
+      _editingTagId = null;
+      _colorSlotId = _nextUnusedColorSlotId();
     });
+    _emitSelection();
   }
 
-  void _removeTag(NoteKnowledgeTag tag) {
-    setState(() {
-      _tags = _tags
-          .where((existing) => existing.metadataText != tag.metadataText)
-          .toList(growable: false);
-    });
+  String? get _newTagFolderId {
+    if (_folderFilter == _allFolderFilter ||
+        _folderFilter == _unfiledFolderFilter) {
+      return null;
+    }
+    return _folderFilter;
   }
 
-  void _toggleAvailableTag(NoteKnowledgeTag tag, bool selected) {
+  void _editTag(NoteTagDefinition tag) {
     setState(() {
-      if (widget.singleSelection) {
-        _tags = selected ? [tag] : const [];
-        return;
-      }
-      if (selected) {
-        _tags = [
-          ..._tags.where((existing) => existing.metadataText != tag.metadataText),
-          tag,
-        ];
-      } else {
-        _tags = _tags.where((existing) => existing.metadataText != tag.metadataText).toList(growable: false);
-      }
-    });
-  }
-
-  void _editTag(NoteKnowledgeTag tag) {
-    setState(() {
-      _editingKey = tag.metadataText;
-      _type = NoteKnowledgeTagTypes.normalize(tag.type);
-      _colorValue = tag.resolvedColorValue;
+      _editingTagId = tag.id;
       _labelController.text = tag.label;
-      _labelController.selection = TextSelection.collapsed(offset: _labelController.text.length);
+      _labelController.selection = TextSelection.collapsed(
+        offset: _labelController.text.length,
+      );
+      _colorSlotId = tag.colorSlotId;
     });
   }
 
-  void _deleteAvailableTag(NoteKnowledgeTag tag) {
+  Future<void> _deleteTag(NoteTagDefinition tag) async {
+    await widget.tagRepository.deleteTag(tag.id);
+    if (!mounted) {
+      return;
+    }
     setState(() {
-      _registry.remove(tag.metadataText);
-      _availableTags = _sortedRegisteredTags();
-      _tags = _tags.where((existing) => existing.metadataText != tag.metadataText).toList(growable: false);
-      if (_editingKey == tag.metadataText) {
-        _editingKey = null;
+      _selectedTags = _selectedTags
+          .where((selected) => !_sameTag(selected, tag))
+          .toList(growable: false);
+      if (_editingTagId == tag.id) {
+        _editingTagId = null;
         _labelController.clear();
       }
     });
+    _emitSelection();
+    await _refreshRegistry();
   }
 
-  bool _isSelected(NoteKnowledgeTag tag) {
-    return _tags.any((selected) => selected.metadataText == tag.metadataText);
-  }
-
-  void _rememberTag(NoteKnowledgeTag tag) {
-    if (tag.metadataText.isEmpty) {
+  Future<void> _createFolder() async {
+    final controller = TextEditingController();
+    final label = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Új mappa'),
+        content: TextField(
+          key: const ValueKey('tag-folder-name-field'),
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Mappa neve',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Létrehozás'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    final trimmed = label?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
       return;
     }
-    _registry[tag.metadataText] = tag;
+    final folder = await widget.tagRepository.createFolder(trimmed);
+    await _refreshRegistry();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _folderFilter = folder.id);
   }
 
-  List<NoteKnowledgeTag> _sortedRegisteredTags() {
-    final tags = _registry.values.toList(growable: false);
-    tags.sort((a, b) => a.metadataText.compareTo(b.metadataText));
-    return tags;
+  Future<void> _moveTagToFolder(NoteTagDefinition tag, String? folderId) async {
+    final updated = await widget.tagRepository.setTagFolder(tag.id, folderId);
+    await _refreshRegistry();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedTags = [
+        for (final selected in _selectedTags)
+          if (_sameTag(selected, tag)) updated.toKnowledgeTag() else selected,
+      ];
+    });
+    _emitSelection();
   }
 
-  int _nextUnusedColorValue() {
-    final used = <int>{
-      for (final tag in _registry.values) tag.resolvedColorValue,
-      for (final tag in _tags) tag.resolvedColorValue,
+  int _nextUnusedColorSlotId() {
+    final used = {
+      for (final tag in _registryTags) tag.colorSlotId,
+      for (final tag in _selectedTags)
+        tag.colorSlotId ??
+            noteTagColorSlotIdForValue(tag.colorValue, fallback: 0),
     };
-    for (final colorValue in noteTagColorSlots) {
-      if (!used.contains(colorValue)) {
-        return colorValue;
+    for (var index = 0; index < noteTagColorSlots.length; index += 1) {
+      if (!used.contains(index)) {
+        return index;
       }
     }
-    return noteTagColorSlots[_registry.length % noteTagColorSlots.length];
+    return _registryTags.length % noteTagColorSlots.length;
+  }
+
+  List<NoteTagDefinition> get _filteredTags {
+    return _registryTags.where((tag) {
+      if (_folderFilter == _allFolderFilter) {
+        return true;
+      }
+      if (_folderFilter == _unfiledFolderFilter) {
+        return tag.folderId == null || tag.folderId!.trim().isEmpty;
+      }
+      return tag.folderId == _folderFilter;
+    }).toList(growable: false);
   }
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
     final theme = Theme.of(context);
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final sheetMaxHeight = mediaQuery.size.height - mediaQuery.padding.top - 8;
+    final visibleHeight = sheetMaxHeight - mediaQuery.viewInsets.bottom;
+    final minHeight = sheetMaxHeight < 120 ? sheetMaxHeight : 120.0;
+    final maxHeight = visibleHeight.clamp(minHeight, sheetMaxHeight).toDouble();
     return Padding(
       key: const ValueKey('tag-manager-sheet'),
-      padding: EdgeInsets.fromLTRB(20, 16, 20, bottomInset + 16),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.title,
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
-                  tooltip: 'Bezárás',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final tag in _tags)
-                  InputChip(
-                    key: ValueKey('tag-chip-${tag.metadataText}'),
-                    avatar: CircleAvatar(backgroundColor: Color(tag.resolvedColorValue)),
-                    label: Text(tag.metadataText),
-                    onDeleted: () => _removeTag(tag),
-                  ),
-              ],
-            ),
-            if (_availableTags.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Text(
-                'Mentett tagek',
-                style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final tag in _availableTags)
-                    _SavedTagChip(
-                      key: ValueKey('tag-saved-chip-${tag.metadataText}'),
-                      tag: tag,
-                      selected: _isSelected(tag),
-                      onSelected: (selected) => _toggleAvailableTag(tag, selected),
-                      onEdit: () => _editTag(tag),
-                      onDelete: () => _deleteAvailableTag(tag),
+      padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: SizedBox(
+          height: maxHeight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                ],
+                    IconButton(
+                      key: const ValueKey('tag-manager-close'),
+                      onPressed: () =>
+                          Navigator.of(context).pop(_selectedTags),
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Bezárás',
+                    ),
+                  ],
+                ),
+              ),
+              _FolderBar(
+                folders: _folders,
+                selectedFilter: _folderFilter,
+                onSelected: (value) => setState(() => _folderFilter = value),
+                onCreateFolder: _createFolder,
+                onMoveTag: _moveTagToFolder,
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : SingleChildScrollView(
+                        key: const ValueKey('tag-manager-pill-scroll'),
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                        child: Wrap(
+                          key: const ValueKey('tag-manager-pill-area'),
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final tag in _filteredTags)
+                              _TagPill(
+                                key: ValueKey('tag-pill-${tag.id}'),
+                                tag: tag,
+                                selected: _isSelected(tag),
+                                onSelected: () => _toggleTag(tag),
+                                onEdit: () => _editTag(tag),
+                                onDelete: () => unawaited(_deleteTag(tag)),
+                              ),
+                          ],
+                        ),
+                      ),
+              ),
+              const Divider(height: 1),
+              _TagEditor(
+                labelController: _labelController,
+                colorSlotId: _colorSlotId,
+                editing: _editingTagId != null,
+                onColorChanged: (value) => setState(() => _colorSlotId = value),
+                onSubmit: _addOrUpdateTag,
               ),
             ],
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              key: const ValueKey('tag-manager-type'),
-              initialValue: _type,
-              decoration: const InputDecoration(
-                labelText: 'Típus',
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                for (final type in NoteKnowledgeTagTypes.values)
-                  DropdownMenuItem(value: type, child: Text(type)),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _type = NoteKnowledgeTagTypes.normalize(value));
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const ValueKey('tag-manager-name'),
-              controller: _labelController,
-              textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(
-                labelText: 'Név',
-                hintText: 'pl. légzési elégtelenség, súlyos, terápia',
-                border: OutlineInputBorder(),
-              ),
-              onSubmitted: (_) => _addTag(),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (var index = 0; index < noteTagColorSlots.length; index++)
-                  _ColorSlotButton(
-                    key: ValueKey('tag-color-slot-$index'),
-                    colorValue: noteTagColorSlots[index],
-                    selected: _colorValue == noteTagColorSlots[index],
-                    onTap: () => setState(() => _colorValue = noteTagColorSlots[index]),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    key: const ValueKey('tag-manager-add'),
-                    onPressed: _addTag,
-                    icon: const Icon(Icons.add),
-                    label: Text(_editingKey == null ? 'Hozzáadás' : 'Frissítés'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    key: const ValueKey('tag-manager-save'),
-                    onPressed: () => Navigator.of(context).pop(_tags),
-                    icon: const Icon(Icons.check),
-                    label: const Text('Mentés'),
-                  ),
-                ),
-              ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FolderBar extends StatelessWidget {
+  const _FolderBar({
+    required this.folders,
+    required this.selectedFilter,
+    required this.onSelected,
+    required this.onCreateFolder,
+    required this.onMoveTag,
+  });
+
+  final List<NoteTagFolder> folders;
+  final String selectedFilter;
+  final ValueChanged<String> onSelected;
+  final VoidCallback onCreateFolder;
+  final Future<void> Function(
+    NoteTagDefinition tag,
+    String? folderId,
+  ) onMoveTag;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      key: const ValueKey('tag-folder-bar'),
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+      child: Row(
+        children: [
+          _FolderChip(
+            key: const ValueKey('tag-folder-all'),
+            label: 'Összes',
+            selected: selectedFilter == _allFolderFilter,
+            onTap: () => onSelected(_allFolderFilter),
+          ),
+          const SizedBox(width: 8),
+          _FolderChip(
+            key: const ValueKey('tag-folder-none'),
+            label: 'Mappa nélkül',
+            selected: selectedFilter == _unfiledFolderFilter,
+            onTap: () => onSelected(_unfiledFolderFilter),
+            onAcceptTag: (tag) => onMoveTag(tag, null),
+          ),
+          const SizedBox(width: 8),
+          _FolderChip(
+            key: const ValueKey('tag-folder-add'),
+            label: 'Új mappa',
+            selected: false,
+            icon: Icons.add,
+            onTap: onCreateFolder,
+          ),
+          for (final folder in folders) ...[
+            const SizedBox(width: 8),
+            _FolderChip(
+              key: ValueKey('tag-folder-${folder.id}'),
+              label: folder.label,
+              selected: selectedFilter == folder.id,
+              onTap: () => onSelected(folder.id),
+              onAcceptTag: (tag) => onMoveTag(tag, folder.id),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FolderChip extends StatelessWidget {
+  const _FolderChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+    this.onAcceptTag,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final Future<void> Function(NoteTagDefinition tag)? onAcceptTag;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final chip = ActionChip(
+      avatar: icon == null ? null : Icon(icon, size: 16),
+      label: Text(label),
+      labelStyle: TextStyle(
+        color: selected
+            ? theme.colorScheme.onPrimary
+            : theme.colorScheme.onSurface,
+        fontWeight: FontWeight.w700,
+      ),
+      backgroundColor: selected
+          ? theme.colorScheme.primary
+          : theme.colorScheme.surfaceContainerHighest,
+      side: BorderSide(
+        color: selected
+            ? theme.colorScheme.primary
+            : theme.colorScheme.outlineVariant,
+      ),
+      onPressed: onTap,
+    );
+    final accept = onAcceptTag;
+    if (accept == null) {
+      return chip;
+    }
+    return DragTarget<NoteTagDefinition>(
+      onWillAcceptWithDetails: (_) => true,
+      onAcceptWithDetails: (details) => unawaited(accept(details.data)),
+      builder: (context, candidateData, rejectedData) {
+        if (candidateData.isEmpty) {
+          return chip;
+        }
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: [
+              BoxShadow(
+                color: theme.colorScheme.primary.withValues(alpha: 0.25),
+                blurRadius: 10,
+              ),
+            ],
+          ),
+          child: chip,
+        );
+      },
+    );
+  }
+}
+
+class _TagPill extends StatelessWidget {
+  const _TagPill({
+    super.key,
+    required this.tag,
+    required this.selected,
+    required this.onSelected,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final NoteTagDefinition tag;
+  final bool selected;
+  final VoidCallback onSelected;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Color(tag.colorValue);
+    final opacity = selected ? 1.0 : 0.42;
+    final pill = Opacity(
+      opacity: opacity,
+      child: Material(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onSelected,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 5, 4, 5),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 160),
+                  child: Text(
+                    tag.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                _PillIconButton(
+                  key: ValueKey('tag-pill-edit-${tag.id}'),
+                  icon: Icons.edit,
+                  tooltip: 'Szerkesztés',
+                  onTap: onEdit,
+                ),
+                _PillIconButton(
+                  key: ValueKey('tag-pill-delete-${tag.id}'),
+                  icon: Icons.close,
+                  tooltip: 'Törlés',
+                  onTap: onDelete,
+                ),
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+    return LongPressDraggable<NoteTagDefinition>(
+      data: tag,
+      feedback: Material(
+        color: Colors.transparent,
+        child: Transform.scale(scale: 1.04, child: pill),
+      ),
+      childWhenDragging: Opacity(opacity: 0.2, child: pill),
+      child: pill,
+    );
+  }
+}
+
+class _PillIconButton extends StatelessWidget {
+  const _PillIconButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkResponse(
+        radius: 14,
+        onTap: onTap,
+        child: Icon(icon, size: 15, color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _TagEditor extends StatelessWidget {
+  const _TagEditor({
+    required this.labelController,
+    required this.colorSlotId,
+    required this.editing,
+    required this.onColorChanged,
+    required this.onSubmit,
+  });
+
+  final TextEditingController labelController;
+  final int colorSlotId;
+  final bool editing;
+  final ValueChanged<int> onColorChanged;
+  final Future<void> Function() onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      key: const ValueKey('tag-manager-editor'),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const ValueKey('tag-manager-name'),
+            controller: labelController,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'Név',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (_) => unawaited(onSubmit()),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (var index = 0; index < noteTagColorSlots.length; index++)
+                _ColorSlotButton(
+                  key: ValueKey('tag-color-slot-$index'),
+                  colorValue: noteTagColorSlots[index],
+                  selected: colorSlotId == index,
+                  onTap: () => onColorChanged(index),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            key: const ValueKey('tag-manager-add'),
+            onPressed: () => unawaited(onSubmit()),
+            icon: Icon(editing ? Icons.check : Icons.add),
+            label: Text(editing ? 'Tag frissítése' : 'Új tag hozzáadása'),
+          ),
+        ],
       ),
     );
   }
@@ -342,63 +707,15 @@ class _ColorSlotButton extends StatelessWidget {
           color: color,
           shape: BoxShape.circle,
           border: Border.all(
-            color: selected ? Theme.of(context).colorScheme.onSurface : Colors.transparent,
+            color: selected
+                ? Theme.of(context).colorScheme.onSurface
+                : Colors.transparent,
             width: selected ? 3 : 1,
           ),
         ),
-        child: selected ? const Icon(Icons.check, color: Colors.white, size: 18) : null,
-      ),
-    );
-  }
-}
-
-class _SavedTagChip extends StatelessWidget {
-  const _SavedTagChip({
-    super.key,
-    required this.tag,
-    required this.selected,
-    required this.onSelected,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  final NoteKnowledgeTag tag;
-  final bool selected;
-  final ValueChanged<bool> onSelected;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: selected ? Color(tag.resolvedColorValue).withValues(alpha: 0.12) : Colors.transparent,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FilterChip(
-            avatar: CircleAvatar(backgroundColor: Color(tag.resolvedColorValue)),
-            label: Text(tag.metadataText),
-            selected: selected,
-            onSelected: onSelected,
-          ),
-          IconButton(
-            tooltip: 'Tag szerkesztése',
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined, size: 16),
-          ),
-          IconButton(
-            tooltip: 'Tag törlése',
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-            onPressed: onDelete,
-            icon: const Icon(Icons.close, size: 16),
-          ),
-        ],
+        child: selected
+            ? const Icon(Icons.check, color: Colors.white, size: 18)
+            : null,
       ),
     );
   }

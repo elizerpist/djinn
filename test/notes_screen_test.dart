@@ -153,21 +153,19 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('tag-manager-type')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('type').last);
-    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('tag-manager-type')), findsNothing);
+    expect(find.byKey(const ValueKey('tag-manager-save')), findsNothing);
     await tester.enterText(find.byKey(const ValueKey('tag-manager-name')), 'terápia');
     await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.tap(find.byKey(const ValueKey('tag-manager-close')));
     await tester.pumpAndSettle();
 
     final updated = (await repository.listNotes()).single;
     final document = NoteDocument.fromPayload(updated.payloadJson);
     expect(document.tags.map((tag) => '${tag.type}:${tag.label}'), [
-      'topic:légzési elégtelenség',
-      'type:terápia',
+      'custom:légzési elégtelenség',
+      'custom:terápia',
     ]);
   });
 

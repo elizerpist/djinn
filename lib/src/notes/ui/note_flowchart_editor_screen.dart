@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../ai/ai_client.dart';
 import '../../debug/debug_console.dart';
+import '../data/tag_repository.dart';
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
@@ -16,12 +17,14 @@ class NoteFlowchartEditorScreen extends StatefulWidget {
     super.key,
     required this.block,
     this.availableTags = const [],
+    this.tagRepository,
     this.onChanged,
     this.onDelete,
   });
 
   final NoteBlock block;
   final List<NoteKnowledgeTag> availableTags;
+  final TagRepository? tagRepository;
   final ValueChanged<NoteBlock>? onChanged;
   final VoidCallback? onDelete;
 
@@ -33,6 +36,9 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
   static const Size _minCanvasSize = Size(32000, 24000);
   static const double _canvasMargin = 8000;
   static const double _gridStep = 32;
+
+  late final TagRepository _tagRepository =
+      widget.tagRepository ?? MemoryTagRepository();
 
   final GlobalKey _canvasKey = GlobalKey();
   final GlobalKey _bodyStackKey = GlobalKey();
@@ -118,17 +124,17 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
   }
 
   Future<void> _tagChunk() async {
-    final tags = await showTagManagerSheet(
+    await showTagManagerSheet(
       context,
       initialTags: _block.tags,
+      tagRepository: _tagRepository,
+      onChanged: (tags) {
+        setState(() => _block = _block.copyWith(tags: tags, clearIndex: true));
+        widget.onChanged?.call(_block);
+      },
       availableTags: [...widget.availableTags, ..._block.knownTags],
       title: 'Chunk tagjei',
     );
-    if (tags == null) {
-      return;
-    }
-    setState(() => _block = _block.copyWith(tags: tags, clearIndex: true));
-    widget.onChanged?.call(_block);
   }
 
   void _deleteChunkTag(NoteKnowledgeTag tag) {
@@ -152,17 +158,19 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
       );
       return;
     }
-    final tags = await showTagManagerSheet(
+    await showTagManagerSheet(
       context,
       initialTags: _tagsForTarget(target),
+      tagRepository: _tagRepository,
+      onChanged: (tags) => _applyTargetTags(target, tags),
       availableTags: [...widget.availableTags, ..._block.knownTags],
       title: target.kind == NoteTagTargetKind.flowchartEdge
           ? 'Flowchart kapcsolat tagjei'
           : 'Flowchart box tagjei',
     );
-    if (tags == null) {
-      return;
-    }
+  }
+
+  void _applyTargetTags(NoteTagTarget target, List<NoteKnowledgeTag> tags) {
     setState(() {
       _block = _block.copyWith(
         scopedTags: [

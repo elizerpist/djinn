@@ -13,6 +13,7 @@ import '../../knowledge/data/pdf_import_service.dart';
 import '../../knowledge/models/knowledge_document.dart';
 import '../../knowledge/ui/knowledge_base_screen.dart';
 import '../../notes/data/note_repository.dart';
+import '../../notes/data/tag_repository.dart';
 import '../../notes/ui/notes_screen.dart';
 import '../../settings/data/api_key_store.dart';
 import '../../settings/models/app_settings.dart';
@@ -30,6 +31,7 @@ class MainScreen extends StatefulWidget {
     required this.chatService,
     required this.knowledgeRepository,
     required this.noteRepository,
+    this.tagRepository,
     required this.pdfImportService,
     required this.refreshKnowledgeReadiness,
     required this.apiKeyStore,
@@ -47,6 +49,7 @@ class MainScreen extends StatefulWidget {
   final ChatService chatService;
   final KnowledgeDocumentRepository knowledgeRepository;
   final NoteRepository noteRepository;
+  final TagRepository? tagRepository;
   final PdfImportService pdfImportService;
   final Future<KnowledgeBaseState> Function() refreshKnowledgeReadiness;
   final ApiKeyStore apiKeyStore;
@@ -65,6 +68,8 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  late final TagRepository _tagRepository =
+      widget.tagRepository ?? MemoryTagRepository();
   List<ChatConversation> _conversations = const [];
   AppDestinationId _selectedDestination = AppDestinationId.chat;
   final Map<AppDestinationId, Widget> _destinationBodyCache =
@@ -197,7 +202,10 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildDestinationBody(AppDestinationId destination) {
     return switch (destination) {
-      AppDestinationId.notes => NotesScreen(repository: widget.noteRepository),
+      AppDestinationId.notes => NotesScreen(
+        repository: widget.noteRepository,
+        tagRepository: _tagRepository,
+      ),
       AppDestinationId.knowledge => KnowledgeBaseScreen(
         repository: widget.knowledgeRepository,
         importService: widget.pdfImportService,

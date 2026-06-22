@@ -255,7 +255,7 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.tap(find.byKey(const ValueKey('tag-manager-close')));
     await tester.pumpAndSettle();
 
     expect(latest?.text, 'Alpha Beta Gamma');
@@ -269,7 +269,7 @@ void main() {
     );
   });
 
-  testWidgets('range tags paint first tag as background and extras as underlines', (
+  testWidgets('range tags paint first tag background and no secondary underlines', (
     tester,
   ) async {
     await _pumpTextChunkEditor(
@@ -314,7 +314,7 @@ void main() {
       find.byKey(const ValueKey('note-text-plain-field')),
     );
     expect(field.controller?.text, 'Alpha Beta Gamma');
-    expect(field.strutStyle?.height, greaterThan(2.0));
+    expect(field.strutStyle?.height, isNull);
     final span = field.controller!.buildTextSpan(
       context: tester.element(
         find.byKey(const ValueKey('note-text-plain-field')),
@@ -330,21 +330,14 @@ void main() {
       const Color(0xFFDC2626).withValues(alpha: 0.22),
     );
     expect(taggedSpan.style?.decoration, isNull);
-
-    final underlinePaint = tester.widget<CustomPaint>(
+    expect(taggedSpan.style?.height, isNull);
+    expect(
       find.byKey(const ValueKey('note-text-range-underline-layer')),
+      findsNothing,
     );
-    final painter = underlinePaint.foregroundPainter;
-    expect(painter, isA<NoteTaggedTextUnderlinePainter>());
-    final typedPainter = painter as NoteTaggedTextUnderlinePainter;
-    expect(typedPainter.runs, hasLength(1));
-    expect(typedPainter.runs.single.colors, [
-      const Color(0xFF2563EB),
-      const Color(0xFF0D9488),
-    ]);
-    expect(typedPainter.renderEditable, isNotNull);
     expect(DebugConsole.allText, contains('[TextChunkVisual]'));
-    expect(DebugConsole.allText, contains('runs=[6-10/u2]'));
+    expect(DebugConsole.allText, contains('countMarkers=[6-10/x3]'));
+    expect(DebugConsole.allText, isNot(contains('runs=[6-10/u2]')));
   });
 
   testWidgets('overflow menu switches tag count corner marker modes', (
@@ -461,7 +454,7 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('tag-manager-save')));
+    await tester.tap(find.byKey(const ValueKey('tag-manager-close')));
     await tester.pumpAndSettle();
 
     expect(latest?.tags.map((tag) => tag.label), ['fontos']);

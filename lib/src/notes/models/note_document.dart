@@ -80,23 +80,36 @@ class NoteKnowledgeTagTypes {
 
 class NoteKnowledgeTag {
   const NoteKnowledgeTag({
+    this.id,
     required this.type,
     required this.label,
     this.colorValue,
+    this.colorSlotId,
+    this.folderId,
   });
 
+  final String? id;
   final String type;
   final String label;
   final int? colorValue;
+  final int? colorSlotId;
+  final String? folderId;
 
   factory NoteKnowledgeTag.fromJson(Object? value) {
     if (value is Map) {
       return NoteKnowledgeTag(
+        id: value['id']?.toString().trim().isNotEmpty == true
+            ? value['id']?.toString().trim()
+            : null,
         type: NoteKnowledgeTagTypes.normalize(value['type']?.toString()),
         label: value['label']?.toString().trim() ?? '',
         colorValue: _tagColorFromJson(
           value['colorValue'] ?? value['color'] ?? value['colorHex'],
         ),
+        colorSlotId: _tagIntFromJson(value['colorSlotId']),
+        folderId: value['folderId']?.toString().trim().isNotEmpty == true
+            ? value['folderId']?.toString().trim()
+            : null,
       );
     }
     return NoteKnowledgeTag.parse(value?.toString() ?? '');
@@ -143,15 +156,50 @@ class NoteKnowledgeTag {
   }
 
   int get resolvedColorValue {
+    final slotId = colorSlotId;
+    if (slotId != null) {
+      final bounded = slotId.clamp(0, noteTagColorSlots.length - 1).toInt();
+      return noteTagColorSlots[bounded];
+    }
     return colorValue ?? _stableTagColorValue(metadataText);
   }
 
   Map<String, Object?> toJson() {
+    final trimmedId = id?.trim();
+    final trimmedFolderId = folderId?.trim();
     return {
+      if (trimmedId != null && trimmedId.isNotEmpty) 'id': trimmedId,
       'type': NoteKnowledgeTagTypes.normalize(type),
       'label': label.trim(),
+      if (colorSlotId != null) 'colorSlotId': colorSlotId,
+      if (trimmedFolderId != null && trimmedFolderId.isNotEmpty)
+        'folderId': trimmedFolderId,
       if (colorValue != null) 'colorValue': colorValue,
     };
+  }
+
+  NoteKnowledgeTag copyWith({
+    String? id,
+    bool clearId = false,
+    String? type,
+    String? label,
+    int? colorValue,
+    bool clearColorValue = false,
+    int? colorSlotId,
+    bool clearColorSlotId = false,
+    String? folderId,
+    bool clearFolderId = false,
+  }) {
+    return NoteKnowledgeTag(
+      id: clearId ? null : id ?? this.id,
+      type: type ?? this.type,
+      label: label ?? this.label,
+      colorValue: clearColorValue ? null : colorValue ?? this.colorValue,
+      colorSlotId: clearColorSlotId
+          ? null
+          : colorSlotId ?? this.colorSlotId,
+      folderId: clearFolderId ? null : folderId ?? this.folderId,
+    );
   }
 }
 
@@ -449,6 +497,16 @@ int? _tagColorFromJson(Object? value) {
       .replaceFirst('0X', '');
   final argb = normalized.length == 6 ? 'FF$normalized' : normalized;
   return int.tryParse(argb, radix: 16);
+}
+
+int? _tagIntFromJson(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString().trim() ?? '');
 }
 
 List<NoteKnowledgeTag> _tagsFromJson(Object? value) {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../ai/ai_client.dart';
 import '../../debug/debug_console.dart';
 import '../data/note_repository.dart';
+import '../data/tag_repository.dart';
 import '../models/note_document.dart';
 import '../models/note_item.dart';
 import 'note_chunk_card.dart';
@@ -18,16 +19,20 @@ class NoteEditorRoute extends StatefulWidget {
     super.key,
     required this.repository,
     required this.initialNote,
+    this.tagRepository,
   });
 
   final NoteRepository repository;
   final NoteItem initialNote;
+  final TagRepository? tagRepository;
 
   @override
   State<NoteEditorRoute> createState() => _NoteEditorRouteState();
 }
 
 class _NoteEditorRouteState extends State<NoteEditorRoute> {
+  late final TagRepository _tagRepository =
+      widget.tagRepository ?? MemoryTagRepository();
   late NoteItem _note;
   late NoteDocument _document;
   late final TextEditingController _titleController;
@@ -293,24 +298,28 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         NoteBlockType.paragraph => NoteTextChunkEditorScreen(
           block: current,
           availableTags: availableTags,
+          tagRepository: _tagRepository,
           onChanged: _replaceBlock,
           onDelete: () => _deleteBlock(current),
         ),
         NoteBlockType.listItem => NoteListChunkEditorScreen(
           block: current,
           availableTags: availableTags,
+          tagRepository: _tagRepository,
           onChanged: _replaceBlock,
           onDelete: () => _deleteBlock(current),
         ),
         NoteBlockType.table => NoteTableEditorScreen(
           block: current,
           availableTags: availableTags,
+          tagRepository: _tagRepository,
           onChanged: _replaceBlock,
           onDelete: () => _deleteBlock(current),
         ),
         NoteBlockType.flowchart => NoteFlowchartEditorScreen(
           block: current,
           availableTags: availableTags,
+          tagRepository: _tagRepository,
           onChanged: _replaceBlock,
           onDelete: () => _deleteBlock(current),
         ),
@@ -338,29 +347,27 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
   }
 
   Future<void> _showBlockTagDialog(NoteBlock block) async {
-    final tags = await showTagManagerSheet(
+    await showTagManagerSheet(
       context,
       initialTags: block.tags,
+      tagRepository: _tagRepository,
+      onChanged: (tags) => _replaceBlock(
+        block.copyWith(tags: tags, clearIndex: true),
+      ),
       availableTags: _document.knownTags,
       title: 'Chunk tagek',
     );
-    if (tags == null) {
-      return;
-    }
-    _replaceBlock(block.copyWith(tags: tags, clearIndex: true));
   }
 
   Future<void> _showDocumentTagDialog() async {
-    final tags = await showTagManagerSheet(
+    await showTagManagerSheet(
       context,
       initialTags: _document.tags,
+      tagRepository: _tagRepository,
+      onChanged: (tags) => _setDocument(_document.copyWith(tags: tags)),
       availableTags: _document.knownTags,
       title: 'Jegyzet tagek',
     );
-    if (tags == null) {
-      return;
-    }
-    _setDocument(_document.copyWith(tags: tags));
   }
 
   @override
