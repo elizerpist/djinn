@@ -43,8 +43,8 @@
 - Modify: `docs/superpowers/checklists/2026-06-22-textchunk-range-tag-visuals.md`
 - Modify: this plan
 
-- [ ] Run targeted tests in CI.
-- [ ] Run focused regressions around text editor, tagged text visuals, and rail.
-- [ ] Run `flutter analyze`.
-- [ ] Run old-symbol scan for deleted textchunk/native placeholder artifacts.
-- [ ] Update checklist and plan statuses honestly.
+- [x] Run targeted tests in CI.
+- [x] Run focused regressions around text editor, tagged text visuals, and rail.
+- [x] Run `flutter analyze`.
+- [x] Run old-symbol scan for deleted textchunk/native placeholder artifacts.
+- [x] Update checklist and plan statuses honestly.
