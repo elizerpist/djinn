@@ -344,7 +344,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(5, 2835970348795291073),
     name: 'CitationEntity',
-    lastPropertyId: const obx_int.IdUid(9, 8182112017704924585),
+    lastPropertyId: const obx_int.IdUid(12, 3824992246571563034),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -401,6 +401,24 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(9, 8182112017704924585),
         name: 'excerpt',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(10, 1703456434339190093),
+        name: 'atomType',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 1162939811165363781),
+        name: 'reasonsJson',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 3824992246571563034),
+        name: 'fullChunkText',
         type: 9,
         flags: 0,
       ),
@@ -2097,7 +2115,16 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final excerptOffset = object.excerpt == null
             ? null
             : fbb.writeString(object.excerpt!);
-        fbb.startTable(10);
+        final atomTypeOffset = object.atomType == null
+            ? null
+            : fbb.writeString(object.atomType!);
+        final reasonsJsonOffset = object.reasonsJson == null
+            ? null
+            : fbb.writeString(object.reasonsJson!);
+        final fullChunkTextOffset = object.fullChunkText == null
+            ? null
+            : fbb.writeString(object.fullChunkText!);
+        fbb.startTable(13);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, publicIdOffset);
         fbb.addOffset(2, messagePublicIdOffset);
@@ -2107,6 +2134,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(6, documentPublicIdOffset);
         fbb.addInt64(7, object.pageNumber);
         fbb.addOffset(8, excerptOffset);
+        fbb.addOffset(9, atomTypeOffset);
+        fbb.addOffset(10, reasonsJsonOffset);
+        fbb.addOffset(11, fullChunkTextOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -2145,6 +2175,15 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final excerptParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 20);
+        final atomTypeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 22);
+        final reasonsJsonParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 24);
+        final fullChunkTextParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 26);
         final object = CitationEntity(
           id: idParam,
           publicId: publicIdParam,
@@ -2155,6 +2194,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           documentPublicId: documentPublicIdParam,
           pageNumber: pageNumberParam,
           excerpt: excerptParam,
+          atomType: atomTypeParam,
+          reasonsJson: reasonsJsonParam,
+          fullChunkText: fullChunkTextParam,
         );
 
         return object;
@@ -3968,6 +4010,21 @@ class CitationEntity_ {
   /// See [CitationEntity.excerpt].
   static final excerpt = obx.QueryStringProperty<CitationEntity>(
     _entities[4].properties[8],
+  );
+
+  /// See [CitationEntity.atomType].
+  static final atomType = obx.QueryStringProperty<CitationEntity>(
+    _entities[4].properties[9],
+  );
+
+  /// See [CitationEntity.reasonsJson].
+  static final reasonsJson = obx.QueryStringProperty<CitationEntity>(
+    _entities[4].properties[10],
+  );
+
+  /// See [CitationEntity.fullChunkText].
+  static final fullChunkText = obx.QueryStringProperty<CitationEntity>(
+    _entities[4].properties[11],
   );
 }
 

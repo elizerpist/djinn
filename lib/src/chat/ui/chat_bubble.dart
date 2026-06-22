@@ -134,28 +134,35 @@ class ChatBubble extends StatelessWidget {
   List<ChatCitation> _groupCitations(List<ChatCitation> citations) {
     final grouped = <String, List<ChatCitation>>{};
     for (final citation in citations) {
-      grouped.putIfAbsent(_citationGroupKey(citation), () => <ChatCitation>[]).add(citation);
+      grouped
+          .putIfAbsent(_citationGroupKey(citation), () => <ChatCitation>[])
+          .add(citation);
     }
-    return grouped.entries.map((entry) {
-      final items = entry.value;
-      final first = items.first;
-      if (items.length == 1) {
-        return first;
-      }
-      return ChatCitation(
-        documentId: first.documentId,
-        title: _compactCitationTitle(first.title),
-        page: first.page,
-        section: first.section,
-        excerpt: _mergedExcerpt(items),
-        sourceId: entry.key,
-        sourceType: _mergedSourceType(items),
-        sourceLabel: first.sourceLabel == null
-            ? _compactCitationTitle(first.title)
-            : _compactCitationTitle(first.sourceLabel!),
-        validationState: first.validationState,
-      );
-    }).toList(growable: false);
+    return grouped.entries
+        .map((entry) {
+          final items = entry.value;
+          final first = items.first;
+          if (items.length == 1) {
+            return first;
+          }
+          return ChatCitation(
+            documentId: first.documentId,
+            title: _compactCitationTitle(first.title),
+            page: first.page,
+            section: first.section,
+            excerpt: _mergedExcerpt(items),
+            sourceId: entry.key,
+            sourceType: _mergedSourceType(items),
+            sourceLabel: first.sourceLabel == null
+                ? _compactCitationTitle(first.title)
+                : _compactCitationTitle(first.sourceLabel!),
+            validationState: first.validationState,
+            atomType: _mergedAtomType(items),
+            reasons: _mergedReasons(items),
+            fullChunkText: _mergedFullChunkText(items),
+          );
+        })
+        .toList(growable: false);
   }
 
   String _citationGroupKey(ChatCitation citation) {
@@ -203,15 +210,45 @@ class ChatBubble extends StatelessWidget {
   }
 
   String? _mergedSourceType(List<ChatCitation> citations) {
-    if (citations.any((citation) =>
-        citation.sourceType == 'flowchart_node' ||
-        citation.sourceType == 'flowchart_edge')) {
+    if (citations.any(
+      (citation) =>
+          citation.sourceType == 'flowchart_node' ||
+          citation.sourceType == 'flowchart_edge',
+    )) {
       return 'flowchart_edge';
     }
     if (citations.any((citation) => citation.sourceType == 'table_chunk')) {
       return 'table_chunk';
     }
     return citations.first.sourceType;
+  }
+
+  String? _mergedAtomType(List<ChatCitation> citations) {
+    for (final citation in citations) {
+      final atomType = citation.atomType;
+      if (atomType != null && atomType.isNotEmpty) {
+        return atomType;
+      }
+    }
+    return null;
+  }
+
+  List<String> _mergedReasons(List<ChatCitation> citations) {
+    final values = <String>{};
+    for (final citation in citations) {
+      values.addAll(citation.reasons.where((reason) => reason.isNotEmpty));
+    }
+    return values.toList(growable: false);
+  }
+
+  String? _mergedFullChunkText(List<ChatCitation> citations) {
+    for (final citation in citations) {
+      final text = citation.fullChunkText?.trim();
+      if (text != null && text.isNotEmpty) {
+        return citation.fullChunkText;
+      }
+    }
+    return null;
   }
 }
 
@@ -361,34 +398,63 @@ class _CitationRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                _sourceIcon(citation.sourceType),
-                size: 16,
-                color: const Color(0xFF475569),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  citation.sourceLabel ?? titleText,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF334155),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
+              Row(
+                children: [
+                  Icon(
+                    _sourceIcon(citation.sourceType),
+                    size: 16,
+                    color: const Color(0xFF475569),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      citation.sourceLabel ?? titleText,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF334155),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.open_in_full,
+                    size: 14,
+                    color: Color(0xFF64748B),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              const Icon(Icons.open_in_full, size: 14, color: Color(0xFF64748B)),
+              if (_chips(citation).isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [
+                    for (final chip in _chips(citation)) _CitationChip(chip),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  List<String> _chips(ChatCitation citation) {
+    return [
+      if (citation.atomType case final atomType?)
+        if (atomType.trim().isNotEmpty) 'atom: ${atomType.trim()}',
+      ...citation.reasons
+          .map((reason) => reason.trim())
+          .where((reason) => reason.isNotEmpty),
+    ];
   }
 
   IconData _sourceIcon(String? sourceType) {
@@ -397,5 +463,32 @@ class _CitationRow extends StatelessWidget {
       'table_chunk' || 'score_chunk' => Icons.table_chart_outlined,
       _ => Icons.article_outlined,
     };
+  }
+}
+
+class _CitationChip extends StatelessWidget {
+  const _CitationChip(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF1D4ED8),
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          height: 1,
+        ),
+      ),
+    );
   }
 }

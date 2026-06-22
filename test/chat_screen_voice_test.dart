@@ -355,7 +355,9 @@ void main() {
     expect(speech.locales, ['hu-HU']);
   });
 
-  testWidgets('citation tap opens fullscreen read-only source preview', (tester) async {
+  testWidgets('citation tap opens fullscreen read-only source preview', (
+    tester,
+  ) async {
     final repository = LocalChatRepository(
       clock: () => DateTime.utc(2026, 1, 1, 12),
     );
@@ -371,6 +373,8 @@ void main() {
           page: 7,
           section: 'ABCDE',
           excerpt: 'Ez a hivatkozott forrásrészlet.',
+          fullChunkText:
+              'Teljes chunk szöveg első mondata.\nMásodik releváns rész.',
           sourceId: 'chunk-7',
           sourceLabel: 'PDF',
         ),
@@ -396,11 +400,30 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('citation-chunk-7')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('citation-preview-screen')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('citation-preview-screen')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('citation-preview-text')), findsOneWidget);
     expect(find.text('omsz.pdf'), findsWidgets);
     expect(find.text('7. oldal'), findsOneWidget);
     expect(find.text('ABCDE'), findsOneWidget);
+    expect(find.text('Ez a hivatkozott forrásrészlet.'), findsOneWidget);
+    expect(find.text('Teljes chunk'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('citation-preview-full-chunk')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Teljes chunk szöveg első mondata.\nMásodik releváns rész.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('citation-start-scope')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('citation-start-scope')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('citation-preview-screen')), findsNothing);
     expect(find.text('Ez a hivatkozott forrásrészlet.'), findsOneWidget);
   });
 }

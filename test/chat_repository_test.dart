@@ -54,6 +54,7 @@ void main() {
           page: 2,
           section: null,
           excerpt: 'Valasz forrassal',
+          fullChunkText: 'Teljes chunk szovege',
         ),
       ],
     );
@@ -62,6 +63,7 @@ void main() {
 
     expect(reloaded.citations.single.documentId, 'backend-doc-1');
     expect(reloaded.citations.single.page, 2);
+    expect(reloaded.citations.single.fullChunkText, 'Teljes chunk szovege');
     expect(reloaded.refusalReason, isNull);
   });
 

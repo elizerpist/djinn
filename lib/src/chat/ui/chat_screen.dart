@@ -274,24 +274,31 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _showCitationExcerpt(ChatCitation citation) async {
-    await Navigator.of(context).push<void>(
+    final scopeText = await Navigator.of(context).push<String>(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
             _CitationPreviewScreen(citation: citation),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 1),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            )),
+            position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+                .animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
             child: child,
           );
         },
       ),
     );
+    if (!mounted) {
+      return;
+    }
+    final trimmed = scopeText?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      unawaited(_send(trimmed, speakResponse: _voiceReplyEnabled));
+    }
   }
 
   @override
@@ -348,17 +355,15 @@ class _ChatScreenState extends State<ChatScreen> {
             voiceController: _voiceController,
             voiceLocale: _voiceLocale,
             defaultVoiceMode: _voiceMode,
-            onVoiceInputModeSelected: (mode) => setState(
-              () {
-                _voiceReplyEnabled = mode == VoiceInputMode.conversation;
-                _voiceListenStarting = true;
-                DebugConsole.log(
-                  '[Voice/UI] input mode selected mode=${mode.name} '
-                  'voiceReply=$_voiceReplyEnabled '
-                  'starting=$_voiceListenStarting',
-                );
-              },
-            ),
+            onVoiceInputModeSelected: (mode) => setState(() {
+              _voiceReplyEnabled = mode == VoiceInputMode.conversation;
+              _voiceListenStarting = true;
+              DebugConsole.log(
+                '[Voice/UI] input mode selected mode=${mode.name} '
+                'voiceReply=$_voiceReplyEnabled '
+                'starting=$_voiceListenStarting',
+              );
+            }),
           ),
         ],
       ),
@@ -433,13 +438,27 @@ class _CitationPreviewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sourceType = citation.sourceType;
-    final isFlowchart = sourceType == 'flowchart_node' || sourceType == 'flowchart_edge';
+    final isFlowchart =
+        sourceType == 'flowchart_node' || sourceType == 'flowchart_edge';
     final isTable = sourceType == 'table_chunk' || sourceType == 'score_chunk';
+    final fullChunkText = citation.fullChunkText?.trim();
+    final showFullChunk =
+        fullChunkText != null &&
+        fullChunkText.isNotEmpty &&
+        fullChunkText != citation.excerpt.trim();
     return Scaffold(
       key: const ValueKey('citation-preview-screen'),
       appBar: AppBar(
         title: Text(citation.title),
         actions: [
+          if (citation.excerpt.trim().isNotEmpty)
+            IconButton(
+              key: const ValueKey('citation-start-scope'),
+              onPressed: () =>
+                  Navigator.of(context).pop(citation.excerpt.trim()),
+              icon: const Icon(Icons.account_tree_outlined),
+              tooltip: 'Új scope ebből',
+            ),
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
             icon: const Icon(Icons.close),
@@ -477,6 +496,24 @@ class _CitationPreviewScreen extends StatelessWidget {
                 _TableCitationPreview(excerpt: citation.excerpt)
               else
                 _TextCitationPreview(excerpt: citation.excerpt),
+              if (showFullChunk) ...[
+                const SizedBox(height: 20),
+                const Divider(height: 1),
+                const SizedBox(height: 16),
+                const Text(
+                  'Teljes chunk',
+                  style: TextStyle(
+                    color: Color(0xFF475569),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _TextCitationPreview(
+                  selectableKey: const ValueKey('citation-preview-full-chunk'),
+                  excerpt: fullChunkText,
+                ),
+              ],
             ],
           ),
         ),
@@ -512,14 +549,18 @@ class _PreviewHeader extends StatelessWidget {
 }
 
 class _TextCitationPreview extends StatelessWidget {
-  const _TextCitationPreview({required this.excerpt});
+  const _TextCitationPreview({
+    this.selectableKey = const ValueKey('citation-preview-text'),
+    required this.excerpt,
+  });
 
+  final Key selectableKey;
   final String excerpt;
 
   @override
   Widget build(BuildContext context) {
     return SelectableText(
-      key: const ValueKey('citation-preview-text'),
+      key: selectableKey,
       excerpt,
       style: const TextStyle(
         color: Color(0xFF111827),
@@ -541,11 +582,13 @@ class _TableCitationPreview extends StatelessWidget {
         .split(RegExp(r'\n+'))
         .map((line) => line.trim())
         .where((line) => line.isNotEmpty)
-        .map((line) => line
-            .split(line.contains('|') ? '|' : ';')
-            .map((part) => part.trim())
-            .where((part) => part.isNotEmpty)
-            .toList(growable: false))
+        .map(
+          (line) => line
+              .split(line.contains('|') ? '|' : ';')
+              .map((part) => part.trim())
+              .where((part) => part.isNotEmpty)
+              .toList(growable: false),
+        )
         .where((row) => row.isNotEmpty)
         .toList(growable: false);
     final columns = rows.fold<int>(
@@ -622,8 +665,9 @@ class _FlowchartCitationPreview extends StatelessWidget {
   }
 
   String _flowchartPreviewLine(String line) {
-    final match = RegExp(r'^\s*(.+?)\s*->\s*(.+?)(?:\s*\[(.*?)\])?\s*$')
-        .firstMatch(line);
+    final match = RegExp(
+      r'^\s*(.+?)\s*->\s*(.+?)(?:\s*\[(.*?)\])?\s*$',
+    ).firstMatch(line);
     if (match == null) {
       return line;
     }
@@ -661,15 +705,15 @@ class ChatModeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, icon, color) = switch (settings.answerMode) {
       AnswerModes.offline => (
-          'Offline',
-          Icons.cloud_off_outlined,
-          const Color(0xFF166534),
-        ),
+        'Offline',
+        Icons.cloud_off_outlined,
+        const Color(0xFF166534),
+      ),
       _ => (
-          settings.activeProvider.label,
-          Icons.cloud_done_outlined,
-          const Color(0xFF155EEF),
-        ),
+        settings.activeProvider.label,
+        Icons.cloud_done_outlined,
+        const Color(0xFF155EEF),
+      ),
     };
     return Container(
       key: const ValueKey('chat-mode-chip'),

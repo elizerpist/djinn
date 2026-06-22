@@ -9,6 +9,9 @@ class ChatCitation {
     this.sourceType,
     this.sourceLabel,
     this.validationState,
+    this.atomType,
+    this.reasons = const [],
+    this.fullChunkText,
   });
 
   final String documentId;
@@ -20,6 +23,9 @@ class ChatCitation {
   final String? sourceType;
   final String? sourceLabel;
   final String? validationState;
+  final String? atomType;
+  final List<String> reasons;
+  final String? fullChunkText;
 
   Map<String, Object?> toJson() {
     return {
@@ -32,6 +38,9 @@ class ChatCitation {
       'sourceType': sourceType,
       'sourceLabel': sourceLabel,
       'validationState': validationState,
+      'atomType': atomType,
+      if (reasons.isNotEmpty) 'reasons': reasons,
+      'fullChunkText': fullChunkText,
     };
   }
 
@@ -51,6 +60,21 @@ class ChatCitation {
       validationState:
           json['validationState'] as String? ??
           json['validation_state'] as String?,
+      atomType: json['atomType'] as String? ?? json['atom_type'] as String?,
+      reasons: _stringsFromJson(json['reasons']),
+      fullChunkText:
+          json['fullChunkText'] as String? ??
+          json['full_chunk_text'] as String?,
     );
+  }
+
+  static List<String> _stringsFromJson(Object? value) {
+    if (value is! List) {
+      return const [];
+    }
+    return value
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
   }
 }

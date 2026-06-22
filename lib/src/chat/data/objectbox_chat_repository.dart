@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:uuid/uuid.dart';
 
 import '../../../objectbox.g.dart';
@@ -135,6 +137,11 @@ class ObjectBoxChatRepository extends LocalChatRepository {
           documentPublicId: citation.documentId,
           pageNumber: citation.page,
           excerpt: citation.excerpt,
+          atomType: citation.atomType,
+          reasonsJson: citation.reasons.isEmpty
+              ? null
+              : jsonEncode(citation.reasons),
+          fullChunkText: citation.fullChunkText,
         ),
       );
     }
@@ -173,7 +180,28 @@ class ObjectBoxChatRepository extends LocalChatRepository {
       sourceType: entity.sourceType,
       sourceLabel: entity.sourceLabel,
       validationState: null,
+      atomType: entity.atomType,
+      reasons: _decodeReasons(entity.reasonsJson),
+      fullChunkText: entity.fullChunkText,
     );
+  }
+
+  List<String> _decodeReasons(String? raw) {
+    if (raw == null || raw.trim().isEmpty) {
+      return const [];
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return const [];
+      }
+      return decoded
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    } on FormatException {
+      return const [];
+    }
   }
 
   void _touchThread(

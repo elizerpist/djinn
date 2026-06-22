@@ -40,6 +40,9 @@ void main() {
           sourceType: 'table_chunk',
           sourceLabel: 'Szöveges PDF-részlet',
           validationState: 'validated',
+          atomType: 'table_cell',
+          reasons: ['table_column', 'table_cell'],
+          fullChunkText: 'Teljes tablazat chunk',
         ),
       ],
     );
@@ -56,5 +59,14 @@ void main() {
     expect(messages.last.sender, ChatSender.assistant);
     expect(messages.last.citations.single.sourceLabel, 'Szöveges PDF-részlet');
     expect(messages.last.citations.single.sourceType, 'table_chunk');
+    expect(messages.last.citations.single.atomType, 'table_cell');
+    expect(messages.last.citations.single.reasons, [
+      'table_column',
+      'table_cell',
+    ]);
+    expect(
+      messages.last.citations.single.fullChunkText,
+      'Teljes tablazat chunk',
+    );
   });
 }

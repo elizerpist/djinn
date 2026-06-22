@@ -573,6 +573,9 @@ class CitationEntity {
     this.documentPublicId,
     this.pageNumber,
     this.excerpt,
+    this.atomType,
+    this.reasonsJson,
+    this.fullChunkText,
   });
 
   @Id()
@@ -592,6 +595,9 @@ class CitationEntity {
   String? documentPublicId;
   int? pageNumber;
   String? excerpt;
+  String? atomType;
+  String? reasonsJson;
+  String? fullChunkText;
 }
 
 @Entity()

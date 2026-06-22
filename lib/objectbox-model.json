@@ -281,7 +281,7 @@
     },
     {
       "id": "5:2835970348795291073",
-      "lastPropertyId": "9:8182112017704924585",
+      "lastPropertyId": "12:3824992246571563034",
       "name": "CitationEntity",
       "properties": [
         {
@@ -334,6 +334,21 @@
         {
           "id": "9:8182112017704924585",
           "name": "excerpt",
+          "type": 9
+        },
+        {
+          "id": "10:1703456434339190093",
+          "name": "atomType",
+          "type": 9
+        },
+        {
+          "id": "11:1162939811165363781",
+          "name": "reasonsJson",
+          "type": 9
+        },
+        {
+          "id": "12:3824992246571563034",
+          "name": "fullChunkText",
           "type": 9
         }
       ],

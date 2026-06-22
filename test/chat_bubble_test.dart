@@ -119,6 +119,38 @@ void main() {
     expect(find.text('Nem validált flowchart'), findsOneWidget);
   });
 
+  testWidgets('renders citation atom type and reason chips', (tester) async {
+    final message = ChatMessage(
+      id: 'm-atom',
+      conversationId: 'c1',
+      sender: ChatSender.assistant,
+      text: 'Válasz.',
+      createdAt: DateTime.utc(2026),
+      citations: const [
+        ChatCitation(
+          documentId: 'note-1',
+          title: 'Légzési elégtelenség',
+          excerpt: 'Terápia | Oxigén / súlyos légzési elégtelenség: O2',
+          sourceId: 'note:note-1:therapy:row-1-cell-2',
+          sourceType: 'table_chunk',
+          sourceLabel: 'Terápia',
+          atomType: 'table_cell',
+          reasons: ['table_column', 'table_cell'],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ChatBubble(message: message)),
+      ),
+    );
+
+    expect(find.text('atom: table_cell'), findsOneWidget);
+    expect(find.text('table_column'), findsOneWidget);
+    expect(find.text('table_cell'), findsOneWidget);
+  });
+
   testWidgets('citation row is tappable', (tester) async {
     const citation = ChatCitation(
       documentId: 'doc-1',

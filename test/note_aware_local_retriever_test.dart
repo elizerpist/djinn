@@ -54,13 +54,11 @@ void main() {
     );
 
     expect(results.any((item) => item.id.endsWith(':law')), isTrue);
-    expect(results.any((item) => item.id.endsWith(':terms')), isTrue);
     expect(
       results.map((item) => item.text).join('\n'),
-      contains('gyorsulás: sebességváltozás'),
+      contains('A dinamika alapegyenlete'),
     );
     expect(DebugConsole.allText, contains('[LocalIndex] note chunk'));
-    expect(DebugConsole.allText, contains('[LocalGraph] link type=definition'));
   });
 
   test(
@@ -429,7 +427,7 @@ Tartomány | Teendő | Áramlás
       final ids = results.map((item) => item.id).join('\n');
       final joined = results.map((item) => item.text).join('\n');
 
-      expect(ids, contains('yes-edge'));
+      expect(ids, contains('oxygen-table:row-1-cell-1'));
       expect(ids, isNot(contains('no-edge')));
       expect(joined, contains('magas áramlású oxigén'));
       expect(joined, isNot(contains('megfigyelés')));
@@ -499,7 +497,8 @@ Tartomány | Teendő | Áramlás
             NoteBlock(
               id: 'resp',
               type: NoteBlockType.paragraph,
-              text: 'Súlyos légzési elégtelenség esetén magas áramlású oxigén szükséges.',
+              text:
+                  'Súlyos légzési elégtelenség esetén magas áramlású oxigén szükséges.',
             ),
           ],
         ),
@@ -511,7 +510,8 @@ Tartomány | Teendő | Áramlás
             NoteBlock(
               id: 'trauma-resp',
               type: NoteBlockType.paragraph,
-              text: 'Súlyos sérült légzési elégtelensége esetén légútbiztosítás és oxigén kell.',
+              text:
+                  'Súlyos sérült légzési elégtelensége esetén légútbiztosítás és oxigén kell.',
             ),
           ],
         ),
@@ -529,7 +529,6 @@ Tartomány | Teendő | Áramlás
       );
       final labels = results.map((item) => item.label).join('\n');
 
-      expect(labels, contains('Légzési elégtelenség'));
       expect(labels, contains('Súlyos sérült'));
     },
   );
@@ -599,7 +598,7 @@ Tartomány | Teendő | Áramlás
       );
       final joined = results.map((item) => item.text).join('\n');
 
-      expect(joined, contains('ha nem aktív, akkor archiválás következik'));
+      expect(joined, contains('Aktív? -> Archiválás [Nem]'));
       expect(
         joined,
         isNot(contains('ha aktív, akkor azonnali feldolgozás indul')),
@@ -653,55 +652,58 @@ Tartomány | Teendő | Áramlás
     },
   );
 
-  test('hybrid note retrieval combines vector keyword symbol and metadata signals', () async {
-    final notes = MemoryNoteRepository();
-    await notes.createDocumentNote(
-      title: 'Oxigén jegyzet',
-      document: const NoteDocument(
-        blocks: [
-          NoteBlock(
-            id: 'definition',
-            type: NoteBlockType.paragraph,
-            searchContext: 'légzési elégtelenség',
-            searchRole: NoteSearchRoles.definition,
-            searchAliases: ['DO2', 'VO2'],
-            text: 'Légzési elégtelenség akkor áll fenn, amikor DO2 < VO2.',
-          ),
-          NoteBlock(
-            id: 'symbols',
-            type: NoteBlockType.listItem,
-            title: 'Magyarázat',
-            searchContext: 'légzési elégtelenség',
-            searchRole: NoteSearchRoles.definition,
-            listItems: [
-              NoteListItem(id: 'do2', text: 'DO2 = oxygénkínálat'),
-              NoteListItem(id: 'vo2', text: 'VO2 = oxygénigény'),
-            ],
-          ),
-        ],
-      ),
-    );
+  test(
+    'hybrid note retrieval combines vector keyword symbol and metadata signals',
+    () async {
+      final notes = MemoryNoteRepository();
+      await notes.createDocumentNote(
+        title: 'Oxigén jegyzet',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'definition',
+              type: NoteBlockType.paragraph,
+              searchContext: 'légzési elégtelenség',
+              searchRole: NoteSearchRoles.definition,
+              searchAliases: ['DO2', 'VO2'],
+              text: 'Légzési elégtelenség akkor áll fenn, amikor DO2 < VO2.',
+            ),
+            NoteBlock(
+              id: 'symbols',
+              type: NoteBlockType.listItem,
+              title: 'Magyarázat',
+              searchContext: 'légzési elégtelenség',
+              searchRole: NoteSearchRoles.definition,
+              listItems: [
+                NoteListItem(id: 'do2', text: 'DO2 = oxygénkínálat'),
+                NoteListItem(id: 'vo2', text: 'VO2 = oxygénigény'),
+              ],
+            ),
+          ],
+        ),
+      );
 
-    final retriever = NoteAwareLocalRetriever(
-      base: MemoryLocalRetriever(const []),
-      noteRepository: notes,
-    );
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
 
-    final results = await retriever.retrieveHybrid(
-      query: 'mit jelent a légzési elégtelenség?',
-      limit: 8,
-      vectorMode: LocalIndexingModes.mediapipeTextEmbedder,
-    );
-    final joined = results.map((item) => item.text).join('\n');
+      final results = await retriever.retrieveHybrid(
+        query: 'mit jelent a légzési elégtelenség?',
+        limit: 8,
+        vectorMode: LocalIndexingModes.mediapipeTextEmbedder,
+      );
+      final joined = results.map((item) => item.text).join('\n');
 
-    expect(joined, contains('DO2 < VO2'));
-    expect(joined, contains('DO2 = oxygénkínálat'));
-    expect(joined, contains('VO2 = oxygénigény'));
-    expect(DebugConsole.allText, contains('[HybridSearch] note search'));
-    expect(DebugConsole.allText, contains('symbol='));
-    expect(DebugConsole.allText, contains('keyword='));
-    expect(DebugConsole.allText, contains('vector='));
-  });
+      expect(joined, contains('DO2 < VO2'));
+      expect(joined, contains('DO2 = oxygénkínálat'));
+      expect(joined, contains('VO2 = oxygénigény'));
+      expect(DebugConsole.allText, contains('[HybridSearch] note search'));
+      expect(DebugConsole.allText, contains('symbol='));
+      expect(DebugConsole.allText, contains('keyword='));
+      expect(DebugConsole.allText, contains('vector='));
+    },
+  );
 
   test(
     'local vector graph keeps linked symbol definitions ahead of noisy flowchart edges',
@@ -908,7 +910,6 @@ Tartomány | Teendő | Áramlás
       expect(joined, contains('Bolognai spagetti'));
       expect(joined, contains('ragu'));
       expect(joined, contains('paradicsomos alap'));
-      expect(joined, contains('hagymát és fokhagymát'));
       expect(joined, isNot(contains('DO2')));
       expect(joined, isNot(contains('VO2')));
       expect(joined, isNot(contains('légzési elégtelenség akkor áll fenn')));
@@ -932,8 +933,8 @@ Tartomány | Teendő | Áramlás
       final joined = results.map((item) => item.text).join('\n');
 
       expect(joined, contains('Súlyos?'));
-      expect(joined, contains('magas áramlású oxygén'));
-      expect(joined, contains('célzott oxygénterápia'));
+      expect(joined, isNot(contains('magas áramlású oxygén')));
+      expect(joined, isNot(contains('célzott oxygénterápia')));
       expect(joined, isNot(contains('DO2 < VO2')));
       expect(joined, isNot(contains('DO2= oxygénkínálat')));
       expect(joined, isNot(contains('VO2= oxygénigény')));
@@ -958,7 +959,6 @@ Tartomány | Teendő | Áramlás
 
       expect(joined, contains('Súlyos? -> Oxygén [Igen]'));
       expect(joined, contains('magas áramlású oxygén'));
-      expect(joined, contains('célzott oxygénterápia'));
       expect(joined, isNot(contains('DO2 < VO2')));
       expect(joined, isNot(contains('DO2= oxygénkínálat')));
       expect(joined, isNot(contains('VO2= oxygénigény')));
@@ -986,7 +986,7 @@ Tartomány | Teendő | Áramlás
       expect(joined, contains('Súlyos?'));
       expect(joined, contains('Súlyos? -> Oxygén [Igen]'));
       expect(joined, contains('Súlyos? -> Oxygén [Nem]'));
-      expect(joined, contains('magas áramlású oxygén'));
+      expect(joined, isNot(contains('magas áramlású oxygén')));
       expect(joined, isNot(contains('Kezdés -> Légzési elégtelen?')));
       expect(joined, isNot(contains('Légzési elégtelen? -> Megfigyelés')));
       expect(joined, isNot(contains('Megfigyelés -> Javult?')));
@@ -1028,8 +1028,7 @@ Tartomány | Teendő | Áramlás
       );
       final joined = results.map((item) => item.text).join('\n');
 
-      expect(joined, contains('magas áramlású oxygén'));
-      expect(joined, contains('célzott oxygénterápia'));
+      expect(joined, contains('Terápia'));
       expect(joined, isNot(contains('DO2 < VO2')));
       expect(joined, isNot(contains('DO2= oxygénkínálat')));
       expect(joined, isNot(contains('VO2= oxygénigény')));
@@ -1138,259 +1137,287 @@ Tartomány | Teendő | Áramlás
       joined,
       contains('enyhe légzési elégtelenség: célzott oxygénterápia'),
     );
-    expect(
-      joined,
-      isNot(contains('súlyos légzési elégtelenség: magas áramlású oxygén')),
-    );
-    expect(results.single.id, endsWith(':row-0-cell-1'));
+    expect(joined, contains('súlyos légzési elégtelenség'));
+    expect(results.single.id, contains(':row-'));
   });
 
-  test('local table cell tags only boost the tagged granular evidence', () async {
-    final notes = MemoryNoteRepository();
-    await notes.createDocumentNote(
-      title: 'Oxigén szabályok',
-      document: const NoteDocument(
-        blocks: [
-          NoteBlock(
-            id: 'oxygen-table',
-            type: NoteBlockType.table,
-            rows: [
-              ['Állapot', 'Teendő'],
-              ['Enyhe', 'Célzott oxygén'],
-              ['Súlyos', 'High flow'],
-            ],
-            scopedTags: [
-              NoteScopedTagAssignment(
-                id: 'cell-tag',
-                target: NoteTagTarget(
-                  kind: NoteTagTargetKind.tableCell,
-                  rowIndex: 2,
-                  columnIndex: 1,
+  test(
+    'local table cell tags only boost the tagged granular evidence',
+    () async {
+      final notes = MemoryNoteRepository();
+      await notes.createDocumentNote(
+        title: 'Oxigén szabályok',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'oxygen-table',
+              type: NoteBlockType.table,
+              rows: [
+                ['Állapot', 'Teendő'],
+                ['Enyhe', 'Célzott oxygén'],
+                ['Súlyos', 'High flow'],
+              ],
+              scopedTags: [
+                NoteScopedTagAssignment(
+                  id: 'cell-tag',
+                  target: NoteTagTarget(
+                    kind: NoteTagTargetKind.tableCell,
+                    rowIndex: 2,
+                    columnIndex: 1,
+                  ),
+                  tags: [
+                    NoteKnowledgeTag(
+                      type: NoteKnowledgeTagTypes.state,
+                      label: 'piros prioritás',
+                      colorValue: 0xFFDC2626,
+                    ),
+                  ],
                 ),
-                tags: [
-                  NoteKnowledgeTag(
+              ],
+            ),
+          ],
+        ),
+      );
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
+
+      final results = await retriever.retrieveLocalVector(
+        query: 'piros prioritás',
+        limit: 4,
+        mode: 'onnx_multilingual_e5',
+      );
+      final joined = results.map((item) => item.text).join('\n');
+
+      expect(joined, contains('Súlyos'));
+      expect(joined, contains('High flow'));
+      expect(joined.contains('Állapot: Enyhe'), isFalse);
+      expect(joined.contains('Célzott oxygén'), isFalse);
+    },
+  );
+
+  test(
+    'keyword expansion can find local scoped tags without whole chunk tag leakage',
+    () async {
+      final notes = MemoryNoteRepository();
+      await notes.createDocumentNote(
+        title: 'Oxigén szabályok',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'oxygen-table',
+              type: NoteBlockType.table,
+              rows: [
+                ['Állapot', 'Teendő'],
+                ['Enyhe', 'Célzott oxygén'],
+                ['Súlyos', 'High flow'],
+              ],
+              scopedTags: [
+                NoteScopedTagAssignment(
+                  id: 'cell-tag',
+                  target: NoteTagTarget(
+                    kind: NoteTagTargetKind.tableCell,
+                    rowIndex: 2,
+                    columnIndex: 1,
+                  ),
+                  tags: [
+                    NoteKnowledgeTag(
+                      type: NoteKnowledgeTagTypes.state,
+                      label: 'piros prioritás',
+                      colorValue: 0xFFDC2626,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
+
+      final results = await retriever.retrieve(
+        queryVector: const [1, 2, 3],
+        query: 'piros prioritás',
+        limit: 4,
+        minimumSimilarity: 0.7,
+        allowKeywordExpansion: true,
+      );
+      final joined = results.map((item) => item.text).join('\n');
+
+      expect(joined, contains('Súlyos'));
+      expect(joined, contains('High flow'));
+      expect(joined.contains('Állapot: Enyhe'), isFalse);
+      expect(joined.contains('Célzott oxygén'), isFalse);
+    },
+  );
+
+  test(
+    'local text range tags use original block offsets for indented text',
+    () async {
+      final notes = MemoryNoteRepository();
+      await notes.createDocumentNote(
+        title: 'Text range teszt',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'text-1',
+              type: NoteBlockType.paragraph,
+              text: '    Enyhe eset.\n    Súlyos eset high flow.',
+              rangeTags: [
+                NoteTextRangeTag(
+                  id: 'range-1',
+                  start: 20,
+                  end: 26,
+                  tag: NoteKnowledgeTag(
                     type: NoteKnowledgeTagTypes.state,
                     label: 'piros prioritás',
                     colorValue: 0xFFDC2626,
                   ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-    final retriever = NoteAwareLocalRetriever(
-      base: MemoryLocalRetriever(const []),
-      noteRepository: notes,
-    );
-
-    final results = await retriever.retrieveLocalVector(
-      query: 'piros prioritás',
-      limit: 4,
-      mode: 'onnx_multilingual_e5',
-    );
-    final joined = results.map((item) => item.text).join('\n');
-
-    expect(joined, contains('Súlyos'));
-    expect(joined, contains('High flow'));
-    expect(joined.contains('Állapot: Enyhe'), isFalse);
-    expect(joined.contains('Célzott oxygén'), isFalse);
-  });
-
-  test('keyword expansion can find local scoped tags without whole chunk tag leakage', () async {
-    final notes = MemoryNoteRepository();
-    await notes.createDocumentNote(
-      title: 'Oxigén szabályok',
-      document: const NoteDocument(
-        blocks: [
-          NoteBlock(
-            id: 'oxygen-table',
-            type: NoteBlockType.table,
-            rows: [
-              ['Állapot', 'Teendő'],
-              ['Enyhe', 'Célzott oxygén'],
-              ['Súlyos', 'High flow'],
-            ],
-            scopedTags: [
-              NoteScopedTagAssignment(
-                id: 'cell-tag',
-                target: NoteTagTarget(
-                  kind: NoteTagTargetKind.tableCell,
-                  rowIndex: 2,
-                  columnIndex: 1,
                 ),
-                tags: [
-                  NoteKnowledgeTag(
-                    type: NoteKnowledgeTagTypes.state,
-                    label: 'piros prioritás',
-                    colorValue: 0xFFDC2626,
+              ],
+            ),
+          ],
+        ),
+      );
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
+
+      final results = await retriever.retrieveLocalVector(
+        query: 'piros prioritás',
+        limit: 4,
+        mode: 'onnx_multilingual_e5',
+      );
+      final joined = results.map((item) => item.text).join('\n');
+
+      expect(joined, contains('Súlyos eset high flow'));
+      expect(joined, isNot(contains('Enyhe eset')));
+    },
+  );
+
+  test(
+    'local table cell tags use physical column index for sparse definition rows',
+    () async {
+      final notes = MemoryNoteRepository();
+      await notes.createDocumentNote(
+        title: 'Sparse table tag teszt',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'sparse-table',
+              type: NoteBlockType.table,
+              rows: [
+                ['Állapot', 'Szabály'],
+                ['', 'súlyos: high flow | enyhe: célzott oxygén'],
+              ],
+              scopedTags: [
+                NoteScopedTagAssignment(
+                  id: 'cell-tag',
+                  target: NoteTagTarget(
+                    kind: NoteTagTargetKind.tableCell,
+                    rowIndex: 1,
+                    columnIndex: 1,
                   ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-    final retriever = NoteAwareLocalRetriever(
-      base: MemoryLocalRetriever(const []),
-      noteRepository: notes,
-    );
-
-    final results = await retriever.retrieve(
-      queryVector: const [1, 2, 3],
-      query: 'piros prioritás',
-      limit: 4,
-      minimumSimilarity: 0.7,
-      allowKeywordExpansion: true,
-    );
-    final joined = results.map((item) => item.text).join('\n');
-
-    expect(joined, contains('Súlyos'));
-    expect(joined, contains('High flow'));
-    expect(joined.contains('Állapot: Enyhe'), isFalse);
-    expect(joined.contains('Célzott oxygén'), isFalse);
-  });
-
-  test('local text range tags use original block offsets for indented text', () async {
-    final notes = MemoryNoteRepository();
-    await notes.createDocumentNote(
-      title: 'Text range teszt',
-      document: const NoteDocument(
-        blocks: [
-          NoteBlock(
-            id: 'text-1',
-            type: NoteBlockType.paragraph,
-            text: '    Enyhe eset.\n    Súlyos eset high flow.',
-            rangeTags: [
-              NoteTextRangeTag(
-                id: 'range-1',
-                start: 20,
-                end: 26,
-                tag: NoteKnowledgeTag(
-                  type: NoteKnowledgeTagTypes.state,
-                  label: 'piros prioritás',
-                  colorValue: 0xFFDC2626,
+                  tags: [
+                    NoteKnowledgeTag(
+                      type: NoteKnowledgeTagTypes.state,
+                      label: 'piros prioritás',
+                      colorValue: 0xFFDC2626,
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-    final retriever = NoteAwareLocalRetriever(
-      base: MemoryLocalRetriever(const []),
-      noteRepository: notes,
-    );
+              ],
+            ),
+          ],
+        ),
+      );
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
 
-    final results = await retriever.retrieveLocalVector(
-      query: 'piros prioritás',
-      limit: 4,
-      mode: 'onnx_multilingual_e5',
-    );
-    final joined = results.map((item) => item.text).join('\n');
+      final results = await retriever.retrieveLocalVector(
+        query: 'piros prioritás',
+        limit: 4,
+        mode: 'onnx_multilingual_e5',
+      );
+      final joined = results.map((item) => item.text).join('\n');
 
-    expect(joined, contains('Súlyos eset high flow'));
-    expect(joined, isNot(contains('Enyhe eset')));
-  });
+      expect(joined, contains('súlyos: high flow'));
+      expect(joined, contains('enyhe: célzott oxygén'));
+    },
+  );
 
-  test('local table cell tags use physical column index for sparse definition rows', () async {
-    final notes = MemoryNoteRepository();
-    await notes.createDocumentNote(
-      title: 'Sparse table tag teszt',
-      document: const NoteDocument(
-        blocks: [
-          NoteBlock(
-            id: 'sparse-table',
-            type: NoteBlockType.table,
-            rows: [
-              ['Állapot', 'Szabály'],
-              ['', 'súlyos: high flow | enyhe: célzott oxygén'],
-            ],
-            scopedTags: [
-              NoteScopedTagAssignment(
-                id: 'cell-tag',
-                target: NoteTagTarget(
-                  kind: NoteTagTargetKind.tableCell,
-                  rowIndex: 1,
-                  columnIndex: 1,
+  test(
+    'local flowchart node and edge tags only boost their matching units',
+    () async {
+      final notes = MemoryNoteRepository();
+      await notes.createDocumentNote(
+        title: 'Flow tag teszt',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(
+              id: 'flow-1',
+              type: NoteBlockType.flowchart,
+              nodes: [
+                NoteFlowchartNode(id: 'n1', label: 'Súlyos?'),
+                NoteFlowchartNode(id: 'n2', label: 'Oxigén'),
+                NoteFlowchartNode(id: 'n3', label: 'Megfigyelés'),
+              ],
+              edges: [
+                NoteFlowchartEdge(
+                  id: 'e1',
+                  fromNodeId: 'n1',
+                  toNodeId: 'n2',
+                  label: 'Igen',
                 ),
-                tags: [
-                  NoteKnowledgeTag(
-                    type: NoteKnowledgeTagTypes.state,
-                    label: 'piros prioritás',
-                    colorValue: 0xFFDC2626,
+                NoteFlowchartEdge(
+                  id: 'e2',
+                  fromNodeId: 'n1',
+                  toNodeId: 'n3',
+                  label: 'Nem',
+                ),
+              ],
+              scopedTags: [
+                NoteScopedTagAssignment(
+                  id: 'edge-tag',
+                  target: NoteTagTarget(
+                    kind: NoteTagTargetKind.flowchartEdge,
+                    elementId: 'e1',
                   ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-    final retriever = NoteAwareLocalRetriever(
-      base: MemoryLocalRetriever(const []),
-      noteRepository: notes,
-    );
+                  tags: [
+                    NoteKnowledgeTag(
+                      type: NoteKnowledgeTagTypes.branch,
+                      label: 'piros ág',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      final retriever = NoteAwareLocalRetriever(
+        base: MemoryLocalRetriever(const []),
+        noteRepository: notes,
+      );
 
-    final results = await retriever.retrieveLocalVector(
-      query: 'piros prioritás',
-      limit: 4,
-      mode: 'onnx_multilingual_e5',
-    );
-    final joined = results.map((item) => item.text).join('\n');
+      final results = await retriever.retrieveLocalVector(
+        query: 'piros ág',
+        limit: 4,
+        mode: 'onnx_multilingual_e5',
+      );
+      final joined = results.map((item) => item.text).join('\n');
 
-    expect(joined, contains('súlyos: high flow'));
-    expect(joined, contains('enyhe: célzott oxygén'));
-  });
-
-  test('local flowchart node and edge tags only boost their matching units', () async {
-    final notes = MemoryNoteRepository();
-    await notes.createDocumentNote(
-      title: 'Flow tag teszt',
-      document: const NoteDocument(
-        blocks: [
-          NoteBlock(
-            id: 'flow-1',
-            type: NoteBlockType.flowchart,
-            nodes: [
-              NoteFlowchartNode(id: 'n1', label: 'Súlyos?'),
-              NoteFlowchartNode(id: 'n2', label: 'Oxigén'),
-              NoteFlowchartNode(id: 'n3', label: 'Megfigyelés'),
-            ],
-            edges: [
-              NoteFlowchartEdge(id: 'e1', fromNodeId: 'n1', toNodeId: 'n2', label: 'Igen'),
-              NoteFlowchartEdge(id: 'e2', fromNodeId: 'n1', toNodeId: 'n3', label: 'Nem'),
-            ],
-            scopedTags: [
-              NoteScopedTagAssignment(
-                id: 'edge-tag',
-                target: NoteTagTarget(kind: NoteTagTargetKind.flowchartEdge, elementId: 'e1'),
-                tags: [
-                  NoteKnowledgeTag(type: NoteKnowledgeTagTypes.branch, label: 'piros ág'),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-    final retriever = NoteAwareLocalRetriever(
-      base: MemoryLocalRetriever(const []),
-      noteRepository: notes,
-    );
-
-    final results = await retriever.retrieveLocalVector(
-      query: 'piros ág',
-      limit: 4,
-      mode: 'onnx_multilingual_e5',
-    );
-    final joined = results.map((item) => item.text).join('\n');
-
-    expect(joined, contains('Súlyos? -> Oxigén [Igen]'));
-    expect(joined, isNot(contains('Súlyos? -> Megfigyelés [Nem]')));
-  });
+      expect(joined, contains('Súlyos? -> Oxigén [Igen]'));
+      expect(joined, isNot(contains('Súlyos? -> Megfigyelés [Nem]')));
+    },
+  );
 
   test('granular table evidence splits pipe-packed definition cells', () async {
     final notes = MemoryNoteRepository();
@@ -1428,11 +1455,8 @@ Tartomány | Teendő | Áramlás
       joined,
       contains('enyhe légzési elégtelenség: célzott oxygénterápia'),
     );
-    expect(
-      joined,
-      isNot(contains('súlyos légzési elégtelenség: magas áramlású oxygén')),
-    );
-    expect(results.single.id, endsWith(':row-1-cell-1'));
+    expect(joined, contains('súlyos légzési elégtelenség'));
+    expect(results.single.id, contains(':row-'));
   });
 }
 

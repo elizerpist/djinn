@@ -332,30 +332,62 @@ class LocalAnswerService implements AnswerService {
       sourceType: evidence.sourceType.wireName,
       sourceLabel: evidence.label,
       validationState: evidence.validationState.wireName,
+      atomType: evidence.atomType?.wireName,
+      reasons: evidence.reasons
+          .map((reason) => reason.wireName)
+          .toList(growable: false),
+      fullChunkText: evidence.fullChunkText,
     );
   }
 
   List<ChatCitation> _toGroupedChatCitations(List<SourceEvidence> evidence) {
     final grouped = <String, List<SourceEvidence>>{};
     for (final item in evidence) {
-      grouped.putIfAbsent(_citationGroupId(item), () => <SourceEvidence>[]).add(item);
+      grouped
+          .putIfAbsent(_citationGroupId(item), () => <SourceEvidence>[])
+          .add(item);
     }
-    return grouped.entries.map((entry) {
-      final items = entry.value;
-      final first = items.first;
-      final sourceType = _groupSourceType(items);
-      return ChatCitation(
-        documentId: first.documentId ?? '',
-        title: _compactCitationTitle(first.label),
-        page: first.pageNumber,
-        section: null,
-        excerpt: _groupExcerpt(items),
-        sourceId: entry.key,
-        sourceType: sourceType.wireName,
-        sourceLabel: _compactCitationTitle(first.label),
-        validationState: first.validationState.wireName,
-      );
-    }).toList(growable: false);
+    return grouped.entries
+        .map((entry) {
+          final items = entry.value;
+          final first = items.first;
+          final sourceType = _groupSourceType(items);
+          return ChatCitation(
+            documentId: first.documentId ?? '',
+            title: _compactCitationTitle(first.label),
+            page: first.pageNumber,
+            section: null,
+            excerpt: _groupExcerpt(items),
+            sourceId: entry.key,
+            sourceType: sourceType.wireName,
+            sourceLabel: _compactCitationTitle(first.label),
+            validationState: first.validationState.wireName,
+            atomType: first.atomType?.wireName,
+            reasons: _groupReasons(items),
+            fullChunkText: _groupFullChunkText(items),
+          );
+        })
+        .toList(growable: false);
+  }
+
+  String? _groupFullChunkText(List<SourceEvidence> items) {
+    for (final item in items) {
+      final text = item.fullChunkText?.trim();
+      if (text != null && text.isNotEmpty) {
+        return item.fullChunkText;
+      }
+    }
+    return null;
+  }
+
+  List<String> _groupReasons(List<SourceEvidence> items) {
+    final values = <String>{};
+    for (final item in items) {
+      for (final reason in item.reasons) {
+        values.add(reason.wireName);
+      }
+    }
+    return values.toList(growable: false);
   }
 
   String _citationGroupId(SourceEvidence evidence) {
@@ -383,9 +415,11 @@ class LocalAnswerService implements AnswerService {
   }
 
   EvidenceSourceType _groupSourceType(List<SourceEvidence> items) {
-    if (items.any((item) =>
-        item.sourceType == EvidenceSourceType.flowchartEdge ||
-        item.sourceType == EvidenceSourceType.flowchartNode)) {
+    if (items.any(
+      (item) =>
+          item.sourceType == EvidenceSourceType.flowchartEdge ||
+          item.sourceType == EvidenceSourceType.flowchartNode,
+    )) {
       return EvidenceSourceType.flowchartEdge;
     }
     if (items.any((item) => item.sourceType == EvidenceSourceType.tableChunk)) {
@@ -619,8 +653,9 @@ class LocalAnswerService implements AnswerService {
   }
 
   String _formatFlowchartRelation(String line) {
-    final match = RegExp(r'^\s*(.+?)\s*->\s*(.+?)(?:\s*\[(.*?)\])?\s*$')
-        .firstMatch(line);
+    final match = RegExp(
+      r'^\s*(.+?)\s*->\s*(.+?)(?:\s*\[(.*?)\])?\s*$',
+    ).firstMatch(line);
     if (match == null) {
       return line;
     }

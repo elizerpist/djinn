@@ -49,6 +49,12 @@ void main() {
           label: 'Nem validált flowchart',
           validationState: ValidationState.unreviewed,
           score: 0.95,
+          atomType: NoteEvidenceAtomType.flowchartNode,
+          fullChunkText: 'Algoritmus node\nKapcsolt teljes chunk',
+          reasons: [
+            NoteEvidenceReason.directQuery,
+            NoteEvidenceReason.flowchartBranch,
+          ],
         ),
       ]),
       citationVerifier: CitationVerifier(),
@@ -63,6 +69,15 @@ void main() {
     expect(result.hasValidationWarning, isTrue);
     expect(result.citations.single.sourceId, 'node-1');
     expect(result.citations.single.sourceType, 'flowchart_node');
+    expect(result.citations.single.atomType, 'flowchart_node');
+    expect(result.citations.single.reasons, [
+      'direct_query',
+      'flowchart_branch',
+    ]);
+    expect(
+      result.citations.single.fullChunkText,
+      'Algoritmus node\nKapcsolt teljes chunk',
+    );
     expect(DebugConsole.allText, contains('[Chat/RAG] retrieved count=1'));
     expect(
       DebugConsole.allText,
@@ -473,7 +488,8 @@ void main() {
           id: 'note:n1:block-flow:edge-8',
           sourceType: EvidenceSourceType.flowchartEdge,
           text: 'Súlyos? -> Oxygén [Igen]',
-          label: 'Jegyzet · Légzési elégtelenség · Flowchart · kapcsolat: Súlyos? -> Oxygén [Igen]',
+          label:
+              'Jegyzet · Légzési elégtelenség · Flowchart · kapcsolat: Súlyos? -> Oxygén [Igen]',
           validationState: ValidationState.validated,
         ),
         SourceEvidence(
@@ -503,8 +519,14 @@ void main() {
 
     final result = await service.answer('súlyos?');
 
-    expect(result.text, contains('Folyamatkapcsolatok\n- Ha súlyos, akkor Oxygén.'));
-    expect(result.text, contains('Táblázatos szabályok\n- súlyos légzési elégtelenség'));
+    expect(
+      result.text,
+      contains('Folyamatkapcsolatok\n- Ha súlyos, akkor Oxygén.'),
+    );
+    expect(
+      result.text,
+      contains('Táblázatos szabályok\n- súlyos légzési elégtelenség'),
+    );
     expect(result.text, isNot(contains('Források:')));
     expect(result.text, isNot(contains('Súlyos? -> Oxygén')));
     expect(result.citations.map((citation) => citation.sourceId), [
@@ -530,7 +552,9 @@ void main() {
     await service.answer('mi a DO2?');
 
     expect(retriever.hybridQueries, ['mi a DO2?']);
-    expect(retriever.hybridVectorModes, [LocalIndexingModes.mediapipeTextEmbedder]);
+    expect(retriever.hybridVectorModes, [
+      LocalIndexingModes.mediapipeTextEmbedder,
+    ]);
     expect(retriever.localVectorQueries, isEmpty);
   });
 }

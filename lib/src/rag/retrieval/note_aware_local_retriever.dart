@@ -7,6 +7,7 @@ import '../../offline/local_vector_search_service.dart';
 import '../../offline/offline_search_service.dart';
 import '../models/source_evidence.dart';
 import 'local_retriever.dart';
+import 'note_atom_indexer.dart';
 
 class NoteAwareLocalRetriever implements LocalRetriever {
   NoteAwareLocalRetriever({
@@ -69,7 +70,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
           for (final item in noteEvidence)
             LocalVectorChunk(
               id: item.id,
-              label: item.label,
+              label: _searchLabelFor(item),
               text: item.searchableText,
             ),
         ],
@@ -89,6 +90,14 @@ class NoteAwareLocalRetriever implements LocalRetriever {
                 pageNumber: noteById[match.id]!.pageNumber,
                 score: match.score,
                 searchText: noteById[match.id]!.searchText,
+                atomType: noteById[match.id]!.atomType,
+                reasons: noteById[match.id]!.reasons,
+                noteTitle: noteById[match.id]!.noteTitle,
+                chunkId: noteById[match.id]!.chunkId,
+                chunkTitle: noteById[match.id]!.chunkTitle,
+                sourceStart: noteById[match.id]!.sourceStart,
+                sourceEnd: noteById[match.id]!.sourceEnd,
+                fullChunkText: noteById[match.id]!.fullChunkText,
               ),
         ],
       );
@@ -97,17 +106,29 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         'candidates=${noteEvidence.length} matches=${noteMatches.length}',
       );
     }
-    final combined = _dedupe([...baseResults, ...noteMatches]);
+    final primaryNoteScope = _primaryNoteScopeForQuery(trimmed, noteMatches);
+    final reasonedNoteMatches = _withDirectReasons(
+      query: trimmed,
+      evidence: noteMatches,
+      primaryNoteScope: primaryNoteScope,
+    );
+    final combined = _dedupe([...baseResults, ...reasonedNoteMatches]);
     final expanded = _graphExpander.expand(
       query: trimmed,
-      seeds: combined,
-      candidates: noteEvidence,
+      seeds: _primaryScopeEvidence(combined, primaryNoteScope),
+      candidates: _primaryScopeEvidence(noteEvidence, primaryNoteScope),
       existing: combined,
-      limit: _graphExpansionLimit(limit, noteEvidence.length),
+      limit: _shouldExpandQuery(trimmed)
+          ? _graphExpansionLimit(limit, noteEvidence.length)
+          : combined.length,
+    );
+    final reasonedExpanded = _withExpandedReasons(
+      expanded,
+      primaryNoteScope: primaryNoteScope,
     );
     final result = _pruneCompetingEvidence(
       query: trimmed,
-      seeds: _dedupe([...combined, ...expanded]),
+      seeds: _dedupe([...combined, ...reasonedExpanded]),
     ).take(limit).toList();
     DebugConsole.log(
       '[VectorGraph] note-aware retrieval base=${baseResults.length} '
@@ -138,7 +159,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         for (final item in noteEvidence)
           LocalVectorChunk(
             id: item.id,
-            label: item.label,
+            label: _searchLabelFor(item),
             text: item.searchableText,
           ),
       ],
@@ -148,30 +169,32 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       seeds: [
         for (final match in noteMatches)
           if (noteById[match.id] != null)
-            SourceEvidence(
-              id: noteById[match.id]!.id,
-              sourceType: noteById[match.id]!.sourceType,
-              text: noteById[match.id]!.text,
-              label: noteById[match.id]!.label,
-              validationState: noteById[match.id]!.validationState,
-              documentId: noteById[match.id]!.documentId,
-              pageNumber: noteById[match.id]!.pageNumber,
-              score: match.score,
-              searchText: noteById[match.id]!.searchText,
-            ),
+            noteById[match.id]!.copyWith(score: match.score),
       ],
     );
-    final combined = _dedupe([...baseResults, ...noteSeeds]);
+    final primaryNoteScope = _primaryNoteScopeForQuery(query, noteSeeds);
+    final reasonedNoteSeeds = _withDirectReasons(
+      query: query,
+      evidence: noteSeeds,
+      primaryNoteScope: primaryNoteScope,
+    );
+    final combined = _dedupe([...baseResults, ...reasonedNoteSeeds]);
     final expanded = _graphExpander.expand(
       query: query,
-      seeds: combined,
-      candidates: noteEvidence,
+      seeds: _primaryScopeEvidence(combined, primaryNoteScope),
+      candidates: _primaryScopeEvidence(noteEvidence, primaryNoteScope),
       existing: combined,
-      limit: _graphExpansionLimit(limit, noteEvidence.length),
+      limit: _shouldExpandQuery(query)
+          ? _graphExpansionLimit(limit, noteEvidence.length)
+          : combined.length,
+    );
+    final reasonedExpanded = _withExpandedReasons(
+      expanded,
+      primaryNoteScope: primaryNoteScope,
     );
     final result = _pruneCompetingEvidence(
       query: query,
-      seeds: _dedupe([...combined, ...expanded]),
+      seeds: _dedupe([...combined, ...reasonedExpanded]),
     ).take(limit).toList();
     DebugConsole.log(
       '[LocalVector] note search mode=$mode base=${baseResults.length} '
@@ -202,7 +225,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         for (final item in noteEvidence)
           LocalVectorChunk(
             id: item.id,
-            label: item.label,
+            label: _searchLabelFor(item),
             text: item.searchableText,
           ),
       ],
@@ -210,17 +233,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     final vectorSeeds = [
       for (final match in vectorMatches)
         if (noteById[match.id] != null)
-          SourceEvidence(
-            id: noteById[match.id]!.id,
-            sourceType: noteById[match.id]!.sourceType,
-            text: noteById[match.id]!.text,
-            label: noteById[match.id]!.label,
-            validationState: noteById[match.id]!.validationState,
-            documentId: noteById[match.id]!.documentId,
-            pageNumber: noteById[match.id]!.pageNumber,
-            score: match.score,
-            searchText: noteById[match.id]!.searchText,
-          ),
+          noteById[match.id]!.copyWith(score: match.score),
     ];
     final keywordSeeds = _keywordMatches(
       query: query,
@@ -232,7 +245,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       evidence: noteEvidence,
       limit: limit,
     );
-    final combined = _pruneCompetingEvidence(
+    final directSeeds = _pruneCompetingEvidence(
       query: query,
       seeds: _dedupe([
         ...baseResults,
@@ -241,16 +254,31 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         ...symbolSeeds,
       ]),
     );
+    final primaryNoteScope = _primaryNoteScopeForQuery(query, directSeeds);
+    final combined = _dedupe([
+      ...baseResults,
+      ..._withDirectReasons(
+        query: query,
+        evidence: directSeeds.where((item) => item.id.startsWith('note:')),
+        primaryNoteScope: primaryNoteScope,
+      ),
+    ]);
     final expanded = _graphExpander.expand(
       query: query,
-      seeds: combined,
-      candidates: noteEvidence,
+      seeds: _primaryScopeEvidence(combined, primaryNoteScope),
+      candidates: _primaryScopeEvidence(noteEvidence, primaryNoteScope),
       existing: combined,
-      limit: _graphExpansionLimit(limit, noteEvidence.length),
+      limit: _shouldExpandQuery(query)
+          ? _graphExpansionLimit(limit, noteEvidence.length)
+          : combined.length,
+    );
+    final reasonedExpanded = _withExpandedReasons(
+      expanded,
+      primaryNoteScope: primaryNoteScope,
     );
     final result = _pruneCompetingEvidence(
       query: query,
-      seeds: _dedupe([...combined, ...expanded]),
+      seeds: _dedupe([...combined, ...reasonedExpanded]),
     ).take(limit).toList();
     DebugConsole.log(
       '[HybridSearch] note search mode=$vectorMode base=${baseResults.length} '
@@ -266,6 +294,9 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     required List<SourceEvidence> seeds,
   }) {
     final metadataSeeds = _preferDirectMetadataMatches(query, seeds);
+    if (metadataSeeds.any((seed) => seed.atomType != null)) {
+      return metadataSeeds;
+    }
     final scope = _QueryScope.from(query).forEvidence(metadataSeeds);
     final scopedSeeds = _filterByQueryScope(scope, metadataSeeds);
     if (scopedSeeds.length < 2) {
@@ -291,7 +322,9 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         continue;
       }
       if (scope.keepTableCompanions &&
-          entry.value.any((seed) => seed.sourceType == EvidenceSourceType.tableChunk)) {
+          entry.value.any(
+            (seed) => seed.sourceType == EvidenceSourceType.tableChunk,
+          )) {
         continue;
       }
       final scores = <String, int>{};
@@ -327,6 +360,169 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     return scopedSeeds
         .where((seed) => !removedIds.contains(seed.id))
         .toList(growable: false);
+  }
+
+  String? _primaryNoteScopeForQuery(
+    String query,
+    Iterable<SourceEvidence> evidence,
+  ) {
+    final items = evidence
+        .where((item) => _evidenceNoteScopeId(item.id) != null)
+        .toList(growable: false);
+    if (items.isEmpty) {
+      return null;
+    }
+    final queryTerms = _simpleTerms(query);
+    final scores =
+        <String, ({int titleCoverage, int matches, int firstIndex})>{};
+    for (var index = 0; index < items.length; index += 1) {
+      final item = items[index];
+      final scope = _evidenceNoteScopeId(item.id);
+      if (scope == null) {
+        continue;
+      }
+      final titleTerms = _simpleTerms(item.noteTitle ?? '');
+      final titleCoverage = titleTerms.intersection(queryTerms).length;
+      final previous = scores[scope];
+      if (previous == null) {
+        scores[scope] = (
+          titleCoverage: titleCoverage,
+          matches: 1,
+          firstIndex: index,
+        );
+      } else {
+        scores[scope] = (
+          titleCoverage: previous.titleCoverage > titleCoverage
+              ? previous.titleCoverage
+              : titleCoverage,
+          matches: previous.matches + 1,
+          firstIndex: previous.firstIndex,
+        );
+      }
+    }
+    if (scores.isEmpty) {
+      return null;
+    }
+    final ranked = scores.entries.toList(growable: false)
+      ..sort((a, b) {
+        final title = b.value.titleCoverage.compareTo(a.value.titleCoverage);
+        if (title != 0) {
+          return title;
+        }
+        final matches = b.value.matches.compareTo(a.value.matches);
+        if (matches != 0) {
+          return matches;
+        }
+        return a.value.firstIndex.compareTo(b.value.firstIndex);
+      });
+    return ranked.first.key;
+  }
+
+  List<SourceEvidence> _primaryScopeEvidence(
+    Iterable<SourceEvidence> evidence,
+    String? primaryNoteScope,
+  ) {
+    if (primaryNoteScope == null) {
+      return const [];
+    }
+    return evidence
+        .where((item) => _evidenceNoteScopeId(item.id) == primaryNoteScope)
+        .toList(growable: false);
+  }
+
+  bool _shouldExpandQuery(String query) {
+    return _simpleTerms(query).length >= 2;
+  }
+
+  List<SourceEvidence> _withDirectReasons({
+    required String query,
+    required Iterable<SourceEvidence> evidence,
+    required String? primaryNoteScope,
+  }) {
+    return [
+      for (final item in evidence) _withReasons(query, item, primaryNoteScope),
+    ];
+  }
+
+  List<SourceEvidence> _withExpandedReasons(
+    Iterable<SourceEvidence> evidence, {
+    required String? primaryNoteScope,
+  }) {
+    return [
+      for (final item in evidence)
+        _mergeReasons(item, [
+          if (_evidenceNoteScopeId(item.id) == primaryNoteScope)
+            NoteEvidenceReason.noteScope,
+          if (item.sourceType == EvidenceSourceType.flowchartEdge)
+            NoteEvidenceReason.flowchartBranch,
+          NoteEvidenceReason.processLink,
+        ]),
+    ];
+  }
+
+  SourceEvidence _withReasons(
+    String query,
+    SourceEvidence item,
+    String? primaryNoteScope,
+  ) {
+    if (!item.id.startsWith('note:')) {
+      return item;
+    }
+    final scope = _evidenceNoteScopeId(item.id);
+    final reasons = <NoteEvidenceReason>[
+      NoteEvidenceReason.directQuery,
+      if (scope != null && scope == primaryNoteScope)
+        NoteEvidenceReason.noteScope,
+      if (scope != null &&
+          primaryNoteScope != null &&
+          scope != primaryNoteScope)
+        NoteEvidenceReason.externalDirect,
+      if (_titleMatchesQuery(query, item)) NoteEvidenceReason.chunkTitle,
+      ..._structuralReasons(item),
+    ];
+    if (reasons.isEmpty) {
+      reasons.add(NoteEvidenceReason.directQuery);
+    }
+    return _mergeReasons(item, reasons);
+  }
+
+  bool _titleMatchesQuery(String query, SourceEvidence item) {
+    final title = item.chunkTitle?.trim();
+    if (title == null || title.isEmpty) {
+      return false;
+    }
+    final titleTerms = _simpleTerms(title);
+    if (titleTerms.isEmpty) {
+      return false;
+    }
+    final queryTerms = _simpleTerms(query);
+    return titleTerms.any(queryTerms.contains);
+  }
+
+  List<NoteEvidenceReason> _structuralReasons(SourceEvidence item) {
+    return switch (item.atomType) {
+      NoteEvidenceAtomType.listItem => const [NoteEvidenceReason.listItemMatch],
+      NoteEvidenceAtomType.tableCell => const [
+        NoteEvidenceReason.tableColumn,
+        NoteEvidenceReason.tableCell,
+      ],
+      NoteEvidenceAtomType.tableRow => const [NoteEvidenceReason.tableCell],
+      NoteEvidenceAtomType.flowchartEdge => const [
+        NoteEvidenceReason.flowchartBranch,
+      ],
+      NoteEvidenceAtomType.flowchartNode => const [
+        NoteEvidenceReason.flowchartBranch,
+      ],
+      NoteEvidenceAtomType.textSentence || null => const [],
+    };
+  }
+
+  SourceEvidence _mergeReasons(
+    SourceEvidence item,
+    Iterable<NoteEvidenceReason> reasons,
+  ) {
+    final merged = <NoteEvidenceReason>{...item.reasons, ...reasons};
+    return item.copyWith(reasons: merged.toList(growable: false));
   }
 
   List<SourceEvidence> _preferDirectMetadataMatches(
@@ -380,7 +576,8 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         .whereType<String>()
         .toSet();
     final hasMultipleNoteScopes = noteScopes.length > 1;
-    final needsMultiNoteTopicGate = !scope.hasDefinitionIntent &&
+    final needsMultiNoteTopicGate =
+        !scope.hasDefinitionIntent &&
         !scope.hasFacetIntent &&
         hasMultipleNoteScopes &&
         scope.topicTerms.length >= 3;
@@ -389,62 +586,64 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         !needsMultiNoteTopicGate) {
       return seeds;
     }
-    return seeds.where((seed) {
-      if (scope.hasFacetIntent) {
-        if (!_isFacetEvidence(scope, seed)) {
-          DebugConsole.log(
-            '[LocalIndex] evidence pruned id=${seed.id} '
-            'reason=query_facet_scope',
-          );
-          return false;
-        }
-        if (scope.topicTerms.isNotEmpty &&
-            !_coversScopeTerms(seed.searchableText, scope.topicTerms)) {
-          DebugConsole.log(
-            '[LocalIndex] evidence pruned id=${seed.id} '
-            'reason=query_topic_facet_mismatch',
-          );
-          return false;
-        }
-      }
-      if (!scope.allowDefinitionExpansion && _isDefinitionEvidence(seed)) {
-        DebugConsole.log(
-          '[LocalIndex] evidence pruned id=${seed.id} '
-          'reason=query_scope_definition_suppressed',
-        );
-        return false;
-      }
-      if (!scope.hasDefinitionIntent &&
-          !scope.hasFacetIntent &&
-          needsMultiNoteTopicGate &&
-          _queryTopicCoverage(seed.searchableText, scope.topicTerms) < 2) {
-        DebugConsole.log(
-          '[LocalIndex] evidence pruned id=${seed.id} '
-          'reason=query_topic_undercovered',
-        );
-        return false;
-      }
-      final narrowTerm = scope.primaryNarrowTerm;
-      if (scope.isNarrowState &&
-          narrowTerm != null &&
-          (seed.sourceType == EvidenceSourceType.flowchartNode ||
-              seed.sourceType == EvidenceSourceType.flowchartEdge) &&
-          !_coversScopeTerms(seed.searchableText, {narrowTerm})) {
-        DebugConsole.log(
-          '[LocalIndex] evidence pruned id=${seed.id} '
-          'reason=query_primary_state_mismatch term=$narrowTerm',
-        );
-        return false;
-      }
-      if (_flowchartBranchConflictsWithQuery(seed, scope)) {
-        DebugConsole.log(
-          '[LocalIndex] evidence pruned id=${seed.id} '
-          'reason=query_branch_polarity_mismatch',
-        );
-        return false;
-      }
-      return true;
-    }).toList(growable: false);
+    return seeds
+        .where((seed) {
+          if (scope.hasFacetIntent) {
+            if (!_isFacetEvidence(scope, seed)) {
+              DebugConsole.log(
+                '[LocalIndex] evidence pruned id=${seed.id} '
+                'reason=query_facet_scope',
+              );
+              return false;
+            }
+            if (scope.topicTerms.isNotEmpty &&
+                !_coversScopeTerms(seed.searchableText, scope.topicTerms)) {
+              DebugConsole.log(
+                '[LocalIndex] evidence pruned id=${seed.id} '
+                'reason=query_topic_facet_mismatch',
+              );
+              return false;
+            }
+          }
+          if (!scope.allowDefinitionExpansion && _isDefinitionEvidence(seed)) {
+            DebugConsole.log(
+              '[LocalIndex] evidence pruned id=${seed.id} '
+              'reason=query_scope_definition_suppressed',
+            );
+            return false;
+          }
+          if (!scope.hasDefinitionIntent &&
+              !scope.hasFacetIntent &&
+              needsMultiNoteTopicGate &&
+              _queryTopicCoverage(seed.searchableText, scope.topicTerms) < 2) {
+            DebugConsole.log(
+              '[LocalIndex] evidence pruned id=${seed.id} '
+              'reason=query_topic_undercovered',
+            );
+            return false;
+          }
+          final narrowTerm = scope.primaryNarrowTerm;
+          if (scope.isNarrowState &&
+              narrowTerm != null &&
+              (seed.sourceType == EvidenceSourceType.flowchartNode ||
+                  seed.sourceType == EvidenceSourceType.flowchartEdge) &&
+              !_coversScopeTerms(seed.searchableText, {narrowTerm})) {
+            DebugConsole.log(
+              '[LocalIndex] evidence pruned id=${seed.id} '
+              'reason=query_primary_state_mismatch term=$narrowTerm',
+            );
+            return false;
+          }
+          if (_flowchartBranchConflictsWithQuery(seed, scope)) {
+            DebugConsole.log(
+              '[LocalIndex] evidence pruned id=${seed.id} '
+              'reason=query_branch_polarity_mismatch',
+            );
+            return false;
+          }
+          return true;
+        })
+        .toList(growable: false);
   }
 
   String? _evidenceNoteScopeId(String id) {
@@ -466,9 +665,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     if (normalized.contains('table rule')) {
       return true;
     }
-    return scope.facetTerms.any(
-      (term) => _scopeContainsTerm(normalized, term),
-    );
+    return scope.facetTerms.any((term) => _scopeContainsTerm(normalized, term));
   }
 
   bool _isDefinitionEvidence(SourceEvidence evidence) {
@@ -645,17 +842,27 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       evidence: noteEvidence,
       limit: limit,
     );
-    final combined = _dedupe([...baseResults, ...noteMatches]);
+    final primaryNoteScope = _primaryNoteScopeForQuery(query, noteMatches);
+    final reasonedNoteMatches = _withDirectReasons(
+      query: query,
+      evidence: noteMatches,
+      primaryNoteScope: primaryNoteScope,
+    );
+    final combined = _dedupe([...baseResults, ...reasonedNoteMatches]);
     final expanded = _graphExpander.expand(
       query: query,
-      seeds: combined,
-      candidates: noteEvidence,
+      seeds: _primaryScopeEvidence(combined, primaryNoteScope),
+      candidates: _primaryScopeEvidence(noteEvidence, primaryNoteScope),
       existing: combined,
-      limit: limit,
+      limit: _shouldExpandQuery(query) ? limit : combined.length,
+    );
+    final reasonedExpanded = _withExpandedReasons(
+      expanded,
+      primaryNoteScope: primaryNoteScope,
     );
     final result = _pruneCompetingEvidence(
       query: query,
-      seeds: _dedupe([...combined, ...expanded]),
+      seeds: _dedupe([...combined, ...reasonedExpanded]),
     ).take(limit).toList();
     DebugConsole.log(
       '[Offline] note-aware retrieval base=${baseResults.length} '
@@ -667,7 +874,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
 
   Future<List<SourceEvidence>> _loadNoteEvidence({
     bool logEmbeddingFallback = false,
-    bool granular = false,
+    bool granular = true,
   }) async {
     final notes = await _noteRepository.listNotes();
     final evidence = <SourceEvidence>[];
@@ -696,9 +903,17 @@ class NoteAwareLocalRetriever implements LocalRetriever {
             'reason=explicit_keyword_mode indexFresh=${chunk.isIndexFresh}',
           );
         }
-        if (granular) {
-          evidence.addAll(_granularEvidenceForChunk(note.document, chunk));
-        } else {
+      }
+      if (granular) {
+        evidence.addAll(
+          const NoteAtomIndexer().buildEvidence(
+            noteId: note.id,
+            noteTitle: note.title,
+            document: note.document,
+          ),
+        );
+      } else {
+        for (final chunk in chunks) {
           evidence.add(
             SourceEvidence(
               id: 'note:${chunk.noteId}:${chunk.blockId}',
@@ -710,6 +925,9 @@ class NoteAwareLocalRetriever implements LocalRetriever {
                   : ValidationState.unreviewed,
               documentId: chunk.noteId,
               searchText: chunk.searchText,
+              noteTitle: chunk.noteTitle,
+              chunkId: chunk.blockId,
+              fullChunkText: chunk.text,
             ),
           );
         }
@@ -721,6 +939,9 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     return evidence;
   }
 
+  // Kept as a legacy fallback shape while the active note path uses
+  // NoteAtomIndexer for spec-compliant atom evidence.
+  // ignore: unused_element
   List<SourceEvidence> _granularEvidenceForChunk(
     NoteDocument document,
     NoteChunkViewModel chunk,
@@ -798,12 +1019,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     final units = <_TextUnit>[];
     var segmentStart = 0;
     for (final match in delimiter.allMatches(text)) {
-      _addTextUnit(
-        units,
-        source: text,
-        start: segmentStart,
-        end: match.start,
-      );
+      _addTextUnit(units, source: text, start: segmentStart, end: match.start);
       segmentStart = match.end;
     }
     _addTextUnit(units, source: text, start: segmentStart, end: text.length);
@@ -892,7 +1108,8 @@ class NoteAwareLocalRetriever implements LocalRetriever {
               id: 'note:${chunk.noteId}:${chunk.blockId}:row-$rowIndex-cell-$logicalIndex',
               sourceType: EvidenceSourceType.tableChunk,
               text: _tableCellText(cell: cell, header: header, title: title),
-              label: '$baseLabel · sor ${rowIndex + 1} · cella ${definitionCell.columnIndex + 1}',
+              label:
+                  '$baseLabel · sor ${rowIndex + 1} · cella ${definitionCell.columnIndex + 1}',
               validationState: state,
               documentId: chunk.noteId,
               searchText: _joinSearchText([
@@ -1204,7 +1421,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         .map(
           (item) => OfflineChunk(
             id: item.id,
-            label: item.label,
+            label: _searchLabelFor(item),
             text: item.searchableText,
           ),
         )
@@ -1226,6 +1443,13 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       }
     }
     return results;
+  }
+
+  String _searchLabelFor(SourceEvidence item) {
+    if (item.atomType == null) {
+      return item.label;
+    }
+    return item.chunkTitle?.trim() ?? '';
   }
 
   List<SourceEvidence> _symbolMatches({
@@ -1324,11 +1548,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
 }
 
 class _TextUnit {
-  const _TextUnit({
-    required this.text,
-    required this.start,
-    required this.end,
-  });
+  const _TextUnit({required this.text, required this.start, required this.end});
 
   final String text;
   final int start;
@@ -1336,20 +1556,14 @@ class _TextUnit {
 }
 
 class _IndexedTableRow {
-  const _IndexedTableRow({
-    required this.index,
-    required this.row,
-  });
+  const _IndexedTableRow({required this.index, required this.row});
 
   final int index;
   final List<String> row;
 }
 
 class _DefinitionCell {
-  const _DefinitionCell({
-    required this.text,
-    required this.columnIndex,
-  });
+  const _DefinitionCell({required this.text, required this.columnIndex});
 
   final String text;
   final int columnIndex;
@@ -1478,16 +1692,19 @@ class _QueryScope {
       return this;
     }
     final narrowTerm =
-        primaryNarrowTerm ?? _evidenceSpecificNarrowTerm(evidence, orderedTerms, facetTerms);
+        primaryNarrowTerm ??
+        _evidenceSpecificNarrowTerm(evidence, orderedTerms, facetTerms);
     final hasStateLikeSeed = evidence.any((item) {
       if (item.sourceType != EvidenceSourceType.tableChunk &&
           item.sourceType != EvidenceSourceType.flowchartNode &&
           item.sourceType != EvidenceSourceType.flowchartEdge) {
         return false;
       }
-      return narrowTerm != null && _coversScopeTerm(item.searchableText, narrowTerm);
+      return narrowTerm != null &&
+          _coversScopeTerm(item.searchableText, narrowTerm);
     });
-    if (!hasStateLikeSeed || (isNarrowState && primaryNarrowTerm == narrowTerm)) {
+    if (!hasStateLikeSeed ||
+        (isNarrowState && primaryNarrowTerm == narrowTerm)) {
       return this;
     }
     return _QueryScope(
@@ -1518,7 +1735,8 @@ class _QueryScope {
 
   bool get allowSymbolExpansion => hasSymbol || allowDefinitionExpansion;
 
-  bool get keepTableCompanions => hasFacetIntent || (isNarrowState && terms.length <= 3);
+  bool get keepTableCompanions =>
+      hasFacetIntent || (isNarrowState && terms.length <= 3);
 
   bool branchSignalAllowed(_BranchSignal branch) {
     if (!isNarrowState || terms.isEmpty) {
@@ -1645,10 +1863,12 @@ String? _evidenceSpecificNarrowTerm(
     return candidates.isEmpty ? null : candidates.single;
   }
   final stateLikeEvidence = evidence
-      .where((item) =>
-          item.sourceType == EvidenceSourceType.tableChunk ||
-          item.sourceType == EvidenceSourceType.flowchartNode ||
-          item.sourceType == EvidenceSourceType.flowchartEdge)
+      .where(
+        (item) =>
+            item.sourceType == EvidenceSourceType.tableChunk ||
+            item.sourceType == EvidenceSourceType.flowchartNode ||
+            item.sourceType == EvidenceSourceType.flowchartEdge,
+      )
       .toList(growable: false);
   if (stateLikeEvidence.isEmpty) {
     return null;
@@ -1760,7 +1980,9 @@ class LocalKnowledgeGraphExpander {
       }
       final seedTerms = _terms(seed.searchableText).toSet();
       final seedAcronyms = _acronyms(
-        scope.hasSymbol ? '${seed.searchableText}\n$query' : seed.searchableText,
+        scope.hasSymbol
+            ? '${seed.searchableText}\n$query'
+            : seed.searchableText,
       );
       DebugConsole.log(
         '[LocalGraph] seed source=${seed.id} type=${seed.sourceType.wireName} '
@@ -1883,7 +2105,8 @@ class LocalKnowledgeGraphExpander {
         '(^|\\n|\\s)$escaped\\s*[:=\\-]',
         caseSensitive: false,
       );
-      if (scope.allowSymbolExpansion && definitionPattern.hasMatch(candidateText)) {
+      if (scope.allowSymbolExpansion &&
+          definitionPattern.hasMatch(candidateText)) {
         return _GraphLink('definition', 'symbol:$acronym');
       }
     }
