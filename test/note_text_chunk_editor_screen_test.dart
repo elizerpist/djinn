@@ -96,7 +96,7 @@ void main() {
     expect(latest?.text, 'New plain text');
     expect(
       DebugConsole.allText,
-      contains('[TextChunkNative] text changed chars=14 ranges=0'),
+      contains('[TextChunkNative] text changed chars=14 ranges=1'),
     );
   });
 
