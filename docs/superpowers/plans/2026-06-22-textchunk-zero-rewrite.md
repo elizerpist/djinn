@@ -148,5 +148,5 @@ proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/djinn
 ```
 
 - [x] Re-read checklist and mark only verified requirements `DONE`.
-- [ ] Commit and push branch.
-- [ ] Dispatch GitHub Android native build and wait for result.
+- [x] Commit and push branch.
+- [x] Dispatch GitHub Android native build and wait for result.
