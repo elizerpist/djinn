@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/ui/note_text_chunk_editor_screen.dart';
+import 'package:djinn/src/notes/ui/tagged_text_visual.dart';
 
 void main() {
   setUp(DebugConsole.clear);
@@ -262,6 +263,80 @@ void main() {
       find.byKey(const ValueKey('note-text-rail-pill-Beta')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('range tags paint first tag as background and extras as underlines', (
+    tester,
+  ) async {
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha Beta Gamma',
+        rangeTags: [
+          NoteTextRangeTag(
+            id: 'range-1',
+            start: 6,
+            end: 10,
+            tag: NoteKnowledgeTag(
+              type: NoteKnowledgeTagTypes.state,
+              label: 'sulyos',
+              colorValue: 0xFFDC2626,
+            ),
+            tags: [
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.state,
+                label: 'sulyos',
+                colorValue: 0xFFDC2626,
+              ),
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.topic,
+                label: 'legzes',
+                colorValue: 0xFF2563EB,
+              ),
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.symbol,
+                label: 'DO2',
+                colorValue: 0xFF0D9488,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-plain-field')),
+    );
+    expect(field.controller?.text, 'Alpha Beta Gamma');
+    final span = field.controller!.buildTextSpan(
+      context: tester.element(
+        find.byKey(const ValueKey('note-text-plain-field')),
+      ),
+      style: const TextStyle(fontSize: 16),
+      withComposing: false,
+    );
+    expect(span.toPlainText(), 'Alpha Beta Gamma');
+    final taggedSpan = span.children![1] as TextSpan;
+    expect(taggedSpan.text, 'Beta');
+    expect(
+      taggedSpan.style?.backgroundColor,
+      const Color(0xFFDC2626).withValues(alpha: 0.22),
+    );
+    expect(taggedSpan.style?.decoration, isNull);
+
+    final underlinePaint = tester.widget<CustomPaint>(
+      find.byKey(const ValueKey('note-text-range-underline-layer')),
+    );
+    final painter = underlinePaint.foregroundPainter;
+    expect(painter, isA<NoteTaggedTextUnderlinePainter>());
+    final typedPainter = painter as NoteTaggedTextUnderlinePainter;
+    expect(typedPainter.runs, hasLength(1));
+    expect(typedPainter.runs.single.colors, [
+      const Color(0xFF2563EB),
+      const Color(0xFF0D9488),
+    ]);
   });
 
   testWidgets('header global tag action saves chunk tags', (tester) async {

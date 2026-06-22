@@ -34,6 +34,52 @@ void main() {
     expect(style.bottomPadding, 8);
   });
 
+  test('builds editable range spans without changing plain text', () {
+    const text = 'Alpha Beta Gamma';
+    const rangeTags = [
+      NoteTextRangeTag(
+        id: 'range-1',
+        start: 6,
+        end: 10,
+        tag: NoteKnowledgeTag(
+          type: NoteKnowledgeTagTypes.state,
+          label: 'sulyos',
+          colorValue: 0xFFDC2626,
+        ),
+        tags: tags,
+      ),
+    ];
+
+    final span = noteTaggedEditableTextSpan(
+      text: text,
+      rangeTags: rangeTags,
+      baseStyle: const TextStyle(fontSize: 16),
+    );
+
+    expect(span.toPlainText(), text);
+    expect(span.children, hasLength(3));
+    final taggedSpan = span.children![1] as TextSpan;
+    expect(taggedSpan.text, 'Beta');
+    expect(
+      taggedSpan.style?.backgroundColor,
+      const Color(0xFFDC2626).withValues(alpha: 0.22),
+    );
+    expect(taggedSpan.style?.decoration, isNull);
+    expect(taggedSpan.style?.height, greaterThan(1.2));
+
+    final underlineRuns = noteTaggedTextUnderlineRuns(
+      text: text,
+      rangeTags: rangeTags,
+    );
+    expect(underlineRuns, hasLength(1));
+    expect(underlineRuns.single.start, 6);
+    expect(underlineRuns.single.end, 10);
+    expect(underlineRuns.single.colors, [
+      const Color(0xFF2563EB),
+      const Color(0xFF0D9488),
+    ]);
+  });
+
   testWidgets('renders one underline widget for each secondary tag', (
     tester,
   ) async {

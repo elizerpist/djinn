@@ -14,6 +14,18 @@ class NoteTaggedTextVisualStyle {
   double get bottomPadding => secondaryUnderlineColors.length * 4.0;
 }
 
+class NoteTaggedTextUnderlineRun {
+  const NoteTaggedTextUnderlineRun({
+    required this.start,
+    required this.end,
+    required this.colors,
+  });
+
+  final int start;
+  final int end;
+  final List<Color> colors;
+}
+
 NoteTaggedTextVisualStyle noteTaggedTextVisualStyle(
   List<NoteKnowledgeTag> tags,
 ) {
@@ -44,6 +56,230 @@ TextStyle noteTaggedEditableTextStyle(
     backgroundColor: primary.withValues(alpha: alpha),
     fontWeight: FontWeight.w600,
   );
+}
+
+TextSpan noteTaggedEditableTextSpan({
+  required String text,
+  required List<NoteTextRangeTag> rangeTags,
+  TextStyle? baseStyle,
+  double alpha = 0.22,
+}) {
+  final validTags = _validRangeTags(text, rangeTags);
+  if (validTags.isEmpty) {
+    return TextSpan(style: baseStyle, text: text);
+  }
+
+  final children = <InlineSpan>[];
+  var cursor = 0;
+  for (final rangeTag in validTags) {
+    if (rangeTag.start < cursor) {
+      continue;
+    }
+    if (rangeTag.start > cursor) {
+      children.add(TextSpan(text: text.substring(cursor, rangeTag.start)));
+    }
+    final tags = rangeTag.resolvedTags;
+    final visualStyle = noteTaggedTextVisualStyle(tags);
+    final primary = visualStyle.primaryBackground;
+    children.add(
+      TextSpan(
+        text: text.substring(rangeTag.start, rangeTag.end),
+        style: TextStyle(
+          backgroundColor: primary?.withValues(alpha: alpha),
+          height: _taggedRangeHeight(visualStyle.secondaryUnderlineColors),
+        ),
+      ),
+    );
+    cursor = rangeTag.end;
+  }
+  if (cursor < text.length) {
+    children.add(TextSpan(text: text.substring(cursor)));
+  }
+  return TextSpan(style: baseStyle, children: children);
+}
+
+List<NoteTaggedTextUnderlineRun> noteTaggedTextUnderlineRuns({
+  required String text,
+  required List<NoteTextRangeTag> rangeTags,
+}) {
+  final runs = <NoteTaggedTextUnderlineRun>[];
+  for (final rangeTag in _validRangeTags(text, rangeTags)) {
+    final colors = noteTaggedTextVisualStyle(
+      rangeTag.resolvedTags,
+    ).secondaryUnderlineColors;
+    if (colors.isEmpty) {
+      continue;
+    }
+    runs.add(
+      NoteTaggedTextUnderlineRun(
+        start: rangeTag.start,
+        end: rangeTag.end,
+        colors: colors,
+      ),
+    );
+  }
+  return runs;
+}
+
+class NoteTaggedTextEditingController extends TextEditingController {
+  NoteTaggedTextEditingController({
+    super.text,
+    List<NoteTextRangeTag> rangeTags = const [],
+  }) : _rangeTags = rangeTags;
+
+  List<NoteTextRangeTag> _rangeTags;
+
+  List<NoteTextRangeTag> get rangeTags => _rangeTags;
+
+  void setRangeTags(List<NoteTextRangeTag> rangeTags) {
+    _rangeTags = rangeTags;
+    notifyListeners();
+  }
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    if (_rangeTags.isEmpty) {
+      return super.buildTextSpan(
+        context: context,
+        style: style,
+        withComposing: withComposing,
+      );
+    }
+    return noteTaggedEditableTextSpan(
+      text: text,
+      rangeTags: _rangeTags,
+      baseStyle: style,
+    );
+  }
+}
+
+class NoteTaggedTextUnderlinePainter extends CustomPainter {
+  const NoteTaggedTextUnderlinePainter({
+    required this.text,
+    required this.runs,
+    required this.textStyle,
+    required this.textDirection,
+    this.scrollOffset = 0,
+  });
+
+  final String text;
+  final List<NoteTaggedTextUnderlineRun> runs;
+  final TextStyle textStyle;
+  final TextDirection textDirection;
+  final double scrollOffset;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (text.isEmpty || runs.isEmpty || size.width <= 0) {
+      return;
+    }
+    final painter = TextPainter(
+      text: _underlineLayoutTextSpan(
+        text: text,
+        runs: runs,
+        baseStyle: textStyle,
+      ),
+      textDirection: textDirection,
+    )..layout(maxWidth: size.width);
+
+    canvas.save();
+    canvas.translate(0, -scrollOffset);
+    for (final run in runs) {
+      final boxes = painter.getBoxesForSelection(
+        TextSelection(baseOffset: run.start, extentOffset: run.end),
+      );
+      for (final box in boxes) {
+        final left = box.left;
+        final width = box.right - box.left;
+        if (width <= 0) {
+          continue;
+        }
+        for (var index = 0; index < run.colors.length; index += 1) {
+          final top = box.bottom + 2 + index * 4;
+          if (top < scrollOffset - 8 || top > scrollOffset + size.height + 8) {
+            continue;
+          }
+          final rect = Rect.fromLTWH(left, top, width, 2);
+          final rrect = RRect.fromRectAndRadius(
+            rect,
+            const Radius.circular(999),
+          );
+          canvas.drawRRect(rrect, Paint()..color = run.colors[index]);
+        }
+      }
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(NoteTaggedTextUnderlinePainter oldDelegate) {
+    return oldDelegate.text != text ||
+        oldDelegate.runs != runs ||
+        oldDelegate.textStyle != textStyle ||
+        oldDelegate.textDirection != textDirection ||
+        oldDelegate.scrollOffset != scrollOffset;
+  }
+}
+
+List<NoteTextRangeTag> _validRangeTags(
+  String text,
+  List<NoteTextRangeTag> rangeTags,
+) {
+  return rangeTags
+      .map((tag) => tag.clampToTextLength(text.length))
+      .where((tag) => tag.isValid)
+      .toList()
+    ..sort((a, b) {
+      final startCompare = a.start.compareTo(b.start);
+      return startCompare == 0 ? a.end.compareTo(b.end) : startCompare;
+    });
+}
+
+TextSpan _underlineLayoutTextSpan({
+  required String text,
+  required List<NoteTaggedTextUnderlineRun> runs,
+  TextStyle? baseStyle,
+}) {
+  if (runs.isEmpty) {
+    return TextSpan(style: baseStyle, text: text);
+  }
+  final sortedRuns = [...runs]
+    ..sort((a, b) {
+      final startCompare = a.start.compareTo(b.start);
+      return startCompare == 0 ? a.end.compareTo(b.end) : startCompare;
+    });
+  final children = <InlineSpan>[];
+  var cursor = 0;
+  for (final run in sortedRuns) {
+    if (run.start < cursor) {
+      continue;
+    }
+    if (run.start > cursor) {
+      children.add(TextSpan(text: text.substring(cursor, run.start)));
+    }
+    children.add(
+      TextSpan(
+        text: text.substring(run.start, run.end),
+        style: TextStyle(height: _taggedRangeHeight(run.colors)),
+      ),
+    );
+    cursor = run.end;
+  }
+  if (cursor < text.length) {
+    children.add(TextSpan(text: text.substring(cursor)));
+  }
+  return TextSpan(style: baseStyle, children: children);
+}
+
+double? _taggedRangeHeight(List<Color> secondaryUnderlineColors) {
+  if (secondaryUnderlineColors.isEmpty) {
+    return null;
+  }
+  return 1.24 + secondaryUnderlineColors.length * 0.22;
 }
 
 class NoteSecondaryTagUnderlines extends StatelessWidget {

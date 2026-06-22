@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
+import 'tagged_text_visual.dart';
 import 'tag_manager_sheet.dart';
 
 class NoteTextChunkEditorScreen extends StatefulWidget {
@@ -28,23 +29,30 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
 
 class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late NoteBlock _block;
-  late final TextEditingController _controller;
+  late final NoteTaggedTextEditingController _controller;
   late final FocusNode _focusNode;
+  late final ScrollController _textScrollController;
   TextSelection _selection = const TextSelection.collapsed(offset: -1);
   bool _syncingController = false;
   bool _railBottomExpanded = true;
   bool _railRoundedCard = false;
   bool _railTransparentBackground = false;
   bool _railBorderVisible = true;
+  double _textScrollOffset = 0;
 
   @override
   void initState() {
     super.initState();
     _block = widget.block;
-    _controller = TextEditingController(text: widget.block.text);
+    _controller = NoteTaggedTextEditingController(
+      text: widget.block.text,
+      rangeTags: widget.block.rangeTags,
+    );
     _selection = _controller.selection;
     _controller.addListener(_handleControllerValueChanged);
     _focusNode = FocusNode();
+    _textScrollController = ScrollController()
+      ..addListener(_handleTextScrollChanged);
   }
 
   @override
@@ -55,6 +63,12 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         widget.block.text != _controller.text) {
       _syncControllerText(widget.block.text);
     }
+    if (oldWidget.block.id != widget.block.id ||
+        oldWidget.block.rangeTags != widget.block.rangeTags) {
+      _controller.setRangeTags(
+        _clampRangeTags(widget.block.rangeTags, widget.block.text.length),
+      );
+    }
   }
 
   @override
@@ -62,7 +76,17 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     _controller.removeListener(_handleControllerValueChanged);
     _controller.dispose();
     _focusNode.dispose();
+    _textScrollController.removeListener(_handleTextScrollChanged);
+    _textScrollController.dispose();
     super.dispose();
+  }
+
+  void _handleTextScrollChanged() {
+    final nextOffset = _textScrollController.offset;
+    if (nextOffset == _textScrollOffset) {
+      return;
+    }
+    setState(() => _textScrollOffset = nextOffset);
   }
 
   void _syncControllerText(String text) {
@@ -105,6 +129,9 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       _block = nextBlock;
     });
     if (textChanged) {
+      _controller.setRangeTags(nextBlock.rangeTags);
+    }
+    if (textChanged) {
       widget.onChanged(nextBlock);
     }
   }
@@ -130,6 +157,9 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   }
 
   void _emitBlock(NoteBlock block) {
+    _controller.setRangeTags(
+      _clampRangeTags(block.rangeTags, _controller.text.length),
+    );
     setState(() => _block = block);
     widget.onChanged(block);
   }
@@ -450,6 +480,10 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final railVisible = _shouldShowRail;
     final railHeight = railVisible ? (_railBottomExpanded ? 113.0 : 64.0) : 0.0;
+    const editorTextStyle = TextStyle(
+      color: Color(0xFF111827),
+      fontSize: 16,
+    );
     return Scaffold(
       key: const ValueKey('note-text-chunk-editor'),
       resizeToAvoidBottomInset: false,
@@ -489,25 +523,48 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                 padding: EdgeInsets.only(bottom: bottomInset + railHeight),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  child: TextField(
-                    key: const ValueKey('note-text-plain-field'),
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    autofocus: true,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    minLines: null,
-                    maxLines: null,
-                    expands: true,
-                    textAlignVertical: TextAlignVertical.top,
-                    style: const TextStyle(
-                      color: Color(0xFF111827),
-                      fontSize: 16,
-                    ),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Írj valamit...',
-                    ),
+                  child: Stack(
+                    children: [
+                      TextField(
+                        key: const ValueKey('note-text-plain-field'),
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        scrollController: _textScrollController,
+                        autofocus: true,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        minLines: null,
+                        maxLines: null,
+                        expands: true,
+                        textAlignVertical: TextAlignVertical.top,
+                        style: editorTextStyle,
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          hintText: 'Írj valamit...',
+                          isCollapsed: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: CustomPaint(
+                            key: const ValueKey(
+                              'note-text-range-underline-layer',
+                            ),
+                            foregroundPainter: NoteTaggedTextUnderlinePainter(
+                              text: _controller.text,
+                              runs: noteTaggedTextUnderlineRuns(
+                                text: _controller.text,
+                                rangeTags: _block.rangeTags,
+                              ),
+                              textStyle: editorTextStyle,
+                              textDirection: Directionality.of(context),
+                              scrollOffset: _textScrollOffset,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
