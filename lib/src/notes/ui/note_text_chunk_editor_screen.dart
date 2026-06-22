@@ -898,14 +898,15 @@ class _CountMarkerModeMenuItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          selected ? Icons.check : Icons.check_box_outline_blank,
-          size: 18,
+        SizedBox(
+          width: 24,
+          child: selected
+              ? const Icon(Icons.check, size: 18)
+              : const SizedBox.shrink(),
         ),
-        const SizedBox(width: 10),
-        Text(label),
+        const SizedBox(width: 8),
+        Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
       ],
     );
   }
