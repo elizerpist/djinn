@@ -48,10 +48,10 @@
 - Consumes: existing `NoteTextRangeTag.resolvedTags`.
 - Produces: `noteTaggedTextVisualStyle()` with only `primaryBackground`; count marker helpers remain the only multi-tag visual API for text chunks.
 
-- [ ] Write/update tests proving extra tags do not produce underline colors, underline runs, underline widgets, or text strut expansion.
-- [ ] Run `flutter test test/tagged_text_visual_test.dart test/note_text_chunk_editor_screen_test.dart` and confirm the changed tests fail before implementation.
-- [ ] Remove underline generation and textchunk underline layer/strut wiring.
-- [ ] Run the same tests and confirm they pass.
+- [x] Write/update tests proving extra tags do not produce underline colors, underline runs, underline widgets, or text strut expansion.
+- [x] Pre-implementation local fail-first run was not possible in Termux because Dart exits with the ARM64 TLS alignment error; verification was done after implementation in GitHub Actions.
+- [x] Remove underline generation and textchunk underline layer/strut wiring.
+- [x] Run the same tests in GitHub Actions and confirm they pass.
 
 ### Task 2: Add Registry Tag Model And Repositories
 
@@ -68,10 +68,10 @@
 - Produces: `NoteTagDefinition`, `NoteTagFolder`, `TagRepository`, `MemoryTagRepository`, `ObjectBoxTagRepository`.
 - Produces: `NoteKnowledgeTag.copyWith(...)` carrying `id`, `colorSlotId`, `folderId`.
 
-- [ ] Write serialization tests for old `NoteKnowledgeTag` JSON and new registry fields.
-- [ ] Write repository tests for upsert, duplicate-label reuse, folder creation, folder clearing, and embedded tag seeding.
-- [ ] Implement value objects, note tag JSON compatibility, memory repository, ObjectBox entities, and ObjectBox repository.
-- [ ] Run `flutter test test/note_document_test.dart test/tag_repository_test.dart`.
+- [x] Write serialization tests for old `NoteKnowledgeTag` JSON and new registry fields.
+- [x] Write repository tests for upsert, duplicate-label reuse, folder creation, folder clearing, and embedded tag seeding.
+- [x] Implement value objects, note tag JSON compatibility, memory repository, ObjectBox entities, and ObjectBox repository.
+- [x] Run `flutter test test/note_document_test.dart test/tag_repository_test.dart` in GitHub Actions.
 
 ### Task 3: Rewrite The Tag Manager Sheet
 
@@ -85,10 +85,10 @@
 - Consumes: `TagRepository`.
 - Produces: `showTagManagerSheet(context, initialTags, tagRepository, onChanged, availableTags, singleSelection, title)`.
 
-- [ ] Write widget tests asserting there is no `tag-manager-type` and no `tag-manager-save`.
-- [ ] Write widget tests for one scrollable tag area, fixed folder bar, fixed editor, full-color pills, edit/delete controls, duplicate label reuse, and immediate target updates.
-- [ ] Implement the new sheet with header, folder bar, pill area, and fixed editor.
-- [ ] Run sheet and call-site tests.
+- [x] Write widget tests asserting there is no `tag-manager-type` and no `tag-manager-save`.
+- [x] Write widget tests for one scrollable tag area, fixed folder bar, fixed editor, full-color pills, edit/delete controls, duplicate label reuse, and immediate target updates.
+- [x] Implement the new sheet with header, folder bar, pill area, and fixed editor.
+- [x] Run sheet and call-site tests in GitHub Actions.
 
 ### Task 4: Wire Registry Through The App
 
@@ -103,18 +103,18 @@
 - Consumes: `TagRepository` from app dependencies.
 - Produces: all note tag entry points use the same repository and immediate `onChanged` callback.
 
-- [ ] Add `tagRepository` to dependency objects and constructors.
-- [ ] Pass memory repository in test-friendly paths and ObjectBox repository in production path.
-- [ ] Update all `showTagManagerSheet` callers to immediate apply.
-- [ ] Run all note editor tests.
+- [x] Add `tagRepository` to dependency objects and constructors.
+- [x] Pass memory repository in test-friendly paths and ObjectBox repository in production path.
+- [x] Update all `showTagManagerSheet` callers to immediate apply.
+- [x] Run all note editor tests in GitHub Actions.
 
 ### Task 5: Verification, Checklist, Commit, Push
 
 **Files:**
 - Modify: `docs/superpowers/checklists/2026-06-22-tag-sheet-registry-and-text-markers.md`
 
-- [ ] Re-read the checklist and update every status honestly.
-- [ ] Run targeted Flutter tests.
-- [ ] Run `flutter analyze` if local toolchain allows; otherwise note why and rely on GitHub Actions.
-- [ ] Commit the changes.
-- [ ] Push branch and watch GitHub Actions.
+- [x] Re-read the checklist and update every status honestly.
+- [x] Run targeted Flutter tests through GitHub Actions because local Flutter is blocked by Termux Dart TLS alignment.
+- [x] Run `flutter analyze` through GitHub Actions because local Flutter is blocked by Termux Dart TLS alignment.
+- [x] Commit the changes.
+- [x] Push branch and watch GitHub Actions run 27977447969 pass.
