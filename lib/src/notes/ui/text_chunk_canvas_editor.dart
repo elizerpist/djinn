@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -10,68 +9,21 @@ import '../models/note_document.dart';
 import 'text_chunk_layout_model.dart';
 
 const double _underlineFirstLaneInset = 0.5;
-const double _underlineLaneStep = 3.5;
-const String _placeholderLineBreakUnit = '\u200B\n';
-const String _placeholderIndentUnit = '\u00A0\u00A0';
-
-class _TextChunkNativePlaceholder {
-  const _TextChunkNativePlaceholder({
-    required this.offset,
-    required this.text,
-    required this.label,
-  });
-
-  final int offset;
-  final String text;
-  final String label;
-
-  int get length => text.length;
-}
+const double _underlineLaneStep = 3.0;
 
 class TextChunkNativeEditingController extends TextEditingController {
   TextChunkNativeEditingController({super.text});
 
   List<NoteTextRangeTag> _rangeTags = const [];
-  List<_TextChunkNativePlaceholder> _placeholders = const [];
 
   void _configureTextChunkPresentation({
     required List<NoteTextRangeTag> rangeTags,
-    required List<_TextChunkNativePlaceholder> placeholders,
   }) {
     _rangeTags = rangeTags;
-    _placeholders = placeholders;
   }
 
   TextSelection normalizeNativeSelection(TextSelection selection) {
-    final placeholders = _validPlaceholders();
-    if (!selection.isValid || placeholders.isEmpty) {
-      return selection;
-    }
-    int normalizeOffset(int offset) {
-      if (offset < 0) {
-        return offset;
-      }
-      var removed = 0;
-      for (final placeholder in placeholders) {
-        final nativeStart = placeholder.offset + removed;
-        final nativeEnd = nativeStart + placeholder.length;
-        if (offset < nativeStart) {
-          break;
-        }
-        if (offset < nativeEnd) {
-          return placeholder.offset.clamp(0, text.length).toInt();
-        }
-        removed += placeholder.length;
-      }
-      return (offset - removed).clamp(0, text.length).toInt();
-    }
-
-    return TextSelection(
-      baseOffset: normalizeOffset(selection.baseOffset),
-      extentOffset: normalizeOffset(selection.extentOffset),
-      affinity: selection.affinity,
-      isDirectional: selection.isDirectional,
-    );
+    return selection;
   }
 
   @override
@@ -81,20 +33,7 @@ class TextChunkNativeEditingController extends TextEditingController {
     required bool withComposing,
   }) {
     final baseStyle = style ?? const TextStyle();
-    final placeholders = _validPlaceholders();
-    final placeholdersByOffset = <int, List<_TextChunkNativePlaceholder>>{};
-    for (final placeholder in placeholders) {
-      placeholdersByOffset
-          .putIfAbsent(
-            placeholder.offset,
-            () => <_TextChunkNativePlaceholder>[],
-          )
-          .add(placeholder);
-    }
     final breakpoints = <int>{0, text.length};
-    for (final placeholder in placeholders) {
-      breakpoints.add(placeholder.offset);
-    }
     for (final rawTag in _rangeTags) {
       final tag = rawTag.clampToTextLength(text.length);
       if (!tag.isValid) {
@@ -110,9 +49,6 @@ class TextChunkNativeEditingController extends TextEditingController {
     for (var index = 0; index < sortedBreakpoints.length - 1; index += 1) {
       final start = sortedBreakpoints[index];
       final end = sortedBreakpoints[index + 1];
-      children.addAll(
-        _placeholderSpans(baseStyle, placeholdersByOffset[start]),
-      );
       if (start >= end) {
         continue;
       }
@@ -123,58 +59,20 @@ class TextChunkNativeEditingController extends TextEditingController {
         ),
       );
     }
-    children.addAll(
-      _placeholderSpans(baseStyle, placeholdersByOffset[text.length]),
-    );
 
     return TextSpan(style: baseStyle, children: children);
   }
 
-  List<_TextChunkNativePlaceholder> _validPlaceholders() {
-    if (_placeholders.isEmpty) {
-      return const [];
-    }
-    final result = [
-      for (final placeholder in _placeholders)
-        if (placeholder.text.isNotEmpty)
-          _TextChunkNativePlaceholder(
-            offset: placeholder.offset.clamp(0, text.length).toInt(),
-            text: placeholder.text,
-            label: placeholder.label,
-          ),
-    ]..sort((a, b) => a.offset.compareTo(b.offset));
-    return result;
-  }
-
-  List<InlineSpan> _placeholderSpans(
-    TextStyle baseStyle,
-    List<_TextChunkNativePlaceholder>? placeholders,
-  ) {
-    if (placeholders == null || placeholders.isEmpty) {
-      return const [];
-    }
-    return [
-      for (final placeholder in placeholders)
-        TextSpan(
-          text: placeholder.text,
-          style: baseStyle.copyWith(
-            color: Colors.transparent,
-            backgroundColor: Colors.transparent,
-          ),
-        ),
-    ];
-  }
-
   TextStyle _styleForRange(TextStyle baseStyle, int start, int end) {
     final tag = _tagForRange(start, end);
-    if (tag == null || tag.tags.isEmpty) {
-      return baseStyle;
+    var nextStyle = baseStyle;
+    if (tag != null && tag.tags.isNotEmpty) {
+      nextStyle = nextStyle.copyWith(
+        backgroundColor: Color(
+          tag.tags.first.resolvedColorValue,
+        ).withValues(alpha: 0.18),
+      );
     }
-    var nextStyle = baseStyle.copyWith(
-      backgroundColor: Color(
-        tag.tags.first.resolvedColorValue,
-      ).withValues(alpha: 0.18),
-    );
     return nextStyle;
   }
 
@@ -216,8 +114,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   String? _lastDebugSignature;
   String? _lastNativeGeometrySignature;
   List<_TagHighlightGeometry> _nativeTagGeometries = const [];
-  bool _selectionHandleDragActive = false;
-  int? _selectionHandlePointer;
 
   @override
   void initState() {
@@ -241,7 +137,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
 
   @override
   void dispose() {
-    _untrackSelectionHandlePointer();
     widget.controller.removeListener(_handleEditorChanged);
     widget.focusNode.removeListener(_handleEditorChanged);
     super.dispose();
@@ -278,53 +173,37 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           layout.lines,
           lineHeight,
         );
-        final underlineSpacerPlans = _selectionHandleDragActive
-            ? const <_LineSpacerPlan>[]
-            : visualUnderlineSpacerPlans;
+        final underlineSpacerPlans = visualUnderlineSpacerPlans;
         final underlineSpacerHeights = {
           for (final plan in underlineSpacerPlans) plan.lineIndex: plan.height,
         };
-        final occupiedPlaceholderOffsets = <int>{
-          for (final plan in underlineSpacerPlans) plan.offset,
-        };
-        final softWrapIndentPlaceholders = _selectionHandleDragActive
-            ? const <_TextChunkNativePlaceholder>[]
-            : _softWrapIndentPlaceholders(
-                layout.lines,
-                occupiedOffsets: occupiedPlaceholderOffsets,
-              );
-        final nativePlaceholders = [
-          for (final plan in underlineSpacerPlans)
-            _TextChunkNativePlaceholder(
-              offset: plan.offset,
-              text: plan.placeholderText,
-              label:
-                  'underline-line-${plan.lineIndex}-lanes-${plan.underlineLanes}',
-            ),
-          ...softWrapIndentPlaceholders,
-        ];
-        final underlineNativeSpacerHeight = underlineSpacerPlans.fold<double>(
-          0,
-          (total, plan) => total + plan.height,
+        final maxUnderlineSpacerHeight = underlineSpacerHeights.values.fold(
+          0.0,
+          math.max,
         );
-        final totalPlaceholderCount = nativePlaceholders.fold<int>(
-          0,
-          (total, placeholder) => total + placeholder.length,
-        );
+        final nativeLineSpacerHeights = maxUnderlineSpacerHeight > 0
+            ? {
+                for (final line in layout.lines)
+                  line.index: maxUnderlineSpacerHeight,
+              }
+            : underlineSpacerHeights;
+        final nativeLineHeight = lineHeight + maxUnderlineSpacerHeight;
+        final fontSize = effectiveTextStyle.fontSize ?? nativeLineHeight;
+        final strutStyle = maxUnderlineSpacerHeight > 0 && fontSize > 0
+            ? StrutStyle(
+                fontSize: fontSize,
+                height: nativeLineHeight / fontSize,
+                forceStrutHeight: true,
+              )
+            : null;
         final lineTops = _lineTops(
           layout.lines,
           lineHeight,
-          underlineSpacerHeights,
+          nativeLineSpacerHeights,
         );
-        final contentHeight =
-            (layout.lines.length * lineHeight) +
-            underlineNativeSpacerHeight +
-            48;
-        _configureController(placeholders: nativePlaceholders);
-        _scheduleNativeGeometrySync(
-          nativePlaceholders: nativePlaceholders,
-          baseLineHeight: baseLineHeight,
-        );
+        final contentHeight = (layout.lines.length * nativeLineHeight) + 48;
+        _configureController();
+        _scheduleNativeGeometrySync(baseLineHeight: baseLineHeight);
         _logLayoutUpdate(
           layout: layout,
           selection: selection,
@@ -343,7 +222,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           railNeedsSoftWrapTerminator: false,
           railNativeLineCount: 0,
           underlineSpacerPlans: underlineSpacerPlans,
-          totalPlaceholderCount: totalPlaceholderCount,
+          underlineSpacerHeights: nativeLineSpacerHeights,
+          totalPlaceholderCount: 0,
           railPlaceholderCount: 0,
         );
 
@@ -379,15 +259,10 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
                         backgroundCursorColor: Colors.transparent,
                         keyboardType: TextInputType.multiline,
                         maxLines: null,
+                        strutStyle: strutStyle,
                         showSelectionHandles: true,
                         selectionColor: const Color(0x552563EB),
-                        selectionControls: _TextChunkSelectionControls(
-                          onHandlePointerDown:
-                              _handleSelectionHandlePointerDown,
-                          onHandlePointerMove:
-                              _handleSelectionHandlePointerMove,
-                          onHandlePointerEnd: _handleSelectionHandlePointerEnd,
-                        ),
+                        selectionControls: materialTextSelectionHandleControls,
                         contextMenuBuilder: (context, editableTextState) =>
                             AdaptiveTextSelectionToolbar.editableText(
                               editableTextState: editableTextState,
@@ -412,9 +287,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   }
 
   TextRange? _visualSelection() {
-    if (_selectionHandleDragActive) {
-      return null;
-    }
     final selection = widget.controller.selection;
     if (selection.isValid) {
       return TextRange(
@@ -433,15 +305,10 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     return lanes < 0 ? 0 : lanes;
   }
 
-  void _configureController({
-    required List<_TextChunkNativePlaceholder> placeholders,
-  }) {
+  void _configureController() {
     final controller = widget.controller;
     if (controller is TextChunkNativeEditingController) {
-      controller._configureTextChunkPresentation(
-        rangeTags: widget.rangeTags,
-        placeholders: placeholders,
-      );
+      controller._configureTextChunkPresentation(rangeTags: widget.rangeTags);
     }
   }
 
@@ -449,119 +316,10 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     TextSelection selection,
     SelectionChangedCause? cause,
   ) {
-    final controller = widget.controller;
-    if (cause == null || controller is! TextChunkNativeEditingController) {
+    if (cause == null) {
       return;
     }
-    if (cause == SelectionChangedCause.drag) {
-      _handleSelectionHandleDrag();
-      return;
-    }
-    final normalized = controller.normalizeNativeSelection(selection);
-    _cancelSelectionHandleDrag();
-    if (normalized.baseOffset != selection.baseOffset ||
-        normalized.extentOffset != selection.extentOffset) {
-      controller.selection = normalized;
-    }
-    _showNativeToolbarForSelection(normalized, cause);
-  }
-
-  void _handleSelectionHandleDrag() {
-    _startSelectionHandleDrag();
-  }
-
-  void _handleSelectionHandlePointerDown(PointerDownEvent event) {
-    _trackSelectionHandlePointer(event.pointer);
-    _startSelectionHandleDrag();
-  }
-
-  void _handleSelectionHandlePointerMove(PointerMoveEvent event) {
-    if (_selectionHandlePointer == null ||
-        _selectionHandlePointer == event.pointer) {
-      _startSelectionHandleDrag();
-    }
-  }
-
-  void _startSelectionHandleDrag() {
-    _editableTextKey.currentState?.hideToolbar(false);
-    if (!_selectionHandleDragActive && mounted) {
-      setState(() {
-        _selectionHandleDragActive = true;
-      });
-    }
-  }
-
-  void _handleSelectionHandlePointerEnd(PointerUpEvent event) {
-    _handleSelectionHandlePointerReleased(pointer: event.pointer, settle: true);
-  }
-
-  void _handleSelectionHandlePointerRoute(PointerEvent event) {
-    if (event is PointerUpEvent) {
-      _handleSelectionHandlePointerReleased(
-        pointer: event.pointer,
-        settle: true,
-      );
-    } else if (event is PointerCancelEvent) {
-      _handleSelectionHandlePointerReleased(pointer: event.pointer);
-    }
-  }
-
-  void _handleSelectionHandlePointerReleased({
-    int? pointer,
-    bool settle = false,
-  }) {
-    if (pointer != null && pointer == _selectionHandlePointer) {
-      _untrackSelectionHandlePointer();
-      if (settle) {
-        _settleSelectionHandleDrag();
-      }
-    }
-  }
-
-  void _settleSelectionHandleDrag() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _selectionHandlePointer != null) {
-        return;
-      }
-      if (_selectionHandleDragActive) {
-        setState(() {
-          _selectionHandleDragActive = false;
-        });
-      }
-    });
-  }
-
-  void _trackSelectionHandlePointer(int pointer) {
-    if (_selectionHandlePointer == pointer) {
-      return;
-    }
-    _untrackSelectionHandlePointer();
-    _selectionHandlePointer = pointer;
-    GestureBinding.instance.pointerRouter.addRoute(
-      pointer,
-      _handleSelectionHandlePointerRoute,
-    );
-  }
-
-  void _untrackSelectionHandlePointer() {
-    final pointer = _selectionHandlePointer;
-    if (pointer == null) {
-      return;
-    }
-    GestureBinding.instance.pointerRouter.removeRoute(
-      pointer,
-      _handleSelectionHandlePointerRoute,
-    );
-    _selectionHandlePointer = null;
-  }
-
-  void _cancelSelectionHandleDrag() {
-    _untrackSelectionHandlePointer();
-    if (_selectionHandleDragActive && mounted) {
-      setState(() {
-        _selectionHandleDragActive = false;
-      });
-    }
+    _showNativeToolbarForSelection(selection, cause);
   }
 
   void _showNativeToolbarForSelection(
@@ -574,7 +332,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted ||
           !widget.focusNode.hasFocus ||
-          _selectionHandleDragActive ||
           widget.controller.selection.isCollapsed) {
         return;
       }
@@ -587,22 +344,13 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     });
   }
 
-  void _scheduleNativeGeometrySync({
-    required List<_TextChunkNativePlaceholder> nativePlaceholders,
-    required double baseLineHeight,
-  }) {
+  void _scheduleNativeGeometrySync({required double baseLineHeight}) {
     final signature = [
       widget.controller.text.length,
       widget.controller.selection.start,
       widget.controller.selection.end,
       widget.rangeTags
           .map((tag) => '${tag.id}:${tag.start}-${tag.end}:${tag.tags.length}')
-          .join(','),
-      nativePlaceholders
-          .map(
-            (placeholder) =>
-                '${placeholder.label}@${placeholder.offset}+${placeholder.length}',
-          )
           .join(','),
       baseLineHeight.toStringAsFixed(1),
     ].join('|');
@@ -624,7 +372,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           : _nativeUnderlineGeometries(
               renderEditable: renderEditable,
               layoutBox: layoutBox,
-              nativePlaceholders: nativePlaceholders,
+              baseLineHeight: baseLineHeight,
             );
       final nextSignature = _geometrySignature(nextGeometries);
       final currentSignature = _geometrySignature(_nativeTagGeometries);
@@ -642,8 +390,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         'railSoftWrapTerminator=false '
         'railNativeLines=0 '
         'railPlaceholderBreaks=0 '
-        'placeholderCount=${nativePlaceholders.fold<int>(0, (total, placeholder) => total + placeholder.length)} '
-        'placeholders=[${_placeholderSummary(nativePlaceholders)}] '
+        'placeholderCount=0 '
+        'placeholders=[] '
         'nativeOrigins=editable:${_formatOffset(renderOrigin)},layout:${_formatOffset(layoutOrigin)} '
         'tightTagBoxes=true '
         'changedRail=false changedRects=$geometryChanged '
@@ -663,7 +411,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   List<_TagHighlightGeometry> _nativeUnderlineGeometries({
     required RenderEditable renderEditable,
     required RenderBox layoutBox,
-    required List<_TextChunkNativePlaceholder> nativePlaceholders,
+    required double baseLineHeight,
   }) {
     final renderEditableOrigin = renderEditable.localToGlobal(Offset.zero);
     final layoutOrigin = layoutBox.localToGlobal(Offset.zero);
@@ -678,7 +426,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
         renderEditable: renderEditable,
         renderEditableOrigin: renderEditableOrigin,
         layoutOrigin: layoutOrigin,
-        nativePlaceholders: nativePlaceholders,
         start: tag.start,
         end: tag.end,
       );
@@ -693,7 +440,8 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
               color: Color(tags[tagIndex].resolvedColorValue),
               left: rect.left,
               top:
-                  rect.bottom -
+                  rect.top +
+                  baseLineHeight -
                   _underlineFirstLaneInset +
                   ((tagIndex - 1) * _underlineLaneStep),
               width: rect.width.clamp(1, double.infinity).toDouble(),
@@ -710,76 +458,33 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     required RenderEditable renderEditable,
     required Offset renderEditableOrigin,
     required Offset layoutOrigin,
-    required List<_TextChunkNativePlaceholder> nativePlaceholders,
     required int start,
     required int end,
   }) {
     if (start >= end) {
       return const [];
     }
-    final splitPoints = <int>{start, end};
-    for (final placeholder in nativePlaceholders) {
-      if (placeholder.offset > start && placeholder.offset < end) {
-        splitPoints.add(placeholder.offset);
-      }
-    }
-    final sortedSplitPoints = splitPoints.toList()..sort();
-    final ranges = <({int start, int end})>[
-      for (var index = 0; index < sortedSplitPoints.length - 1; index += 1)
-        (start: sortedSplitPoints[index], end: sortedSplitPoints[index + 1]),
-    ];
     final rects = <Rect>[];
-    for (final range in ranges) {
-      if (range.start >= range.end) {
-        continue;
-      }
-      final nativeStart = _nativeOffsetForControllerOffset(
-        range.start,
-        nativePlaceholders,
-        includeAtOffset: true,
+    final previousWidthStyle = renderEditable.selectionWidthStyle;
+    final previousHeightStyle = renderEditable.selectionHeightStyle;
+    renderEditable.selectionWidthStyle = ui.BoxWidthStyle.tight;
+    renderEditable.selectionHeightStyle = ui.BoxHeightStyle.tight;
+    final List<TextBox> boxes;
+    try {
+      boxes = renderEditable.getBoxesForSelection(
+        TextSelection(baseOffset: start, extentOffset: end),
       );
-      final nativeEnd = _nativeOffsetForControllerOffset(
-        range.end,
-        nativePlaceholders,
-        includeAtOffset: false,
-      );
-      final previousWidthStyle = renderEditable.selectionWidthStyle;
-      final previousHeightStyle = renderEditable.selectionHeightStyle;
-      renderEditable.selectionWidthStyle = ui.BoxWidthStyle.tight;
-      renderEditable.selectionHeightStyle = ui.BoxHeightStyle.tight;
-      final List<TextBox> boxes;
-      try {
-        boxes = renderEditable.getBoxesForSelection(
-          TextSelection(baseOffset: nativeStart, extentOffset: nativeEnd),
-        );
-      } finally {
-        renderEditable.selectionWidthStyle = previousWidthStyle;
-        renderEditable.selectionHeightStyle = previousHeightStyle;
-      }
-      for (final box in boxes) {
-        final rect = box.toRect().shift(renderEditableOrigin - layoutOrigin);
-        if (rect.width > 0 && rect.height > 0) {
-          rects.add(rect);
-        }
+    } finally {
+      renderEditable.selectionWidthStyle = previousWidthStyle;
+      renderEditable.selectionHeightStyle = previousHeightStyle;
+    }
+    for (final box in boxes) {
+      final rect = box.toRect().shift(renderEditableOrigin - layoutOrigin);
+      if (rect.width > 0 && rect.height > 0) {
+        rects.add(rect);
       }
     }
     return rects;
-  }
-
-  int _nativeOffsetForControllerOffset(
-    int offset,
-    List<_TextChunkNativePlaceholder> nativePlaceholders, {
-    required bool includeAtOffset,
-  }) {
-    var placeholderCount = 0;
-    for (final placeholder in nativePlaceholders) {
-      final beforeOffset = placeholder.offset < offset;
-      final atOffset = includeAtOffset && placeholder.offset == offset;
-      if (beforeOffset || atOffset) {
-        placeholderCount += placeholder.length;
-      }
-    }
-    return offset + placeholderCount;
   }
 
   String _geometrySignature(List<_TagHighlightGeometry> geometries) {
@@ -813,6 +518,7 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
     required bool railNeedsSoftWrapTerminator,
     required int railNativeLineCount,
     required List<_LineSpacerPlan> underlineSpacerPlans,
+    required Map<int, double> underlineSpacerHeights,
     required int totalPlaceholderCount,
     required int railPlaceholderCount,
   }) {
@@ -826,7 +532,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
           .map((tag) => '${tag.id}:${tag.start}-${tag.end}:${tag.tags.length}')
           .join(','),
       contentWidth.toStringAsFixed(1),
-      _selectionHandleDragActive,
     ].join('|');
     if (_lastDebugSignature == signature) {
       return;
@@ -844,16 +549,13 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
               'ul=${line.underlineLanes.length}}',
         )
         .join(' ');
-    final underlineSpacerHeights = {
-      for (final plan in underlineSpacerPlans) plan.lineIndex: plan.height,
-    };
     const double? railTop = null;
     const double? railBottom = null;
     const double? railNativeSpacerBottom = null;
     DebugConsole.log(
       '[TextChunkLayout] textLen=${widget.controller.text.length} '
       'selection=${selection == null ? 'null' : '${selection.start}-${selection.end}'} '
-      'selectionDragActive=$_selectionHandleDragActive '
+      'selectionDragActive=false '
       'focus=${widget.focusNode.hasFocus} '
       'content=${contentWidth.toStringAsFixed(1)}x${contentHeight.toStringAsFixed(1)} '
       'lineHeight=${lineHeight.toStringAsFixed(1)} '
@@ -939,37 +641,6 @@ class _TextChunkCanvasEditorState extends State<TextChunkCanvasEditor> {
   }
 }
 
-class _TextChunkSelectionControls extends MaterialTextSelectionControls
-    with TextSelectionHandleControls {
-  _TextChunkSelectionControls({
-    required this.onHandlePointerDown,
-    required this.onHandlePointerMove,
-    required this.onHandlePointerEnd,
-  });
-
-  final ValueChanged<PointerDownEvent> onHandlePointerDown;
-  final ValueChanged<PointerMoveEvent> onHandlePointerMove;
-  final ValueChanged<PointerUpEvent> onHandlePointerEnd;
-
-  @override
-  Widget buildHandle(
-    BuildContext context,
-    TextSelectionHandleType type,
-    double textLineHeight, [
-    VoidCallback? onTap,
-  ]) {
-    return Listener(
-      key: ValueKey('note-text-native-selection-handle-${type.name}'),
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: onHandlePointerDown,
-      onPointerMove: onHandlePointerMove,
-      onPointerUp: onHandlePointerEnd,
-      onPointerCancel: (_) {},
-      child: super.buildHandle(context, type, textLineHeight, onTap),
-    );
-  }
-}
-
 class _LineMarker extends StatelessWidget {
   const _LineMarker({
     required this.line,
@@ -1039,7 +710,6 @@ class _LineSpacerPlan {
     required this.underlineLanes,
     required this.lineBreakCount,
     required this.height,
-    required this.placeholderText,
   });
 
   final int lineIndex;
@@ -1047,7 +717,6 @@ class _LineSpacerPlan {
   final int underlineLanes;
   final int lineBreakCount;
   final double height;
-  final String placeholderText;
 }
 
 double _lineTop(int lineIndex, Map<int, double> lineTops) {
@@ -1068,46 +737,10 @@ Map<int, double> _lineTops(
   return result;
 }
 
-List<_TextChunkNativePlaceholder> _softWrapIndentPlaceholders(
-  List<TextChunkVisualLine> lines, {
-  required Set<int> occupiedOffsets,
-}) {
-  final placeholders = <_TextChunkNativePlaceholder>[];
-  for (var index = 0; index + 1 < lines.length; index += 1) {
-    final line = lines[index];
-    final nextLine = lines[index + 1];
-    if (line.indentLevel <= 0 ||
-        line.hardBreakAfter ||
-        occupiedOffsets.contains(line.end)) {
-      continue;
-    }
-    final isSoftWrapContinuation =
-        nextLine.paragraphIndex == line.paragraphIndex &&
-        nextLine.lineIndexInParagraph == line.lineIndexInParagraph + 1 &&
-        nextLine.start == line.end;
-    if (!isSoftWrapContinuation) {
-      continue;
-    }
-    final indent = _continuationIndentForLine(line);
-    if (indent.isEmpty) {
-      continue;
-    }
-    placeholders.add(
-      _TextChunkNativePlaceholder(
-        offset: line.end,
-        text: _placeholderTextForLineBreaks(1, trailingText: indent),
-        label: 'indent-soft-wrap-${line.index}',
-      ),
-    );
-  }
-  return placeholders;
-}
-
 List<_LineSpacerPlan> _underlineSpacerPlans(
   List<TextChunkVisualLine> lines,
-  double baseLineHeight, {
-  int? trailingIndentSuppressedOffset,
-}) {
+  double baseLineHeight,
+) {
   final plans = <_LineSpacerPlan>[];
   for (final line in lines) {
     final lanes = line.underlineLanes.length;
@@ -1115,25 +748,14 @@ List<_LineSpacerPlan> _underlineSpacerPlans(
     if (nativeLineCount <= 0) {
       continue;
     }
-    // The first inserted newline terminates the current visual row. The
-    // following newlines are the rows that create visible vertical space.
-    final placeholderLineBreakCount = nativeLineCount + 1;
     final offset = _insertionOffsetForLine(line);
-    final shouldCarryContinuationIndent =
-        !line.hardBreakAfter && offset != trailingIndentSuppressedOffset;
     plans.add(
       _LineSpacerPlan(
         lineIndex: line.index,
         offset: offset,
         underlineLanes: lanes,
-        lineBreakCount: placeholderLineBreakCount,
+        lineBreakCount: nativeLineCount,
         height: nativeLineCount * baseLineHeight,
-        placeholderText: _placeholderTextForLineBreaks(
-          placeholderLineBreakCount,
-          trailingText: shouldCarryContinuationIndent
-              ? _continuationIndentForLine(line)
-              : '',
-        ),
       ),
     );
   }
@@ -1149,13 +771,6 @@ int _underlineNativeLineCountForLanes(int lanes) {
 
 int _insertionOffsetForLine(TextChunkVisualLine line) {
   return line.hardBreakAfter ? line.end + 1 : line.end;
-}
-
-String _continuationIndentForLine(TextChunkVisualLine line) {
-  if (line.indentLevel <= 0) {
-    return '';
-  }
-  return _placeholderIndentUnit * line.indentLevel;
 }
 
 String _lineHeightSummary(
@@ -1182,29 +797,6 @@ String _lineSpacerSummary(List<_LineSpacerPlan> plans) {
             '/breaks${plan.lineBreakCount}/ul${plan.underlineLanes}',
       )
       .join(' ');
-}
-
-String _placeholderSummary(List<_TextChunkNativePlaceholder> placeholders) {
-  return placeholders
-      .map(
-        (placeholder) =>
-            '${placeholder.label}@${placeholder.offset}+${placeholder.length}',
-      )
-      .join(' ');
-}
-
-String _placeholderTextForLineBreaks(
-  int lineBreakCount, {
-  String trailingText = '',
-}) {
-  if (lineBreakCount <= 0) {
-    return trailingText;
-  }
-  final lineBreaks = List.filled(
-    lineBreakCount,
-    _placeholderLineBreakUnit,
-  ).join();
-  return '$lineBreaks$trailingText';
 }
 
 String _formatRect(Rect? rect) {

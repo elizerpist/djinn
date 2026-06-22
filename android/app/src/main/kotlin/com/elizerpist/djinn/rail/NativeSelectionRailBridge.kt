@@ -36,6 +36,7 @@ class NativeSelectionRailBridge(
 
     private var currentState: RailState = RailState.hidden()
     private var attached = false
+    private var lastImeBottom = 0
 
     init {
         channel.setMethodCallHandler(this)
@@ -60,8 +61,8 @@ class NativeSelectionRailBridge(
     private fun configureRailView() {
         railContainer.visibility = View.GONE
         railContainer.isClickable = true
-        railContainer.elevation = dp(10).toFloat()
-        railContainer.setPadding(dp(10), dp(6), dp(10), dp(6))
+        railContainer.elevation = 0f
+        railContainer.setPadding(0, 0, 0, 0)
 
         railContent.orientation = LinearLayout.VERTICAL
         railContent.setPadding(dp(10), dp(8), dp(10), dp(8))
@@ -167,7 +168,8 @@ class NativeSelectionRailBridge(
     }
 
     private fun positionRail(imeBottom: Int) {
-        railContainer.translationY = -imeBottom.toFloat()
+        lastImeBottom = max(0, imeBottom)
+        railContainer.translationY = -lastImeBottom.toFloat()
     }
 
     private fun renderState(state: RailState) {
@@ -178,18 +180,24 @@ class NativeSelectionRailBridge(
         railContent.background = railBackground(state)
         renderActions(state)
         renderTags(state)
-        positionRail(estimatedKeyboardBottom())
+        positionRail(max(lastImeBottom, estimatedKeyboardBottom()))
     }
 
     private fun renderActions(state: RailState) {
         actionRow.removeAllViews()
+        actionRow.addView(
+            actionButton(
+                "toggleTags",
+                if (state.bottomRowExpanded) "^" else "v",
+                state.actionEnabled("toggleTags")
+            )
+        )
         actionRow.addView(actionButton("outdent", "<", state.actionEnabled("outdent")))
         actionRow.addView(actionButton("indent", ">", state.actionEnabled("indent")))
         actionRow.addView(actionButton("tagSelection", "Tag", state.actionEnabled("tagSelection")))
         actionRow.addView(actionButton("clearTags", "Del", state.actionEnabled("clearTags")))
         actionRow.addView(actionButton("previousTag", "Prev", state.actionEnabled("previousTag")))
         actionRow.addView(actionButton("nextTag", "Next", state.actionEnabled("nextTag")))
-        actionRow.addView(actionButton("toggleTags", "Rows", state.actionEnabled("toggleTags")))
         actionRow.addView(actionButton("toggleRounded", "R", state.actionEnabled("toggleRounded")))
         actionRow.addView(actionButton("toggleGrey", "G", state.actionEnabled("toggleGrey")))
         actionRow.addView(actionButton("toggleBorder", "B", state.actionEnabled("toggleBorder")))
@@ -266,13 +274,13 @@ class NativeSelectionRailBridge(
 
     private fun railBackground(state: RailState): GradientDrawable {
         val backgroundColor = if (state.greyBackground) {
-            Color.rgb(243, 244, 246)
+            Color.rgb(248, 250, 252)
         } else {
             Color.WHITE
         }
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = if (state.roundedCard) dp(16).toFloat() else dp(8).toFloat()
+            cornerRadius = if (state.roundedCard) dp(8).toFloat() else 0f
             setColor(backgroundColor)
             if (state.borderVisible) {
                 setStroke(dp(1), Color.rgb(209, 213, 219))

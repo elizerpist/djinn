@@ -597,13 +597,10 @@ void main() {
   testWidgets('touching a native selection handle keeps inline rail absent', (
     tester,
   ) async {
+    const text = 'Alpha\nBeta\nGamma\nDelta';
     await _pumpTextChunkEditor(
       tester,
-      const NoteBlock(
-        id: 'text-1',
-        type: NoteBlockType.paragraph,
-        text: 'Alpha\nBeta\nGamma\nDelta',
-      ),
+      const NoteBlock(id: 'text-1', type: NoteBlockType.paragraph, text: text),
     );
 
     await tester.longPressAt(
@@ -616,10 +613,6 @@ void main() {
       isFalse,
     );
     expect(
-      find.byKey(const ValueKey('note-text-native-selection-handle-right')),
-      findsOneWidget,
-    );
-    expect(
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
       findsNothing,
     );
@@ -627,12 +620,16 @@ void main() {
       find.byKey(const ValueKey('note-text-inline-selection-spacer')),
       findsNothing,
     );
-
-    final handle = find.byKey(
-      const ValueKey('note-text-native-selection-handle-right'),
+    expect(
+      find.byKey(const ValueKey('note-text-native-selection-handle-right')),
+      findsNothing,
+      reason: 'Selection handles are now the stock Material native handles.',
     );
-    final gesture = await tester.startGesture(tester.getCenter(handle));
-    await tester.pump();
+
+    await _simulateNativeSelectionDrag(
+      tester,
+      const TextSelection(baseOffset: 0, extentOffset: 16),
+    );
 
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
@@ -645,10 +642,7 @@ void main() {
       find.byKey(const ValueKey('note-text-inline-selection-spacer')),
       findsNothing,
     );
-
-    await gesture.up();
-    await tester.pump();
-    await tester.pump();
+    expect(_nativeEditablePlainText(tester), text);
 
     expect(
       find.byKey(const ValueKey('note-text-inline-selection-rail')),
@@ -1238,7 +1232,7 @@ void main() {
     expect(gamma.top, greaterThanOrEqualTo(lastUnderline.bottom + 1));
   });
 
-  testWidgets('stacked underline spacing is local to the tagged visual line', (
+  testWidgets('stacked underline spacing keeps native text pure', (
     tester,
   ) async {
     const text = 'Alpha\nBeta\nGamma';
@@ -1274,7 +1268,6 @@ void main() {
       ),
     );
 
-    final alpha = _nativeEditableSubstringRect(tester, 'Alpha');
     final beta = _nativeEditableSubstringRect(tester, 'Beta');
     final gamma = _nativeEditableSubstringRect(tester, 'Gamma');
     final firstUnderline = tester.getRect(
@@ -1288,13 +1281,8 @@ void main() {
       ),
     );
 
-    expect(
-      beta.top - alpha.top,
-      lessThanOrEqualTo(28),
-      reason:
-          'Underline spacing belongs below the tagged line only; the line '
-          'above it must keep the normal native line distance.',
-    );
+    expect(DebugConsole.allText, contains('placeholderDelta=0'));
+    expect(DebugConsole.allText, isNot(contains('underline-line-')));
     expect(firstUnderline.top, greaterThan(beta.top + 15));
     expect(lastUnderline.top, greaterThan(firstUnderline.top));
     expect(gamma.top, greaterThanOrEqualTo(lastUnderline.bottom + 1));
@@ -1391,10 +1379,17 @@ void main() {
     );
     expect(
       five.logs,
-      contains('underline-line-'),
+      isNot(contains('underline-line-')),
       reason:
-          'Five underline lanes should still use a native spacer, just a '
-          'smaller one than eight lanes. $diagnostic',
+          'Many underline lanes must open visual space without hidden native '
+          'text placeholders. $diagnostic',
+    );
+    expect(
+      five.logs,
+      contains('placeholderDelta=0'),
+      reason:
+          'Underline spacing must keep EditableText plain text identical to '
+          'the controller text. $diagnostic',
     );
     expect(
       none.logs,
@@ -1526,60 +1521,65 @@ void main() {
     },
   );
 
-  testWidgets(
-    'stacked underline spacer preserves indented soft-wrap continuation',
-    (tester) async {
-      const text =
-          '    Holnap reggel holnap reggel holnap reggel reggel holnap reggel';
-      final rangeStart = text.indexOf('Holnap');
-      final rangeEnd = text.indexOf(' reggel reggel');
-      await _pumpTextChunkEditor(
-        tester,
-        NoteBlock(
-          id: 'text-1',
-          type: NoteBlockType.paragraph,
-          text: text,
-          rangeTags: [
-            NoteTextRangeTag(
-              id: 'range-holnap',
-              start: rangeStart,
-              end: rangeEnd,
-              tag: _tagsWithSecondary(5).first,
-              tags: _tagsWithSecondary(5),
-            ),
-          ],
-        ),
-        surfaceSize: const Size(300, 700),
-      );
+  testWidgets('stacked underline spacing keeps indented soft-wrap text pure', (
+    tester,
+  ) async {
+    const text =
+        '    Holnap reggel holnap reggel holnap reggel reggel holnap reggel';
+    final rangeStart = text.indexOf('Holnap');
+    final rangeEnd = text.indexOf(' reggel reggel');
+    await _pumpTextChunkEditor(
+      tester,
+      NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: text,
+        rangeTags: [
+          NoteTextRangeTag(
+            id: 'range-holnap',
+            start: rangeStart,
+            end: rangeEnd,
+            tag: _tagsWithSecondary(5).first,
+            tags: _tagsWithSecondary(5),
+          ),
+        ],
+      ),
+      surfaceSize: const Size(300, 700),
+    );
 
-      final firstText = _nativeEditableRangeTightRect(
-        tester,
-        rangeStart,
-        rangeStart + 1,
-      );
-      final lineBounds = _nativeEditableNonEmptyLineBounds(tester);
-      final diagnostic =
-          'firstText=$firstText '
-          'bounds=${lineBounds.map((line) => '${line.left.toStringAsFixed(1)},${line.top.toStringAsFixed(1)},${line.right.toStringAsFixed(1)}').join(';')} '
-          'logs=${DebugConsole.allText}';
+    final firstText = _nativeEditableRangeTightRect(
+      tester,
+      rangeStart,
+      rangeStart + 1,
+    );
+    final lineBounds = _nativeEditableNonEmptyLineBounds(tester);
+    final firstLineGap = lineBounds.length > 1
+        ? lineBounds[1].top - lineBounds[0].top
+        : 0.0;
+    final diagnostic =
+        'firstText=$firstText '
+        'bounds=${lineBounds.map((line) => '${line.left.toStringAsFixed(1)},${line.top.toStringAsFixed(1)},${line.right.toStringAsFixed(1)}').join(';')} '
+        'logs=${DebugConsole.allText}';
 
-      expect(lineBounds.length, greaterThan(1), reason: diagnostic);
-      expect(
-        DebugConsole.allText,
-        contains('underline-line-'),
-        reason: diagnostic,
-      );
-      for (final line in lineBounds) {
-        expect(
-          line.left,
-          greaterThanOrEqualTo(firstText.left - 1.5),
-          reason:
-              'Every real native row after an underline spacer must keep the '
-              'paragraph indent. $diagnostic',
-        );
-      }
-    },
-  );
+    expect(lineBounds.length, greaterThan(1), reason: diagnostic);
+    expect(
+      DebugConsole.allText,
+      isNot(contains('underline-line-')),
+      reason: diagnostic,
+    );
+    expect(
+      DebugConsole.allText,
+      contains('placeholderDelta=0'),
+      reason: diagnostic,
+    );
+    expect(
+      firstLineGap,
+      greaterThan(20),
+      reason:
+          'Stacked underline spacing must create vertical room without '
+          'synthetic soft-wrap indent placeholders. $diagnostic',
+    );
+  });
 
   testWidgets(
     'native rail paragraph step indents every visual line in the active paragraph',
