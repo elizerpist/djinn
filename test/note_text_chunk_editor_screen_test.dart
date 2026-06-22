@@ -35,6 +35,16 @@ void main() {
 
     final editable = tester.widget<EditableText>(_editableTextFinder());
     expect(editable.controller.text, text);
+    expect(
+      find.byKey(const ValueKey('note-text-native-editor')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('note-text-chunk-field')), findsNothing);
+    expect(find.byKey(const ValueKey('note-text-scroll')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('note-text-secondary-underline-overlay')),
+      findsNothing,
+    );
     expect(DebugConsole.allText, isNot(contains('rail-line-')));
     expect(DebugConsole.allText, isNot(contains('underline-line-')));
     expect(DebugConsole.allText, isNot(contains('placeholderDelta=')));
@@ -133,24 +143,45 @@ void main() {
     expect(visibleCalls, isEmpty);
   });
 
+  testWidgets('paragraph step stores metadata without mutating text', (
+    tester,
+  ) async {
+    const text = 'Alpha\nBeta\n\nGamma';
+    final calls = <MethodCall>[];
+    final controller = _installNativeRailController(calls, nativeRailChannel);
+    addTearDown(controller.dispose);
+    NoteBlock? latest;
+
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(id: 'text-1', type: NoteBlockType.paragraph, text: text),
+      onChanged: (block) => latest = block,
+      nativeSelectionRailController: controller,
+    );
+
+    _setEditorSelection(
+      tester,
+      const TextSelection(baseOffset: 1, extentOffset: 14),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('note-text-indent')));
+    await tester.pumpAndSettle();
+
+    final editable = tester.widget<EditableText>(_editableTextFinder());
+    expect(editable.controller.text, text);
+    expect(latest?.text, text);
+    expect(latest?.paragraphStyles.map((style) => style.level), [1, 1]);
+    expect(DebugConsole.allText, isNot(contains('[TextChunkMargin]')));
+  });
+
   testWidgets(
-    'secondary underlines paint over native glyph boxes and expand content height',
+    'secondary underline lanes configure native span height without overlay',
     (tester) async {
       const text = 'Alpha Beta Gamma';
       final calls = <MethodCall>[];
       final controller = _installNativeRailController(calls, nativeRailChannel);
       addTearDown(controller.dispose);
-
-      await _pumpTextChunkEditor(
-        tester,
-        const NoteBlock(
-          id: 'text-1',
-          type: NoteBlockType.paragraph,
-          text: text,
-        ),
-        nativeSelectionRailController: controller,
-      );
-      final plainHeight = tester.getSize(_editableTextFinder()).height;
 
       await _pumpTextChunkEditor(
         tester,
@@ -173,13 +204,17 @@ void main() {
 
       final editable = tester.widget<EditableText>(_editableTextFinder());
       expect(editable.controller.text, text);
+      final span = editable.controller.buildTextSpan(
+        context: tester.element(_editableTextFinder()),
+        style: const TextStyle(fontSize: 16),
+        withComposing: false,
+      );
+      final children = span.children!.whereType<TextSpan>();
+      final betaSpan = children.firstWhere((child) => child.text == 'Beta');
+      expect(betaSpan.style?.height, greaterThan(1));
       expect(
         find.byKey(const ValueKey('note-text-secondary-underline-overlay')),
-        findsOneWidget,
-      );
-      expect(
-        tester.getSize(_editableTextFinder()).height,
-        greaterThan(plainHeight),
+        findsNothing,
       );
     },
   );

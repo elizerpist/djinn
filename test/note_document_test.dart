@@ -246,6 +246,46 @@ void main() {
     },
   );
 
+  test('text paragraph styles round trip through note block json', () {
+    const block = NoteBlock(
+      id: 'block-1',
+      type: NoteBlockType.paragraph,
+      text: 'Alpha\nBeta\n\nGamma',
+      paragraphStyles: [
+        NoteTextParagraphStyle(id: 'p-1', start: 0, end: 10, level: 2),
+        NoteTextParagraphStyle(id: 'p-2', start: 12, end: 17, level: 1),
+      ],
+    );
+
+    final parsed = NoteBlock.fromJson(block.toJson());
+
+    expect(parsed.paragraphStyles, hasLength(2));
+    expect(parsed.paragraphStyles.first.id, 'p-1');
+    expect(parsed.paragraphStyles.first.start, 0);
+    expect(parsed.paragraphStyles.first.end, 10);
+    expect(parsed.paragraphStyles.first.level, 2);
+    expect(parsed.paragraphStyles.last.id, 'p-2');
+    expect(parsed.paragraphStyles.last.start, 12);
+    expect(parsed.paragraphStyles.last.end, 17);
+    expect(parsed.paragraphStyles.last.level, 1);
+  });
+
+  test('invalid paragraph styles are ignored while parsing', () {
+    final block = NoteBlock.fromJson({
+      'id': 'block-1',
+      'type': 'paragraph',
+      'text': 'Alpha',
+      'paragraphStyles': [
+        {'id': 'bad', 'start': 5, 'end': 2, 'level': 1},
+        {'id': 'ok', 'start': 0, 'end': 5, 'level': 20},
+      ],
+    });
+
+    expect(block.paragraphStyles, hasLength(1));
+    expect(block.paragraphStyles.single.id, 'ok');
+    expect(block.paragraphStyles.single.level, 8);
+  });
+
   test(
     'serializes multitag text ranges and scoped table flowchart tag assignments',
     () {

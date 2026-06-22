@@ -8,10 +8,11 @@ import 'native_selection_rail_bridge.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
 import 'tag_manager_sheet.dart';
-import 'text_chunk/text_chunk_controller.dart';
-import 'text_chunk/text_chunk_editor.dart';
-import 'text_chunk/text_chunk_rail_state.dart';
-import 'text_chunk/text_chunk_ranges.dart';
+import 'text_chunk/native_text_chunk_editor.dart';
+import 'text_chunk/text_chunk_paragraphs.dart';
+import 'text_chunk/text_chunk_rail.dart';
+import 'text_chunk/text_chunk_span_controller.dart';
+import 'text_chunk/text_chunk_text_edits.dart';
 
 String _editorBlockSignature(NoteBlock block) {
   return [
@@ -21,6 +22,7 @@ String _editorBlockSignature(NoteBlock block) {
     block.title ?? '',
     block.tags.map(_tagSignature).join('\u001e'),
     block.rangeTags.map(_rangeTagSignature).join('\u001e'),
+    block.paragraphStyles.map(_paragraphStyleSignature).join('\u001e'),
   ].join('\u001f');
 }
 
@@ -31,6 +33,10 @@ String _rangeTagSignature(NoteTextRangeTag rangeTag) {
     rangeTag.end,
     rangeTag.resolvedTags.map(_tagSignature).join('\u001d'),
   ].join(':');
+}
+
+String _paragraphStyleSignature(NoteTextParagraphStyle style) {
+  return [style.id, style.start, style.end, style.level].join(':');
 }
 
 String _tagSignature(NoteKnowledgeTag tag) {
@@ -64,7 +70,7 @@ class NoteTextChunkEditorScreen extends StatefulWidget {
 
 class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late NoteBlock _block;
-  late final TextChunkEditingController _controller;
+  late final TextChunkSpanController _controller;
   late final FocusNode _focusNode;
   late final NativeSelectionRailController _nativeSelectionRailController;
   late final bool _ownsNativeSelectionRailController;
@@ -82,7 +88,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   void initState() {
     super.initState();
     _block = widget.block;
-    _controller = TextChunkEditingController(text: widget.block.text)
+    _controller = TextChunkSpanController(text: widget.block.text)
       ..addListener(_handleControllerChanged);
     _focusNode = FocusNode();
     _nativeSelectionRailController =
@@ -158,16 +164,22 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     }
     final nextText = _controller.text;
     if (nextText != _block.text) {
-      final edit = _editFromTextChange(_block.text, nextText);
+      final edit = textChunkEditFromTextChange(_block.text, nextText);
       final rangeTags = adjustTextChunkRangeTagsForEdit(
         oldTextLength: _block.text.length,
         rangeTags: _block.rangeTags,
+        edit: edit,
+      );
+      final paragraphStyles = adjustTextChunkParagraphStylesForEdit(
+        oldTextLength: _block.text.length,
+        paragraphStyles: _block.paragraphStyles,
         edit: edit,
       );
       setState(() {
         _block = _block.copyWith(
           text: nextText,
           rangeTags: rangeTags,
+          paragraphStyles: paragraphStyles,
           clearIndex: true,
         );
       });
@@ -243,29 +255,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         }
         return;
     }
-  }
-
-  TextChunkTextEdit _editFromTextChange(String oldText, String newText) {
-    var prefix = 0;
-    while (prefix < oldText.length &&
-        prefix < newText.length &&
-        oldText.codeUnitAt(prefix) == newText.codeUnitAt(prefix)) {
-      prefix += 1;
-    }
-    var oldSuffix = oldText.length;
-    var newSuffix = newText.length;
-    while (oldSuffix > prefix &&
-        newSuffix > prefix &&
-        oldText.codeUnitAt(oldSuffix - 1) ==
-            newText.codeUnitAt(newSuffix - 1)) {
-      oldSuffix -= 1;
-      newSuffix -= 1;
-    }
-    return TextChunkTextEdit(
-      offset: prefix,
-      deleteCount: oldSuffix - prefix,
-      insertText: newText.substring(prefix, newSuffix),
-    );
   }
 
   void _emitTitle(String value) {
@@ -501,45 +490,56 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
 
   void _changeParagraphIndent(int delta) {
     final selection = _controller.selection;
-    final offset =
-        _activeRailRange?.start ??
-        (selection.isValid ? selection.extentOffset : 0);
-    final result = applyTextChunkParagraphMarginStep(
+    final activeRange = _activeRailRange;
+    final targetSelection = activeRange == null
+        ? (selection.isValid
+              ? selection
+              : const TextSelection.collapsed(offset: 0))
+        : TextSelection(
+            baseOffset: activeRange.start,
+            extentOffset: activeRange.end,
+          );
+    final result = applyTextChunkParagraphLevelStep(
       text: _block.text,
-      rangeTags: _block.rangeTags,
-      offset: offset,
+      paragraphStyles: _block.paragraphStyles,
+      selection: targetSelection,
       delta: delta,
     );
     DebugConsole.log(
-      '[TextChunkMargin] delta=$delta offset=$offset '
+      '[TextChunkParagraph] delta=$delta '
       'oldLen=${_block.text.length} newLen=${result.text.length} '
-      'oldRanges=${_block.rangeTags.length} newRanges=${result.rangeTags.length} '
-      'selection=${result.selectionOffset} '
-      'changed=${result.text != _block.text}',
+      'oldStyles=${_block.paragraphStyles.length} '
+      'newStyles=${result.paragraphStyles.length} '
+      'selection=${result.selection.start}-${result.selection.end} '
+      'changed=${!_sameParagraphStyles(_block.paragraphStyles, result.paragraphStyles)}',
     );
-    if (result.text == _block.text) {
+    if (_sameParagraphStyles(_block.paragraphStyles, result.paragraphStyles)) {
       return;
     }
     setState(() {
       _block = _block.copyWith(
-        text: result.text,
-        rangeTags: result.rangeTags,
+        paragraphStyles: result.paragraphStyles,
         clearIndex: true,
       );
     });
-    _syncingController = true;
-    try {
-      _controller.value = TextEditingValue(
-        text: result.text,
-        selection: TextSelection.collapsed(
-          offset: result.selectionOffset.clamp(0, result.text.length).toInt(),
-        ),
-      );
-    } finally {
-      _syncingController = false;
-    }
     widget.onChanged(_block);
     _syncNativeRailState();
+  }
+
+  bool _sameParagraphStyles(
+    List<NoteTextParagraphStyle> first,
+    List<NoteTextParagraphStyle> second,
+  ) {
+    if (first.length != second.length) {
+      return false;
+    }
+    for (var index = 0; index < first.length; index += 1) {
+      if (_paragraphStyleSignature(first[index]) !=
+          _paragraphStyleSignature(second[index])) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void _deleteChunk() {
@@ -549,6 +549,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _controller.configureTextChunkSpans(rangeTags: _block.rangeTags);
     return Scaffold(
       key: const ValueKey('note-text-chunk-editor'),
       appBar: NoteChunkEditorHeader(
@@ -597,7 +598,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
               child: NativeTextChunkEditor(
                 controller: _controller,
                 focusNode: _focusNode,
-                rangeTags: _block.rangeTags,
                 textStyle: _textStyle,
                 onSelectionChanged: (_, _) => _updateSelectionState(),
               ),

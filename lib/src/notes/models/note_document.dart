@@ -217,6 +217,66 @@ class NoteTextRangeTag {
   }
 }
 
+class NoteTextParagraphStyle {
+  const NoteTextParagraphStyle({
+    required this.id,
+    required this.start,
+    required this.end,
+    this.level = 0,
+  });
+
+  final String id;
+  final int start;
+  final int end;
+  final int level;
+
+  bool get isValid => id.trim().isNotEmpty && start >= 0 && end > start;
+
+  factory NoteTextParagraphStyle.fromJson(Object? value) {
+    if (value is! Map) {
+      return const NoteTextParagraphStyle(id: '', start: 0, end: 0);
+    }
+    final normalized = Map<Object?, Object?>.from(value);
+    final rawLevel = normalized['level'];
+    return NoteTextParagraphStyle(
+      id: normalized['id']?.toString() ?? '',
+      start: normalized['start'] is int ? normalized['start'] as int : 0,
+      end: normalized['end'] is int ? normalized['end'] as int : 0,
+      level: (rawLevel is int ? rawLevel : 0).clamp(0, 8).toInt(),
+    );
+  }
+
+  NoteTextParagraphStyle clampToTextLength(int length) {
+    final normalizedLength = length < 0 ? 0 : length;
+    final clampedStart = start.clamp(0, normalizedLength).toInt();
+    final clampedEnd = end.clamp(clampedStart, normalizedLength).toInt();
+    return copyWith(start: clampedStart, end: clampedEnd);
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'start': start,
+      'end': end,
+      if (level != 0) 'level': level.clamp(0, 8).toInt(),
+    };
+  }
+
+  NoteTextParagraphStyle copyWith({
+    String? id,
+    int? start,
+    int? end,
+    int? level,
+  }) {
+    return NoteTextParagraphStyle(
+      id: id ?? this.id,
+      start: start ?? this.start,
+      end: end ?? this.end,
+      level: (level ?? this.level).clamp(0, 8).toInt(),
+    );
+  }
+}
+
 enum NoteTagTargetKind {
   textRange('text_range'),
   listItem('list_item'),
@@ -417,6 +477,16 @@ List<NoteTextRangeTag> _rangeTagsFromJson(Object? value) {
       .whereType<Map>()
       .map((item) => NoteTextRangeTag.fromJson(Map<String, Object?>.from(item)))
       .where((tag) => tag.isValid)
+      .toList(growable: false);
+}
+
+List<NoteTextParagraphStyle> _paragraphStylesFromJson(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+  return value
+      .map(NoteTextParagraphStyle.fromJson)
+      .where((style) => style.isValid)
       .toList(growable: false);
 }
 
@@ -737,6 +807,7 @@ class NoteBlock {
     this.searchAliases = const [],
     this.tags = const [],
     this.rangeTags = const [],
+    this.paragraphStyles = const [],
     this.scopedTags = const [],
     this.level = 0,
     this.rows = const [],
@@ -759,6 +830,7 @@ class NoteBlock {
   final List<String> searchAliases;
   final List<NoteKnowledgeTag> tags;
   final List<NoteTextRangeTag> rangeTags;
+  final List<NoteTextParagraphStyle> paragraphStyles;
   final List<NoteScopedTagAssignment> scopedTags;
   final int level;
   final List<List<String>> rows;
@@ -782,6 +854,7 @@ class NoteBlock {
       searchAliases: _stringsFromJson(json['searchAliases']),
       tags: _tagsFromJson(json['tags']),
       rangeTags: _rangeTagsFromJson(json['rangeTags']),
+      paragraphStyles: _paragraphStylesFromJson(json['paragraphStyles']),
       scopedTags: _scopedTagsFromJson(json['scopedTags']),
       level: json['level'] is int ? json['level'] as int : 0,
       rows: _rowsFromJson(json['rows']),
@@ -816,6 +889,10 @@ class NoteBlock {
       if (tags.isNotEmpty) 'tags': tags.map((tag) => tag.toJson()).toList(),
       if (rangeTags.isNotEmpty)
         'rangeTags': rangeTags.map((tag) => tag.toJson()).toList(),
+      if (paragraphStyles.isNotEmpty)
+        'paragraphStyles': paragraphStyles
+            .map((style) => style.toJson())
+            .toList(),
       if (scopedTags.isNotEmpty)
         'scopedTags': scopedTags
             .map((assignment) => assignment.toJson())
@@ -1002,6 +1079,7 @@ class NoteBlock {
     List<String>? searchAliases,
     List<NoteKnowledgeTag>? tags,
     List<NoteTextRangeTag>? rangeTags,
+    List<NoteTextParagraphStyle>? paragraphStyles,
     List<NoteScopedTagAssignment>? scopedTags,
     int? level,
     List<List<String>>? rows,
@@ -1025,6 +1103,7 @@ class NoteBlock {
       searchAliases: searchAliases ?? this.searchAliases,
       tags: tags ?? this.tags,
       rangeTags: rangeTags ?? this.rangeTags,
+      paragraphStyles: paragraphStyles ?? this.paragraphStyles,
       scopedTags: scopedTags ?? this.scopedTags,
       level: level ?? this.level,
       rows: rows ?? this.rows,

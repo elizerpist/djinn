@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/note_document.dart';
 import '../native_selection_rail_bridge.dart';
-import 'text_chunk_ranges.dart';
+import 'text_chunk_paragraphs.dart';
 
 NativeSelectionRailState textChunkNativeRailState({
   required TextRange? activeRange,

@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../../models/note_document.dart';
-import 'text_chunk_underlines.dart';
 
-class TextChunkEditingController extends TextEditingController {
-  TextChunkEditingController({super.text});
+const double textChunkUnderlineLaneHeight = 4;
+const double textChunkUnderlineTopGap = 3;
+
+class TextChunkSpanController extends TextEditingController {
+  TextChunkSpanController({super.text});
 
   List<NoteTextRangeTag> _rangeTags = const [];
 
-  void configureTextChunkPresentation({
-    required List<NoteTextRangeTag> rangeTags,
-  }) {
+  void configureTextChunkSpans({required List<NoteTextRangeTag> rangeTags}) {
     _rangeTags = rangeTags;
   }
 
@@ -52,11 +52,11 @@ class TextChunkEditingController extends TextEditingController {
   }
 
   TextStyle _styleForRange(TextStyle baseStyle, int start, int end) {
-    final tag = _tagForRange(start, end);
-    if (tag == null || tag.resolvedTags.isEmpty) {
+    final tags = _tagsForRange(start, end);
+    if (tags.isEmpty) {
       return baseStyle;
     }
-    final secondaryLaneCount = tag.resolvedTags.length - 1;
+    final secondaryLaneCount = tags.length - 1;
     final fontSize = baseStyle.fontSize;
     final lineHeight = fontSize == null || secondaryLaneCount <= 0
         ? baseStyle.height
@@ -66,19 +66,34 @@ class TextChunkEditingController extends TextEditingController {
               fontSize;
     return baseStyle.copyWith(
       backgroundColor: Color(
-        tag.resolvedTags.first.resolvedColorValue,
+        tags.first.resolvedColorValue,
       ).withValues(alpha: 0.18),
+      decoration: secondaryLaneCount > 0
+          ? TextDecoration.underline
+          : baseStyle.decoration,
+      decorationColor: secondaryLaneCount > 0
+          ? Color(tags[1].resolvedColorValue)
+          : baseStyle.decorationColor,
+      decorationThickness: secondaryLaneCount > 0
+          ? 2
+          : baseStyle.decorationThickness,
       height: lineHeight,
     );
   }
 
-  NoteTextRangeTag? _tagForRange(int start, int end) {
+  List<NoteKnowledgeTag> _tagsForRange(int start, int end) {
+    final tags = <NoteKnowledgeTag>[];
     for (final rawTag in _rangeTags) {
-      final tag = rawTag.clampToTextLength(text.length);
-      if (tag.isValid && tag.start <= start && tag.end >= end) {
-        return tag;
+      final rangeTag = rawTag.clampToTextLength(text.length);
+      if (!rangeTag.isValid || rangeTag.start >= end || rangeTag.end <= start) {
+        continue;
+      }
+      for (final tag in rangeTag.resolvedTags) {
+        if (!tags.any((current) => current.metadataText == tag.metadataText)) {
+          tags.add(tag);
+        }
       }
     }
-    return null;
+    return tags;
   }
 }
