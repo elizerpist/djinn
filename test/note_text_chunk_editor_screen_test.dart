@@ -45,7 +45,7 @@ void main() {
     );
   });
 
-  testWidgets('header title and text changes autosave without textchunk logs', (
+  testWidgets('header title and text changes autosave with text debug logs', (
     tester,
   ) async {
     NoteBlock? latest;
@@ -85,6 +85,7 @@ void main() {
     );
     await tester.pump();
     expect(latest?.title, 'Updated title');
+    expect(DebugConsole.allText, isNot(contains('[TextChunkNative]')));
 
     await tester.enterText(
       find.byKey(const ValueKey('note-text-plain-field')),
@@ -93,7 +94,10 @@ void main() {
     await tester.pump();
 
     expect(latest?.text, 'New plain text');
-    expect(DebugConsole.allText, isNot(contains('[TextChunk')));
+    expect(
+      DebugConsole.allText,
+      contains('[TextChunkNative] text changed chars=14 ranges=0'),
+    );
   });
 
   testWidgets('keyboard rail appears above keyboard only for selected text', (
@@ -337,6 +341,9 @@ void main() {
       const Color(0xFF2563EB),
       const Color(0xFF0D9488),
     ]);
+    expect(typedPainter.renderEditable, isNotNull);
+    expect(DebugConsole.allText, contains('[TextChunkVisual]'));
+    expect(DebugConsole.allText, contains('runs=[6-10/u2]'));
   });
 
   testWidgets('header global tag action saves chunk tags', (tester) async {
@@ -389,11 +396,14 @@ void main() {
     expect(latest?.paragraphStyles.single.start, 0);
     expect(latest?.paragraphStyles.single.end, 27);
     expect(latest?.paragraphStyles.single.level, 1);
+    expect(DebugConsole.allText, contains('[TextChunkParagraph] delta=1'));
+    expect(DebugConsole.allText, contains('affected=[0-27]'));
 
     await tester.tap(find.byKey(const ValueKey('note-text-rail-outdent')));
     await tester.pumpAndSettle();
     expect(latest?.text, text);
     expect(latest?.paragraphStyles, isEmpty);
+    expect(DebugConsole.allText, contains('[TextChunkParagraph] delta=-1'));
   });
 }
 

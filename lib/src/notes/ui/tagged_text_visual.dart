@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../models/note_document.dart';
 
@@ -164,6 +165,8 @@ class NoteTaggedTextUnderlinePainter extends CustomPainter {
     required this.textStyle,
     required this.textDirection,
     this.scrollOffset = 0,
+    this.renderEditable,
+    this.editableOffset = Offset.zero,
   });
 
   final String text;
@@ -171,12 +174,33 @@ class NoteTaggedTextUnderlinePainter extends CustomPainter {
   final TextStyle textStyle;
   final TextDirection textDirection;
   final double scrollOffset;
+  final RenderEditable? renderEditable;
+  final Offset editableOffset;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (text.isEmpty || runs.isEmpty || size.width <= 0) {
       return;
     }
+    final editable = renderEditable;
+    if (editable != null && editable.attached) {
+      canvas.save();
+      canvas.translate(editableOffset.dx, editableOffset.dy);
+      for (final run in runs) {
+        _paintUnderlineBoxes(
+          canvas: canvas,
+          boxes: editable.getBoxesForSelection(
+            TextSelection(baseOffset: run.start, extentOffset: run.end),
+          ),
+          colors: run.colors,
+          visibleTop: -editableOffset.dy - 8,
+          visibleBottom: -editableOffset.dy + size.height + 8,
+        );
+      }
+      canvas.restore();
+      return;
+    }
+
     final painter = TextPainter(
       text: _underlineLayoutTextSpan(
         text: text,
@@ -189,28 +213,15 @@ class NoteTaggedTextUnderlinePainter extends CustomPainter {
     canvas.save();
     canvas.translate(0, -scrollOffset);
     for (final run in runs) {
-      final boxes = painter.getBoxesForSelection(
-        TextSelection(baseOffset: run.start, extentOffset: run.end),
+      _paintUnderlineBoxes(
+        canvas: canvas,
+        boxes: painter.getBoxesForSelection(
+          TextSelection(baseOffset: run.start, extentOffset: run.end),
+        ),
+        colors: run.colors,
+        visibleTop: scrollOffset - 8,
+        visibleBottom: scrollOffset + size.height + 8,
       );
-      for (final box in boxes) {
-        final left = box.left;
-        final width = box.right - box.left;
-        if (width <= 0) {
-          continue;
-        }
-        for (var index = 0; index < run.colors.length; index += 1) {
-          final top = box.bottom + 2 + index * 4;
-          if (top < scrollOffset - 8 || top > scrollOffset + size.height + 8) {
-            continue;
-          }
-          final rect = Rect.fromLTWH(left, top, width, 2);
-          final rrect = RRect.fromRectAndRadius(
-            rect,
-            const Radius.circular(999),
-          );
-          canvas.drawRRect(rrect, Paint()..color = run.colors[index]);
-        }
-      }
     }
     canvas.restore();
   }
@@ -221,7 +232,37 @@ class NoteTaggedTextUnderlinePainter extends CustomPainter {
         oldDelegate.runs != runs ||
         oldDelegate.textStyle != textStyle ||
         oldDelegate.textDirection != textDirection ||
-        oldDelegate.scrollOffset != scrollOffset;
+        oldDelegate.scrollOffset != scrollOffset ||
+        oldDelegate.renderEditable != renderEditable ||
+        oldDelegate.editableOffset != editableOffset;
+  }
+}
+
+void _paintUnderlineBoxes({
+  required Canvas canvas,
+  required List<TextBox> boxes,
+  required List<Color> colors,
+  required double visibleTop,
+  required double visibleBottom,
+}) {
+  for (final box in boxes) {
+    final left = box.left;
+    final width = box.right - box.left;
+    if (width <= 0) {
+      continue;
+    }
+    for (var index = 0; index < colors.length; index += 1) {
+      final top = box.bottom + 2 + index * 4;
+      if (top < visibleTop || top > visibleBottom) {
+        continue;
+      }
+      final rect = Rect.fromLTWH(left, top, width, 2);
+      final rrect = RRect.fromRectAndRadius(
+        rect,
+        const Radius.circular(999),
+      );
+      canvas.drawRRect(rrect, Paint()..color = colors[index]);
+    }
   }
 }
 
@@ -279,7 +320,7 @@ double? _taggedRangeHeight(List<Color> secondaryUnderlineColors) {
   if (secondaryUnderlineColors.isEmpty) {
     return null;
   }
-  return 1.24 + secondaryUnderlineColors.length * 0.22;
+  return 1.34 + secondaryUnderlineColors.length * 0.42;
 }
 
 class NoteSecondaryTagUnderlines extends StatelessWidget {

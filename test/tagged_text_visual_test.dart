@@ -65,7 +65,7 @@ void main() {
       const Color(0xFFDC2626).withValues(alpha: 0.22),
     );
     expect(taggedSpan.style?.decoration, isNull);
-    expect(taggedSpan.style?.height, greaterThan(1.2));
+    expect(taggedSpan.style?.height, greaterThan(2.0));
 
     final underlineRuns = noteTaggedTextUnderlineRuns(
       text: text,

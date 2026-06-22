@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
+import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
@@ -32,13 +34,19 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   late final NoteTaggedTextEditingController _controller;
   late final FocusNode _focusNode;
   late final ScrollController _textScrollController;
+  final GlobalKey _textFieldHostKey = GlobalKey();
+  final GlobalKey _underlineLayerKey = GlobalKey();
   TextSelection _selection = const TextSelection.collapsed(offset: -1);
   bool _syncingController = false;
   bool _railBottomExpanded = true;
   bool _railRoundedCard = false;
   bool _railTransparentBackground = false;
   bool _railBorderVisible = true;
+  bool _tagGeometryRefreshScheduled = false;
   double _textScrollOffset = 0;
+  RenderEditable? _tagRenderEditable;
+  Offset _tagEditableOffset = Offset.zero;
+  String? _lastVisualLogSignature;
 
   @override
   void initState() {
@@ -87,6 +95,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       return;
     }
     setState(() => _textScrollOffset = nextOffset);
+    _scheduleTagGeometryRefresh();
   }
 
   void _syncControllerText(String text) {
@@ -97,6 +106,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         selection: TextSelection.collapsed(offset: text.length),
       );
       _selection = _controller.selection;
+      _lastVisualLogSignature = null;
+      _scheduleTagGeometryRefresh();
     } finally {
       _syncingController = false;
     }
@@ -123,11 +134,16 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         ),
         clearIndex: true,
       );
+      DebugConsole.log(
+        '[TextChunkNative] text changed chars=${value.text.length} '
+        'ranges=${nextBlock.rangeTags.length}',
+      );
     }
     setState(() {
       _selection = value.selection;
       _block = nextBlock;
     });
+    _scheduleTagGeometryRefresh();
     if (textChanged) {
       _controller.setRangeTags(nextBlock.rangeTags);
     }
@@ -156,11 +172,122 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         .toList(growable: false);
   }
 
+  void _scheduleTagGeometryRefresh() {
+    if (_tagGeometryRefreshScheduled) {
+      return;
+    }
+    _tagGeometryRefreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tagGeometryRefreshScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      final editable = _findRenderEditable(
+        _textFieldHostKey.currentContext?.findRenderObject(),
+      );
+      final layerBox = _underlineLayerKey.currentContext?.findRenderObject();
+      var nextOffset = Offset.zero;
+      if (editable != null && layerBox is RenderBox && editable.attached) {
+        nextOffset =
+            editable.localToGlobal(Offset.zero) -
+            layerBox.localToGlobal(Offset.zero);
+      }
+      _logVisualGeometry(editable, nextOffset);
+      if (editable != _tagRenderEditable || nextOffset != _tagEditableOffset) {
+        setState(() {
+          _tagRenderEditable = editable;
+          _tagEditableOffset = nextOffset;
+        });
+      }
+    });
+  }
+
+  RenderEditable? _findRenderEditable(RenderObject? root) {
+    if (root == null) {
+      return null;
+    }
+    if (root is RenderEditable) {
+      return root;
+    }
+    RenderEditable? result;
+    root.visitChildren((child) {
+      result ??= _findRenderEditable(child);
+    });
+    return result;
+  }
+
+  void _logVisualGeometry(RenderEditable? editable, Offset editableOffset) {
+    final runs = noteTaggedTextUnderlineRuns(
+      text: _controller.text,
+      rangeTags: _block.rangeTags,
+    );
+    final runLabel = runs
+        .map((run) => '${run.start}-${run.end}/u${run.colors.length}')
+        .join(' ');
+    final boxesLabel = editable == null
+        ? 'none'
+        : runs
+              .map((run) {
+                final boxes = editable.getBoxesForSelection(
+                  TextSelection(baseOffset: run.start, extentOffset: run.end),
+                );
+                final first = boxes.isEmpty ? null : boxes.first;
+                final firstLabel = first == null
+                    ? 'empty'
+                    : '${first.left.toStringAsFixed(1)},'
+                          '${first.top.toStringAsFixed(1)},'
+                          '${first.right.toStringAsFixed(1)},'
+                          '${first.bottom.toStringAsFixed(1)}';
+                return '${run.start}-${run.end}:${boxes.length}:$firstLabel';
+              })
+              .join(' ');
+    final signature =
+        '${_controller.text.length}|${_selectionLabel(_selection)}|'
+        '${_block.rangeTags.length}|$runLabel|'
+        '${editableOffset.dx.toStringAsFixed(1)},'
+        '${editableOffset.dy.toStringAsFixed(1)}|'
+        '${_textScrollOffset.toStringAsFixed(1)}|'
+        '${_paragraphStylesLabel(_block.paragraphStyles)}|$boxesLabel';
+    if (signature == _lastVisualLogSignature) {
+      return;
+    }
+    _lastVisualLogSignature = signature;
+    DebugConsole.log(
+      '[TextChunkVisual] textLen=${_controller.text.length} '
+      'selection=${_selectionLabel(_selection)} '
+      'ranges=${_block.rangeTags.length} runs=[$runLabel] '
+      'editable=${editable != null} '
+      'editableOffset=(${editableOffset.dx.toStringAsFixed(1)},'
+      '${editableOffset.dy.toStringAsFixed(1)}) '
+      'scroll=${_textScrollOffset.toStringAsFixed(1)} '
+      'paragraphStyles=[${_paragraphStylesLabel(_block.paragraphStyles)}] '
+      'boxes=[$boxesLabel]',
+    );
+  }
+
+  String _selectionLabel(TextSelection selection) {
+    if (!selection.isValid) {
+      return 'null';
+    }
+    return '${selection.start}-${selection.end}';
+  }
+
+  String _paragraphStylesLabel(List<NoteTextParagraphStyle> styles) {
+    return styles
+        .map((style) => '${style.start}-${style.end}/l${style.level}')
+        .join(' ');
+  }
+
+  String _paragraphRangesLabel(List<TextRange> ranges) {
+    return ranges.map((range) => '${range.start}-${range.end}').join(' ');
+  }
+
   void _emitBlock(NoteBlock block) {
     _controller.setRangeTags(
       _clampRangeTags(block.rangeTags, _controller.text.length),
     );
     setState(() => _block = block);
+    _scheduleTagGeometryRefresh();
     widget.onChanged(block);
   }
 
@@ -393,6 +520,13 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       final startCompare = a.start.compareTo(b.start);
       return startCompare == 0 ? a.end.compareTo(b.end) : startCompare;
     });
+    DebugConsole.log(
+      '[TextChunkParagraph] delta=$delta '
+      'selection=${_selectionLabel(_selection)} '
+      'affected=[${_paragraphRangesLabel(affected)}] '
+      'styles=[${_paragraphStylesLabel(nextStyles)}] '
+      'textUnchanged=true',
+    );
     _emitBlock(_block.copyWith(paragraphStyles: nextStyles, clearIndex: true));
     _focusNode.requestFocus();
   }
@@ -484,6 +618,7 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
       color: Color(0xFF111827),
       fontSize: 16,
     );
+    _scheduleTagGeometryRefresh();
     return Scaffold(
       key: const ValueKey('note-text-chunk-editor'),
       resizeToAvoidBottomInset: false,
@@ -525,41 +660,49 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                   child: Stack(
                     children: [
-                      TextField(
-                        key: const ValueKey('note-text-plain-field'),
-                        controller: _controller,
-                        focusNode: _focusNode,
-                        scrollController: _textScrollController,
-                        autofocus: true,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        minLines: null,
-                        maxLines: null,
-                        expands: true,
-                        textAlignVertical: TextAlignVertical.top,
-                        style: editorTextStyle,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          hintText: 'Írj valamit...',
-                          isCollapsed: true,
-                          contentPadding: EdgeInsets.zero,
+                      SizedBox.expand(
+                        key: _textFieldHostKey,
+                        child: TextField(
+                          key: const ValueKey('note-text-plain-field'),
+                          controller: _controller,
+                          focusNode: _focusNode,
+                          scrollController: _textScrollController,
+                          autofocus: true,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          minLines: null,
+                          maxLines: null,
+                          expands: true,
+                          textAlignVertical: TextAlignVertical.top,
+                          style: editorTextStyle,
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            hintText: 'Írj valamit...',
+                            isCollapsed: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
                       ),
                       Positioned.fill(
                         child: IgnorePointer(
-                          child: CustomPaint(
-                            key: const ValueKey(
-                              'note-text-range-underline-layer',
-                            ),
-                            foregroundPainter: NoteTaggedTextUnderlinePainter(
-                              text: _controller.text,
-                              runs: noteTaggedTextUnderlineRuns(
-                                text: _controller.text,
-                                rangeTags: _block.rangeTags,
+                          child: SizedBox.expand(
+                            key: _underlineLayerKey,
+                            child: CustomPaint(
+                              key: const ValueKey(
+                                'note-text-range-underline-layer',
                               ),
-                              textStyle: editorTextStyle,
-                              textDirection: Directionality.of(context),
-                              scrollOffset: _textScrollOffset,
+                              foregroundPainter: NoteTaggedTextUnderlinePainter(
+                                text: _controller.text,
+                                runs: noteTaggedTextUnderlineRuns(
+                                  text: _controller.text,
+                                  rangeTags: _block.rangeTags,
+                                ),
+                                textStyle: editorTextStyle,
+                                textDirection: Directionality.of(context),
+                                scrollOffset: _textScrollOffset,
+                                renderEditable: _tagRenderEditable,
+                                editableOffset: _tagEditableOffset,
+                              ),
                             ),
                           ),
                         ),
