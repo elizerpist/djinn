@@ -1,8 +1,13 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/src/notes/data/note_repository.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
+import 'package:djinn/src/notes/models/note_item.dart';
+import 'package:djinn/src/notes/pdf/note_pdf_export_models.dart';
+import 'package:djinn/src/notes/pdf/note_pdf_export_service.dart';
 import 'package:djinn/src/notes/ui/note_editor_route.dart';
 
 void main() {
@@ -149,7 +154,8 @@ void main() {
     );
 
     await tester.tap(find.byKey(const ValueKey('note-editor-menu')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('Tagek'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('tag-manager-sheet')), findsOneWidget);
@@ -169,4 +175,76 @@ void main() {
     expect(saved.document.tags.single.label, 'légzési elégtelenség');
     expect(saved.document.tags.single.colorValue, isNotNull);
   });
+
+  testWidgets('note menu exports only the opened note as PDF', (tester) async {
+    final repository = MemoryNoteRepository();
+    final note = await repository.createDocumentNote(
+      title: 'Aktív jegyzet',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(id: 'a', type: NoteBlockType.paragraph, text: 'Alpha'),
+        ],
+      ),
+    );
+    await repository.createDocumentNote(
+      title: 'Másik jegyzet',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(id: 'b', type: NoteBlockType.paragraph, text: 'Beta'),
+        ],
+      ),
+    );
+    final receivedIds = <String>[];
+    NotePdfPreviewFile? openedFile;
+    final service = _CapturingPdfExportService(
+      receivedIds: receivedIds,
+      filename: 'Akt_v_jegyzet.pdf',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteEditorRoute(
+          repository: repository,
+          initialNote: note,
+          pdfExportService: service,
+          pdfPreviewOpener: (context, file, service, viewerBuilder) {
+            openedFile = file;
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-editor-menu')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Export as PDF'), findsOneWidget);
+    await tester.tap(find.text('Export as PDF'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(receivedIds, [note.id]);
+    expect(openedFile?.filename, 'Akt_v_jegyzet.pdf');
+  });
+}
+
+class _CapturingPdfExportService extends NotePdfExportService {
+  const _CapturingPdfExportService({
+    required this.receivedIds,
+    required this.filename,
+  });
+
+  final List<String> receivedIds;
+  final String filename;
+
+  @override
+  Future<NotePdfPreviewFile> createPreviewFileForNotes(
+    List<NoteItem> notes,
+  ) async {
+    receivedIds.addAll(notes.map((note) => note.id));
+    return NotePdfPreviewFile(
+      path: 'memory:$filename',
+      filename: filename,
+      bytes: Uint8List.fromList('%PDF fake'.codeUnits),
+    );
+  }
 }

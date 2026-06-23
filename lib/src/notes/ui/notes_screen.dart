@@ -335,6 +335,7 @@ class _NotesScreenState extends State<NotesScreen> {
     return const [
       PopupMenuItem(value: 'index', child: Text('Indexelés / újraindexelés')),
       PopupMenuItem(value: 'move', child: Text('Mozgatás mappába')),
+      PopupMenuItem(value: 'export-pdf', child: Text('Export as PDF')),
       PopupMenuItem(value: 'export', child: Text('Export')),
       PopupMenuItem(value: 'share', child: Text('Megosztás')),
       PopupMenuDivider(),
@@ -402,7 +403,7 @@ class _NotesScreenState extends State<NotesScreen> {
       return;
     }
     if (value == 'export-pdf') {
-      await _exportNoteAsPdf(selected.single);
+      await _exportNotesAsPdf(selected);
       return;
     }
     if (value == 'share') {
@@ -685,14 +686,17 @@ class _NotesScreenState extends State<NotesScreen> {
     ).showSnackBar(SnackBar(content: Text('Exportálva: $path')));
   }
 
-  Future<void> _exportNoteAsPdf(NoteItem note) async {
+  Future<void> _exportNotesAsPdf(List<NoteItem> notes) async {
     try {
-      final previewFile = await _pdfExportService.createPreviewFile(note);
+      final previewFile = await _pdfExportService.createPreviewFileForNotes(
+        notes,
+      );
       if (!mounted) {
         return;
       }
       DebugConsole.log(
-        '[NotePdfExport] preview open note=${note.id} path=${previewFile.path}',
+        '[NotePdfExport] preview open notes=${notes.length} '
+        'ids=${notes.map((note) => note.id).join(',')} path=${previewFile.path}',
       );
       final opener = widget.pdfPreviewOpener ?? _openPdfPreview;
       unawaited(

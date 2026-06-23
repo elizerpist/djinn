@@ -13,6 +13,8 @@ import 'note_pdf_document_builder.dart';
 import 'note_pdf_export_models.dart';
 
 typedef NotePdfByteBuilder = Future<Uint8List> Function(NoteItem note);
+typedef NotePdfBatchByteBuilder =
+    Future<Uint8List> Function(List<NoteItem> notes);
 typedef NotePdfTempDirectoryProvider = Future<Directory> Function();
 typedef NotePdfSaveFile =
     Future<String?> Function({
@@ -25,47 +27,55 @@ typedef NotePdfShareFile = Future<void> Function(NotePdfPreviewFile file);
 class NotePdfExportService {
   const NotePdfExportService({
     this.buildPdfBytes,
+    this.buildPdfBatchBytes,
     this.tempDirectoryProvider,
     this.saveFile,
     this.shareFile,
   });
 
   final NotePdfByteBuilder? buildPdfBytes;
+  final NotePdfBatchByteBuilder? buildPdfBatchBytes;
   final NotePdfTempDirectoryProvider? tempDirectoryProvider;
   final NotePdfSaveFile? saveFile;
   final NotePdfShareFile? shareFile;
 
   Future<NotePdfExportResult> generate(NoteItem note) async {
-    final document = NoteDocument.fromPayload(
-      note.payloadJson,
-      legacyType: note.type.wireName,
-      legacyText: note.plainText,
-      title: note.title,
-    );
-    final hasContent = document.blocks.any(notePdfBlockHasExportableContent);
-    if (!hasContent) {
+    return generateMany([note]);
+  }
+
+  Future<NotePdfExportResult> generateMany(List<NoteItem> notes) async {
+    final selected = List<NoteItem>.from(notes, growable: false);
+    if (selected.isEmpty) {
       throw const NotePdfExportException(
-        'A jegyzet nem tartalmaz exportálható tartalmat.',
+        'Nincs kijelölt jegyzet PDF exporthoz.',
       );
     }
+    for (final note in selected) {
+      _validateExportable(note);
+    }
     DebugConsole.log(
-      '[NotePdfExport] generate start note=${note.id} blocks=${document.blocks.length}',
+      '[NotePdfExport] generate batch start notes=${selected.length} '
+      'ids=${selected.map((note) => note.id).join(',')}',
     );
-    final bytes = await (buildPdfBytes ?? const NotePdfDocumentBuilder().build)(
-      note,
-    );
+    final bytes = await _buildBytes(selected);
+    final filename = selected.length == 1
+        ? safeNotePdfFilename(selected.single.title)
+        : 'jegyzetek_${selected.length}.pdf';
     DebugConsole.log(
-      '[NotePdfExport] generated filename=${safeNotePdfFilename(note.title)} '
+      '[NotePdfExport] generated filename=$filename notes=${selected.length} '
       'bytes=${bytes.length}',
     );
-    return NotePdfExportResult(
-      filename: safeNotePdfFilename(note.title),
-      bytes: bytes,
-    );
+    return NotePdfExportResult(filename: filename, bytes: bytes);
   }
 
   Future<NotePdfPreviewFile> createPreviewFile(NoteItem note) async {
-    final result = await generate(note);
+    return createPreviewFileForNotes([note]);
+  }
+
+  Future<NotePdfPreviewFile> createPreviewFileForNotes(
+    List<NoteItem> notes,
+  ) async {
+    final result = await generateMany(notes);
     final directory = await (tempDirectoryProvider ?? getTemporaryDirectory)();
     await directory.create(recursive: true);
     final file = File(p.join(directory.path, result.filename));
@@ -78,6 +88,34 @@ class NotePdfExportService {
       filename: result.filename,
       bytes: result.bytes,
     );
+  }
+
+  void _validateExportable(NoteItem note) {
+    final document = NoteDocument.fromPayload(
+      note.payloadJson,
+      legacyType: note.type.wireName,
+      legacyText: note.plainText,
+      title: note.title,
+    );
+    final hasContent = document.blocks.any(notePdfBlockHasExportableContent);
+    if (!hasContent) {
+      throw const NotePdfExportException(
+        'A jegyzet nem tartalmaz exportálható tartalmat.',
+      );
+    }
+  }
+
+  Future<Uint8List> _buildBytes(List<NoteItem> notes) {
+    if (notes.length == 1 && buildPdfBytes != null) {
+      return buildPdfBytes!(notes.single);
+    }
+    if (buildPdfBatchBytes != null) {
+      return buildPdfBatchBytes!(notes);
+    }
+    if (notes.length == 1) {
+      return const NotePdfDocumentBuilder().build(notes.single);
+    }
+    return const NotePdfDocumentBuilder().buildMany(notes);
   }
 
   Future<String?> savePreviewFile(NotePdfPreviewFile file) async {

@@ -1,3 +1,5 @@
+import 'dart:async' show FutureOr;
+
 import 'package:flutter/material.dart';
 
 import '../../ai/ai_client.dart';
@@ -6,13 +8,24 @@ import '../data/note_repository.dart';
 import '../data/tag_repository.dart';
 import '../models/note_document.dart';
 import '../models/note_item.dart';
+import '../pdf/note_pdf_export_models.dart';
+import '../pdf/note_pdf_export_service.dart';
 import 'note_chunk_card.dart';
 import 'note_chunk_fab.dart';
 import 'note_flowchart_editor_screen.dart';
 import 'note_list_chunk_editor_screen.dart';
+import 'note_pdf_preview_screen.dart';
 import 'note_table_editor_screen.dart';
 import 'note_text_chunk_editor_screen.dart';
 import 'tag_manager_sheet.dart';
+
+typedef NoteEditorPdfPreviewOpener =
+    FutureOr<void> Function(
+      BuildContext context,
+      NotePdfPreviewFile file,
+      NotePdfExportService service,
+      WidgetBuilder? viewerBuilder,
+    );
 
 class NoteEditorRoute extends StatefulWidget {
   const NoteEditorRoute({
@@ -20,11 +33,17 @@ class NoteEditorRoute extends StatefulWidget {
     required this.repository,
     required this.initialNote,
     this.tagRepository,
+    this.pdfExportService,
+    this.pdfPreviewViewerBuilder,
+    this.pdfPreviewOpener,
   });
 
   final NoteRepository repository;
   final NoteItem initialNote;
   final TagRepository? tagRepository;
+  final NotePdfExportService? pdfExportService;
+  final WidgetBuilder? pdfPreviewViewerBuilder;
+  final NoteEditorPdfPreviewOpener? pdfPreviewOpener;
 
   @override
   State<NoteEditorRoute> createState() => _NoteEditorRouteState();
@@ -33,6 +52,8 @@ class NoteEditorRoute extends StatefulWidget {
 class _NoteEditorRouteState extends State<NoteEditorRoute> {
   late final TagRepository _tagRepository =
       widget.tagRepository ?? MemoryTagRepository();
+  NotePdfExportService get _pdfExportService =>
+      widget.pdfExportService ?? const NotePdfExportService();
   late NoteItem _note;
   late NoteDocument _document;
   late final TextEditingController _titleController;
@@ -218,12 +239,81 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
       await _showDocumentTagDialog();
       return;
     }
+    if (value == 'export-pdf') {
+      await _exportCurrentNoteAsPdf();
+      return;
+    }
     if (value == 'delete') {
       await widget.repository.deleteNotes([_note.id]);
       if (mounted) {
         Navigator.of(context).pop();
       }
     }
+  }
+
+  NoteItem get _currentExportNote {
+    return _note.copyWithDocument(title: _normalizedTitle, document: _document);
+  }
+
+  Future<void> _exportCurrentNoteAsPdf() async {
+    final note = _currentExportNote;
+    try {
+      final previewFile = await _pdfExportService.createPreviewFileForNotes([
+        note,
+      ]);
+      if (!mounted) {
+        return;
+      }
+      DebugConsole.log(
+        '[NotePdfExport] preview open note=${note.id} source=note-editor '
+        'path=${previewFile.path}',
+      );
+      final opener = widget.pdfPreviewOpener ?? _openPdfPreview;
+      unawaited(
+        Future<void>.sync(
+          () => opener(
+            context,
+            previewFile,
+            _pdfExportService,
+            widget.pdfPreviewViewerBuilder,
+          ),
+        ),
+      );
+    } on NotePdfExportException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      DebugConsole.log(
+        '[NotePdfExport] preview failed source=note-editor error=$error',
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('PDF export sikertelen: $error')));
+    }
+  }
+
+  Future<void> _openPdfPreview(
+    BuildContext context,
+    NotePdfPreviewFile file,
+    NotePdfExportService service,
+    WidgetBuilder? viewerBuilder,
+  ) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => NotePdfPreviewScreen(
+          file: file,
+          exportService: service,
+          viewerBuilder: viewerBuilder,
+        ),
+      ),
+    );
   }
 
   void _startTitleEdit() {
@@ -351,9 +441,8 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
       context,
       initialTags: block.tags,
       tagRepository: _tagRepository,
-      onChanged: (tags) => _replaceBlock(
-        block.copyWith(tags: tags, clearIndex: true),
-      ),
+      onChanged: (tags) =>
+          _replaceBlock(block.copyWith(tags: tags, clearIndex: true)),
       availableTags: _document.knownTags,
       title: 'Chunk tagek',
     );
@@ -388,6 +477,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
               ),
               PopupMenuItem(value: 'tags', child: Text('Tagek')),
               PopupMenuItem(value: 'chunks', child: Text('Chunkok kinyitása')),
+              PopupMenuItem(value: 'export-pdf', child: Text('Export as PDF')),
               PopupMenuItem(value: 'delete', child: Text('Törlés')),
             ],
           ),

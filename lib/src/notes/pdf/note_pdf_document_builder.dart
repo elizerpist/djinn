@@ -32,70 +32,109 @@ class NotePdfDocumentBuilder {
   const NotePdfDocumentBuilder();
 
   Future<Uint8List> build(NoteItem note) async {
-    final document = NoteDocument.fromPayload(
-      note.payloadJson,
-      legacyType: note.type.wireName,
-      legacyText: note.plainText,
-      title: note.title,
-    );
+    return buildMany([note]);
+  }
+
+  Future<Uint8List> buildMany(List<NoteItem> notes) async {
+    final exportableNotes = List<NoteItem>.from(notes, growable: false);
     DebugConsole.log(
-      '[NotePdfExport] build start note=${note.id} blocks=${document.blocks.length}',
+      '[NotePdfExport] build batch start notes=${exportableNotes.length} '
+      'ids=${exportableNotes.map((note) => note.id).join(',')}',
     );
 
     final fonts = await _PdfFonts.load();
     final pdf = pw.Document(
-      title: note.title.trim().isEmpty ? 'Jegyzet' : note.title.trim(),
+      title: exportableNotes.length == 1
+          ? _documentTitle(exportableNotes.single)
+          : 'Jegyzetek',
       author: 'Djinn',
       creator: 'Djinn note PDF export',
     );
     final textTheme = _PdfTextTheme(fonts);
 
-    final blocks = document.blocks
-        .where(notePdfBlockHasExportableContent)
-        .toList(growable: false);
-    final pendingBlocks = <NoteBlock>[];
-    var headerPending = true;
-    for (final block in blocks) {
-      if (block.type == NoteBlockType.flowchart) {
-        if (pendingBlocks.isNotEmpty) {
-          _addOrdinaryPages(
-            pdf,
-            note,
-            pendingBlocks,
-            textTheme,
-            includeDocumentHeader: headerPending,
-          );
-          headerPending = false;
-          pendingBlocks.clear();
-        }
-        _addFlowchartPages(
-          pdf,
-          note,
-          block,
-          textTheme,
-          includeDocumentHeader: headerPending,
-        );
-        headerPending = false;
-      } else {
-        pendingBlocks.add(block);
-      }
-    }
-    if (pendingBlocks.isNotEmpty) {
-      _addOrdinaryPages(
+    for (var i = 0; i < exportableNotes.length; i += 1) {
+      _addNotePages(
         pdf,
-        note,
-        pendingBlocks,
+        exportableNotes[i],
         textTheme,
-        includeDocumentHeader: headerPending,
+        index: i + 1,
+        total: exportableNotes.length,
       );
     }
 
     final bytes = await pdf.save();
     DebugConsole.log(
-      '[NotePdfExport] build complete note=${note.id} bytes=${bytes.length}',
+      '[NotePdfExport] build batch complete notes=${exportableNotes.length} '
+      'bytes=${bytes.length}',
     );
     return Uint8List.fromList(bytes);
   }
+}
+
+String _documentTitle(NoteItem note) {
+  return note.title.trim().isEmpty ? 'Jegyzet' : note.title.trim();
+}
+
+void _addNotePages(
+  pw.Document pdf,
+  NoteItem note,
+  _PdfTextTheme textTheme, {
+  required int index,
+  required int total,
+}) {
+  final document = NoteDocument.fromPayload(
+    note.payloadJson,
+    legacyType: note.type.wireName,
+    legacyText: note.plainText,
+    title: note.title,
+  );
+  DebugConsole.log(
+    '[NotePdfExport] build note start note=${note.id} index=$index/$total '
+    'freshPage=${index > 1} blocks=${document.blocks.length}',
+  );
+
+  final blocks = document.blocks
+      .where(notePdfBlockHasExportableContent)
+      .toList(growable: false);
+  final pendingBlocks = <NoteBlock>[];
+  var headerPending = true;
+  for (final block in blocks) {
+    if (block.type == NoteBlockType.flowchart) {
+      if (pendingBlocks.isNotEmpty) {
+        _addOrdinaryPages(
+          pdf,
+          note,
+          pendingBlocks,
+          textTheme,
+          includeDocumentHeader: headerPending,
+        );
+        headerPending = false;
+        pendingBlocks.clear();
+      }
+      _addFlowchartPages(
+        pdf,
+        note,
+        block,
+        textTheme,
+        includeDocumentHeader: headerPending,
+      );
+      headerPending = false;
+    } else {
+      pendingBlocks.add(block);
+    }
+  }
+  if (pendingBlocks.isNotEmpty) {
+    _addOrdinaryPages(
+      pdf,
+      note,
+      pendingBlocks,
+      textTheme,
+      includeDocumentHeader: headerPending,
+    );
+  }
+  DebugConsole.log(
+    '[NotePdfExport] build note complete note=${note.id} index=$index/$total',
+  );
 }
 
 bool notePdfBlockHasExportableContent(NoteBlock block) {
@@ -366,20 +405,13 @@ void _addFlowchartPages(
     marginLeft: 0,
     marginRight: 0,
   );
-  final landscape = _pageFormat.landscape.copyWith(
-    marginTop: 0,
-    marginBottom: 0,
-    marginLeft: 0,
-    marginRight: 0,
-  );
   final portraitCanvas = _flowchartCanvasSize(portrait);
-  final landscapeCanvas = _flowchartCanvasSize(landscape);
   final layout = buildNotePdfFlowchartLayout(
     block,
     portraitWidth: portraitCanvas.width,
     portraitHeight: portraitCanvas.height,
-    landscapeWidth: landscapeCanvas.width,
-    landscapeHeight: landscapeCanvas.height,
+    landscapeWidth: portraitCanvas.width,
+    landscapeHeight: portraitCanvas.height,
   );
   final mode = layout.pages.isEmpty
       ? NotePdfFlowchartPageMode.portraitSingle
@@ -397,9 +429,7 @@ void _addFlowchartPages(
   for (var i = 0; i < layout.pages.length; i += 1) {
     final page = layout.pages[i];
     final includeHeaderOnPage = includeDocumentHeader && i == 0;
-    final pageFormat = page.mode == NotePdfFlowchartPageMode.portraitSingle
-        ? portrait
-        : landscape;
+    final pageFormat = portrait;
     final canvasSize = _flowchartCanvasSize(
       pageFormat,
       documentHeaderHeight: includeHeaderOnPage

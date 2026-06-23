@@ -2,10 +2,9 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import '../models/note_document.dart';
+import '../models/note_flowchart_geometry.dart';
 import 'note_pdf_export_models.dart';
 
-const double _nodeWidth = 156;
-const double _nodeMinHeight = 64;
 const double _chartPadding = 24;
 const double _minReadableScale = 0.72;
 const double _tileOverlap = 56;
@@ -71,15 +70,7 @@ NotePdfFlowchartLayout buildNotePdfFlowchartLayout(
   final nodes = [...block.nodes]..sort((a, b) => a.order.compareTo(b.order));
   final nodeBoxes = [
     for (var i = 0; i < nodes.length; i += 1)
-      NotePdfFlowchartNodeBox(
-        node: nodes[i],
-        rect: Rect.fromLTWH(
-          nodes[i].x == 0 && nodes[i].y == 0 ? 80.0 : nodes[i].x,
-          nodes[i].x == 0 && nodes[i].y == 0 ? 80.0 + i * 120.0 : nodes[i].y,
-          _nodeWidth,
-          _heightFor(nodes[i].label),
-        ),
-      ),
+      NotePdfFlowchartNodeBox(node: nodes[i], rect: _nodeRect(nodes[i], i)),
   ];
   final bounds = _boundsFor(nodeBoxes).inflate(_chartPadding);
   final boxesById = {for (final box in nodeBoxes) box.node.id: box};
@@ -100,8 +91,6 @@ NotePdfFlowchartLayout buildNotePdfFlowchartLayout(
     bounds,
     portraitWidth: portraitWidth,
     portraitHeight: portraitHeight,
-    landscapeWidth: landscapeWidth,
-    landscapeHeight: landscapeHeight,
   );
   return NotePdfFlowchartLayout(
     bounds: bounds,
@@ -111,14 +100,30 @@ NotePdfFlowchartLayout buildNotePdfFlowchartLayout(
   );
 }
 
-double _heightFor(String label) {
-  final lines = (label.trim().length / 24).ceil().clamp(1, 4).toInt();
-  return math.max(_nodeMinHeight, 46 + lines * 14);
+Rect _nodeRect(NoteFlowchartNode node, int index) {
+  final size = noteFlowchartEditorNodeSize(node);
+  final x = node.x == 0 && node.y == 0 ? 120.0 : node.x;
+  final y = node.x == 0 && node.y == 0 ? 120.0 + index * 120.0 : node.y;
+  return Rect.fromLTWH(
+    _pdfPoint(x),
+    _pdfPoint(y),
+    _pdfPoint(size.width),
+    _pdfPoint(size.height),
+  );
+}
+
+double _pdfPoint(double editorUnit) {
+  return editorUnit * noteFlowchartEditorUnitToPdfPoint;
+}
+
+Offset _pdfOffset(NoteFlowchartWaypoint waypoint) {
+  return Offset(_pdfPoint(waypoint.x), _pdfPoint(waypoint.y));
 }
 
 Rect _boundsFor(List<NotePdfFlowchartNodeBox> boxes) {
   if (boxes.isEmpty) {
-    return const Rect.fromLTWH(0, 0, _nodeWidth, _nodeMinHeight);
+    final fallback = Size(_pdfPoint(210), _pdfPoint(78));
+    return Rect.fromLTWH(0, 0, fallback.width, fallback.height);
   }
   var rect = boxes.first.rect;
   for (final box in boxes.skip(1)) {
@@ -130,11 +135,7 @@ Rect _boundsFor(List<NotePdfFlowchartNodeBox> boxes) {
 List<Offset> _route(NoteFlowchartEdge edge, Rect from, Rect to) {
   if (edge.routingMode == NoteFlowchartRoutingMode.manual &&
       edge.manualWaypoints.isNotEmpty) {
-    return [
-      from.center,
-      ...edge.manualWaypoints.map((point) => Offset(point.x, point.y)),
-      to.center,
-    ];
+    return [from.center, ...edge.manualWaypoints.map(_pdfOffset), to.center];
   }
   final start = Offset(from.right, from.center.dy);
   final end = Offset(to.left, to.center.dy);
@@ -187,8 +188,6 @@ List<NotePdfFlowchartPage> _pagesFor(
   Rect bounds, {
   required double portraitWidth,
   required double portraitHeight,
-  required double landscapeWidth,
-  required double landscapeHeight,
 }) {
   final portraitScale = math.min(
     portraitWidth / bounds.width,
@@ -203,21 +202,8 @@ List<NotePdfFlowchartPage> _pagesFor(
       ),
     ];
   }
-  final landscapeScale = math.min(
-    landscapeWidth / bounds.width,
-    landscapeHeight / bounds.height,
-  );
-  if (landscapeScale >= _minReadableScale) {
-    return [
-      NotePdfFlowchartPage(
-        mode: NotePdfFlowchartPageMode.landscapeSingle,
-        sourceRect: bounds,
-        scale: landscapeScale.clamp(0.1, 1.0).toDouble(),
-      ),
-    ];
-  }
-  final detailWidth = landscapeWidth / _minReadableScale;
-  final detailHeight = landscapeHeight / _minReadableScale;
+  final detailWidth = portraitWidth / _minReadableScale;
+  final detailHeight = portraitHeight / _minReadableScale;
   final tiles = <Rect>[];
   var y = bounds.top;
   while (y < bounds.bottom) {
@@ -240,10 +226,10 @@ List<NotePdfFlowchartPage> _pagesFor(
     NotePdfFlowchartPage(
       mode: NotePdfFlowchartPageMode.overviewAndTiles,
       sourceRect: bounds,
-      scale: math.min(
-        landscapeWidth / bounds.width,
-        landscapeHeight / bounds.height,
-      ),
+      scale: math
+          .min(portraitWidth / bounds.width, portraitHeight / bounds.height)
+          .clamp(0.1, 1.0)
+          .toDouble(),
       isOverview: true,
       index: 1,
       total: total,

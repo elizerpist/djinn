@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -5,6 +7,8 @@ import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/notes/data/note_repository.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/models/note_item.dart';
+import 'package:djinn/src/notes/pdf/note_pdf_export_models.dart';
+import 'package:djinn/src/notes/pdf/note_pdf_export_service.dart';
 import 'package:djinn/src/notes/ui/notes_screen.dart';
 
 void main() {
@@ -154,6 +158,65 @@ void main() {
     },
   );
 
+  testWidgets('multi-selected notes export together as one PDF preview', (
+    tester,
+  ) async {
+    final repository = MemoryNoteRepository();
+    final first = await repository.createDocumentNote(
+      title: 'Első jegyzet',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(id: 'p1', type: NoteBlockType.paragraph, text: 'Első'),
+        ],
+      ),
+    );
+    final second = await repository.createDocumentNote(
+      title: 'Második jegyzet',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(id: 'p1', type: NoteBlockType.paragraph, text: 'Második'),
+        ],
+      ),
+    );
+    final receivedIds = <String>[];
+    NotePdfPreviewFile? openedFile;
+    final service = _CapturingPdfExportService(
+      receivedIds: receivedIds,
+      filename: 'jegyzetek_2.pdf',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotesScreen(
+          repository: repository,
+          pdfExportService: service,
+          pdfPreviewOpener: (context, file, service, viewerBuilder) {
+            openedFile = file;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.longPress(find.byKey(ValueKey('note-box-${first.id}')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(ValueKey('note-checkbox-${second.id}')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('notes-selection-menu')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('2 kijelölve'), findsOneWidget);
+    expect(find.text('Export as PDF'), findsOneWidget);
+    await tester.tap(find.text('Export as PDF'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(receivedIds, hasLength(2));
+    expect(receivedIds, containsAll([first.id, second.id]));
+    expect(openedFile?.filename, 'jegyzetek_2.pdf');
+  });
+
   testWidgets('header menu opens the tag usage guide', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(
@@ -274,4 +337,26 @@ void main() {
     expect(notes.single.title, 'Importált jegyzet');
     expect(find.text('Importált jegyzet'), findsOneWidget);
   });
+}
+
+class _CapturingPdfExportService extends NotePdfExportService {
+  const _CapturingPdfExportService({
+    required this.receivedIds,
+    required this.filename,
+  });
+
+  final List<String> receivedIds;
+  final String filename;
+
+  @override
+  Future<NotePdfPreviewFile> createPreviewFileForNotes(
+    List<NoteItem> notes,
+  ) async {
+    receivedIds.addAll(notes.map((note) => note.id));
+    return NotePdfPreviewFile(
+      path: 'memory:$filename',
+      filename: filename,
+      bytes: Uint8List.fromList('%PDF fake'.codeUnits),
+    );
+  }
 }

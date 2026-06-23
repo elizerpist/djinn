@@ -138,6 +138,41 @@ void main() {
     },
   );
 
+  test('document builder starts each batch note on a fresh page', () async {
+    DebugConsole.clear();
+    NoteItem note(String id, String title, String text) {
+      final document = NoteDocument(
+        blocks: [
+          NoteBlock(id: '$id-p1', type: NoteBlockType.paragraph, text: text),
+        ],
+      );
+      return NoteItem(
+        id: id,
+        type: NoteItemType.document,
+        title: title,
+        plainText: document.plainText,
+        payloadJson: document.toPayloadJson(),
+        auditState: LocalAuditState.edited,
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      );
+    }
+
+    final bytes = await const NotePdfDocumentBuilder().buildMany([
+      note('note-1', 'Első', 'Első tartalom'),
+      note('note-2', 'Második', 'Második tartalom'),
+    ]);
+
+    expect(String.fromCharCodes(bytes.take(4)), '%PDF');
+    final logs = DebugConsole.allText;
+    expect(logs, contains('build batch start notes=2'));
+    expect(logs, contains('build note start note=note-1 index=1/2'));
+    expect(
+      logs,
+      contains('build note start note=note-2 index=2/2 freshPage=true'),
+    );
+  });
+
   test('list marker helper follows checkbox and hierarchy modes', () {
     const checkbox = NoteBlock(
       id: 'c1',
@@ -277,6 +312,60 @@ void main() {
         DebugConsole.allText,
         contains('[NotePdfExport] save cancelled filename=Ment_s.pdf'),
       );
+    },
+  );
+
+  test(
+    'export service writes batch preview file from selected notes',
+    () async {
+      DebugConsole.clear();
+      final tempDir = await Directory.systemTemp.createTemp(
+        'note-pdf-batch-test-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final receivedIds = <String>[];
+      final service = NotePdfExportService(
+        buildPdfBatchBytes: (notes) async {
+          receivedIds.addAll(notes.map((note) => note.id));
+          return Uint8List.fromList('%PDF batch bytes'.codeUnits);
+        },
+        tempDirectoryProvider: () async => tempDir,
+      );
+      NoteItem note(String id, String title) {
+        return NoteItem(
+          id: id,
+          type: NoteItemType.document,
+          title: title,
+          plainText: 'Exportálható',
+          payloadJson: const NoteDocument(
+            blocks: [
+              NoteBlock(
+                id: 'p1',
+                type: NoteBlockType.paragraph,
+                text: 'Exportálható',
+              ),
+            ],
+          ).toPayloadJson(),
+          auditState: LocalAuditState.edited,
+          createdAt: DateTime(2026),
+          updatedAt: DateTime(2026),
+        );
+      }
+
+      final preview = await service.createPreviewFileForNotes([
+        note('n1', 'Első'),
+        note('n2', 'Második'),
+      ]);
+
+      expect(receivedIds, ['n1', 'n2']);
+      expect(preview.filename, 'jegyzetek_2.pdf');
+      expect(File(preview.path).existsSync(), isTrue);
+      expect(DebugConsole.allText, contains('generate batch start notes=2'));
+      expect(DebugConsole.allText, contains('preview path='));
     },
   );
 }

@@ -35,66 +35,81 @@ void main() {
     expect(layout.edgeRoutes.single.edge.id, 'e1');
     expect(layout.edgeRoutes.single.labelAnchor.dx, greaterThan(0));
     expect(layout.edgeRoutes.single.labelAnchor.dy, greaterThan(0));
-    expect(layout.bounds.width, greaterThan(260));
+    expect(layout.bounds.width, greaterThan(180));
     expect(layout.pages.single.mode, NotePdfFlowchartPageMode.portraitSingle);
   });
 
-  test('wide flowchart chooses landscape when portrait would be too small', () {
-    final block = NoteBlock(
-      id: 'wide',
-      type: NoteBlockType.flowchart,
-      nodes: [
-        for (var i = 0; i < 4; i += 1)
-          NoteFlowchartNode(id: 'n$i', label: 'Node $i', x: i * 220, y: 0),
-      ],
-      edges: [
-        for (var i = 0; i < 3; i += 1)
-          NoteFlowchartEdge(
-            id: 'e$i',
-            fromNodeId: 'n$i',
-            toNodeId: 'n${i + 1}',
-            label: '',
-          ),
-      ],
-    );
-
-    final layout = buildNotePdfFlowchartLayout(
-      block,
-      portraitWidth: 260,
-      portraitHeight: 700,
-      landscapeWidth: 820,
-      landscapeHeight: 420,
-    );
-
-    expect(layout.pages.single.mode, NotePdfFlowchartPageMode.landscapeSingle);
-  });
-
-  test('very large flowchart chooses overview plus tiled detail pages', () {
-    final block = NoteBlock(
-      id: 'huge',
-      type: NoteBlockType.flowchart,
-      nodes: [
-        for (var row = 0; row < 3; row += 1)
-          for (var col = 0; col < 6; col += 1)
-            NoteFlowchartNode(
-              id: 'n$row-$col',
-              label: 'Node $row $col',
-              x: col * 260,
-              y: row * 180,
+  test(
+    'editor-visible wide flowchart stays on one portrait page at 1:1 size',
+    () {
+      final block = NoteBlock(
+        id: 'wide',
+        type: NoteBlockType.flowchart,
+        nodes: [
+          for (var i = 0; i < 4; i += 1)
+            NoteFlowchartNode(id: 'n$i', label: 'Node $i', x: i * 260, y: 0),
+        ],
+        edges: [
+          for (var i = 0; i < 3; i += 1)
+            NoteFlowchartEdge(
+              id: 'e$i',
+              fromNodeId: 'n$i',
+              toNodeId: 'n${i + 1}',
+              label: '',
             ),
-      ],
-    );
+        ],
+      );
 
-    final layout = buildNotePdfFlowchartLayout(
-      block,
-      portraitWidth: 260,
-      portraitHeight: 360,
-      landscapeWidth: 420,
-      landscapeHeight: 260,
-    );
+      final layout = buildNotePdfFlowchartLayout(
+        block,
+        portraitWidth: 531,
+        portraitHeight: 716,
+        landscapeWidth: 778,
+        landscapeHeight: 533,
+      );
 
-    expect(layout.pages.first.mode, NotePdfFlowchartPageMode.overviewAndTiles);
-    expect(layout.pages.length, greaterThan(2));
-    expect(layout.pages.where((page) => page.isOverview), hasLength(1));
-  });
+      expect(layout.pages, hasLength(1));
+      expect(layout.pages.single.mode, NotePdfFlowchartPageMode.portraitSingle);
+      expect(layout.pages.single.scale, 1.0);
+      expect(layout.bounds.width, lessThanOrEqualTo(531));
+    },
+  );
+
+  test(
+    'very large flowchart chooses portrait overview plus tiled detail pages',
+    () {
+      final block = NoteBlock(
+        id: 'huge',
+        type: NoteBlockType.flowchart,
+        nodes: [
+          for (var row = 0; row < 3; row += 1)
+            for (var col = 0; col < 6; col += 1)
+              NoteFlowchartNode(
+                id: 'n$row-$col',
+                label: 'Node $row $col',
+                x: col * 1100,
+                y: row * 900,
+              ),
+        ],
+      );
+
+      final layout = buildNotePdfFlowchartLayout(
+        block,
+        portraitWidth: 260,
+        portraitHeight: 360,
+        landscapeWidth: 420,
+        landscapeHeight: 260,
+      );
+
+      expect(
+        layout.pages.first.mode,
+        NotePdfFlowchartPageMode.overviewAndTiles,
+      );
+      expect(layout.pages.length, greaterThan(2));
+      expect(layout.pages.where((page) => page.isOverview), hasLength(1));
+      expect(layout.pages.map((page) => page.mode).toSet(), {
+        NotePdfFlowchartPageMode.overviewAndTiles,
+      });
+    },
+  );
 }
