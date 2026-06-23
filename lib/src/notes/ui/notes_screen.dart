@@ -18,10 +18,20 @@ import '../data/tag_repository.dart';
 import '../models/note_document.dart';
 import '../models/note_folder.dart';
 import '../models/note_item.dart';
+import '../pdf/note_pdf_export_models.dart';
+import '../pdf/note_pdf_export_service.dart';
 import 'note_editor_route.dart';
+import 'note_pdf_preview_screen.dart';
 import 'tag_manager_sheet.dart';
 
 typedef ImportNotesForTest = Future<List<NoteItem>?> Function();
+typedef NotePdfPreviewOpener =
+    FutureOr<void> Function(
+      BuildContext context,
+      NotePdfPreviewFile file,
+      NotePdfExportService service,
+      WidgetBuilder? viewerBuilder,
+    );
 
 enum _NoteSortMode { newestFirst, oldestFirst, titleAsc, titleDesc }
 
@@ -51,6 +61,9 @@ class NotesScreen extends StatefulWidget {
     this.importNotesForTest,
     this.controller,
     this.showFloatingActionButton = true,
+    this.pdfExportService,
+    this.pdfPreviewViewerBuilder,
+    this.pdfPreviewOpener,
   });
 
   final NoteRepository repository;
@@ -58,6 +71,9 @@ class NotesScreen extends StatefulWidget {
   final ImportNotesForTest? importNotesForTest;
   final NotesScreenController? controller;
   final bool showFloatingActionButton;
+  final NotePdfExportService? pdfExportService;
+  final WidgetBuilder? pdfPreviewViewerBuilder;
+  final NotePdfPreviewOpener? pdfPreviewOpener;
 
   @override
   State<NotesScreen> createState() => _NotesScreenState();
@@ -73,6 +89,9 @@ class _NotesScreenState extends State<NotesScreen> {
   bool _showFolderBar = true;
   bool _hasAnyNotes = false;
   _NoteSortMode _sortMode = _NoteSortMode.newestFirst;
+
+  NotePdfExportService get _pdfExportService =>
+      widget.pdfExportService ?? const NotePdfExportService();
 
   @override
   void initState() {
@@ -305,6 +324,7 @@ class _NotesScreenState extends State<NotesScreen> {
         PopupMenuItem(value: 'audit', child: Text('Kinyert tartalom audit')),
         PopupMenuItem(value: 'tags', child: Text('Tagek')),
         PopupMenuItem(value: 'move', child: Text('Mozgatás mappába')),
+        PopupMenuItem(value: 'export-pdf', child: Text('Export as PDF')),
         PopupMenuItem(value: 'export', child: Text('Export')),
         PopupMenuItem(value: 'share', child: Text('Megosztás')),
         PopupMenuItem(value: 'rename', child: Text('Átnevezés')),
@@ -379,6 +399,10 @@ class _NotesScreenState extends State<NotesScreen> {
     }
     if (value == 'export') {
       await _exportNotes(selected);
+      return;
+    }
+    if (value == 'export-pdf') {
+      await _exportNoteAsPdf(selected.single);
       return;
     }
     if (value == 'share') {
@@ -659,6 +683,61 @@ class _NotesScreenState extends State<NotesScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('Exportálva: $path')));
+  }
+
+  Future<void> _exportNoteAsPdf(NoteItem note) async {
+    try {
+      final previewFile = await _pdfExportService.createPreviewFile(note);
+      if (!mounted) {
+        return;
+      }
+      DebugConsole.log(
+        '[NotePdfExport] preview open note=${note.id} path=${previewFile.path}',
+      );
+      final opener = widget.pdfPreviewOpener ?? _openPdfPreview;
+      unawaited(
+        Future<void>.sync(
+          () => opener(
+            context,
+            previewFile,
+            _pdfExportService,
+            widget.pdfPreviewViewerBuilder,
+          ),
+        ),
+      );
+    } on NotePdfExportException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      DebugConsole.log('[NotePdfExport] preview failed error=$error');
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('PDF export sikertelen: $error')));
+    }
+  }
+
+  Future<void> _openPdfPreview(
+    BuildContext context,
+    NotePdfPreviewFile file,
+    NotePdfExportService service,
+    WidgetBuilder? viewerBuilder,
+  ) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => NotePdfPreviewScreen(
+          file: file,
+          exportService: service,
+          viewerBuilder: viewerBuilder,
+        ),
+      ),
+    );
   }
 
   Future<void> _shareNotes(List<NoteItem> notes) async {
