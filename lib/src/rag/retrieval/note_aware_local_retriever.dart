@@ -49,6 +49,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     if (trimmed.isEmpty || baseResults.length >= limit) {
       return baseResults;
     }
+    _logAtomSearchStart(mode: 'vector', query: trimmed, limit: limit);
     final noteEvidence = await _loadNoteEvidence(
       logEmbeddingFallback: allowKeywordExpansion,
       granular: true,
@@ -107,21 +108,30 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       );
     }
     final primaryNoteScope = _primaryNoteScopeForQuery(trimmed, noteMatches);
+    _logAtomSearchPrimaryScope(primaryNoteScope);
     final reasonedNoteMatches = _withDirectReasons(
       query: trimmed,
       evidence: noteMatches,
       primaryNoteScope: primaryNoteScope,
     );
+    _logAtomSearchDirect(reasonedNoteMatches);
     final combined = _dedupe([...baseResults, ...reasonedNoteMatches]);
+    final shouldExpand = _shouldExpandQuery(trimmed);
+    _logAtomSearchCascadeDecision(
+      shouldExpand: shouldExpand,
+      seeds: combined.length,
+      candidates: noteEvidence.length,
+    );
     final expanded = _graphExpander.expand(
       query: trimmed,
       seeds: _primaryScopeEvidence(combined, primaryNoteScope),
       candidates: _primaryScopeEvidence(noteEvidence, primaryNoteScope),
       existing: combined,
-      limit: _shouldExpandQuery(trimmed)
+      limit: shouldExpand
           ? _graphExpansionLimit(limit, noteEvidence.length)
           : combined.length,
     );
+    _logAtomSearchCascadeResult(expanded);
     final reasonedExpanded = _withExpandedReasons(
       expanded,
       primaryNoteScope: primaryNoteScope,
@@ -135,6 +145,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       'noteMatches=${noteMatches.length} graph=${expanded.length} '
       'total=${result.length}',
     );
+    _logAtomSearchFinal(result, primaryNoteScope);
     return result;
   }
 
@@ -144,6 +155,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     required int limit,
     required String mode,
   }) async {
+    _logAtomSearchStart(mode: mode, query: query, limit: limit);
     final baseResults = await _base.retrieveLocalVector(
       query: query,
       limit: limit,
@@ -173,21 +185,30 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       ],
     );
     final primaryNoteScope = _primaryNoteScopeForQuery(query, noteSeeds);
+    _logAtomSearchPrimaryScope(primaryNoteScope);
     final reasonedNoteSeeds = _withDirectReasons(
       query: query,
       evidence: noteSeeds,
       primaryNoteScope: primaryNoteScope,
     );
+    _logAtomSearchDirect(reasonedNoteSeeds);
     final combined = _dedupe([...baseResults, ...reasonedNoteSeeds]);
+    final shouldExpand = _shouldExpandQuery(query);
+    _logAtomSearchCascadeDecision(
+      shouldExpand: shouldExpand,
+      seeds: combined.length,
+      candidates: noteEvidence.length,
+    );
     final expanded = _graphExpander.expand(
       query: query,
       seeds: _primaryScopeEvidence(combined, primaryNoteScope),
       candidates: _primaryScopeEvidence(noteEvidence, primaryNoteScope),
       existing: combined,
-      limit: _shouldExpandQuery(query)
+      limit: shouldExpand
           ? _graphExpansionLimit(limit, noteEvidence.length)
           : combined.length,
     );
+    _logAtomSearchCascadeResult(expanded);
     final reasonedExpanded = _withExpandedReasons(
       expanded,
       primaryNoteScope: primaryNoteScope,
@@ -201,6 +222,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       'candidates=${noteEvidence.length} matches=${noteSeeds.length} '
       'graph=${expanded.length} total=${result.length}',
     );
+    _logAtomSearchFinal(result, primaryNoteScope);
     return result;
   }
 
@@ -210,6 +232,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     required int limit,
     required String vectorMode,
   }) async {
+    _logAtomSearchStart(mode: 'hybrid/$vectorMode', query: query, limit: limit);
     final baseResults = await _base.retrieveHybrid(
       query: query,
       limit: limit,
@@ -255,6 +278,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       ]),
     );
     final primaryNoteScope = _primaryNoteScopeForQuery(query, directSeeds);
+    _logAtomSearchPrimaryScope(primaryNoteScope);
     final combined = _dedupe([
       ...baseResults,
       ..._withDirectReasons(
@@ -263,15 +287,23 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         primaryNoteScope: primaryNoteScope,
       ),
     ]);
+    _logAtomSearchDirect(combined.where((item) => item.id.startsWith('note:')));
+    final shouldExpand = _shouldExpandQuery(query);
+    _logAtomSearchCascadeDecision(
+      shouldExpand: shouldExpand,
+      seeds: combined.length,
+      candidates: noteEvidence.length,
+    );
     final expanded = _graphExpander.expand(
       query: query,
       seeds: _primaryScopeEvidence(combined, primaryNoteScope),
       candidates: _primaryScopeEvidence(noteEvidence, primaryNoteScope),
       existing: combined,
-      limit: _shouldExpandQuery(query)
+      limit: shouldExpand
           ? _graphExpansionLimit(limit, noteEvidence.length)
           : combined.length,
     );
+    _logAtomSearchCascadeResult(expanded);
     final reasonedExpanded = _withExpandedReasons(
       expanded,
       primaryNoteScope: primaryNoteScope,
@@ -286,6 +318,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       'keyword=${keywordSeeds.length} symbol=${symbolSeeds.length} '
       'graph=${expanded.length} total=${result.length}',
     );
+    _logAtomSearchFinal(result, primaryNoteScope);
     return result;
   }
 
@@ -835,6 +868,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     required String query,
     required int limit,
   }) async {
+    _logAtomSearchStart(mode: 'offline', query: query, limit: limit);
     final baseResults = await _base.retrieveOffline(query: query, limit: limit);
     final noteEvidence = await _loadNoteEvidence();
     final noteMatches = _keywordMatches(
@@ -843,19 +877,28 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       limit: limit,
     );
     final primaryNoteScope = _primaryNoteScopeForQuery(query, noteMatches);
+    _logAtomSearchPrimaryScope(primaryNoteScope);
     final reasonedNoteMatches = _withDirectReasons(
       query: query,
       evidence: noteMatches,
       primaryNoteScope: primaryNoteScope,
     );
+    _logAtomSearchDirect(reasonedNoteMatches);
     final combined = _dedupe([...baseResults, ...reasonedNoteMatches]);
+    final shouldExpand = _shouldExpandQuery(query);
+    _logAtomSearchCascadeDecision(
+      shouldExpand: shouldExpand,
+      seeds: combined.length,
+      candidates: noteEvidence.length,
+    );
     final expanded = _graphExpander.expand(
       query: query,
       seeds: _primaryScopeEvidence(combined, primaryNoteScope),
       candidates: _primaryScopeEvidence(noteEvidence, primaryNoteScope),
       existing: combined,
-      limit: _shouldExpandQuery(query) ? limit : combined.length,
+      limit: shouldExpand ? limit : combined.length,
     );
+    _logAtomSearchCascadeResult(expanded);
     final reasonedExpanded = _withExpandedReasons(
       expanded,
       primaryNoteScope: primaryNoteScope,
@@ -869,6 +912,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
       'noteMatches=${noteMatches.length} graph=${expanded.length} '
       'total=${result.length}',
     );
+    _logAtomSearchFinal(result, primaryNoteScope);
     return result;
   }
 
@@ -878,6 +922,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
   }) async {
     final notes = await _noteRepository.listNotes();
     final evidence = <SourceEvidence>[];
+    var indexedNotes = 0;
     for (final note in notes) {
       if (note.auditState.wireName == 'rejected') {
         DebugConsole.log(
@@ -885,6 +930,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         );
         continue;
       }
+      indexedNotes += 1;
       final chunks = const NoteChunkBuilder().build(
         noteId: note.id,
         noteTitle: note.title,
@@ -933,10 +979,139 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         }
       }
     }
+    _logAtomSearchEvidence(indexedNotes: indexedNotes, evidence: evidence);
     DebugConsole.log(
       '[LocalIndex] note evidence loaded count=${evidence.length}',
     );
     return evidence;
+  }
+
+  void _logAtomSearchStart({
+    required String mode,
+    required String query,
+    required int limit,
+  }) {
+    DebugConsole.log(
+      '[NoteAtomSearch] start mode=$mode query="${_debugClip(query, 80)}" '
+      'limit=$limit',
+    );
+  }
+
+  void _logAtomSearchEvidence({
+    required int indexedNotes,
+    required List<SourceEvidence> evidence,
+  }) {
+    final atomEvidence = evidence
+        .where((item) => item.atomType != null)
+        .toList(growable: false);
+    DebugConsole.log(
+      '[NoteAtomSearch] evidence notes=$indexedNotes '
+      'atoms=${atomEvidence.length} ${_atomTypeSummary(atomEvidence)}',
+    );
+  }
+
+  void _logAtomSearchDirect(Iterable<SourceEvidence> evidence) {
+    final items = evidence
+        .where((item) => item.id.startsWith('note:'))
+        .toList();
+    DebugConsole.log(
+      '[NoteAtomSearch] direct matches count=${items.length} '
+      'items=${_evidenceDebugList(items)}',
+    );
+  }
+
+  void _logAtomSearchPrimaryScope(String? primaryNoteScope) {
+    DebugConsole.log(
+      '[NoteAtomSearch] primary scope=${primaryNoteScope ?? 'none'}',
+    );
+  }
+
+  void _logAtomSearchCascadeDecision({
+    required bool shouldExpand,
+    required int seeds,
+    required int candidates,
+  }) {
+    if (!shouldExpand) {
+      DebugConsole.log(
+        '[NoteAtomSearch] cascade skipped reason=single_term '
+        'seeds=$seeds candidates=$candidates',
+      );
+      return;
+    }
+    DebugConsole.log(
+      '[NoteAtomSearch] cascade start seeds=$seeds candidates=$candidates',
+    );
+  }
+
+  void _logAtomSearchCascadeResult(Iterable<SourceEvidence> expanded) {
+    final items = expanded.toList(growable: false);
+    DebugConsole.log(
+      '[NoteAtomSearch] cascade result count=${items.length} '
+      'items=${_evidenceDebugList(items)}',
+    );
+  }
+
+  void _logAtomSearchFinal(
+    Iterable<SourceEvidence> result,
+    String? primaryNoteScope,
+  ) {
+    final items = result.toList(growable: false);
+    final noteItems = items
+        .where((item) => item.id.startsWith('note:'))
+        .toList();
+    final external = noteItems
+        .where(
+          (item) => item.reasons.contains(NoteEvidenceReason.externalDirect),
+        )
+        .length;
+    DebugConsole.log(
+      '[NoteAtomSearch] final count=${items.length} note=${noteItems.length} '
+      'external=$external scope=${primaryNoteScope ?? 'none'} '
+      'items=${_evidenceDebugList(items)}',
+    );
+  }
+
+  String _atomTypeSummary(Iterable<SourceEvidence> evidence) {
+    final counts = <NoteEvidenceAtomType, int>{};
+    for (final item in evidence) {
+      final atomType = item.atomType;
+      if (atomType == null) {
+        continue;
+      }
+      counts[atomType] = (counts[atomType] ?? 0) + 1;
+    }
+    if (counts.isEmpty) {
+      return 'none';
+    }
+    return [
+      for (final type in NoteEvidenceAtomType.values)
+        if ((counts[type] ?? 0) > 0) '${type.wireName}=${counts[type]}',
+    ].join(' ');
+  }
+
+  String _evidenceDebugList(Iterable<SourceEvidence> evidence) {
+    final items = evidence
+        .take(6)
+        .map((item) {
+          final type = item.atomType?.wireName ?? item.sourceType.wireName;
+          final reasons = item.reasons.isEmpty
+              ? 'none'
+              : item.reasons.map((reason) => reason.wireName).join('+');
+          return '${item.id}/$type/$reasons/"${_debugClip(item.text, 70)}"';
+        })
+        .toList(growable: false);
+    if (items.isEmpty) {
+      return '[]';
+    }
+    return '[${items.join(' | ')}]';
+  }
+
+  String _debugClip(String value, int maxLength) {
+    final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final clipped = normalized.length <= maxLength
+        ? normalized
+        : '${normalized.substring(0, maxLength)}...';
+    return clipped.replaceAll('"', "'");
   }
 
   // Kept as a legacy fallback shape while the active note path uses

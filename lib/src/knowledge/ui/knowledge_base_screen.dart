@@ -36,6 +36,24 @@ typedef ChooseDuplicatePackImportForTest =
 
 enum KnowledgePackDuplicateChoice { updateExisting, createDuplicate, cancel }
 
+class KnowledgeBaseScreenController {
+  _KnowledgeBaseScreenState? _state;
+
+  Future<void> importPdfs() async {
+    await _state?._importPdfs();
+  }
+
+  void _attach(_KnowledgeBaseScreenState state) {
+    _state = state;
+  }
+
+  void _detach(_KnowledgeBaseScreenState state) {
+    if (_state == state) {
+      _state = null;
+    }
+  }
+}
+
 enum _KnowledgeSortMode {
   newestFirst,
   oldestFirst,
@@ -69,6 +87,8 @@ class KnowledgeBaseScreen extends StatefulWidget {
     this.importKnowledgePackForTest,
     this.readDocumentBytesForTest,
     this.chooseDuplicatePackImportForTest,
+    this.controller,
+    this.showFloatingActionButton = true,
   });
 
   final KnowledgeDocumentRepository repository;
@@ -84,6 +104,8 @@ class KnowledgeBaseScreen extends StatefulWidget {
   final ImportKnowledgePackForTest? importKnowledgePackForTest;
   final ReadDocumentBytesForTest? readDocumentBytesForTest;
   final ChooseDuplicatePackImportForTest? chooseDuplicatePackImportForTest;
+  final KnowledgeBaseScreenController? controller;
+  final bool showFloatingActionButton;
 
   @override
   State<KnowledgeBaseScreen> createState() => _KnowledgeBaseScreenState();
@@ -102,7 +124,23 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   @override
   void initState() {
     super.initState();
+    widget.controller?._attach(this);
     _loadDocuments();
+  }
+
+  @override
+  void didUpdateWidget(covariant KnowledgeBaseScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?._detach(this);
+      widget.controller?._attach(this);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller?._detach(this);
+    super.dispose();
   }
 
   Future<void> _loadDocuments() async {
@@ -266,7 +304,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     }
   }
 
-
   Future<void> _processDocumentLocally(KnowledgeDocument document) async {
     final processingService = widget.localProcessingService;
     if (processingService == null) {
@@ -287,7 +324,8 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     try {
       await processingService.processDocument(
         documentId,
-        forceReprocess: document.status.isReady ||
+        forceReprocess:
+            document.status.isReady ||
             document.status == KnowledgeDocumentStatus.needsReview,
         onProgress: _handleProcessingProgress,
       );
@@ -578,7 +616,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       await _exportKnowledgePack(_selectedDocuments);
     }
   }
-
 
   void _openExtractedKnowledge(KnowledgeDocument document) {
     Navigator.of(context).push(
@@ -910,7 +947,8 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     return Scaffold(
       appBar: KnowledgeHeader(
         selectionCount: selectionCount,
-        selectionSummary: '${visibleDocuments.length} dokumentum ebben a nézetben',
+        selectionSummary:
+            '${visibleDocuments.length} dokumentum ebben a nézetben',
         onExitSelection: _exitSelection,
         onShareSelected: () => _shareKnowledgePack(_selectedDocuments),
         onDeleteSelected: _deleteSelectedDocuments,
@@ -970,13 +1008,15 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'PDF/PNG hozzáadása',
-        onPressed: _importing ? null : _importPdfs,
-        child: _importing
-            ? const CircularProgressIndicator(strokeWidth: 2)
-            : const Icon(Icons.upload_file),
-      ),
+      floatingActionButton: widget.showFloatingActionButton
+          ? FloatingActionButton(
+              tooltip: 'PDF/PNG hozzáadása',
+              onPressed: _importing ? null : _importPdfs,
+              child: _importing
+                  ? const CircularProgressIndicator(strokeWidth: 2)
+                  : const Icon(Icons.upload_file),
+            )
+          : null,
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/notes/data/note_repository.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/rag/models/source_evidence.dart';
@@ -7,6 +8,8 @@ import 'package:djinn/src/rag/retrieval/local_retriever.dart';
 import 'package:djinn/src/rag/retrieval/note_aware_local_retriever.dart';
 
 void main() {
+  setUp(DebugConsole.clear);
+
   test(
     'bolognai query returns only direct bolognai atoms from mixed chunks',
     () async {
@@ -57,6 +60,32 @@ void main() {
       expect(
         noteAtoms.map((item) => item.text).join('\n'),
         isNot(contains('Légzési elégtelenség')),
+      );
+      expect(
+        DebugConsole.allText,
+        contains(
+          '[NoteAtomSearch] start mode=offline query="bolognai" limit=8',
+        ),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[NoteAtomSearch] evidence notes=1 atoms=2 text_sentence=2'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[NoteAtomSearch] direct matches count=1'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[NoteAtomSearch] primary scope=note:'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[NoteAtomSearch] cascade skipped reason=single_term'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[NoteAtomSearch] final count=1 note=1 external=0'),
       );
     },
   );

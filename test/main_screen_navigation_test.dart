@@ -60,6 +60,89 @@ void main() {
     expect(find.text('AI'), findsOneWidget);
   });
 
+  testWidgets('destination FABs rotate and scale in both directions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_mainScreenApp(AppSettings.defaults()));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('main-destination-fab-chat')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Jegyzetek'));
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(
+      find.byKey(const ValueKey('main-destination-fab-chat')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('main-destination-fab-notes')),
+      findsOneWidget,
+    );
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('main-destination-fab-chat')),
+        matching: find.byType(RotationTransition),
+      ),
+      findsWidgets,
+    );
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('main-destination-fab-notes')),
+        matching: find.byType(RotationTransition),
+      ),
+      findsWidgets,
+    );
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('main-destination-fab-chat')),
+        matching: find.byType(ScaleTransition),
+      ),
+      findsWidgets,
+    );
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('main-destination-fab-notes')),
+        matching: find.byType(ScaleTransition),
+      ),
+      findsWidgets,
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('main-destination-fab-chat')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('main-destination-fab-notes')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Tudástár'));
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(
+      find.byKey(const ValueKey('main-destination-fab-notes')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('main-destination-fab-knowledge')),
+      findsOneWidget,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Chat'));
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(
+      find.byKey(const ValueKey('main-destination-fab-knowledge')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('main-destination-fab-chat')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('bottom navigation keeps visited destinations alive', (
     tester,
   ) async {

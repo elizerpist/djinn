@@ -1,0 +1,11 @@
+# Main FAB Animation and Note Atom Search Debug Checklist
+
+| ID | Source | Code area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| FAB-01 | User: "a bottom nav chat menu fab gombja jelenleg rotációval előjön" | `lib/src/chat/ui/main_screen.dart` | The current chat FAB entrance remains grow + rotation. | DONE: `test/main_screen_navigation_test.dart` inspects transition widgets during tab-change entrance. | DONE |
+| FAB-02 | User: "ha vált a többi menure ... inverz rotációval eltűnik" | `lib/src/chat/ui/main_screen.dart` | When leaving any destination with a FAB, the previous destination FAB stays in the tree during transition and exits with shrink + opposite rotation. | DONE: widget test switches tabs, pumps mid-transition, and sees outgoing and incoming FAB keys with transition wrappers. | DONE |
+| FAB-03 | User: "ugyanez legyen igaz a többi menure" | `lib/src/chat/ui/main_screen.dart` | Chat, notes, and knowledge use the same destination FAB switcher behavior; settings has no action FAB and uses the empty switcher child. | DONE: widget test covers chat -> notes -> knowledge -> chat transitions. | DONE |
+| FAB-04 | Existing app shell behavior | `main_screen.dart`, destination screens | Destination body caching, navigation labels, and existing screen ownership remain unchanged. | DONE: existing navigation, notes, and knowledge widget tests pass. | DONE |
+| DBG-01 | User: "az előbb megcsinált kereséshez adj részletes debug logokat" | `lib/src/rag/retrieval/note_aware_local_retriever.dart` | Note atom search logs query start, evidence load summary, direct matches, primary note scope, cascade decision, graph expansion, and final result summary. | DONE: retriever tests assert `[NoteAtomSearch]` entries with those stages. | DONE |
+| DBG-02 | Testability requirement | `note_aware_local_retriever.dart` | Logs are bounded and readable: IDs/types/reasons/snippets are capped and snippets are trimmed. | DONE: debug helper caps evidence lists and snippets; unit test asserts representative stages without relying on full long text. | DONE |
+| VER-01 | Global workflow | Ubuntu/proot test environment | Relevant tests and `flutter analyze` pass before commit/push. | DONE: targeted FAB/search tests, related notes/knowledge tests, `flutter analyze`, and full `flutter test` pass under Ubuntu/proot. | DONE |

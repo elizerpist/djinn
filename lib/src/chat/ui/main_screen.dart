@@ -70,6 +70,9 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   late final TagRepository _tagRepository =
       widget.tagRepository ?? MemoryTagRepository();
+  final NotesScreenController _notesController = NotesScreenController();
+  final KnowledgeBaseScreenController _knowledgeController =
+      KnowledgeBaseScreenController();
   List<ChatConversation> _conversations = const [];
   AppDestinationId _selectedDestination = AppDestinationId.chat;
   final Map<AppDestinationId, Widget> _destinationBodyCache =
@@ -190,13 +193,61 @@ class _MainScreenState extends State<MainScreen> {
             ),
         ],
       ),
-      floatingActionButton: _selectedDestination == AppDestinationId.chat
-          ? FloatingActionButton(
-              tooltip: 'Új chat',
-              onPressed: _openNewChat,
-              child: const Icon(Icons.add_comment),
-            )
-          : null,
+      floatingActionButton: _buildDestinationFab(),
+    );
+  }
+
+  Widget _buildDestinationFab() {
+    final child = switch (_selectedDestination) {
+      AppDestinationId.chat => FloatingActionButton(
+        key: const ValueKey('main-destination-fab-chat'),
+        heroTag: 'main-destination-fab-chat',
+        tooltip: 'Új chat',
+        onPressed: _openNewChat,
+        child: const Icon(Icons.add_comment),
+      ),
+      AppDestinationId.notes => FloatingActionButton(
+        key: const ValueKey('main-destination-fab-notes'),
+        heroTag: 'main-destination-fab-notes',
+        tooltip: 'Új jegyzet',
+        onPressed: _notesController.openEditor,
+        child: const Icon(Icons.note_add_outlined),
+      ),
+      AppDestinationId.knowledge => FloatingActionButton(
+        key: const ValueKey('main-destination-fab-knowledge'),
+        heroTag: 'main-destination-fab-knowledge',
+        tooltip: 'PDF/PNG hozzáadása',
+        onPressed: _knowledgeController.importPdfs,
+        child: const Icon(Icons.upload_file),
+      ),
+      AppDestinationId.settings => const SizedBox.shrink(
+        key: ValueKey('main-destination-fab-empty'),
+      ),
+    };
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      reverseDuration: const Duration(milliseconds: 180),
+      layoutBuilder: (currentChild, previousChildren) => Stack(
+        alignment: Alignment.center,
+        children: [...previousChildren, ?currentChild],
+      ),
+      transitionBuilder: (child, animation) {
+        final outgoing = animation.status == AnimationStatus.reverse;
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+          reverseCurve: Curves.easeInBack,
+        );
+        final turns = Tween<double>(
+          begin: outgoing ? -0.18 : 0.18,
+          end: 0,
+        ).animate(curved);
+        return ScaleTransition(
+          scale: curved,
+          child: RotationTransition(turns: turns, child: child),
+        );
+      },
+      child: child,
     );
   }
 
@@ -205,12 +256,16 @@ class _MainScreenState extends State<MainScreen> {
       AppDestinationId.notes => NotesScreen(
         repository: widget.noteRepository,
         tagRepository: _tagRepository,
+        controller: _notesController,
+        showFloatingActionButton: false,
       ),
       AppDestinationId.knowledge => KnowledgeBaseScreen(
         repository: widget.knowledgeRepository,
         importService: widget.pdfImportService,
         processingService: widget.processingService,
         localProcessingService: widget.localProcessingService,
+        controller: _knowledgeController,
+        showFloatingActionButton: false,
       ),
       AppDestinationId.chat => _buildChatListBody(),
       AppDestinationId.settings => SettingsScreen(

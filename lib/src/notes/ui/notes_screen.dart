@@ -25,17 +25,39 @@ typedef ImportNotesForTest = Future<List<NoteItem>?> Function();
 
 enum _NoteSortMode { newestFirst, oldestFirst, titleAsc, titleDesc }
 
+class NotesScreenController {
+  _NotesScreenState? _state;
+
+  Future<void> openEditor() async {
+    await _state?._openEditor();
+  }
+
+  void _attach(_NotesScreenState state) {
+    _state = state;
+  }
+
+  void _detach(_NotesScreenState state) {
+    if (_state == state) {
+      _state = null;
+    }
+  }
+}
+
 class NotesScreen extends StatefulWidget {
   const NotesScreen({
     super.key,
     required this.repository,
     this.tagRepository,
     this.importNotesForTest,
+    this.controller,
+    this.showFloatingActionButton = true,
   });
 
   final NoteRepository repository;
   final TagRepository? tagRepository;
   final ImportNotesForTest? importNotesForTest;
+  final NotesScreenController? controller;
+  final bool showFloatingActionButton;
 
   @override
   State<NotesScreen> createState() => _NotesScreenState();
@@ -55,7 +77,23 @@ class _NotesScreenState extends State<NotesScreen> {
   @override
   void initState() {
     super.initState();
+    widget.controller?._attach(this);
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant NotesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?._detach(this);
+      widget.controller?._attach(this);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller?._detach(this);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -70,7 +108,8 @@ class _NotesScreenState extends State<NotesScreen> {
       _folders = folders;
       _notes = _sort(notes);
       _hasAnyNotes = allNotes.isNotEmpty;
-      if (_activeFolderId != null && !folders.any((f) => f.id == _activeFolderId)) {
+      if (_activeFolderId != null &&
+          !folders.any((f) => f.id == _activeFolderId)) {
         _activeFolderId = null;
       }
       final existingIds = allNotes.map((note) => note.id).toSet();
@@ -84,8 +123,12 @@ class _NotesScreenState extends State<NotesScreen> {
       return switch (_sortMode) {
         _NoteSortMode.newestFirst => b.updatedAt.compareTo(a.updatedAt),
         _NoteSortMode.oldestFirst => a.updatedAt.compareTo(b.updatedAt),
-        _NoteSortMode.titleAsc => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-        _NoteSortMode.titleDesc => b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+        _NoteSortMode.titleAsc => a.title.toLowerCase().compareTo(
+          b.title.toLowerCase(),
+        ),
+        _NoteSortMode.titleDesc => b.title.toLowerCase().compareTo(
+          a.title.toLowerCase(),
+        ),
       };
     });
     return sorted;
@@ -160,11 +203,13 @@ class _NotesScreenState extends State<NotesScreen> {
     );
   }
 
-  List<NoteItem> get _selectedNotes =>
-      _notes.where((note) => _selectedNoteIds.contains(note.id)).toList(growable: false);
+  List<NoteItem> get _selectedNotes => _notes
+      .where((note) => _selectedNoteIds.contains(note.id))
+      .toList(growable: false);
 
   Future<void> _openEditor({NoteItem? note}) async {
-    final target = note ??
+    final target =
+        note ??
         await widget.repository.createDocumentNote(
           title: 'Névtelen jegyzet',
           document: NoteDocument.empty(),
@@ -175,11 +220,12 @@ class _NotesScreenState extends State<NotesScreen> {
     }
     await Navigator.of(context).push<void>(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => NoteEditorRoute(
-          repository: widget.repository,
-          tagRepository: _tagRepository,
-          initialNote: target,
-        ),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            NoteEditorRoute(
+              repository: widget.repository,
+              tagRepository: _tagRepository,
+              initialNote: target,
+            ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
             position: Tween<Offset>(
@@ -225,12 +271,18 @@ class _NotesScreenState extends State<NotesScreen> {
     return [
       PopupMenuItem<String>(
         value: 'toggle-folders',
-        child: Text(_showFolderBar ? 'Mappasáv elrejtése' : 'Mappasáv mutatása'),
+        child: Text(
+          _showFolderBar ? 'Mappasáv elrejtése' : 'Mappasáv mutatása',
+        ),
       ),
       const PopupMenuItem<String>(value: 'new-folder', child: Text('Új mappa')),
       const PopupMenuItem<String>(value: 'import', child: Text('Import')),
       const PopupMenuItem<String>(value: 'tags', child: Text('Tagek')),
-      if (_notes.isNotEmpty) const PopupMenuItem<String>(value: 'select-all', child: Text('Összes kijelölése')),
+      if (_notes.isNotEmpty)
+        const PopupMenuItem<String>(
+          value: 'select-all',
+          child: Text('Összes kijelölése'),
+        ),
       const PopupMenuDivider(),
       const PopupMenuItem<_NoteSortMode>(
         value: _NoteSortMode.newestFirst,
@@ -344,7 +396,10 @@ class _NotesScreenState extends State<NotesScreen> {
 
   Future<void> _indexNotes(List<NoteItem> notes) async {
     for (final note in notes) {
-      final ids = note.document.blocks.where((block) => block.hasContent).map((block) => block.id).toList();
+      final ids = note.document.blocks
+          .where((block) => block.hasContent)
+          .map((block) => block.id)
+          .toList();
       if (ids.isNotEmpty) {
         await widget.repository.markNoteBlocksIndexed(note.id, ids);
       }
@@ -394,12 +449,21 @@ class _NotesScreenState extends State<NotesScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Cím', border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+            labelText: 'Cím',
+            border: OutlineInputBorder(),
+          ),
           onSubmitted: (value) => Navigator.of(context).pop(value),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Mégse')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('OK')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('OK'),
+          ),
         ],
       ),
     );
@@ -408,7 +472,11 @@ class _NotesScreenState extends State<NotesScreen> {
     if (trimmed == null || trimmed.isEmpty) {
       return;
     }
-    await widget.repository.updateNoteDocument(note.id, title: trimmed, document: note.document);
+    await widget.repository.updateNoteDocument(
+      note.id,
+      title: trimmed,
+      document: note.document,
+    );
     await _load();
   }
 
@@ -426,7 +494,9 @@ class _NotesScreenState extends State<NotesScreen> {
             SizedBox(height: 6),
             Text('Örökölt tag'),
             SizedBox(height: 12),
-            Text('Formátum: topic:légzési elégtelenség, state:súlyos, type:terápia.'),
+            Text(
+              'Formátum: topic:légzési elégtelenség, state:súlyos, type:terápia.',
+            ),
           ],
         ),
         actions: [
@@ -482,7 +552,9 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   Future<void> _deleteNotes(List<NoteItem> notes) async {
-    await widget.repository.deleteNotes(notes.map((note) => note.id).toList(growable: false));
+    await widget.repository.deleteNotes(
+      notes.map((note) => note.id).toList(growable: false),
+    );
     _exitSelection();
     await _load();
   }
@@ -499,9 +571,14 @@ class _NotesScreenState extends State<NotesScreen> {
         DebugConsole.log('[Notes] import skipped empty_file');
         return;
       }
-      final imported = await widget.repository.importNotes(notes, folderId: _activeFolderId);
+      final imported = await widget.repository.importNotes(
+        notes,
+        folderId: _activeFolderId,
+      );
       final folderLabel = _activeFolderId ?? 'none';
-      DebugConsole.log('[Notes] import notes=${imported.length} folder=$folderLabel');
+      DebugConsole.log(
+        '[Notes] import notes=${imported.length} folder=$folderLabel',
+      );
       await _load();
       if (!mounted) {
         return;
@@ -531,7 +608,8 @@ class _NotesScreenState extends State<NotesScreen> {
       return null;
     }
     final file = result.files.single;
-    final bytes = file.bytes ??
+    final bytes =
+        file.bytes ??
         (file.path == null ? null : await File(file.path!).readAsBytes());
     if (bytes == null) {
       throw const FormatException('A kiválasztott jegyzetfájl nem olvasható.');
@@ -550,14 +628,20 @@ class _NotesScreenState extends State<NotesScreen> {
     }
     final rawNotes = decoded['notes'];
     if (rawNotes is! List) {
-      throw const FormatException('A jegyzet export nem tartalmaz notes listát.');
+      throw const FormatException(
+        'A jegyzet export nem tartalmaz notes listát.',
+      );
     }
-    return rawNotes.map((item) {
-      if (item is! Map) {
-        throw const FormatException('Érvénytelen jegyzet elem az import fájlban.');
-      }
-      return NoteItem.fromJson(Map<String, Object?>.from(item));
-    }).toList(growable: false);
+    return rawNotes
+        .map((item) {
+          if (item is! Map) {
+            throw const FormatException(
+              'Érvénytelen jegyzet elem az import fájlban.',
+            );
+          }
+          return NoteItem.fromJson(Map<String, Object?>.from(item));
+        })
+        .toList(growable: false);
   }
 
   Future<void> _exportNotes(List<NoteItem> notes) async {
@@ -572,7 +656,9 @@ class _NotesScreenState extends State<NotesScreen> {
     if (!mounted || path == null) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Exportálva: $path')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Exportálva: $path')));
   }
 
   Future<void> _shareNotes(List<NoteItem> notes) async {
@@ -596,7 +682,9 @@ class _NotesScreenState extends State<NotesScreen> {
       'type': 'djinn_notes',
       'notes': notes.map((note) => note.toJson()).toList(),
     };
-    return Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(payload)));
+    return Uint8List.fromList(
+      utf8.encode(const JsonEncoder.withIndent('  ').convert(payload)),
+    );
   }
 
   String _notesExportFilename(List<NoteItem> notes) {
@@ -662,7 +750,8 @@ class _NotesScreenState extends State<NotesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final showFolderBar = _showFolderBar && (_folders.isNotEmpty || _hasAnyNotes);
+    final showFolderBar =
+        _showFolderBar && (_folders.isNotEmpty || _hasAnyNotes);
     return Scaffold(
       appBar: _buildAppBar(),
       body: Column(
@@ -680,12 +769,14 @@ class _NotesScreenState extends State<NotesScreen> {
           Expanded(child: _buildList()),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        key: const ValueKey('notes-create-fab'),
-        tooltip: 'Új jegyzet',
-        onPressed: () => unawaited(_openEditor()),
-        child: const Icon(Icons.note_add_outlined),
-      ),
+      floatingActionButton: widget.showFloatingActionButton
+          ? FloatingActionButton(
+              key: const ValueKey('notes-create-fab'),
+              tooltip: 'Új jegyzet',
+              onPressed: () => unawaited(_openEditor()),
+              child: const Icon(Icons.note_add_outlined),
+            )
+          : null,
     );
   }
 
@@ -699,7 +790,9 @@ class _NotesScreenState extends State<NotesScreen> {
       );
     }
     return ListView.separated(
-      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
       itemCount: _notes.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -763,7 +856,8 @@ class _FolderBar extends StatelessWidget {
                   onSelected: (_) => onSelected(null),
                 ),
               for (final folder in folders) ...[
-                if (showAll || folder != folders.first) const SizedBox(width: 8),
+                if (showAll || folder != folders.first)
+                  const SizedBox(width: 8),
                 ChoiceChip(
                   key: ValueKey('notes-folder-pill-${folder.id}'),
                   avatar: const Icon(Icons.folder_outlined, size: 18),
@@ -814,7 +908,9 @@ class _NoteBox extends StatelessWidget {
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB)),
+        side: BorderSide(
+          color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+        ),
       ),
       child: InkWell(
         key: ValueKey('note-box-${note.id}'),
