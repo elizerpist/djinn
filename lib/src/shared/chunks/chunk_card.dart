@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../knowledge/models/local_extraction.dart';
+import 'shared_chunk.dart';
 
-enum ChunkCardKind { text, list, table, score, flowchart, imageRegion, visualFact }
+typedef ChunkCardKind = SharedChunkKind;
 
 class ChunkCardViewModel {
   const ChunkCardViewModel({
@@ -104,23 +105,19 @@ class ChunkCard extends StatelessWidget {
 
   static IconData _iconFor(ChunkCardKind kind) {
     return switch (kind) {
-      ChunkCardKind.text => Icons.subject,
-      ChunkCardKind.list => Icons.format_list_bulleted,
-      ChunkCardKind.table => Icons.table_chart_outlined,
-      ChunkCardKind.score => Icons.format_list_numbered,
-      ChunkCardKind.flowchart => Icons.account_tree_outlined,
-      ChunkCardKind.imageRegion => Icons.crop_free,
-      ChunkCardKind.visualFact => Icons.visibility_outlined,
+      SharedChunkKind.text => Icons.subject,
+      SharedChunkKind.list => Icons.format_list_bulleted,
+      SharedChunkKind.table => Icons.table_chart_outlined,
+      SharedChunkKind.flowchart => Icons.account_tree_outlined,
     };
   }
 
   static Color _colorFor(ChunkCardKind kind) {
     return switch (kind) {
-      ChunkCardKind.text || ChunkCardKind.list => const Color(0xFF2563EB),
-      ChunkCardKind.table => const Color(0xFF047857),
-      ChunkCardKind.score => const Color(0xFFB45309),
-      ChunkCardKind.flowchart => const Color(0xFF7C3AED),
-      ChunkCardKind.imageRegion || ChunkCardKind.visualFact => const Color(0xFF0891B2),
+      SharedChunkKind.text => const Color(0xFF2563EB),
+      SharedChunkKind.list => const Color(0xFF059669),
+      SharedChunkKind.table => const Color(0xFFEA580C),
+      SharedChunkKind.flowchart => const Color(0xFF9333EA),
     };
   }
 }
@@ -146,7 +143,11 @@ class _AuditPill extends StatelessWidget {
       ),
       child: Text(
         state == LocalAuditState.unreviewed ? 'Review' : state.label,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800),
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

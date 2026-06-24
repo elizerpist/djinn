@@ -11,6 +11,7 @@ import '../../shared/chunks/chunk_validation_card.dart';
 import '../../shared/ui/draggable_bottom_card.dart';
 import '../../flowchart/ui/interactive_flowchart_editor_screen.dart';
 import '../../flowchart/ui/mobile_flowchart_viewer.dart';
+import 'pdf_shared_chunk_adapter.dart';
 
 class ExtractedKnowledgeScreen extends StatefulWidget {
   const ExtractedKnowledgeScreen({
@@ -805,18 +806,12 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
   }
 
   static ChunkCardKind _cardKindFor(ExtractedKnowledgeItem item) {
-    return switch (item.chunkKind) {
-      LocalChunkKind.list => ChunkCardKind.list,
-      LocalChunkKind.table => ChunkCardKind.table,
-      LocalChunkKind.flowchart => ChunkCardKind.flowchart,
-      LocalChunkKind.text => switch (item.sourceType) {
-        EvidenceSourceType.tableChunk => ChunkCardKind.table,
-        EvidenceSourceType.scoreChunk => ChunkCardKind.table,
-        EvidenceSourceType.flowchartNode ||
-        EvidenceSourceType.flowchartEdge => ChunkCardKind.flowchart,
-        EvidenceSourceType.textChunk => ChunkCardKind.text,
-      },
-    };
+    final shared = sharedChunkFromExtractedItem(
+      item,
+      filename: '',
+      isImage: false,
+    );
+    return shared.kind;
   }
 }
 
