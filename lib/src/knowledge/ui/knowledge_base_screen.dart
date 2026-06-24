@@ -429,8 +429,12 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            PdfViewerScreen(title: document.filename, path: document.localPath),
+        builder: (_) => PdfViewerScreen(
+          title: document.filename,
+          path: document.localPath,
+          repository: widget.repository,
+          document: document,
+        ),
       ),
     );
   }

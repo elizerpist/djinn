@@ -3,26 +3,150 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
-class PdfViewerScreen extends StatelessWidget {
-  const PdfViewerScreen({super.key, required this.title, required this.path});
+import '../../debug/debug_console.dart';
+import '../data/knowledge_document_repository.dart';
+import '../models/extracted_knowledge_item.dart';
+import '../models/knowledge_document.dart';
+import 'extracted_knowledge_screen.dart';
+import 'source_chunk_box_overlay.dart';
+
+class PdfViewerScreen extends StatefulWidget {
+  const PdfViewerScreen({
+    super.key,
+    required this.title,
+    required this.path,
+    this.repository,
+    this.document,
+  });
 
   final String title;
   final String path;
+  final KnowledgeDocumentRepository? repository;
+  final KnowledgeDocument? document;
+
+  @override
+  State<PdfViewerScreen> createState() => _PdfViewerScreenState();
+}
+
+class _PdfViewerScreenState extends State<PdfViewerScreen> {
+  SourceChunkBoxMode _boxMode = SourceChunkBoxMode.hidden;
+  List<ExtractedKnowledgeItem> _sourceItems = const [];
+
+  bool get _hasSourceContext =>
+      widget.repository != null && widget.document != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSourceItems();
+  }
+
+  @override
+  void didUpdateWidget(covariant PdfViewerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.document?.id != widget.document?.id ||
+        oldWidget.repository != widget.repository) {
+      _loadSourceItems();
+    }
+  }
+
+  Future<void> _loadSourceItems() async {
+    final repository = widget.repository;
+    final document = widget.document;
+    if (repository == null || document == null) {
+      return;
+    }
+    final items = await repository.listExtractedKnowledgeItems(document.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _sourceItems = items);
+    DebugConsole.log(
+      '[Knowledge/Viewer] boxes loaded document=${document.id} '
+      'count=${items.length}',
+    );
+  }
+
+  void _setBoxMode(SourceChunkBoxMode mode) {
+    setState(() => _boxMode = mode);
+    final document = widget.document;
+    if (document != null) {
+      DebugConsole.log(
+        '[Knowledge/Viewer] box mode document=${document.id} mode=${mode.name}',
+      );
+    }
+  }
+
+  void _handleBoxTap(String chunkId) {
+    final repository = widget.repository;
+    final document = widget.document;
+    if (document != null) {
+      DebugConsole.log(
+        '[Knowledge/Viewer] box tap document=${document.id} chunk=$chunkId',
+      );
+    }
+    if (repository == null || document == null) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ExtractedKnowledgeScreen(
+          repository: repository,
+          document: document,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isPng = path.toLowerCase().endsWith('.png');
+    final isPng = widget.path.toLowerCase().endsWith('.png');
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: isPng ? _PngViewer(path: path) : _PdfDocumentViewer(path: path),
+      appBar: AppBar(
+        title: Text(widget.title),
+        actions: [
+          if (_hasSourceContext)
+            PopupMenuButton<SourceChunkBoxMode>(
+              key: const Key('source-box-mode-menu'),
+              tooltip: 'Forrásdobozok',
+              initialValue: _boxMode,
+              onSelected: _setBoxMode,
+              itemBuilder: (context) => [
+                for (final mode in SourceChunkBoxMode.values)
+                  PopupMenuItem(value: mode, child: Text(mode.label)),
+              ],
+            ),
+        ],
+      ),
+      body: isPng
+          ? _PngViewer(
+              path: widget.path,
+              items: _sourceItems,
+              boxMode: _boxMode,
+              onTapBox: _handleBoxTap,
+            )
+          : _PdfDocumentViewer(
+              path: widget.path,
+              items: _sourceItems,
+              boxMode: _boxMode,
+              onTapBox: _handleBoxTap,
+            ),
     );
   }
 }
 
 class _PdfDocumentViewer extends StatefulWidget {
-  const _PdfDocumentViewer({required this.path});
+  const _PdfDocumentViewer({
+    required this.path,
+    required this.items,
+    required this.boxMode,
+    required this.onTapBox,
+  });
 
   final String path;
+  final List<ExtractedKnowledgeItem> items;
+  final SourceChunkBoxMode boxMode;
+  final ValueChanged<String> onTapBox;
 
   @override
   State<_PdfDocumentViewer> createState() => _PdfDocumentViewerState();
@@ -59,6 +183,16 @@ class _PdfDocumentViewerState extends State<_PdfDocumentViewer> {
           setState(() => _pageNumber = pageNumber);
         },
         viewerOverlayBuilder: (context, size, handleLinkTap) => [
+          Positioned.fill(
+            child: SourceChunkBoxOverlay(
+              boxes: sourceChunkBoxesFromItems(
+                widget.items,
+                mode: widget.boxMode,
+                pageNumber: _pageNumber,
+              ),
+              onTapBox: widget.onTapBox,
+            ),
+          ),
           PdfViewerScrollThumb(
             controller: _controller,
             orientation: ScrollbarOrientation.right,
@@ -172,20 +306,50 @@ class _PdfPageControls extends StatelessWidget {
 }
 
 class _PngViewer extends StatelessWidget {
-  const _PngViewer({required this.path});
+  const _PngViewer({
+    required this.path,
+    required this.items,
+    required this.boxMode,
+    required this.onTapBox,
+  });
 
   final String path;
+  final List<ExtractedKnowledgeItem> items;
+  final SourceChunkBoxMode boxMode;
+  final ValueChanged<String> onTapBox;
 
   @override
   Widget build(BuildContext context) {
+    final boxes = sourceChunkBoxesFromItems(
+      items,
+      mode: boxMode,
+      pageNumber: 1,
+    );
     return Container(
       color: const Color(0xFF111827),
       alignment: Alignment.center,
-      child: InteractiveViewer(
-        minScale: 0.5,
-        maxScale: 5,
-        child: Image.file(File(path), fit: BoxFit.contain),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 5,
+            child: Center(child: Image.file(File(path), fit: BoxFit.contain)),
+          ),
+          if (boxes.isNotEmpty)
+            SourceChunkBoxOverlay(boxes: boxes, onTapBox: onTapBox),
+        ],
       ),
     );
+  }
+}
+
+extension on SourceChunkBoxMode {
+  String get label {
+    return switch (this) {
+      SourceChunkBoxMode.hidden => 'Dobozok rejtve',
+      SourceChunkBoxMode.ai => 'AI dobozok',
+      SourceChunkBoxMode.manual => 'Manuális dobozok',
+    };
   }
 }
