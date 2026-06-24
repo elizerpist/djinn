@@ -25,21 +25,24 @@ enum LocalChunkKind {
   text('text'),
   list('list'),
   table('table'),
-  score('score'),
-  flowchart('flowchart'),
-  imageRegion('image_region'),
-  visualFact('visual_fact'),
-  unknown('unknown');
+  flowchart('flowchart');
 
   const LocalChunkKind(this.wireName);
 
   final String wireName;
 
   static LocalChunkKind fromWireName(String? value) {
-    return LocalChunkKind.values.firstWhere(
-      (item) => item.wireName == value,
-      orElse: () => LocalChunkKind.text,
-    );
+    return switch (value?.trim()) {
+      'list' => LocalChunkKind.list,
+      'table' || 'score' => LocalChunkKind.table,
+      'flowchart' => LocalChunkKind.flowchart,
+      'text' ||
+      'image_region' ||
+      'visual_fact' ||
+      'unknown' ||
+      null ||
+      _ => LocalChunkKind.text,
+    };
   }
 
   String get label {
@@ -47,11 +50,7 @@ enum LocalChunkKind {
       LocalChunkKind.text => 'Szöveg',
       LocalChunkKind.list => 'Felsorolás',
       LocalChunkKind.table => 'Táblázat',
-      LocalChunkKind.score => 'Score',
       LocalChunkKind.flowchart => 'Flowchart',
-      LocalChunkKind.imageRegion => 'Képterület',
-      LocalChunkKind.visualFact => 'Képi tény',
-      LocalChunkKind.unknown => 'Bizonytalan',
     };
   }
 }

@@ -60,9 +60,8 @@ class _FlowchartHubScreenState extends State<FlowchartHubScreen> {
                         Expanded(
                           child: Text(
                             'Audit',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                         ),
                         const DebugHeaderButton(),
@@ -77,7 +76,8 @@ class _FlowchartHubScreenState extends State<FlowchartHubScreen> {
                             ChoiceChip(
                               label: Text(tab.label),
                               selected: tab == _selected,
-                              onSelected: (_) => setState(() => _selected = tab),
+                              onSelected: (_) =>
+                                  setState(() => _selected = tab),
                             ),
                             const SizedBox(width: 8),
                           ],
@@ -127,7 +127,10 @@ extension on _FlowchartHubTab {
 }
 
 class _AuditPane extends StatefulWidget {
-  const _AuditPane({required this.repository, required this.fallbackRepository});
+  const _AuditPane({
+    required this.repository,
+    required this.fallbackRepository,
+  });
 
   final KnowledgeDocumentRepository? repository;
   final FlowchartValidationRepository? fallbackRepository;
@@ -251,7 +254,10 @@ class _AuditPaneState extends State<_AuditPane> {
     if (repository == null) {
       final fallback = widget.fallbackRepository;
       if (fallback != null) {
-        return FlowchartValidationScreen(repository: fallback, showAppBar: false);
+        return FlowchartValidationScreen(
+          repository: fallback,
+          showAppBar: false,
+        );
       }
       return const Center(
         child: Padding(
@@ -272,7 +278,9 @@ class _AuditPaneState extends State<_AuditPane> {
           return const Center(child: CircularProgressIndicator());
         }
         final allItems = snapshot.data ?? const <_AuditItemView>[];
-        final filtered = allItems.where(_filter.matches).toList(growable: false);
+        final filtered = allItems
+            .where(_filter.matches)
+            .toList(growable: false);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -351,22 +359,16 @@ extension on _AuditFilter {
     final item = view.item;
     return switch (this) {
       _AuditFilter.all => true,
-      _AuditFilter.text =>
-        item.sourceType == EvidenceSourceType.textChunk &&
-            item.chunkKind != LocalChunkKind.imageRegion &&
-            item.chunkKind != LocalChunkKind.visualFact,
+      _AuditFilter.text => item.sourceType == EvidenceSourceType.textChunk,
       _AuditFilter.table =>
         item.sourceType == EvidenceSourceType.tableChunk ||
             item.sourceType == EvidenceSourceType.scoreChunk ||
-            item.chunkKind == LocalChunkKind.table ||
-            item.chunkKind == LocalChunkKind.score,
+            item.chunkKind == LocalChunkKind.table,
       _AuditFilter.flowchart =>
         item.sourceType == EvidenceSourceType.flowchartNode ||
             item.sourceType == EvidenceSourceType.flowchartEdge ||
             item.chunkKind == LocalChunkKind.flowchart,
-      _AuditFilter.image =>
-        item.chunkKind == LocalChunkKind.imageRegion ||
-            item.chunkKind == LocalChunkKind.visualFact,
+      _AuditFilter.image => false,
       _AuditFilter.uncertain => item.auditState == LocalAuditState.unreviewed,
       _AuditFilter.accepted =>
         item.auditState == LocalAuditState.accepted ||
@@ -409,7 +411,11 @@ class _AuditItemCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(_iconFor(item), color: _colorFor(item.auditState), size: 20),
+                Icon(
+                  _iconFor(item),
+                  color: _colorFor(item.auditState),
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -441,10 +447,7 @@ class _AuditItemCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 8),
-            SelectableText(
-              item.text,
-              style: const TextStyle(height: 1.28),
-            ),
+            SelectableText(item.text, style: const TextStyle(height: 1.28)),
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -475,10 +478,10 @@ class _AuditItemCard extends StatelessWidget {
 
   IconData _iconFor(ExtractedKnowledgeItem item) {
     return switch (item.sourceType) {
-      EvidenceSourceType.tableChunk || EvidenceSourceType.scoreChunk =>
-        Icons.table_chart_outlined,
-      EvidenceSourceType.flowchartNode || EvidenceSourceType.flowchartEdge =>
-        Icons.account_tree_outlined,
+      EvidenceSourceType.tableChunk ||
+      EvidenceSourceType.scoreChunk => Icons.table_chart_outlined,
+      EvidenceSourceType.flowchartNode ||
+      EvidenceSourceType.flowchartEdge => Icons.account_tree_outlined,
       EvidenceSourceType.textChunk => Icons.subject,
     };
   }

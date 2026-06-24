@@ -18,11 +18,7 @@ IconData _staticIconForKind(LocalChunkKind kind) {
     LocalChunkKind.text => Icons.notes_outlined,
     LocalChunkKind.list => Icons.format_list_bulleted,
     LocalChunkKind.table => Icons.table_chart_outlined,
-    LocalChunkKind.score => Icons.fact_check_outlined,
     LocalChunkKind.flowchart => Icons.account_tree_outlined,
-    LocalChunkKind.imageRegion => Icons.crop_free,
-    LocalChunkKind.visualFact => Icons.visibility_outlined,
-    LocalChunkKind.unknown => Icons.help_outline,
   };
 }
 
@@ -98,10 +94,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
               LocalChunkKind.text,
               LocalChunkKind.list,
               LocalChunkKind.table,
-              LocalChunkKind.score,
               LocalChunkKind.flowchart,
-              LocalChunkKind.imageRegion,
-              LocalChunkKind.visualFact,
             ])
               ListTile(
                 leading: Icon(_iconForKind(option)),
@@ -334,14 +327,14 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
           'right': rect.right,
           'bottom': rect.bottom,
         },
-      if (_kind == LocalChunkKind.table || _kind == LocalChunkKind.score)
+      if (_kind == LocalChunkKind.table)
         'table': {'rows': _tableRows, 'columns': _tableColumns},
     });
   }
 
   String _defaultDraftForKind(LocalChunkKind kind) {
     return switch (kind) {
-      LocalChunkKind.table || LocalChunkKind.score => _tableTemplate(),
+      LocalChunkKind.table => _tableTemplate(),
       LocalChunkKind.flowchart => _flowchartTemplate(),
       _ => '',
     };
@@ -376,9 +369,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
 
   void _applyTableAction(String action) {
     setState(() {
-      _kind = _kind == LocalChunkKind.score
-          ? LocalChunkKind.score
-          : LocalChunkKind.table;
+      _kind = LocalChunkKind.table;
       _sourceMode = 'table';
       switch (action) {
         case 'add_row':
@@ -459,10 +450,8 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
   String _sourceModeForKind(LocalChunkKind kind) {
     return switch (kind) {
       LocalChunkKind.text || LocalChunkKind.list => 'pdf_text',
-      LocalChunkKind.table || LocalChunkKind.score => 'table',
+      LocalChunkKind.table => 'table',
       LocalChunkKind.flowchart => 'flowchart',
-      LocalChunkKind.imageRegion || LocalChunkKind.visualFact => 'ocr_image',
-      LocalChunkKind.unknown => 'pdf_text',
     };
   }
 
@@ -471,13 +460,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       LocalChunkKind.text => 'Bekezdés vagy rövid szövegrészlet',
       LocalChunkKind.list => 'Felsorolás vagy több soron folytatódó lista',
       LocalChunkKind.table => 'Táblázatrészlet szövegből vagy képből',
-      LocalChunkKind.score => 'Score vagy skálaelemek',
       LocalChunkKind.flowchart => 'Folyamatábra részlet',
-      LocalChunkKind.imageRegion =>
-        'Képes régió OCR vagy későbbi audit számára',
-      LocalChunkKind.visualFact =>
-        'Képen látható tény, például szín vagy eszköz',
-      LocalChunkKind.unknown => 'Bizonytalan típus',
     };
   }
 
@@ -809,8 +792,7 @@ class _ExtractionBoxHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final detail = switch (kind) {
-      LocalChunkKind.table ||
-      LocalChunkKind.score => '$tableRows x $tableColumns',
+      LocalChunkKind.table => '$tableRows x $tableColumns',
       LocalChunkKind.flowchart => 'draft',
       _ => 'manual',
     };
@@ -942,9 +924,7 @@ class _ManualChunkCard extends StatelessWidget {
                     border: OutlineInputBorder(),
                   ),
                   items: [
-                    for (final option in LocalChunkKind.values.where(
-                      (item) => item != LocalChunkKind.unknown,
-                    ))
+                    for (final option in LocalChunkKind.values)
                       DropdownMenuItem(
                         value: option,
                         child: Text(option.label),
@@ -1118,7 +1098,7 @@ class _KindSpecificControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final disabled = loading || saving;
-    if (kind == LocalChunkKind.table || kind == LocalChunkKind.score) {
+    if (kind == LocalChunkKind.table) {
       return DecoratedBox(
         key: const Key('manual-table-toolbar'),
         decoration: BoxDecoration(

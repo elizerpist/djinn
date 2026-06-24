@@ -228,7 +228,10 @@ class ObjectBoxKnowledgeRepository
         .toList(growable: false);
     _store.runInTransaction(TxMode.write, () {
       for (final document in documents) {
-        _clearGeneratedKnowledgeForDocument(document.publicId, includeLocal: true);
+        _clearGeneratedKnowledgeForDocument(
+          document.publicId,
+          includeLocal: true,
+        );
         _documentBox.remove(document.id);
       }
     });
@@ -428,16 +431,18 @@ class ObjectBoxKnowledgeRepository
     if (flowchart == null) {
       return null;
     }
-    final nodes = _flowchartNodeBox
-        .getAll()
-        .where((node) => node.flowchartPublicId == flowchartPublicId)
-        .toList(growable: false)
-      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-    final edges = _flowchartEdgeBox
-        .getAll()
-        .where((edge) => edge.flowchartPublicId == flowchartPublicId)
-        .toList(growable: false)
-      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final nodes =
+        _flowchartNodeBox
+            .getAll()
+            .where((node) => node.flowchartPublicId == flowchartPublicId)
+            .toList(growable: false)
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final edges =
+        _flowchartEdgeBox
+            .getAll()
+            .where((edge) => edge.flowchartPublicId == flowchartPublicId)
+            .toList(growable: false)
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     return EditableFlowchart(
       id: flowchart.publicId,
       documentId: documentId,
@@ -699,7 +704,9 @@ class ObjectBoxKnowledgeRepository
     });
   }
 
-  Future<ChunkComparison> compareExtractedChunks(String documentPublicId) async {
+  Future<ChunkComparison> compareExtractedChunks(
+    String documentPublicId,
+  ) async {
     final aiItems = await listExtractedKnowledgeItems(
       documentPublicId,
       pipeline: LocalExtractionPipeline.ai,
@@ -1066,7 +1073,6 @@ class ObjectBoxKnowledgeRepository
     return a.id.compareTo(b.id);
   }
 
-
   ExtractedKnowledgeItem _itemFromChunk(
     String documentPublicId,
     DocumentChunkEntity chunk,
@@ -1080,7 +1086,9 @@ class ObjectBoxKnowledgeRepository
           ? evidenceSourceTypeFromWireName(
               embedding?.sourceType ?? EvidenceSourceType.textChunk.wireName,
             )
-          : _sourceTypeForLocalKind(LocalChunkKind.fromWireName(chunk.chunkKind)),
+          : _sourceTypeForLocalKind(
+              LocalChunkKind.fromWireName(chunk.chunkKind),
+            ),
       text: chunk.text,
       pageNumber: chunk.pageNumber,
       sectionTitle: chunk.sectionTitle,
@@ -1098,13 +1106,9 @@ class ObjectBoxKnowledgeRepository
   EvidenceSourceType _sourceTypeForLocalKind(LocalChunkKind kind) {
     return switch (kind) {
       LocalChunkKind.table => EvidenceSourceType.tableChunk,
-      LocalChunkKind.score => EvidenceSourceType.scoreChunk,
       LocalChunkKind.flowchart => EvidenceSourceType.flowchartNode,
       LocalChunkKind.text ||
-      LocalChunkKind.list ||
-      LocalChunkKind.imageRegion ||
-      LocalChunkKind.visualFact ||
-      LocalChunkKind.unknown => EvidenceSourceType.textChunk,
+      LocalChunkKind.list => EvidenceSourceType.textChunk,
     };
   }
 
@@ -1113,7 +1117,7 @@ class ObjectBoxKnowledgeRepository
       return LocalChunkKind.table;
     }
     if (sourceType == EvidenceSourceType.scoreChunk.wireName) {
-      return LocalChunkKind.score;
+      return LocalChunkKind.table;
     }
     if (sourceType == EvidenceSourceType.flowchartNode.wireName ||
         sourceType == EvidenceSourceType.flowchartEdge.wireName) {
@@ -1144,10 +1148,7 @@ class ObjectBoxKnowledgeRepository
       }
       if (local == null) {
         rows.add(
-          ChunkComparisonRow(
-            status: ChunkComparisonStatus.aiOnly,
-            aiChunk: ai,
-          ),
+          ChunkComparisonRow(status: ChunkComparisonStatus.aiOnly, aiChunk: ai),
         );
         continue;
       }
@@ -1212,24 +1213,34 @@ class ObjectBoxKnowledgeRepository
   ) {
     final ids = box
         .getAll()
-        .where((entity) => switch (entity) {
-              DocumentPageEntity item => item.documentPublicId == documentPublicId,
-              ExtractionAuditItemEntity item => item.documentPublicId == documentPublicId,
-              KnowledgeNodeEntity item => item.documentPublicId == documentPublicId,
-              KnowledgeEdgeEntity item => item.documentPublicId == documentPublicId,
-              KnowledgeEvidenceEntity item => item.documentPublicId == documentPublicId,
-              VisualObjectEntity item => item.documentPublicId == documentPublicId,
-              _ => false,
-            })
-        .map((entity) => switch (entity) {
-              DocumentPageEntity item => item.id,
-              ExtractionAuditItemEntity item => item.id,
-              KnowledgeNodeEntity item => item.id,
-              KnowledgeEdgeEntity item => item.id,
-              KnowledgeEvidenceEntity item => item.id,
-              VisualObjectEntity item => item.id,
-              _ => 0,
-            })
+        .where(
+          (entity) => switch (entity) {
+            DocumentPageEntity item =>
+              item.documentPublicId == documentPublicId,
+            ExtractionAuditItemEntity item =>
+              item.documentPublicId == documentPublicId,
+            KnowledgeNodeEntity item =>
+              item.documentPublicId == documentPublicId,
+            KnowledgeEdgeEntity item =>
+              item.documentPublicId == documentPublicId,
+            KnowledgeEvidenceEntity item =>
+              item.documentPublicId == documentPublicId,
+            VisualObjectEntity item =>
+              item.documentPublicId == documentPublicId,
+            _ => false,
+          },
+        )
+        .map(
+          (entity) => switch (entity) {
+            DocumentPageEntity item => item.id,
+            ExtractionAuditItemEntity item => item.id,
+            KnowledgeNodeEntity item => item.id,
+            KnowledgeEdgeEntity item => item.id,
+            KnowledgeEvidenceEntity item => item.id,
+            VisualObjectEntity item => item.id,
+            _ => 0,
+          },
+        )
         .where((id) => id > 0)
         .toList(growable: false);
     if (ids.isNotEmpty) {
@@ -1404,7 +1415,8 @@ class ObjectBoxKnowledgeRepository
 
   ValidationState _validationStateForAuditState(LocalAuditState state) {
     return switch (state) {
-      LocalAuditState.accepted || LocalAuditState.edited => ValidationState.validated,
+      LocalAuditState.accepted ||
+      LocalAuditState.edited => ValidationState.validated,
       LocalAuditState.rejected => ValidationState.rejected,
       LocalAuditState.unreviewed => ValidationState.unreviewed,
     };

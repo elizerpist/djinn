@@ -1,5 +1,6 @@
 import '../../../objectbox.g.dart';
 import '../../debug/debug_console.dart';
+import '../../knowledge/models/local_extraction.dart';
 import '../../local_store/entities.dart';
 import '../../offline/local_vector_search_service.dart';
 import '../../offline/offline_search_service.dart';
@@ -35,7 +36,8 @@ abstract class LocalRetriever {
 class MemoryLocalRetriever implements LocalRetriever {
   MemoryLocalRetriever(
     this._items, {
-    LocalVectorSearchService localVectorSearch = const LocalVectorSearchService(),
+    LocalVectorSearchService localVectorSearch =
+        const LocalVectorSearchService(),
   }) : _localVectorSearch = localVectorSearch;
 
   final List<SourceEvidence> _items;
@@ -74,8 +76,6 @@ class MemoryLocalRetriever implements LocalRetriever {
     );
     return evidence;
   }
-
-
 
   @override
   Future<List<SourceEvidence>> retrieveLocalVector({
@@ -135,8 +135,6 @@ class MemoryLocalRetriever implements LocalRetriever {
     return _dedupeEvidence([...vector, ...keyword]).take(limit).toList();
   }
 
-
-
   @override
   Future<List<SourceEvidence>> retrieveOffline({
     required String query,
@@ -166,15 +164,16 @@ List<SourceEvidence> _dedupeEvidence(List<SourceEvidence> items) {
 class ObjectBoxLocalRetriever implements LocalRetriever {
   ObjectBoxLocalRetriever({
     required Store store,
-    LocalVectorSearchService localVectorSearch = const LocalVectorSearchService(),
+    LocalVectorSearchService localVectorSearch =
+        const LocalVectorSearchService(),
   }) : _localVectorSearch = localVectorSearch,
-      _embeddingBox = store.box<ChunkEmbeddingEntity>(),
-      _chunkBox = store.box<DocumentChunkEntity>(),
-      _flowchartBox = store.box<FlowchartEntity>(),
-      _nodeBox = store.box<FlowchartNodeEntity>(),
-      _edgeBox = store.box<FlowchartEdgeEntity>(),
-      _knowledgeEdgeBox = store.box<KnowledgeEdgeEntity>(),
-      _knowledgeEvidenceBox = store.box<KnowledgeEvidenceEntity>();
+       _embeddingBox = store.box<ChunkEmbeddingEntity>(),
+       _chunkBox = store.box<DocumentChunkEntity>(),
+       _flowchartBox = store.box<FlowchartEntity>(),
+       _nodeBox = store.box<FlowchartNodeEntity>(),
+       _edgeBox = store.box<FlowchartEdgeEntity>(),
+       _knowledgeEdgeBox = store.box<KnowledgeEdgeEntity>(),
+       _knowledgeEvidenceBox = store.box<KnowledgeEvidenceEntity>();
 
   final LocalVectorSearchService _localVectorSearch;
   final Box<ChunkEmbeddingEntity> _embeddingBox;
@@ -257,7 +256,6 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     }
   }
 
-
   @override
   Future<List<SourceEvidence>> retrieveLocalVector({
     required String query,
@@ -299,7 +297,10 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
       existing: seeds,
       limit: limit,
     );
-    final result = [...seeds, ...graphExpanded].take(limit).toList(growable: false);
+    final result = [
+      ...seeds,
+      ...graphExpanded,
+    ].take(limit).toList(growable: false);
     DebugConsole.log(
       '[LocalVector] objectbox search mode=$mode candidates=${evidence.length} '
       'matches=${seeds.length} graph=${graphExpanded.length} total=${result.length}',
@@ -319,9 +320,10 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
       mode: vectorMode,
     );
     final keyword = await retrieveOffline(query: query, limit: limit);
-    final result = _dedupeEvidence([...vector, ...keyword])
-        .take(limit)
-        .toList(growable: false);
+    final result = _dedupeEvidence([
+      ...vector,
+      ...keyword,
+    ]).take(limit).toList(growable: false);
     DebugConsole.log(
       '[HybridSearch] objectbox search mode=$vectorMode vector=${vector.length} '
       'keyword=${keyword.length} total=${result.length}',
@@ -473,7 +475,6 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     );
   }
 
-
   List<SourceEvidence> _expandWithLocalKeywordEvidence({
     required String? query,
     required List<SourceEvidence> existing,
@@ -528,7 +529,9 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     required int limit,
   }) {
     if (seeds.isEmpty || existing.length >= limit) {
-      DebugConsole.log('[VectorGraph] graph expansion seeds=${seeds.length} edges=0 matches=0');
+      DebugConsole.log(
+        '[VectorGraph] graph expansion seeds=${seeds.length} edges=0 matches=0',
+      );
       return const [];
     }
     final existingIds = existing.map((item) => item.id).toSet();
@@ -539,7 +542,9 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
         .map((evidence) => evidence.nodePublicId)
         .toSet();
     if (seedNodeIds.isEmpty) {
-      DebugConsole.log('[VectorGraph] graph expansion seeds=${seeds.length} edges=0 matches=0');
+      DebugConsole.log(
+        '[VectorGraph] graph expansion seeds=${seeds.length} edges=0 matches=0',
+      );
       return const [];
     }
     final edges = _knowledgeEdgeBox
@@ -604,11 +609,11 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
   }
 
   EvidenceSourceType _sourceTypeFromLocalChunkKind(String value) {
-    return switch (value) {
-      'table' => EvidenceSourceType.tableChunk,
-      'score' => EvidenceSourceType.scoreChunk,
-      'flowchart' => EvidenceSourceType.flowchartNode,
-      _ => EvidenceSourceType.textChunk,
+    return switch (LocalChunkKind.fromWireName(value)) {
+      LocalChunkKind.table => EvidenceSourceType.tableChunk,
+      LocalChunkKind.flowchart => EvidenceSourceType.flowchartNode,
+      LocalChunkKind.text ||
+      LocalChunkKind.list => EvidenceSourceType.textChunk,
     };
   }
 
@@ -651,7 +656,9 @@ class ObjectBoxLocalRetriever implements LocalRetriever {
     }
     final validationState = _chunkValidationState(chunk);
     if (validationState == ValidationState.rejected) {
-      DebugConsole.log('[VectorGraph] skipped rejected chunk=${chunk.publicId}');
+      DebugConsole.log(
+        '[VectorGraph] skipped rejected chunk=${chunk.publicId}',
+      );
       return null;
     }
     return SourceEvidence(

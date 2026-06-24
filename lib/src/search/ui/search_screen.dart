@@ -106,9 +106,7 @@ class _SearchScreenState extends State<SearchScreen> {
     return switch (item.chunkKind) {
       LocalChunkKind.table => Icons.table_chart_outlined,
       LocalChunkKind.flowchart => Icons.account_tree_outlined,
-      LocalChunkKind.score => Icons.rule_folder_outlined,
-      LocalChunkKind.imageRegion || LocalChunkKind.visualFact => Icons.image_outlined,
-      LocalChunkKind.text || LocalChunkKind.list || LocalChunkKind.unknown => Icons.subject,
+      LocalChunkKind.text || LocalChunkKind.list => Icons.subject,
     };
   }
 
@@ -155,9 +153,8 @@ class _SearchScreenState extends State<SearchScreen> {
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
                     itemCount: _results.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) => _SearchResultCard(
-                      result: _results[index],
-                    ),
+                    itemBuilder: (context, index) =>
+                        _SearchResultCard(result: _results[index]),
                   ),
           ),
         ],

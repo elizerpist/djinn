@@ -217,16 +217,7 @@ extension _ExtractedPipelineViewLabel on _ExtractedPipelineView {
   }
 }
 
-enum _ExtractedTypeFilter {
-  all,
-  text,
-  list,
-  table,
-  score,
-  flowchart,
-  imageRegion,
-  visualFact,
-}
+enum _ExtractedTypeFilter { all, text, list, table, flowchart }
 
 extension _ExtractedTypeFilterLabel on _ExtractedTypeFilter {
   String get label {
@@ -235,10 +226,7 @@ extension _ExtractedTypeFilterLabel on _ExtractedTypeFilter {
       _ExtractedTypeFilter.text => 'Szöveg',
       _ExtractedTypeFilter.list => 'Felsorolás',
       _ExtractedTypeFilter.table => 'Táblázat',
-      _ExtractedTypeFilter.score => 'Score',
       _ExtractedTypeFilter.flowchart => 'Flowchart',
-      _ExtractedTypeFilter.imageRegion => 'Kép',
-      _ExtractedTypeFilter.visualFact => 'Vizuális tény',
     };
   }
 
@@ -251,24 +239,21 @@ extension _ExtractedTypeFilterLabel on _ExtractedTypeFilter {
       _ExtractedTypeFilter.list => item.chunkKind == LocalChunkKind.list,
       _ExtractedTypeFilter.table =>
         item.chunkKind == LocalChunkKind.table ||
-            item.sourceType == EvidenceSourceType.tableChunk,
-      _ExtractedTypeFilter.score =>
-        item.chunkKind == LocalChunkKind.score ||
+            item.sourceType == EvidenceSourceType.tableChunk ||
             item.sourceType == EvidenceSourceType.scoreChunk,
       _ExtractedTypeFilter.flowchart =>
         item.chunkKind == LocalChunkKind.flowchart ||
             item.sourceType == EvidenceSourceType.flowchartNode ||
             item.sourceType == EvidenceSourceType.flowchartEdge,
-      _ExtractedTypeFilter.imageRegion =>
-        item.chunkKind == LocalChunkKind.imageRegion,
-      _ExtractedTypeFilter.visualFact =>
-        item.chunkKind == LocalChunkKind.visualFact,
     };
   }
 }
 
 class _ContentTypeFilterBar extends StatelessWidget {
-  const _ContentTypeFilterBar({required this.selected, required this.onSelected});
+  const _ContentTypeFilterBar({
+    required this.selected,
+    required this.onSelected,
+  });
 
   final _ExtractedTypeFilter selected;
   final ValueChanged<_ExtractedTypeFilter> onSelected;
@@ -387,11 +372,10 @@ class _ExtractedKnowledgeList extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       itemCount: items.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) =>
-          _ExtractedKnowledgeTile(
-            item: items[index],
-            onValidate: () => onValidate(items[index]),
-          ),
+      itemBuilder: (context, index) => _ExtractedKnowledgeTile(
+        item: items[index],
+        onValidate: () => onValidate(items[index]),
+      ),
     );
   }
 }
@@ -450,10 +434,7 @@ class _ChunkComparisonTile extends StatelessWidget {
                 Expanded(
                   child: Text(
                     _statusLabel(row.status),
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: TextStyle(color: color, fontWeight: FontWeight.w800),
                   ),
                 ),
                 Text(
@@ -548,10 +529,7 @@ class _ComparisonSide extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: resolved == null
-          ? Text(
-              emptyLabel,
-              style: const TextStyle(color: Color(0xFF9CA3AF)),
-            )
+          ? Text(emptyLabel, style: const TextStyle(color: Color(0xFF9CA3AF)))
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -698,7 +676,10 @@ class _FlowchartGroupCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.account_tree_outlined, color: Color(0xFF7C3AED)),
+                const Icon(
+                  Icons.account_tree_outlined,
+                  color: Color(0xFF7C3AED),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -785,10 +766,7 @@ MobileFlowchartData _mobileFlowchartDataFromGroup(
 }
 
 class _ExtractedKnowledgeTile extends StatelessWidget {
-  const _ExtractedKnowledgeTile({
-    required this.item,
-    required this.onValidate,
-  });
+  const _ExtractedKnowledgeTile({required this.item, required this.onValidate});
 
   final ExtractedKnowledgeItem item;
   final VoidCallback onValidate;
@@ -830,20 +808,16 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
     return switch (item.chunkKind) {
       LocalChunkKind.list => ChunkCardKind.list,
       LocalChunkKind.table => ChunkCardKind.table,
-      LocalChunkKind.score => ChunkCardKind.score,
       LocalChunkKind.flowchart => ChunkCardKind.flowchart,
-      LocalChunkKind.imageRegion => ChunkCardKind.imageRegion,
-      LocalChunkKind.visualFact => ChunkCardKind.visualFact,
-      LocalChunkKind.text || LocalChunkKind.unknown => switch (item.sourceType) {
+      LocalChunkKind.text => switch (item.sourceType) {
         EvidenceSourceType.tableChunk => ChunkCardKind.table,
-        EvidenceSourceType.scoreChunk => ChunkCardKind.score,
+        EvidenceSourceType.scoreChunk => ChunkCardKind.table,
         EvidenceSourceType.flowchartNode ||
         EvidenceSourceType.flowchartEdge => ChunkCardKind.flowchart,
         EvidenceSourceType.textChunk => ChunkCardKind.text,
       },
     };
   }
-
 }
 
 class _ExtractedKnowledgeBody extends StatelessWidget {

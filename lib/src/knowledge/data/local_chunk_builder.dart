@@ -19,7 +19,9 @@ class LocalChunkBuilder {
     var currentSection = <String>[];
 
     String? sectionTitle() {
-      final title = currentSection.where((line) => line.trim().isNotEmpty).join(' / ');
+      final title = currentSection
+          .where((line) => line.trim().isNotEmpty)
+          .join(' / ');
       return title.isEmpty ? null : title;
     }
 
@@ -152,11 +154,7 @@ class LocalChunkBuilder {
               pipeline: page.textPipeline == LocalExtractionPipeline.localOcr
                   ? LocalExtractionPipeline.localOcr
                   : LocalExtractionPipeline.localTable,
-              kind: block.any(_looksLikeTableLine)
-                  ? LocalChunkKind.table
-                  : _looksLikeScoreLine(block.join(' '))
-                      ? LocalChunkKind.score
-                      : LocalChunkKind.table,
+              kind: LocalChunkKind.table,
               auditState: LocalAuditState.unreviewed,
               sourcePageImagePath: page.sourceImagePath,
               confidence: page.confidence,
@@ -223,10 +221,7 @@ class LocalChunkBuilder {
   }
 
   String _stripListMarker(String line) {
-    return line
-        .trim()
-        .replaceFirst(RegExp(r'^([-*•]|\d+[.)])\s+'), '')
-        .trim();
+    return line.trim().replaceFirst(RegExp(r'^([-*•]|\d+[.)])\s+'), '').trim();
   }
 
   bool _looksLikeTableLine(String line) {

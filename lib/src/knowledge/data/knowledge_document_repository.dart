@@ -510,7 +510,9 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     );
   }
 
-  Future<ChunkComparison> compareExtractedChunks(String documentPublicId) async {
+  Future<ChunkComparison> compareExtractedChunks(
+    String documentPublicId,
+  ) async {
     final aiItems = await listExtractedKnowledgeItems(
       documentPublicId,
       pipeline: LocalExtractionPipeline.ai,
@@ -584,7 +586,6 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     );
   }
 
-
   ExtractedKnowledgeItem _itemFromLocalChunk(
     String documentPublicId,
     LocalChunk chunk,
@@ -609,13 +610,9 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
   EvidenceSourceType _sourceTypeForLocalKind(LocalChunkKind kind) {
     return switch (kind) {
       LocalChunkKind.table => EvidenceSourceType.tableChunk,
-      LocalChunkKind.score => EvidenceSourceType.scoreChunk,
       LocalChunkKind.flowchart => EvidenceSourceType.flowchartNode,
       LocalChunkKind.text ||
-      LocalChunkKind.list ||
-      LocalChunkKind.imageRegion ||
-      LocalChunkKind.visualFact ||
-      LocalChunkKind.unknown => EvidenceSourceType.textChunk,
+      LocalChunkKind.list => EvidenceSourceType.textChunk,
     };
   }
 
@@ -628,7 +625,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     return switch (sourceType) {
       EvidenceSourceType.textChunk => LocalChunkKind.text,
       EvidenceSourceType.tableChunk => LocalChunkKind.table,
-      EvidenceSourceType.scoreChunk => LocalChunkKind.score,
+      EvidenceSourceType.scoreChunk => LocalChunkKind.table,
       EvidenceSourceType.flowchartNode ||
       EvidenceSourceType.flowchartEdge => LocalChunkKind.flowchart,
     };
@@ -656,10 +653,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       }
       if (local == null) {
         rows.add(
-          ChunkComparisonRow(
-            status: ChunkComparisonStatus.aiOnly,
-            aiChunk: ai,
-          ),
+          ChunkComparisonRow(status: ChunkComparisonStatus.aiOnly, aiChunk: ai),
         );
         continue;
       }

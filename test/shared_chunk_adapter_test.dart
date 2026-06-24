@@ -87,21 +87,9 @@ void main() {
       sharedKindFromLocalChunkKind(LocalChunkKind.flowchart),
       SharedChunkKind.flowchart,
     );
-    expect(
-      sharedKindFromLocalChunkKind(LocalChunkKind.score),
-      SharedChunkKind.table,
-    );
-    expect(
-      sharedKindFromLocalChunkKind(LocalChunkKind.imageRegion),
-      SharedChunkKind.text,
-    );
-    expect(
-      sharedKindFromLocalChunkKind(LocalChunkKind.visualFact),
-      SharedChunkKind.text,
-    );
-    expect(
-      sharedKindFromLocalChunkKind(LocalChunkKind.unknown),
-      SharedChunkKind.text,
-    );
+    expect(LocalChunkKind.fromWireName('score'), LocalChunkKind.table);
+    expect(LocalChunkKind.fromWireName('image_region'), LocalChunkKind.text);
+    expect(LocalChunkKind.fromWireName('visual_fact'), LocalChunkKind.text);
+    expect(LocalChunkKind.fromWireName('unknown'), LocalChunkKind.text);
   });
 }

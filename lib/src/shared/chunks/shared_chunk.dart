@@ -44,12 +44,9 @@ class SharedChunkViewModel {
 
 SharedChunkKind sharedKindFromLocalChunkKind(LocalChunkKind kind) {
   return switch (kind) {
-    LocalChunkKind.text ||
-    LocalChunkKind.imageRegion ||
-    LocalChunkKind.visualFact ||
-    LocalChunkKind.unknown => SharedChunkKind.text,
+    LocalChunkKind.text => SharedChunkKind.text,
     LocalChunkKind.list => SharedChunkKind.list,
-    LocalChunkKind.table || LocalChunkKind.score => SharedChunkKind.table,
+    LocalChunkKind.table => SharedChunkKind.table,
     LocalChunkKind.flowchart => SharedChunkKind.flowchart,
   };
 }
