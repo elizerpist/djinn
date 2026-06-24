@@ -1179,7 +1179,7 @@ void main() {
     expect(processingService.processedIds, hasLength(1));
   });
 
-  testWidgets('selection menu offers local chunking for AI-ready PDFs', (
+  testWidgets('selection menu exposes only AI and manual chunking modes', (
     tester,
   ) async {
     final repository = KnowledgeDocumentRepository();
@@ -1215,14 +1215,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('AI újrachunkolás'), findsOneWidget);
-    expect(find.text('Lokális chunkolás'), findsOneWidget);
+    expect(find.text('Kézi chunkolás'), findsOneWidget);
+    expect(find.text('Lokális chunkolás'), findsNothing);
     expect(find.text('Lokális újrachunkolás'), findsNothing);
-
-    await tester.tap(find.text('Lokális chunkolás'));
-    await tester.pumpAndSettle();
-
-    expect(localProcessingService.processedIds, [document.id]);
-    expect(localProcessingService.forceReprocessFlags, [true]);
+    expect(localProcessingService.processedIds, isEmpty);
   });
 
   testWidgets('manual chunk editor saves a selected PDF chunk', (tester) async {
@@ -1321,6 +1317,36 @@ void main() {
       DebugConsole.allText,
       contains('[ManualChunk] save complete document=${document.id} kind=text'),
     );
+  });
+
+  testWidgets('manual chunk sheet uses clamping scroll physics', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    await _openManualChunkEditor(
+      tester,
+      repository,
+      filename: 'manual-sheet-scroll.pdf',
+    );
+
+    await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Szöveg').last);
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const Key('manual-chunk-selection-layer')),
+      const Offset(260, 160),
+    );
+    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const Key('manual-chunk-title-field')),
+    );
+
+    final scrollView = tester.widget<SingleChildScrollView>(
+      find.byType(SingleChildScrollView).last,
+    );
+    expect(scrollView.physics, isA<ClampingScrollPhysics>());
   });
 
   testWidgets(

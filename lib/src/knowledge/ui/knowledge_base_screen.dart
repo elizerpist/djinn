@@ -361,46 +361,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     }
   }
 
-  Future<void> _processDocumentLocally(KnowledgeDocument document) async {
-    final processingService = widget.localProcessingService;
-    if (processingService == null) {
-      return;
-    }
-    final documentId = document.id;
-    setState(() {
-      _processingDocumentId = documentId;
-      _processingProgressByDocumentId = {
-        ..._processingProgressByDocumentId,
-        documentId: ProcessingProgress(
-          documentId: documentId,
-          phase: ProcessingPhase.extracting,
-          label: 'Lokális OCR...',
-        ),
-      };
-    });
-    try {
-      await processingService.processDocument(
-        documentId,
-        forceReprocess:
-            document.status.isReady ||
-            document.status == KnowledgeDocumentStatus.needsReview,
-        onProgress: _handleProcessingProgress,
-      );
-      await _loadDocuments();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _processingDocumentId = null;
-          final next = Map<String, ProcessingProgress>.of(
-            _processingProgressByDocumentId,
-          );
-          next.remove(documentId);
-          _processingProgressByDocumentId = next;
-        });
-      }
-    }
-  }
-
   void _handleProcessingProgress(ProcessingProgress progress) {
     if (!mounted) {
       return;
@@ -468,21 +428,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     );
     for (final document in documentsToProcess) {
       await _processDocument(document);
-    }
-    if (mounted) {
-      _exitSelection();
-    }
-  }
-
-  Future<void> _processSelectedDocumentsLocally() async {
-    final selectedIds = Set<String>.of(_selectedDocumentIds);
-    final documentsToProcess = _documents.where(
-      (document) =>
-          selectedIds.contains(document.id) &&
-          _canProcessManually(document.status),
-    );
-    for (final document in documentsToProcess) {
-      await _processDocumentLocally(document);
     }
     if (mounted) {
       _exitSelection();
@@ -643,11 +588,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
             value: 'ai_chunk',
             child: Text(_aiChunkActionLabel(selectedDocuments)),
           ),
-        if (widget.localProcessingService != null)
-          PopupMenuItem<String>(
-            value: 'local_chunk',
-            child: Text(_localChunkActionLabel()),
-          ),
         const PopupMenuItem<String>(
           value: 'move',
           child: Text('Mozgatás mappába'),
@@ -673,8 +613,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     }
     if (selected == 'ai_chunk') {
       await _processSelectedDocumentsWithAi();
-    } else if (selected == 'local_chunk') {
-      await _processSelectedDocumentsLocally();
     } else if (selected == 'move') {
       await _moveSelectedDocuments();
     } else if (selected == 'manual_chunk') {
@@ -727,10 +665,6 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       return 'AI újrapróbálás';
     }
     return 'AI chunkolás';
-  }
-
-  String _localChunkActionLabel() {
-    return 'Lokális chunkolás';
   }
 
   Future<void> _exportKnowledgePack(List<KnowledgeDocument> documents) async {

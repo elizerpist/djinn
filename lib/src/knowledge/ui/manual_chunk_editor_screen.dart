@@ -898,7 +898,7 @@ class _ManualChunkCard extends StatelessWidget {
                 maxHeight: MediaQuery.sizeOf(context).height * 0.72,
               ),
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
