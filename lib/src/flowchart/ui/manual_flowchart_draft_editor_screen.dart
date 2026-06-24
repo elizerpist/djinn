@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../ai/ai_client.dart';
+import '../../debug/debug_console.dart';
 import '../models/editable_flowchart.dart';
 import 'flowchart_editor_canvas.dart';
 
@@ -29,6 +30,15 @@ class _ManualFlowchartDraftEditorScreenState
   void initState() {
     super.initState();
     _flowchart = _fromText(widget.initialText);
+    _log(
+      'open document=${widget.documentId} page=${widget.pageNumber} '
+      'initialChars=${widget.initialText.length} '
+      'nodes=${_flowchart.nodes.length} edges=${_flowchart.edges.length}',
+    );
+  }
+
+  void _log(String message) {
+    DebugConsole.log('[ManualFlowchartDraft] $message');
   }
 
   EditableFlowchart _fromText(String text) {
@@ -88,16 +98,22 @@ class _ManualFlowchartDraftEditorScreenState
   Future<void> _addNode() async {
     final node = await _showNodeDialog();
     if (node == null) {
+      _log('node add cancelled');
       return;
     }
     setState(() {
       _flowchart = _flowchart.copyWith(nodes: [..._flowchart.nodes, node]);
     });
+    _log(
+      'node add id=${node.id} labelChars=${node.label.length} '
+      'shape=${node.shape.wireName} nodes=${_flowchart.nodes.length}',
+    );
   }
 
   Future<void> _editNode(EditableFlowchartNode node) async {
     final edited = await _showNodeDialog(existing: node);
     if (edited == null) {
+      _log('node edit cancelled id=${node.id}');
       return;
     }
     setState(() {
@@ -108,6 +124,10 @@ class _ManualFlowchartDraftEditorScreenState
         ],
       );
     });
+    _log(
+      'node edit id=${edited.id} labelChars=${edited.label.length} '
+      'shape=${edited.shape.wireName}',
+    );
   }
 
   void _deleteNode(EditableFlowchartNode node) {
@@ -115,10 +135,16 @@ class _ManualFlowchartDraftEditorScreenState
       _flowchart = _flowchart.copyWith(
         nodes: _flowchart.nodes.where((item) => item.id != node.id).toList(),
         edges: _flowchart.edges
-            .where((edge) => edge.fromNodeId != node.id && edge.toNodeId != node.id)
+            .where(
+              (edge) => edge.fromNodeId != node.id && edge.toNodeId != node.id,
+            )
             .toList(),
       );
     });
+    _log(
+      'node delete id=${node.id} nodes=${_flowchart.nodes.length} '
+      'edges=${_flowchart.edges.length}',
+    );
   }
 
   Future<EditableFlowchartNode?> _showNodeDialog({
@@ -140,6 +166,9 @@ class _ManualFlowchartDraftEditorScreenState
 
   Future<void> _addEdge() async {
     if (_flowchart.nodes.length < 2) {
+      _log(
+        'edge add blocked reason=not_enough_nodes nodes=${_flowchart.nodes.length}',
+      );
       return;
     }
     final edge = await showDialog<EditableFlowchartEdge>(
@@ -156,11 +185,16 @@ class _ManualFlowchartDraftEditorScreenState
       ),
     );
     if (edge == null) {
+      _log('edge add cancelled');
       return;
     }
     setState(() {
       _flowchart = _flowchart.copyWith(edges: [..._flowchart.edges, edge]);
     });
+    _log(
+      'edge add id=${edge.id} from=${edge.fromNodeId} to=${edge.toNodeId} '
+      'labelChars=${edge.label.length} edges=${_flowchart.edges.length}',
+    );
   }
 
   void _deleteEdge(EditableFlowchartEdge edge) {
@@ -169,9 +203,14 @@ class _ManualFlowchartDraftEditorScreenState
         edges: _flowchart.edges.where((item) => item.id != edge.id).toList(),
       );
     });
+    _log('edge delete id=${edge.id} edges=${_flowchart.edges.length}');
   }
 
   void _save() {
+    _log(
+      'save document=${widget.documentId} page=${widget.pageNumber} '
+      'nodes=${_flowchart.nodes.length} edges=${_flowchart.edges.length}',
+    );
     Navigator.of(context).pop(_serialize());
   }
 
@@ -270,17 +309,21 @@ class _ManualFlowchartNodeDialog extends StatefulWidget {
   final String Function(AiFlowchartNodeShape) shapeLabel;
 
   @override
-  State<_ManualFlowchartNodeDialog> createState() => _ManualFlowchartNodeDialogState();
+  State<_ManualFlowchartNodeDialog> createState() =>
+      _ManualFlowchartNodeDialogState();
 }
 
-class _ManualFlowchartNodeDialogState extends State<_ManualFlowchartNodeDialog> {
+class _ManualFlowchartNodeDialogState
+    extends State<_ManualFlowchartNodeDialog> {
   late final TextEditingController _labelController;
   late AiFlowchartNodeShape _shape;
 
   @override
   void initState() {
     super.initState();
-    _labelController = TextEditingController(text: widget.existing?.label ?? '');
+    _labelController = TextEditingController(
+      text: widget.existing?.label ?? '',
+    );
     _shape = widget.existing?.shape ?? AiFlowchartNodeShape.process;
   }
 
@@ -293,7 +336,9 @@ class _ManualFlowchartNodeDialogState extends State<_ManualFlowchartNodeDialog> 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.existing == null ? 'Új flowchart elem' : 'Elem szerkesztése'),
+      title: Text(
+        widget.existing == null ? 'Új flowchart elem' : 'Elem szerkesztése',
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -317,7 +362,10 @@ class _ManualFlowchartNodeDialogState extends State<_ManualFlowchartNodeDialog> 
             items: [
               for (final option in AiFlowchartNodeShape.values)
                 if (option != AiFlowchartNodeShape.unknown)
-                  DropdownMenuItem(value: option, child: Text(widget.shapeLabel(option))),
+                  DropdownMenuItem(
+                    value: option,
+                    child: Text(widget.shapeLabel(option)),
+                  ),
             ],
             onChanged: (value) {
               if (value != null) {
@@ -376,10 +424,12 @@ class _ManualFlowchartEdgeDialog extends StatefulWidget {
   final String labelFieldKey;
 
   @override
-  State<_ManualFlowchartEdgeDialog> createState() => _ManualFlowchartEdgeDialogState();
+  State<_ManualFlowchartEdgeDialog> createState() =>
+      _ManualFlowchartEdgeDialogState();
 }
 
-class _ManualFlowchartEdgeDialogState extends State<_ManualFlowchartEdgeDialog> {
+class _ManualFlowchartEdgeDialogState
+    extends State<_ManualFlowchartEdgeDialog> {
   late final TextEditingController _labelController;
   late String _fromNodeId;
   late String _toNodeId;
@@ -440,14 +490,14 @@ class _ManualFlowchartEdgeDialogState extends State<_ManualFlowchartEdgeDialog> 
           onPressed: _fromNodeId == _toNodeId
               ? null
               : () => Navigator.of(context).pop(
-                    EditableFlowchartEdge(
-                      id: widget.edgeId,
-                      fromNodeId: _fromNodeId,
-                      toNodeId: _toNodeId,
-                      label: _labelController.text.trim(),
-                      order: widget.order,
-                    ),
+                  EditableFlowchartEdge(
+                    id: widget.edgeId,
+                    fromNodeId: _fromNodeId,
+                    toNodeId: _toNodeId,
+                    label: _labelController.text.trim(),
+                    order: widget.order,
                   ),
+                ),
           child: const Text('Mentés'),
         ),
       ],

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
+import '../../debug/debug_console.dart';
 import '../data/knowledge_document_repository.dart';
 import '../data/mlkit_ocr_engine.dart';
 import '../data/pdfrx_local_page_extractor.dart';
@@ -11,6 +12,19 @@ import '../models/knowledge_document.dart';
 import '../models/local_extraction.dart';
 import '../../shared/ui/draggable_bottom_card.dart';
 import '../../flowchart/ui/manual_flowchart_draft_editor_screen.dart';
+
+IconData _staticIconForKind(LocalChunkKind kind) {
+  return switch (kind) {
+    LocalChunkKind.text => Icons.notes_outlined,
+    LocalChunkKind.list => Icons.format_list_bulleted,
+    LocalChunkKind.table => Icons.table_chart_outlined,
+    LocalChunkKind.score => Icons.fact_check_outlined,
+    LocalChunkKind.flowchart => Icons.account_tree_outlined,
+    LocalChunkKind.imageRegion => Icons.crop_free,
+    LocalChunkKind.visualFact => Icons.visibility_outlined,
+    LocalChunkKind.unknown => Icons.help_outline,
+  };
+}
 
 class ManualChunkEditorScreen extends StatefulWidget {
   const ManualChunkEditorScreen({
@@ -44,9 +58,20 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
   Offset? _dragStart;
   Offset? _dragCurrent;
   Rect? _selectionRect;
+  int _tableRows = 2;
+  int _tableColumns = 2;
 
   bool get _isPng => widget.document.localPath.toLowerCase().endsWith('.png');
   bool get _cardVisible => _selectionRect != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _log(
+      'open document=${widget.document.id} filename=${widget.document.filename} '
+      'path=${widget.document.localPath} isPng=$_isPng',
+    );
+  }
 
   @override
   void dispose() {
@@ -56,7 +81,12 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
     super.dispose();
   }
 
+  void _log(String message) {
+    DebugConsole.log('[ManualChunk] $message');
+  }
+
   Future<void> _chooseSelectionType() async {
+    _log('type sheet open page=$_pageNumber');
     final selected = await showModalBottomSheet<LocalChunkKind>(
       context: context,
       showDragHandle: true,
@@ -84,12 +114,14 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       ),
     );
     if (selected == null || !mounted) {
+      _log('type sheet cancelled');
       return;
     }
     _beginSelection(selected);
   }
 
   void _beginSelection(LocalChunkKind kind) {
+    final sourceMode = _sourceModeForKind(kind);
     setState(() {
       _kind = kind;
       _selectionKind = kind;
@@ -97,15 +129,22 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       _dragStart = null;
       _dragCurrent = null;
       _errorText = null;
-      _sourceMode = _sourceModeForKind(kind);
+      _sourceMode = sourceMode;
       _titleController.clear();
       _contentController.clear();
       _pageController.text = _pageNumber.toString();
+      _tableRows = 2;
+      _tableColumns = 2;
     });
+    _log('selection type selected kind=${kind.wireName} source=$sourceMode');
   }
 
   Future<void> _completeSelection(Rect rect) async {
     if (rect.width < 18 || rect.height < 18 || _selectionKind == null) {
+      _log(
+        'selection ignored reason=too_small_or_missing_kind '
+        'rect=${_formatRect(rect)} kind=${_selectionKind?.wireName ?? 'null'}',
+      );
       setState(() {
         _dragStart = null;
         _dragCurrent = null;
@@ -119,16 +158,25 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       _loadingSelectionText = true;
       _errorText = null;
     });
+    _log(
+      'selection complete kind=${_selectionKind!.wireName} '
+      'rect=${_formatRect(rect)} page=$_pageNumber source=$_sourceMode',
+    );
     try {
       final content = await _prefillSelectionText();
       if (!mounted) {
         return;
       }
-      _contentController.text = content;
+      final normalizedContent = content.trim().isEmpty
+          ? _defaultDraftForKind(_selectionKind!)
+          : content;
+      _contentController.text = normalizedContent;
+      _log('prefill complete chars=${normalizedContent.length}');
     } catch (error) {
       if (!mounted) {
         return;
       }
+      _log('prefill failed error=$error');
       setState(() {
         _errorText = 'A kijelölt rész előtöltése nem sikerült: $error';
       });
@@ -141,32 +189,41 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
 
   Future<String> _prefillSelectionText() async {
     if (!File(widget.document.localPath).existsSync()) {
+      _log('prefill skipped missing_file path=${widget.document.localPath}');
       return '';
     }
     if (_isPng) {
+      _log('prefill start source=png_ocr path=${widget.document.localPath}');
       final engine = MlKitOcrEngine();
       try {
-        return (await engine.recognizeImage(widget.document.localPath))
-            .text
-            .trim();
+        return (await engine.recognizeImage(
+          widget.document.localPath,
+        )).text.trim();
       } finally {
         await engine.close();
       }
     }
+    _log('prefill start source=pdf_text page=$_pageNumber');
     final pdfText = await _loadCurrentPdfPageText();
     final wantsOcr = _sourceMode != 'pdf_text' || pdfText.trim().isEmpty;
     if (!wantsOcr) {
+      _log('prefill using pdf_text chars=${pdfText.trim().length}');
       return pdfText.trim();
     }
+    _log(
+      'prefill fallback ocr reason=${pdfText.trim().isEmpty ? 'empty_pdf_text' : 'source_mode_ocr'} '
+      'source=$_sourceMode',
+    );
     final engine = MlKitOcrEngine();
     try {
-      final pages = await PdfrxLocalPageExtractor(
-        ocrEngine: engine,
-        renderScale: 2.0,
-      ).extractPages(
-        documentId: widget.document.id,
-        path: widget.document.localPath,
-      );
+      final pages =
+          await PdfrxLocalPageExtractor(
+            ocrEngine: engine,
+            renderScale: 2.0,
+          ).extractPages(
+            documentId: widget.document.id,
+            path: widget.document.localPath,
+          );
       final page = pages.where((item) => item.pageNumber == _pageNumber);
       if (page.isEmpty) {
         return pdfText.trim();
@@ -178,13 +235,17 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
   }
 
   Future<String> _loadCurrentPdfPageText() async {
+    _log('pdf text open path=${widget.document.localPath} page=$_pageNumber');
     final document = await PdfDocument.openFile(widget.document.localPath);
     try {
       for (final page in document.pages) {
         if (page.pageNumber == _pageNumber) {
-          return (await page.loadText())?.fullText ?? '';
+          final text = (await page.loadText())?.fullText ?? '';
+          _log('pdf text loaded page=$_pageNumber chars=${text.length}');
+          return text;
         }
       }
+      _log('pdf text page missing page=$_pageNumber');
       return '';
     } finally {
       await document.dispose();
@@ -194,14 +255,22 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
   Future<void> _save() async {
     final content = _contentController.text.trim();
     if (content.isEmpty) {
+      _log('save rejected reason=empty_content kind=${_kind.wireName}');
       setState(() => _errorText = 'A chunk tartalma nem lehet üres.');
       return;
     }
     final page = int.tryParse(_pageController.text.trim());
     if (page == null || page < 1) {
+      _log(
+        'save rejected reason=invalid_page value=${_pageController.text.trim()}',
+      );
       setState(() => _errorText = 'Az oldalszám legalább 1 legyen.');
       return;
     }
+    _log(
+      'save start document=${widget.document.id} kind=${_kind.wireName} '
+      'page=$page chars=${content.length} source=$_sourceMode rect=${_formatRect(_selectionRect)}',
+    );
     setState(() {
       _saving = true;
       _errorText = null;
@@ -220,11 +289,9 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
         sourceRectJson: _sourceRectJson(page),
         confidence: 1,
       );
-      await widget.repository.saveLocalChunks(
-        widget.document.id,
-        [chunk],
-        replaceExisting: false,
-      );
+      await widget.repository.saveLocalChunks(widget.document.id, [
+        chunk,
+      ], replaceExisting: false);
       if (!widget.document.status.isReady) {
         await widget.repository.updateStatus(
           widget.document.id,
@@ -237,11 +304,16 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       if (!mounted) {
         return;
       }
+      _log(
+        'save complete document=${widget.document.id} kind=${_kind.wireName} '
+        'chunk=${chunk.id} status=${widget.document.status.wireName}',
+      );
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {
         return;
       }
+      _log('save failed error=$error');
       setState(() {
         _saving = false;
         _errorText = 'A kézi chunk mentése nem sikerült: $error';
@@ -262,10 +334,86 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
           'right': rect.right,
           'bottom': rect.bottom,
         },
+      if (_kind == LocalChunkKind.table || _kind == LocalChunkKind.score)
+        'table': {'rows': _tableRows, 'columns': _tableColumns},
     });
   }
 
+  String _defaultDraftForKind(LocalChunkKind kind) {
+    return switch (kind) {
+      LocalChunkKind.table || LocalChunkKind.score => _tableTemplate(),
+      LocalChunkKind.flowchart => _flowchartTemplate(),
+      _ => '',
+    };
+  }
+
+  String _tableTemplate() {
+    final header = List.generate(
+      _tableColumns,
+      (index) => 'Oszlop ${index + 1}',
+    );
+    final separator = List.filled(_tableColumns, '---');
+    final rows = [
+      header,
+      separator,
+      for (var row = 0; row < _tableRows; row += 1)
+        List.generate(
+          _tableColumns,
+          (column) => 'cella ${row + 1}.${column + 1}',
+        ),
+    ];
+    return rows.map((row) => '| ${row.join(' | ')} |').join('\n');
+  }
+
+  String _flowchartTemplate() {
+    return [
+      '[flowchart]',
+      'node draft-node-1 | start_end | Kezdés',
+      'node draft-node-2 | process | OCR alapján javítandó elem',
+      'edge Kezdés -> OCR alapján javítandó elem',
+    ].join('\n');
+  }
+
+  void _applyTableAction(String action) {
+    setState(() {
+      _kind = _kind == LocalChunkKind.score
+          ? LocalChunkKind.score
+          : LocalChunkKind.table;
+      _sourceMode = 'table';
+      switch (action) {
+        case 'add_row':
+          _tableRows += 1;
+          break;
+        case 'add_column':
+          _tableColumns += 1;
+          break;
+        case 'drop_cell':
+          break;
+      }
+      _contentController.text = _tableTemplate();
+    });
+    _log(
+      'table action=$action rows=$_tableRows columns=$_tableColumns '
+      'rect=${_formatRect(_selectionRect)}',
+    );
+  }
+
+  void _applyFlowchartAction(String action) {
+    setState(() {
+      _kind = LocalChunkKind.flowchart;
+      _sourceMode = 'flowchart';
+      if (_contentController.text.trim().isEmpty || action == 'draft_nodes') {
+        _contentController.text = _flowchartTemplate();
+      }
+    });
+    _log(
+      'flowchart action=$action rect=${_formatRect(_selectionRect)} '
+      'chars=${_contentController.text.length}',
+    );
+  }
+
   void _cancelCard() {
+    _log('card cancel kind=${_selectionKind?.wireName ?? _kind.wireName}');
     setState(() {
       _selectionKind = null;
       _selectionRect = null;
@@ -278,6 +426,10 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
 
   Future<void> _openFlowchartDraftEditor() async {
     final pageNumber = int.tryParse(_pageController.text.trim()) ?? _pageNumber;
+    _log(
+      'flowchart draft open document=${widget.document.id} '
+      'page=$pageNumber chars=${_contentController.text.length}',
+    );
     final result = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         builder: (_) => ManualFlowchartDraftEditorScreen(
@@ -288,6 +440,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       ),
     );
     if (result == null || !mounted) {
+      _log('flowchart draft cancelled');
       return;
     }
     setState(() {
@@ -295,6 +448,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       _sourceMode = 'flowchart';
       _contentController.text = result;
     });
+    _log('flowchart draft applied chars=${result.length}');
   }
 
   String? _emptyToNull(String value) {
@@ -328,16 +482,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
   }
 
   IconData _iconForKind(LocalChunkKind kind) {
-    return switch (kind) {
-      LocalChunkKind.text => Icons.notes_outlined,
-      LocalChunkKind.list => Icons.format_list_bulleted,
-      LocalChunkKind.table => Icons.table_chart_outlined,
-      LocalChunkKind.score => Icons.fact_check_outlined,
-      LocalChunkKind.flowchart => Icons.account_tree_outlined,
-      LocalChunkKind.imageRegion => Icons.crop_free,
-      LocalChunkKind.visualFact => Icons.visibility_outlined,
-      LocalChunkKind.unknown => Icons.help_outline,
-    };
+    return _staticIconForKind(kind);
   }
 
   @override
@@ -358,12 +503,17 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
                     _dragStart = position;
                     _dragCurrent = position;
                   });
+                  _log('selection drag start at=${_formatOffset(position)}');
                 },
                 onUpdate: (position) => setState(() => _dragCurrent = position),
                 onEnd: () {
                   final start = _dragStart;
                   final current = _dragCurrent;
                   if (start != null && current != null) {
+                    _log(
+                      'selection drag end start=${_formatOffset(start)} '
+                      'end=${_formatOffset(current)}',
+                    );
                     _completeSelection(Rect.fromPoints(start, current));
                   }
                 },
@@ -375,6 +525,17 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
               right: 16,
               top: 16,
               child: _SelectionBanner(),
+            ),
+          if (_cardVisible)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: _ExtractionBoxOverlay(
+                  rect: _selectionRect!,
+                  kind: _kind,
+                  tableRows: _tableRows,
+                  tableColumns: _tableColumns,
+                ),
+              ),
             ),
           if (_cardVisible)
             Positioned(
@@ -392,13 +553,22 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
                   loading: _loadingSelectionText,
                   saving: _saving,
                   errorText: _errorText,
+                  tableRows: _tableRows,
+                  tableColumns: _tableColumns,
                   onKindChanged: (value) => setState(() {
+                    _log(
+                      'card kind changed from=${_kind.wireName} '
+                      'to=${value.wireName}',
+                    );
                     _kind = value;
                     _sourceMode = _sourceModeForKind(value);
                   }),
                   onSourceModeChanged: (value) => setState(() {
+                    _log('card source changed from=$_sourceMode to=$value');
                     _sourceMode = value;
                   }),
+                  onTableAction: _applyTableAction,
+                  onFlowchartAction: _applyFlowchartAction,
                   onCancel: _cancelCard,
                   onEditFlowchart: _openFlowchartDraftEditor,
                   onSave: _save,
@@ -420,8 +590,10 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
 
   Widget _buildViewer(BuildContext context) {
     if (_isPng) {
+      _log('viewer build png path=${widget.document.localPath}');
       return _ManualPngViewer(path: widget.document.localPath);
     }
+    _log('viewer build pdf path=${widget.document.localPath}');
     return PdfViewer.file(
       widget.document.localPath,
       controller: _pdfController,
@@ -438,6 +610,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
             _pageNumber = controller.pageNumber ?? 1;
             _pageController.text = _pageNumber.toString();
           });
+          _log('viewer ready pages=$_pageCount current=$_pageNumber');
         },
         onPageChanged: (pageNumber) {
           if (!mounted || pageNumber == null) {
@@ -447,6 +620,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
             _pageNumber = pageNumber;
             _pageController.text = _pageNumber.toString();
           });
+          _log('viewer page changed page=$_pageNumber');
         },
         viewerOverlayBuilder: (context, size, handleLinkTap) => [
           PdfViewerScrollThumb(
@@ -466,6 +640,18 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
         ],
       ),
     );
+  }
+
+  String _formatOffset(Offset offset) {
+    return '${offset.dx.toStringAsFixed(1)},${offset.dy.toStringAsFixed(1)}';
+  }
+
+  String _formatRect(Rect? rect) {
+    if (rect == null) {
+      return 'null';
+    }
+    return '${rect.left.toStringAsFixed(1)},${rect.top.toStringAsFixed(1)},'
+        '${rect.width.toStringAsFixed(1)}x${rect.height.toStringAsFixed(1)}';
   }
 }
 
@@ -551,6 +737,127 @@ class _SelectionBanner extends StatelessWidget {
   }
 }
 
+class _ExtractionBoxOverlay extends StatelessWidget {
+  const _ExtractionBoxOverlay({
+    required this.rect,
+    required this.kind,
+    required this.tableRows,
+    required this.tableColumns,
+  });
+
+  final Rect rect;
+  final LocalChunkKind kind;
+  final int tableRows;
+  final int tableColumns;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _ExtractionBoxPainter(rect: rect),
+      child: Stack(
+        children: [
+          Positioned(
+            left: rect.left.clamp(12.0, double.infinity),
+            top: rect.top.clamp(12.0, double.infinity),
+            child: _ExtractionBoxHeader(
+              kind: kind,
+              tableRows: tableRows,
+              tableColumns: tableColumns,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExtractionBoxPainter extends CustomPainter {
+  const _ExtractionBoxPainter({required this.rect});
+
+  final Rect rect;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fill = Paint()
+      ..color = const Color(0xFF0F766E).withValues(alpha: 0.12);
+    final stroke = Paint()
+      ..color = const Color(0xFF0F766E)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(8));
+    canvas.drawRRect(rrect, fill);
+    canvas.drawRRect(rrect, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ExtractionBoxPainter oldDelegate) {
+    return oldDelegate.rect != rect;
+  }
+}
+
+class _ExtractionBoxHeader extends StatelessWidget {
+  const _ExtractionBoxHeader({
+    required this.kind,
+    required this.tableRows,
+    required this.tableColumns,
+  });
+
+  final LocalChunkKind kind;
+  final int tableRows;
+  final int tableColumns;
+
+  @override
+  Widget build(BuildContext context) {
+    final detail = switch (kind) {
+      LocalChunkKind.table ||
+      LocalChunkKind.score => '$tableRows x $tableColumns',
+      LocalChunkKind.flowchart => 'draft',
+      _ => 'manual',
+    };
+    return DecoratedBox(
+      key: const Key('manual-extraction-box-header'),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F766E),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_staticIconForKind(kind), color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              '${kind.label} box',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              detail,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.78),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ManualChunkCard extends StatelessWidget {
   const _ManualChunkCard({
     required this.kind,
@@ -561,8 +868,12 @@ class _ManualChunkCard extends StatelessWidget {
     required this.loading,
     required this.saving,
     required this.errorText,
+    required this.tableRows,
+    required this.tableColumns,
     required this.onKindChanged,
     required this.onSourceModeChanged,
+    required this.onTableAction,
+    required this.onFlowchartAction,
     required this.onCancel,
     required this.onEditFlowchart,
     required this.onSave,
@@ -576,8 +887,12 @@ class _ManualChunkCard extends StatelessWidget {
   final bool loading;
   final bool saving;
   final String? errorText;
+  final int tableRows;
+  final int tableColumns;
   final ValueChanged<LocalChunkKind> onKindChanged;
   final ValueChanged<String> onSourceModeChanged;
+  final ValueChanged<String> onTableAction;
+  final ValueChanged<String> onFlowchartAction;
   final VoidCallback onCancel;
   final VoidCallback onEditFlowchart;
   final VoidCallback onSave;
@@ -627,9 +942,13 @@ class _ManualChunkCard extends StatelessWidget {
                     border: OutlineInputBorder(),
                   ),
                   items: [
-                    for (final option in LocalChunkKind.values
-                        .where((item) => item != LocalChunkKind.unknown))
-                      DropdownMenuItem(value: option, child: Text(option.label)),
+                    for (final option in LocalChunkKind.values.where(
+                      (item) => item != LocalChunkKind.unknown,
+                    ))
+                      DropdownMenuItem(
+                        value: option,
+                        child: Text(option.label),
+                      ),
                   ],
                   onChanged: (value) {
                     if (value != null) {
@@ -654,14 +973,30 @@ class _ManualChunkCard extends StatelessWidget {
                       value: 'ocr_image',
                       child: Text('Képből / OCR-ból'),
                     ),
-                    DropdownMenuItem(value: 'table', child: Text('Táblázatból')),
-                    DropdownMenuItem(value: 'flowchart', child: Text('Flowchartból')),
+                    DropdownMenuItem(
+                      value: 'table',
+                      child: Text('Táblázatból'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'flowchart',
+                      child: Text('Flowchartból'),
+                    ),
                   ],
                   onChanged: (value) {
                     if (value != null) {
                       onSourceModeChanged(value);
                     }
                   },
+                ),
+                const SizedBox(height: 12),
+                _KindSpecificControls(
+                  kind: kind,
+                  tableRows: tableRows,
+                  tableColumns: tableColumns,
+                  loading: loading,
+                  saving: saving,
+                  onTableAction: onTableAction,
+                  onFlowchartAction: onFlowchartAction,
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -742,7 +1077,9 @@ class _ManualChunkCard extends StatelessWidget {
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.save_outlined),
                         label: const Text('Mentés'),
@@ -756,6 +1093,134 @@ class _ManualChunkCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _KindSpecificControls extends StatelessWidget {
+  const _KindSpecificControls({
+    required this.kind,
+    required this.tableRows,
+    required this.tableColumns,
+    required this.loading,
+    required this.saving,
+    required this.onTableAction,
+    required this.onFlowchartAction,
+  });
+
+  final LocalChunkKind kind;
+  final int tableRows;
+  final int tableColumns;
+  final bool loading;
+  final bool saving;
+  final ValueChanged<String> onTableAction;
+  final ValueChanged<String> onFlowchartAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = loading || saving;
+    if (kind == LocalChunkKind.table || kind == LocalChunkKind.score) {
+      return DecoratedBox(
+        key: const Key('manual-table-toolbar'),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0FDFA),
+          border: Border.all(color: const Color(0xFF99F6E4)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Táblázat rács: $tableRows sor x $tableColumns oszlop',
+                style: const TextStyle(
+                  color: Color(0xFF115E59),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ActionChip(
+                    key: const Key('manual-table-add-row'),
+                    avatar: const Icon(Icons.table_rows_outlined, size: 18),
+                    label: const Text('Sor +'),
+                    onPressed: disabled ? null : () => onTableAction('add_row'),
+                  ),
+                  ActionChip(
+                    key: const Key('manual-table-add-column'),
+                    avatar: const Icon(Icons.view_column_outlined, size: 18),
+                    label: const Text('Oszlop +'),
+                    onPressed: disabled
+                        ? null
+                        : () => onTableAction('add_column'),
+                  ),
+                  ActionChip(
+                    key: const Key('manual-table-drop-cell'),
+                    avatar: const Icon(Icons.control_point_duplicate, size: 18),
+                    label: const Text('Cella dobása'),
+                    onPressed: disabled
+                        ? null
+                        : () => onTableAction('drop_cell'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (kind == LocalChunkKind.flowchart) {
+      return DecoratedBox(
+        key: const Key('manual-flowchart-toolbar'),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEEF2FF),
+          border: Border.all(color: const Color(0xFFC7D2FE)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Flowchart box műveletek',
+                style: TextStyle(
+                  color: Color(0xFF3730A3),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ActionChip(
+                    key: const Key('manual-flowchart-draft-nodes'),
+                    avatar: const Icon(Icons.account_tree_outlined, size: 18),
+                    label: const Text('OCR box draft'),
+                    onPressed: disabled
+                        ? null
+                        : () => onFlowchartAction('draft_nodes'),
+                  ),
+                  ActionChip(
+                    key: const Key('manual-flowchart-draft-edges'),
+                    avatar: const Icon(Icons.add_link, size: 18),
+                    label: const Text('Kapcsolatok'),
+                    onPressed: disabled
+                        ? null
+                        : () => onFlowchartAction('draft_edges'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }
 

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/flowchart/ui/manual_flowchart_draft_editor_screen.dart';
 
 void main() {
   testWidgets('manual flowchart draft editor returns edited graph text', (
     tester,
   ) async {
+    DebugConsole.clear();
     String? result;
     await tester.pumpWidget(
       MaterialApp(
@@ -33,7 +35,10 @@ void main() {
 
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('flowchart-editor-canvas')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('flowchart-editor-canvas')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('manual-flowchart-add-node')));
     await tester.pumpAndSettle();
@@ -50,5 +55,17 @@ void main() {
     expect(result, contains('node draft-node-3'));
     expect(result, contains('Szállítás'));
     expect(result, contains('edge Start -> Oxigén'));
+    expect(
+      DebugConsole.allText,
+      contains('[ManualFlowchartDraft] open document=doc-1 page=1'),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[ManualFlowchartDraft] node add id=draft-node-3'),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[ManualFlowchartDraft] save document=doc-1 page=1 nodes=3'),
+    );
   });
 }

@@ -76,6 +76,88 @@ void main() {
     expect(documents.single.status, KnowledgeDocumentStatus.imported);
   });
 
+  testWidgets('imports pathless picked PDF bytes with detailed debug logs', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+    final repository = KnowledgeDocumentRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          pickPdfs: () async => [
+            PickedPdfFile(
+              filename: 'cloud-source.pdf',
+              bytes: [37, 80, 68, 70],
+            ),
+          ],
+          clock: () => DateTime.utc(2026, 6, 24, 10),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
+
+    await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
+    await _pumpUntilFound(tester, find.text('cloud-source.pdf'));
+
+    final documents = await repository.listDocuments();
+    expect(documents, hasLength(1));
+    expect(documents.single.localPath, '/memory/cloud-source.pdf');
+    expect(DebugConsole.allText, contains('[Knowledge/Import] start'));
+    expect(DebugConsole.allText, contains('picker result count=1'));
+    expect(
+      DebugConsole.allText,
+      contains('file copy source=bytes filename=cloud-source.pdf bytes=4'),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('repository add filename=cloud-source.pdf'),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[Knowledge/Import] complete added=1'),
+    );
+  });
+
+  testWidgets(
+    'logs skipped picked PDF when Android picker returns no path or bytes',
+    (tester) async {
+      DebugConsole.clear();
+      final repository = KnowledgeDocumentRepository();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: KnowledgeBaseScreen(
+            repository: repository,
+            importService: _FakePdfImportService(),
+            pickPdfs: () async => const [
+              PickedPdfFile(filename: 'provider-only.pdf'),
+            ],
+          ),
+        ),
+      );
+      await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
+
+      await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
+      await tester.pumpAndSettle();
+
+      final documents = await repository.listDocuments();
+      expect(documents, isEmpty);
+      expect(
+        DebugConsole.allText,
+        contains(
+          '[Knowledge/Import] file skipped filename=provider-only.pdf reason=missing_path_and_bytes',
+        ),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[Knowledge/Import] complete added=0'),
+      );
+    },
+  );
+
   testWidgets('imports picked PNG files into the local knowledge base', (
     tester,
   ) async {
@@ -199,6 +281,7 @@ void main() {
   });
 
   testWidgets('single tap opens in-app PDF viewer callback', (tester) async {
+    DebugConsole.clear();
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
       filename: 'stroke.pdf',
@@ -224,6 +307,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(openedId, document.id);
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[Knowledge/Viewer] open document=${document.id} filename=stroke.pdf path=/memory/stroke.pdf',
+      ),
+    );
   });
 
   testWidgets(
@@ -1080,54 +1169,54 @@ void main() {
     expect(processingService.processedIds, hasLength(1));
   });
 
-  testWidgets(
-    'selection menu offers local chunking for AI-ready PDFs',
-    (tester) async {
-      final repository = KnowledgeDocumentRepository();
-      final document = await repository.addDocument(
-        filename: 'ai-ready-local.pdf',
-        localPath: '/memory/ai-ready-local.pdf',
-        sizeBytes: 4,
-        importedAt: DateTime.utc(2026, 6, 14),
-        sha256: 'ai-ready-local',
-      );
-      await repository.updateStatus(document.id, KnowledgeDocumentStatus.ready);
-      final localProcessingService = _RecordingLocalProcessingService(
-        repository: repository,
-      );
+  testWidgets('selection menu offers local chunking for AI-ready PDFs', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'ai-ready-local.pdf',
+      localPath: '/memory/ai-ready-local.pdf',
+      sizeBytes: 4,
+      importedAt: DateTime.utc(2026, 6, 14),
+      sha256: 'ai-ready-local',
+    );
+    await repository.updateStatus(document.id, KnowledgeDocumentStatus.ready);
+    final localProcessingService = _RecordingLocalProcessingService(
+      repository: repository,
+    );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: KnowledgeBaseScreen(
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          processingService: _RecordingProcessingService(
             repository: repository,
-            importService: _FakePdfImportService(),
-            processingService: _RecordingProcessingService(
-              repository: repository,
-            ),
-            localProcessingService: localProcessingService,
           ),
+          localProcessingService: localProcessingService,
         ),
-      );
-      await _pumpUntilFound(tester, find.text('ai-ready-local.pdf'));
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('ai-ready-local.pdf'));
 
-      await tester.longPress(find.text('ai-ready-local.pdf'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
-      await tester.pumpAndSettle();
+    await tester.longPress(find.text('ai-ready-local.pdf'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+    await tester.pumpAndSettle();
 
-      expect(find.text('AI újrachunkolás'), findsOneWidget);
-      expect(find.text('Lokális chunkolás'), findsOneWidget);
-      expect(find.text('Lokális újrachunkolás'), findsNothing);
+    expect(find.text('AI újrachunkolás'), findsOneWidget);
+    expect(find.text('Lokális chunkolás'), findsOneWidget);
+    expect(find.text('Lokális újrachunkolás'), findsNothing);
 
-      await tester.tap(find.text('Lokális chunkolás'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Lokális chunkolás'));
+    await tester.pumpAndSettle();
 
-      expect(localProcessingService.processedIds, [document.id]);
-      expect(localProcessingService.forceReprocessFlags, [true]);
-    },
-  );
+    expect(localProcessingService.processedIds, [document.id]);
+    expect(localProcessingService.forceReprocessFlags, [true]);
+  });
 
   testWidgets('manual chunk editor saves a selected PDF chunk', (tester) async {
+    DebugConsole.clear();
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
       filename: 'manual-source.pdf',
@@ -1194,7 +1283,145 @@ void main() {
     expect(manualItems.single.sectionTitle, 'COPDAE kiváltó okai');
     expect(manualItems.single.text, contains('pneumothorax'));
     expect(manualItems.single.auditState, LocalAuditState.edited);
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[ManualChunk] open document=${document.id} filename=manual-source.pdf',
+      ),
+    );
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[ManualChunk] selection type selected kind=text source=pdf_text',
+      ),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[ManualChunk] selection drag start'),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[ManualChunk] selection complete kind=text'),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[ManualChunk] prefill skipped missing_file'),
+    );
+    expect(
+      DebugConsole.allText,
+      contains('[ManualChunk] save complete document=${document.id} kind=text'),
+    );
   });
+
+  testWidgets(
+    'manual table selection exposes box controls and logs operations',
+    (tester) async {
+      DebugConsole.clear();
+      final repository = KnowledgeDocumentRepository();
+      await _openManualChunkEditor(
+        tester,
+        repository,
+        filename: 'manual-table.pdf',
+      );
+
+      await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
+      await tester.pumpAndSettle();
+      await _tapManualSelectionKind(tester, 'Táblázat');
+      await tester.drag(
+        find.byKey(const Key('manual-chunk-selection-layer')),
+        const Offset(260, 160),
+      );
+      await tester.pumpAndSettle();
+      await _pumpUntilFound(
+        tester,
+        find.byKey(const Key('manual-extraction-box-header')),
+      );
+
+      expect(find.text('Táblázat box'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const Key('manual-table-toolbar')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('manual-table-toolbar')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('manual-table-add-row')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('manual-table-add-column')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('manual-table-drop-cell')));
+      await tester.pumpAndSettle();
+
+      expect(
+        DebugConsole.allText,
+        contains('[ManualChunk] selection type selected kind=table'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[ManualChunk] table action=add_row rows=3 columns=2'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[ManualChunk] table action=add_column rows=3 columns=3'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[ManualChunk] table action=drop_cell rows=3 columns=3'),
+      );
+    },
+  );
+
+  testWidgets(
+    'manual flowchart selection exposes box controls and opens draft editor',
+    (tester) async {
+      DebugConsole.clear();
+      final repository = KnowledgeDocumentRepository();
+      await _openManualChunkEditor(
+        tester,
+        repository,
+        filename: 'manual-flowchart.pdf',
+      );
+
+      await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
+      await tester.pumpAndSettle();
+      await _tapManualSelectionKind(tester, 'Flowchart');
+      await tester.drag(
+        find.byKey(const Key('manual-chunk-selection-layer')),
+        const Offset(260, 160),
+      );
+      await tester.pumpAndSettle();
+      await _pumpUntilFound(
+        tester,
+        find.byKey(const Key('manual-extraction-box-header')),
+      );
+
+      expect(find.text('Flowchart box'), findsOneWidget);
+      await tester.ensureVisible(
+        find.byKey(const Key('manual-flowchart-toolbar')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('manual-flowchart-toolbar')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('manual-flowchart-draft-nodes')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const Key('manual-flowchart-open-editor')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('manual-flowchart-open-editor')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Kézi flowchart szerkesztő'), findsOneWidget);
+      expect(
+        DebugConsole.allText,
+        contains('[ManualChunk] selection type selected kind=flowchart'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[ManualChunk] flowchart action=draft_nodes'),
+      );
+      expect(
+        DebugConsole.allText,
+        contains('[ManualChunk] flowchart draft open'),
+      );
+    },
+  );
 
   testWidgets('selection menu re-syncs ready PDF', (tester) async {
     final repository = KnowledgeDocumentRepository();
@@ -1417,7 +1644,9 @@ class _RecordingLocalProcessingService extends LocalDocumentProcessingService {
       documentPublicId,
       KnowledgeDocumentStatus.needsReview,
     );
-    return ProcessingResult(state: KnowledgeDocumentStatus.needsReview.wireName);
+    return ProcessingResult(
+      state: KnowledgeDocumentStatus.needsReview.wireName,
+    );
   }
 }
 
@@ -1472,6 +1701,57 @@ Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
       return;
     }
   }
+}
+
+Future<KnowledgeDocument> _openManualChunkEditor(
+  WidgetTester tester,
+  KnowledgeDocumentRepository repository, {
+  required String filename,
+}) async {
+  final document = await repository.addDocument(
+    filename: filename,
+    localPath: '/memory/$filename',
+    sizeBytes: 4,
+    importedAt: DateTime.utc(2026, 6, 14),
+    sha256: filename,
+  );
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: KnowledgeBaseScreen(
+        repository: repository,
+        importService: _FakePdfImportService(),
+      ),
+    ),
+  );
+  await _pumpUntilFound(tester, find.text(filename));
+
+  await tester.longPress(find.text(filename));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('knowledge-selection-menu')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Kézi chunkolás'));
+  await tester.pumpAndSettle();
+  await _pumpUntilFound(
+    tester,
+    find.byKey(const Key('manual-chunk-new-selection')),
+  );
+
+  return document;
+}
+
+Future<void> _tapManualSelectionKind(WidgetTester tester, String label) async {
+  final option = find.text(label);
+  for (var attempt = 0; attempt < 8; attempt += 1) {
+    if (option.evaluate().isNotEmpty) {
+      await tester.tap(option.last);
+      await tester.pumpAndSettle();
+      return;
+    }
+    await tester.drag(find.byType(ListView).last, const Offset(0, -160));
+    await tester.pumpAndSettle();
+  }
+  expect(option, findsOneWidget);
 }
 
 List<String> _disabledPopupLabels(WidgetTester tester) {

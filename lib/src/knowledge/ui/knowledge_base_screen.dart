@@ -205,25 +205,50 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   }
 
   Future<void> _importPdfs() async {
+    DebugConsole.log(
+      '[Knowledge/Import] start folder=${_activeFolderId ?? 'root'}',
+    );
     setState(() => _importing = true);
+    var addedCount = 0;
+    var skippedCount = 0;
     try {
       final picked = await (widget.pickPdfs ?? _pickPdfsFromDevice)();
+      DebugConsole.log(
+        '[Knowledge/Import] picker result count=${picked.length}',
+      );
       for (final file in picked) {
-        final imported = await _copyPickedFile(file);
-        if (imported == null) {
-          continue;
+        try {
+          final imported = await _copyPickedFile(file);
+          if (imported == null) {
+            skippedCount += 1;
+            continue;
+          }
+          DebugConsole.log(
+            '[Knowledge/Import] repository add filename=${imported.filename} '
+            'size=${imported.sizeBytes} sha=${_shortHash(imported.sha256)}',
+          );
+          await widget.repository.addDocument(
+            filename: imported.filename,
+            localPath: imported.localPath,
+            sizeBytes: imported.sizeBytes,
+            importedAt: (widget.clock ?? DateTime.now)(),
+            sha256: imported.sha256,
+            folderId: _activeFolderId,
+          );
+          addedCount += 1;
+        } catch (error, stackTrace) {
+          skippedCount += 1;
+          DebugConsole.log(
+            '[Knowledge/Import] file failed filename=${file.filename} '
+            'error=$error stack=${_compactStack(stackTrace)}',
+          );
         }
-        await widget.repository.addDocument(
-          filename: imported.filename,
-          localPath: imported.localPath,
-          sizeBytes: imported.sizeBytes,
-          importedAt: (widget.clock ?? DateTime.now)(),
-          sha256: imported.sha256,
-          folderId: _activeFolderId,
-        );
       }
       await _loadDocuments();
     } finally {
+      DebugConsole.log(
+        '[Knowledge/Import] complete added=$addedCount skipped=$skippedCount',
+      );
       if (mounted) {
         setState(() => _importing = false);
       }
@@ -233,29 +258,42 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   Future<PdfImportResult?> _copyPickedFile(PickedPdfFile file) async {
     final path = file.path;
     if (path != null) {
+      DebugConsole.log(
+        '[Knowledge/Import] file copy source=path filename=${file.filename} path=$path',
+      );
       return widget.importService.copyDocumentFromPath(path);
     }
     final bytes = file.bytes;
     if (bytes != null) {
+      DebugConsole.log(
+        '[Knowledge/Import] file copy source=bytes filename=${file.filename} bytes=${bytes.length}',
+      );
       return widget.importService.copyDocumentBytes(
         filename: file.filename,
         bytes: bytes,
       );
     }
+    DebugConsole.log(
+      '[Knowledge/Import] file skipped filename=${file.filename} reason=missing_path_and_bytes',
+    );
     return null;
   }
 
   Future<List<PickedPdfFile>> _pickPdfsFromDevice() async {
+    DebugConsole.log(
+      '[Knowledge/Import] picker open type=pdf_png allowMultiple=true',
+    );
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['pdf', 'png'],
       allowMultiple: true,
-      withData: false,
+      withData: true,
     );
     if (result == null) {
+      DebugConsole.log('[Knowledge/Import] picker cancelled');
       return const [];
     }
-    return result.files
+    final files = result.files
         .map(
           (file) => PickedPdfFile(
             filename: file.name,
@@ -264,6 +302,25 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
           ),
         )
         .toList(growable: false);
+    DebugConsole.log(
+      '[Knowledge/Import] picker selected files=${files.length} '
+      'pathBacked=${files.where((file) => file.path != null).length} '
+      'byteBacked=${files.where((file) => file.bytes != null).length}',
+    );
+    return files;
+  }
+
+  String _shortHash(String? hash) {
+    if (hash == null || hash.length <= 10) {
+      return hash ?? 'null';
+    }
+    return hash.substring(0, 10);
+  }
+
+  String _compactStack(StackTrace stackTrace) {
+    final lines = stackTrace.toString().split('\n');
+    final firstLine = lines.isEmpty ? '' : lines.first;
+    return firstLine.isEmpty ? 'none' : firstLine;
   }
 
   Future<void> _processDocument(KnowledgeDocument document) async {
@@ -357,6 +414,10 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   }
 
   void _openDocument(KnowledgeDocument document) {
+    DebugConsole.log(
+      '[Knowledge/Viewer] open document=${document.id} '
+      'filename=${document.filename} path=${document.localPath}',
+    );
     final callback = widget.onOpenDocumentForTest;
     if (callback != null) {
       callback(document);
