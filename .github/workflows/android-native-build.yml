@@ -82,12 +82,18 @@ jobs:
         run: flutter test
 
       - name: Build debug APK
-        run: flutter build apk --debug --target-platform android-arm64
+        run: |
+          flutter build apk --debug --target-platform android-arm64 \
+            --dart-define=DJINN_BUILD_SHA="$GITHUB_SHA" \
+            --dart-define=DJINN_BUILD_REF="$GITHUB_REF_NAME" \
+            --dart-define=DJINN_BUILD_RUN_ID="$GITHUB_RUN_ID"
 
       - name: Prepare debug APK release file
         run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
           mkdir -p build/release
           cp build/app/outputs/flutter-apk/app-debug.apk build/release/djinn-debug.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk "build/release/djinn-debug-${SHORT_SHA}.apk"
           rm -rf "$ANDROID_HOME/ndk/29.0.13113456"
           rm -rf "$HOME/.gradle/caches"
           rm -rf .gradle android/.gradle
@@ -97,22 +103,31 @@ jobs:
       - name: Publish latest debug APK release
         env:
           GH_TOKEN: ${{ github.token }}
-          APK_PATH: build/release/djinn-debug.apk
-          APK_NAME: djinn-debug.apk
         run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          LATEST_APK_NAME="djinn-debug.apk"
+          SHA_APK_NAME="djinn-debug-${SHORT_SHA}.apk"
+          LATEST_APK_PATH="build/release/${LATEST_APK_NAME}"
+          SHA_APK_PATH="build/release/${SHA_APK_NAME}"
           git tag -f debug-latest "$GITHUB_SHA"
           git push origin refs/tags/debug-latest --force
-          NOTES="Latest Djinn debug APK built from ${GITHUB_REF_NAME} commit ${GITHUB_SHA}."
+          SHA_APK_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/debug-latest/${SHA_APK_NAME}"
+          LATEST_APK_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/debug-latest/${LATEST_APK_NAME}"
+          NOTES="Latest Djinn debug APK built from ${GITHUB_REF_NAME} commit ${GITHUB_SHA}.
+
+          Direct SHA APK link: ${SHA_APK_URL}
+          Latest moving APK link: ${LATEST_APK_URL}"
           if gh release view debug-latest >/dev/null 2>&1; then
-            gh release delete-asset debug-latest "$APK_NAME" --yes >/dev/null 2>&1 || true
-            gh release upload debug-latest "$APK_PATH" --clobber
+            gh release delete-asset debug-latest "$LATEST_APK_NAME" --yes >/dev/null 2>&1 || true
+            gh release upload debug-latest "$LATEST_APK_PATH" "$SHA_APK_PATH" --clobber
             gh release edit debug-latest \
               --title "Latest Djinn debug APK" \
               --notes "$NOTES"
           else
-            gh release create debug-latest "$APK_PATH" \
+            gh release create debug-latest "$LATEST_APK_PATH" "$SHA_APK_PATH" \
               --prerelease \
               --title "Latest Djinn debug APK" \
               --notes "$NOTES"
           fi
-          echo "Direct APK link: https://github.com/${GITHUB_REPOSITORY}/releases/download/debug-latest/${APK_NAME}"
+          echo "Direct SHA APK link: ${SHA_APK_URL}"
+          echo "Direct moving APK link: ${LATEST_APK_URL}"

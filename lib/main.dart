@@ -7,6 +7,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'src/ai/ai_client.dart';
 import 'src/cases/data/case_repository.dart';
 import 'src/ai/ai_provider.dart';
+import 'src/build/build_info.dart';
 import 'src/chat/data/chat_service.dart';
 import 'src/chat/data/local_answer_service.dart';
 import 'src/chat/data/local_chat_repository.dart';
@@ -35,6 +36,7 @@ import 'src/openai/openai_http_client.dart';
 import 'src/rag/retrieval/local_retriever.dart';
 import 'src/rag/retrieval/note_aware_local_retriever.dart';
 import 'src/rag/verification/citation_verifier.dart';
+import 'src/debug/debug_console.dart';
 import 'src/settings/data/api_key_store.dart';
 import 'src/settings/data/app_settings_repository.dart';
 import 'src/settings/models/app_settings.dart';
@@ -94,6 +96,12 @@ class _DjinnAppState extends State<DjinnApp> {
   late final Future<_AppDependencies> _dependencies = _loadDependencies();
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   ObjectBoxStore? _objectBoxStore;
+
+  @override
+  void initState() {
+    super.initState();
+    DebugConsole.log('[Build] ${BuildInfo.debugSummary}');
+  }
 
   Future<_AppDependencies> _loadDependencies() async {
     if (widget.chatRepository != null &&

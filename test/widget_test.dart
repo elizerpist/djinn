@@ -10,6 +10,7 @@ import 'package:djinn/src/chat/data/local_chat_repository.dart';
 import 'package:djinn/src/chat/models/chat_citation.dart';
 import 'package:djinn/src/chat/models/chat_message.dart';
 import 'package:djinn/src/chat/ui/chat_bubble.dart';
+import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/knowledge/data/knowledge_api_client.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/data/knowledge_sync_service.dart';
@@ -19,6 +20,19 @@ import 'package:djinn/src/settings/data/api_key_store.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
 
 void main() {
+  testWidgets('Djinn logs the running build identity at startup', (
+    tester,
+  ) async {
+    DebugConsole.clear();
+
+    await tester.pumpWidget(_testApp());
+    await _pumpUntilFound(tester, find.text('Djinn'));
+
+    expect(DebugConsole.allText, contains('[Build]'));
+    expect(DebugConsole.allText, contains('sha='));
+    expect(DebugConsole.allText, contains('ref='));
+  });
+
   testWidgets('Djinn opens a new chat and sends a text message', (
     tester,
   ) async {
@@ -164,7 +178,9 @@ void main() {
     expect(find.byKey(const Key('openai-api-key-field')), findsOneWidget);
   });
 
-  testWidgets('Djinn shows branded loading and header debug control', (tester) async {
+  testWidgets('Djinn shows branded loading and header debug control', (
+    tester,
+  ) async {
     await tester.pumpWidget(_testApp());
 
     expect(find.byKey(const ValueKey('djinn-loading-screen')), findsOneWidget);
