@@ -280,7 +280,9 @@ void main() {
     );
   });
 
-  testWidgets('single tap opens in-app PDF viewer callback', (tester) async {
+  testWidgets('left document icon opens in-app PDF viewer callback', (
+    tester,
+  ) async {
     DebugConsole.clear();
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
@@ -303,10 +305,18 @@ void main() {
     );
     await _pumpUntilFound(tester, find.text('stroke.pdf'));
 
-    await tester.tap(find.text('stroke.pdf'));
+    await tester.tap(
+      find.byKey(ValueKey('knowledge-document-source-${document.id}')),
+    );
     await tester.pumpAndSettle();
 
     expect(openedId, document.id);
+    expect(
+      DebugConsole.allText,
+      contains(
+        '[Knowledge/List] open source document=${document.id} filename=stroke.pdf',
+      ),
+    );
     expect(
       DebugConsole.allText,
       contains(
@@ -1460,6 +1470,52 @@ void main() {
     expect(processingService.forceReprocessFlags, [true]);
   });
 
+  testWidgets(
+    'document row card opens chunks and left icon opens source viewer',
+    (tester) async {
+      final document = KnowledgeDocument(
+        id: 'doc-1',
+        filename: 'source.pdf',
+        localPath: '/memory/source.pdf',
+        sizeBytes: 4,
+        importedAt: DateTime.utc(2026, 6, 24),
+        status: KnowledgeDocumentStatus.imported,
+      );
+      var openedChunks = 0;
+      var openedSource = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: KnowledgeDocumentRow(
+              document: document,
+              selectionMode: false,
+              selected: false,
+              processing: false,
+              onTap: () => openedChunks += 1,
+              onOpenSource: () => openedSource += 1,
+              onLongPress: () {},
+              onSelectionChanged: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+      await tester.tap(find.text('source.pdf'));
+      await tester.pumpAndSettle();
+      expect(openedChunks, 1);
+      expect(openedSource, 0);
+
+      await tester.tap(
+        find.byKey(const ValueKey('knowledge-document-source-doc-1')),
+      );
+      await tester.pumpAndSettle();
+      expect(openedChunks, 1);
+      expect(openedSource, 1);
+    },
+  );
+
   testWidgets('processing row shows compact progress strip', (tester) async {
     final document = KnowledgeDocument(
       id: 'doc-1',
@@ -1481,6 +1537,7 @@ void main() {
             progressLabel: 'Embedding 4/15',
             progressValue: 4 / 15,
             onTap: () {},
+            onOpenSource: () {},
             onLongPress: () {},
             onSelectionChanged: (_) {},
           ),
@@ -1521,6 +1578,7 @@ void main() {
                 selected: false,
                 processing: false,
                 onTap: () {},
+                onOpenSource: () {},
                 onLongPress: () {},
                 onSelectionChanged: (_) {},
               ),
@@ -1530,6 +1588,7 @@ void main() {
                 selected: false,
                 processing: false,
                 onTap: () {},
+                onOpenSource: () {},
                 onLongPress: () {},
                 onSelectionChanged: (_) {},
               ),

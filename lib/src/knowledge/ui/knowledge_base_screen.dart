@@ -415,6 +415,10 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
 
   void _openDocument(KnowledgeDocument document) {
     DebugConsole.log(
+      '[Knowledge/List] open source document=${document.id} '
+      'filename=${document.filename}',
+    );
+    DebugConsole.log(
       '[Knowledge/Viewer] open document=${document.id} '
       'filename=${document.filename} path=${document.localPath}',
     );
@@ -679,6 +683,10 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   }
 
   void _openExtractedKnowledge(KnowledgeDocument document) {
+    DebugConsole.log(
+      '[Knowledge/List] open chunks document=${document.id} '
+      'filename=${document.filename}',
+    );
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ExtractedKnowledgeScreen(
@@ -1059,7 +1067,8 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
                         progressValue: _progressValue(
                           _processingProgressByDocumentId[document.id],
                         ),
-                        onTap: () => _openDocument(document),
+                        onTap: () => _openExtractedKnowledge(document),
+                        onOpenSource: () => _openDocument(document),
                         onLongPress: () => _enterSelection(document.id),
                         onSelectionChanged: (value) =>
                             _selectDocument(document.id, value),

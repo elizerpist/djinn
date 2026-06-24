@@ -12,6 +12,7 @@ class KnowledgeDocumentRow extends StatelessWidget {
     this.progressLabel,
     this.progressValue,
     required this.onTap,
+    required this.onOpenSource,
     required this.onLongPress,
     required this.onSelectionChanged,
   });
@@ -23,6 +24,7 @@ class KnowledgeDocumentRow extends StatelessWidget {
   final String? progressLabel;
   final double? progressValue;
   final VoidCallback onTap;
+  final VoidCallback onOpenSource;
   final VoidCallback onLongPress;
   final ValueChanged<bool> onSelectionChanged;
 
@@ -51,7 +53,12 @@ class KnowledgeDocumentRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                   ],
-                  Icon(_documentIcon, color: _documentIconColor),
+                  InkResponse(
+                    key: ValueKey('knowledge-document-source-${document.id}'),
+                    onTap: selectionMode ? null : onOpenSource,
+                    radius: 22,
+                    child: Icon(_documentIcon, color: _documentIconColor),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -100,6 +107,10 @@ class KnowledgeDocumentRow extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (!selectionMode) ...[
+                    const SizedBox(width: 8),
+                    const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+                  ],
                 ],
               ),
               if (progressLabel != null) ...[
