@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../knowledge/models/local_extraction.dart';
+import '../../notes/models/note_document.dart';
 import 'shared_chunk.dart';
 
 typedef ChunkCardKind = SharedChunkKind;
@@ -15,6 +16,7 @@ class ChunkCardViewModel {
     required this.sourceLabel,
     required this.pipelineLabel,
     this.pageLabel,
+    this.tags = const [],
   });
 
   final String id;
@@ -25,6 +27,7 @@ class ChunkCardViewModel {
   final String sourceLabel;
   final String pipelineLabel;
   final String? pageLabel;
+  final List<NoteKnowledgeTag> tags;
 }
 
 class ChunkCard extends StatelessWidget {
@@ -33,6 +36,8 @@ class ChunkCard extends StatelessWidget {
     required this.viewModel,
     this.onTap,
     this.onLongPress,
+    this.onTag,
+    this.tagButtonKey,
     this.expandedChild,
     this.metadata,
   });
@@ -40,6 +45,8 @@ class ChunkCard extends StatelessWidget {
   final ChunkCardViewModel viewModel;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final VoidCallback? onTag;
+  final Key? tagButtonKey;
   final Widget? expandedChild;
   final String? metadata;
 
@@ -64,15 +71,39 @@ class ChunkCard extends StatelessWidget {
             foregroundColor: color,
             child: Icon(_iconFor(viewModel.kind), size: 20),
           ),
-          title: Text(
-            viewModel.title,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  viewModel.title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (onTag != null)
+                IconButton(
+                  key: tagButtonKey,
+                  tooltip: 'Chunk tagek',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onTag,
+                  icon: const Icon(Icons.sell_outlined, size: 18),
+                ),
+            ],
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 2),
               _AuditPill(state: viewModel.auditState),
+              if (viewModel.tags.isNotEmpty) ...[
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [
+                    for (final tag in viewModel.tags) _TagPill(tag: tag),
+                  ],
+                ),
+              ],
               const SizedBox(height: 4),
               Text(
                 viewModel.preview,
@@ -119,6 +150,37 @@ class ChunkCard extends StatelessWidget {
       SharedChunkKind.table => const Color(0xFFEA580C),
       SharedChunkKind.flowchart => const Color(0xFF9333EA),
     };
+  }
+}
+
+class _TagPill extends StatelessWidget {
+  const _TagPill({required this.tag});
+
+  final NoteKnowledgeTag tag;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Color(tag.resolvedColorValue);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        child: Text(
+          tag.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
   }
 }
 

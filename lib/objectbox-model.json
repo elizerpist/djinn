@@ -356,7 +356,7 @@
     },
     {
       "id": "6:9012920818068651330",
-      "lastPropertyId": "13:4895734823750777506",
+      "lastPropertyId": "14:1230647960012750427",
       "name": "DocumentChunkEntity",
       "properties": [
         {
@@ -427,6 +427,11 @@
         {
           "id": "13:4895734823750777506",
           "name": "sourcePageImagePath",
+          "type": 9
+        },
+        {
+          "id": "14:1230647960012750427",
+          "name": "tagsJson",
           "type": 9
         }
       ],

@@ -181,6 +181,7 @@ class DocumentChunkEntity {
     this.endPageNumber,
     this.confidence,
     this.sourcePageImagePath,
+    this.tagsJson,
   });
 
   @Id()
@@ -202,6 +203,7 @@ class DocumentChunkEntity {
   int? endPageNumber;
   double? confidence;
   String? sourcePageImagePath;
+  String? tagsJson;
 }
 
 @Entity()

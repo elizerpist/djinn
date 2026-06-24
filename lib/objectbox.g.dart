@@ -429,7 +429,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(6, 9012920818068651330),
     name: 'DocumentChunkEntity',
-    lastPropertyId: const obx_int.IdUid(13, 4895734823750777506),
+    lastPropertyId: const obx_int.IdUid(14, 1230647960012750427),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -509,6 +509,12 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(13, 4895734823750777506),
         name: 'sourcePageImagePath',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(14, 1230647960012750427),
+        name: 'tagsJson',
         type: 9,
         flags: 0,
       ),
@@ -2226,7 +2232,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final sourcePageImagePathOffset = object.sourcePageImagePath == null
             ? null
             : fbb.writeString(object.sourcePageImagePath!);
-        fbb.startTable(14);
+        final tagsJsonOffset = object.tagsJson == null
+            ? null
+            : fbb.writeString(object.tagsJson!);
+        fbb.startTable(15);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, publicIdOffset);
         fbb.addOffset(2, documentPublicIdOffset);
@@ -2240,6 +2249,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addInt64(10, object.endPageNumber);
         fbb.addFloat64(11, object.confidence);
         fbb.addOffset(12, sourcePageImagePathOffset);
+        fbb.addOffset(13, tagsJsonOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -2295,6 +2305,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final sourcePageImagePathParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 28);
+        final tagsJsonParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 30);
         final object = DocumentChunkEntity(
           id: idParam,
           publicId: publicIdParam,
@@ -2309,6 +2322,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           endPageNumber: endPageNumberParam,
           confidence: confidenceParam,
           sourcePageImagePath: sourcePageImagePathParam,
+          tagsJson: tagsJsonParam,
         );
 
         return object;
@@ -4093,6 +4107,11 @@ class DocumentChunkEntity_ {
   /// See [DocumentChunkEntity.sourcePageImagePath].
   static final sourcePageImagePath =
       obx.QueryStringProperty<DocumentChunkEntity>(_entities[5].properties[12]);
+
+  /// See [DocumentChunkEntity.tagsJson].
+  static final tagsJson = obx.QueryStringProperty<DocumentChunkEntity>(
+    _entities[5].properties[13],
+  );
 }
 
 /// [FlowchartEdgeEntity] entity fields to define ObjectBox queries.

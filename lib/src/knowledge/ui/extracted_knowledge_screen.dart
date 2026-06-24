@@ -12,6 +12,7 @@ import '../../shared/chunks/chunk_validation_card.dart';
 import '../../shared/ui/draggable_bottom_card.dart';
 import '../../flowchart/ui/interactive_flowchart_editor_screen.dart';
 import '../../flowchart/ui/mobile_flowchart_viewer.dart';
+import '../../notes/ui/tag_manager_sheet.dart';
 import 'pdf_shared_chunk_adapter.dart';
 
 class ExtractedKnowledgeScreen extends StatefulWidget {
@@ -111,6 +112,23 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
     }
   }
 
+  Future<void> _openTagSheet(ExtractedKnowledgeItem item) async {
+    final tags = await showTagManagerSheet(
+      context,
+      initialTags: item.tags,
+      title: 'Chunk tagjei',
+    );
+    if (tags == null) {
+      return;
+    }
+    await widget.repository.updateExtractedKnowledgeTags(
+      widget.document.id,
+      item.id,
+      tags,
+    );
+    _reloadData();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -164,6 +182,7 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
                   items: items,
                   onValidate: _openValidationCard,
                   onEditFlowchart: _openFlowchartEditor,
+                  onTag: _openTagSheet,
                 ),
               ),
             ],
@@ -232,11 +251,13 @@ class _ExtractedKnowledgeList extends StatelessWidget {
     required this.items,
     required this.onValidate,
     required this.onEditFlowchart,
+    required this.onTag,
   });
 
   final List<ExtractedKnowledgeItem> items;
   final ValueChanged<ExtractedKnowledgeItem> onValidate;
   final ValueChanged<String> onEditFlowchart;
+  final ValueChanged<ExtractedKnowledgeItem> onTag;
 
   @override
   Widget build(BuildContext context) {
@@ -271,6 +292,7 @@ class _ExtractedKnowledgeList extends StatelessWidget {
       itemBuilder: (context, index) => _ExtractedKnowledgeTile(
         item: items[index],
         onValidate: () => onValidate(items[index]),
+        onTag: () => onTag(items[index]),
       ),
     );
   }
@@ -481,10 +503,15 @@ MobileFlowchartData _mobileFlowchartDataFromGroup(
 }
 
 class _ExtractedKnowledgeTile extends StatelessWidget {
-  const _ExtractedKnowledgeTile({required this.item, required this.onValidate});
+  const _ExtractedKnowledgeTile({
+    required this.item,
+    required this.onValidate,
+    required this.onTag,
+  });
 
   final ExtractedKnowledgeItem item;
   final VoidCallback onValidate;
+  final VoidCallback onTag;
 
   @override
   Widget build(BuildContext context) {
@@ -498,8 +525,11 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
         sourceLabel: item.typeLabel,
         pipelineLabel: item.pipelineLabel,
         pageLabel: item.pageLabel,
+        tags: item.tags,
       ),
       onLongPress: onValidate,
+      onTag: onTag,
+      tagButtonKey: ValueKey('pdf-chunk-tags-${item.id}'),
       expandedChild: _ExtractedKnowledgeBody(item: item),
       metadata: _metadata(item),
     );

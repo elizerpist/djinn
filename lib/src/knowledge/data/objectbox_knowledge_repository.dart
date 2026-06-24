@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../../objectbox.g.dart';
 import '../../ai/ai_client.dart';
 import '../../local_store/entities.dart';
+import '../../notes/models/note_document.dart';
 import '../../openai/openai_client.dart';
 import '../../flowchart/models/editable_flowchart.dart';
 import '../models/chunk_package.dart';
@@ -572,6 +573,7 @@ class ObjectBoxKnowledgeRepository
             endPageNumber: chunk.endPageNumber,
             confidence: chunk.confidence,
             sourcePageImagePath: chunk.sourcePageImagePath,
+            tagsJson: _tagsToJson(chunk.tags),
           ),
         );
         _auditItemBox.put(
@@ -701,6 +703,24 @@ class ObjectBoxKnowledgeRepository
         edge.rejectionReason = reason;
         _flowchartEdgeBox.put(edge);
       }
+    });
+  }
+
+  Future<void> updateExtractedKnowledgeTags(
+    String documentPublicId,
+    String itemId,
+    List<NoteKnowledgeTag> tags,
+  ) async {
+    final sourceId = itemId.startsWith('$documentPublicId:')
+        ? itemId
+        : '$documentPublicId:$itemId';
+    _store.runInTransaction(TxMode.write, () {
+      final chunk = _findChunk(sourceId);
+      if (chunk == null) {
+        return;
+      }
+      chunk.tagsJson = _tagsToJson(tags);
+      _chunkBox.put(chunk);
     });
   }
 
@@ -1100,6 +1120,7 @@ class ObjectBoxKnowledgeRepository
       endPageNumber: chunk.endPageNumber,
       confidence: chunk.confidence,
       sourcePageImagePath: chunk.sourcePageImagePath,
+      tags: _tagsFromJson(chunk.tagsJson),
     );
   }
 
@@ -1388,6 +1409,31 @@ class ObjectBoxKnowledgeRepository
       return null;
     }
     return jsonEncode(sourceRect);
+  }
+
+  String? _tagsToJson(List<NoteKnowledgeTag> tags) {
+    if (tags.isEmpty) {
+      return null;
+    }
+    return jsonEncode([for (final tag in tags) tag.toJson()]);
+  }
+
+  List<NoteKnowledgeTag> _tagsFromJson(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return const [];
+    }
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is! List) {
+        return const [];
+      }
+      return decoded
+          .map(NoteKnowledgeTag.fromJson)
+          .where((tag) => tag.label.trim().isNotEmpty)
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
   }
 
   String _edgeRelation(

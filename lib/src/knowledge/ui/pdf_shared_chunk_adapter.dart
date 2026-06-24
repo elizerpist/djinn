@@ -22,6 +22,6 @@ SharedChunkViewModel sharedChunkFromExtractedItem(
     pageLabel: item.pageLabel,
     sourceRectJson: item.sourceRectJson,
     auditState: item.auditState,
-    tags: const [],
+    tags: item.tags,
   );
 }

@@ -7,6 +7,7 @@ import '../../ai/ai_client.dart';
 import '../../flowchart/models/editable_flowchart.dart';
 import '../../core/storage/json_file_store.dart';
 import '../../local_store/entities.dart';
+import '../../notes/models/note_document.dart';
 import '../../openai/openai_client.dart';
 import '../models/chunk_package.dart';
 import '../models/extracted_knowledge_item.dart';
@@ -510,6 +511,22 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     );
   }
 
+  Future<void> updateExtractedKnowledgeTags(
+    String documentPublicId,
+    String itemId,
+    List<NoteKnowledgeTag> tags,
+  ) async {
+    final extractedItems = _extractedItemsByDocument[documentPublicId];
+    if (extractedItems == null) {
+      return;
+    }
+    final index = extractedItems.indexWhere((item) => item.id == itemId);
+    if (index == -1) {
+      return;
+    }
+    extractedItems[index] = extractedItems[index].copyWith(tags: tags);
+  }
+
   Future<ChunkComparison> compareExtractedChunks(
     String documentPublicId,
   ) async {
@@ -604,6 +621,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       endPageNumber: chunk.endPageNumber,
       confidence: chunk.confidence,
       sourcePageImagePath: chunk.sourcePageImagePath,
+      tags: chunk.tags,
     );
   }
 

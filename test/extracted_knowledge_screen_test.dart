@@ -5,6 +5,7 @@ import 'package:djinn/src/ai/ai_client.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/knowledge/ui/extracted_knowledge_screen.dart';
+import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/shared/chunks/chunk_card.dart';
 
 void main() {
@@ -15,6 +16,137 @@ void main() {
       'table',
       'flowchart',
     ]);
+  });
+
+  test('manual pdf chunk tags round trip through repository', () async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'tags.pdf',
+      localPath: '/memory/tags.pdf',
+      sizeBytes: 8,
+      importedAt: DateTime.utc(2026, 6, 24),
+      sha256: 'hash-tags',
+    );
+    await repository.saveLocalChunks(document.id, const [
+      LocalChunk(
+        id: 'manual-tagged',
+        documentId: 'document-1',
+        text: 'Tagelhető chunk',
+        pageNumber: 1,
+        pipeline: LocalExtractionPipeline.manual,
+        kind: LocalChunkKind.text,
+      ),
+    ], replaceExisting: false);
+
+    await repository
+        .updateExtractedKnowledgeTags(document.id, 'manual-tagged', const [
+          NoteKnowledgeTag(
+            type: NoteKnowledgeTagTypes.custom,
+            label: 'súlyos',
+            colorSlotId: 1,
+          ),
+        ]);
+
+    final items = await repository.listExtractedKnowledgeItems(document.id);
+    expect(items.single.tags.single.label, 'súlyos');
+  });
+
+  testWidgets('manual pdf chunk cards render saved tag pills', (tester) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'tag-card.pdf',
+      localPath: '/memory/tag-card.pdf',
+      sizeBytes: 8,
+      importedAt: DateTime.utc(2026, 6, 24),
+      sha256: 'hash-tag-card',
+    );
+    await repository.saveLocalChunks(document.id, const [
+      LocalChunk(
+        id: 'manual-tag-card',
+        documentId: 'document-1',
+        text: 'Tagelt kártya tartalom',
+        pageNumber: 1,
+        pipeline: LocalExtractionPipeline.manual,
+        kind: LocalChunkKind.text,
+        tags: [
+          NoteKnowledgeTag(
+            type: NoteKnowledgeTagTypes.custom,
+            label: 'súlyos',
+            colorSlotId: 1,
+          ),
+        ],
+      ),
+    ], replaceExisting: false);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExtractedKnowledgeScreen(
+          repository: repository,
+          document: document,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('pdf-chunk-mode-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manuális chunkok').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('súlyos'), findsOneWidget);
+  });
+
+  testWidgets('manual pdf chunk tag button opens sheet and persists tags', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'tag-sheet.pdf',
+      localPath: '/memory/tag-sheet.pdf',
+      sizeBytes: 8,
+      importedAt: DateTime.utc(2026, 6, 24),
+      sha256: 'hash-tag-sheet',
+    );
+    await repository.saveLocalChunks(document.id, const [
+      LocalChunk(
+        id: 'manual-tag-sheet',
+        documentId: 'document-1',
+        text: 'Tag sheet tartalom',
+        pageNumber: 1,
+        pipeline: LocalExtractionPipeline.manual,
+        kind: LocalChunkKind.text,
+      ),
+    ], replaceExisting: false);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExtractedKnowledgeScreen(
+          repository: repository,
+          document: document,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('pdf-chunk-mode-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manuális chunkok').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('pdf-chunk-tags-manual-tag-sheet')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('tag-manager-name')),
+      'akut',
+    );
+    await tester.tap(find.byKey(const ValueKey('tag-manager-add')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-manager-close')));
+    await tester.pumpAndSettle();
+
+    final items = await repository.listExtractedKnowledgeItems(document.id);
+    expect(items.single.tags.single.label, 'akut');
   });
 
   testWidgets('flowchart tab provides named views without color rail clutter', (

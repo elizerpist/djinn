@@ -1,3 +1,5 @@
+import '../../notes/models/note_document.dart';
+
 enum LocalExtractionPipeline {
   ai('ai'),
   localPdfText('local_pdf_text'),
@@ -134,6 +136,7 @@ class LocalChunk {
     this.sourceRectJson,
     this.confidence,
     this.sourcePageImagePath,
+    this.tags = const [],
   });
 
   final String id;
@@ -148,6 +151,7 @@ class LocalChunk {
   final String? sourceRectJson;
   final double? confidence;
   final String? sourcePageImagePath;
+  final List<NoteKnowledgeTag> tags;
 }
 
 enum ChunkComparisonStatus { matched, aiOnly, localOnly }

@@ -1,4 +1,5 @@
 import '../../local_store/entities.dart';
+import '../../notes/models/note_document.dart';
 import 'local_extraction.dart';
 
 class ExtractedKnowledgeItem implements ChunkComparisonItem {
@@ -24,6 +25,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
     this.endPageNumber,
     this.confidence,
     this.sourcePageImagePath,
+    this.tags = const [],
   });
 
   @override
@@ -52,11 +54,13 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
   final int? endPageNumber;
   final double? confidence;
   final String? sourcePageImagePath;
+  final List<NoteKnowledgeTag> tags;
 
   ExtractedKnowledgeItem copyWith({
     String? text,
     LocalAuditState? auditState,
     String? sectionTitle,
+    List<NoteKnowledgeTag>? tags,
   }) {
     return ExtractedKnowledgeItem(
       id: id,
@@ -80,6 +84,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
       endPageNumber: endPageNumber,
       confidence: confidence,
       sourcePageImagePath: sourcePageImagePath,
+      tags: tags ?? this.tags,
     );
   }
 
