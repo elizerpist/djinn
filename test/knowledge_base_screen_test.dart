@@ -62,7 +62,7 @@ void main() {
     );
     await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
 
-    await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
+    await tester.tap(find.byTooltip('PDF/kép hozzáadása'));
     await _pumpUntilFound(tester, find.text('omsz.pdf'));
 
     expect(find.text('omsz.pdf'), findsOneWidget);
@@ -99,7 +99,7 @@ void main() {
     );
     await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
 
-    await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
+    await tester.tap(find.byTooltip('PDF/kép hozzáadása'));
     await _pumpUntilFound(tester, find.text('cloud-source.pdf'));
 
     final documents = await repository.listDocuments();
@@ -140,7 +140,7 @@ void main() {
       );
       await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
 
-      await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
+      await tester.tap(find.byTooltip('PDF/kép hozzáadása'));
       await tester.pumpAndSettle();
 
       final documents = await repository.listDocuments();
@@ -181,7 +181,7 @@ void main() {
     );
     await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
 
-    await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
+    await tester.tap(find.byTooltip('PDF/kép hozzáadása'));
     await _pumpUntilFound(tester, find.text('rave-flowchart.png'));
 
     final documents = await repository.listDocuments();
@@ -216,7 +216,7 @@ void main() {
     );
     await _pumpUntilFound(tester, find.text('Nincs importált dokumentum'));
 
-    await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
+    await tester.tap(find.byTooltip('PDF/kép hozzáadása'));
     await _pumpUntilFound(tester, find.text('Nincs sync'));
 
     expect(find.text('OpenAI API kulcs szükséges'), findsNothing);
@@ -505,7 +505,7 @@ void main() {
 
     await tester.tap(find.byKey(Key('folder-pill-${folder.id}')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('PDF/PNG hozzáadása'));
+    await tester.tap(find.byTooltip('PDF/kép hozzáadása'));
     await _pumpUntilFound(tester, find.text('folder.pdf'));
 
     expect((await repository.listDocuments()).single.folderId, folder.id);
@@ -1512,6 +1512,49 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(openedChunks, 1);
+      expect(openedSource, 1);
+    },
+  );
+
+  testWidgets(
+    'png document row uses image icon and chunk/source split behavior',
+    (tester) async {
+      final document = KnowledgeDocument(
+        id: 'img-1',
+        filename: 'scan.png',
+        localPath: '/memory/scan.png',
+        sizeBytes: 4,
+        importedAt: DateTime.utc(2026, 6, 24),
+        status: KnowledgeDocumentStatus.imported,
+      );
+      var openedChunks = 0;
+      var openedSource = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: KnowledgeDocumentRow(
+              document: document,
+              selectionMode: false,
+              selected: false,
+              processing: false,
+              onTap: () => openedChunks += 1,
+              onOpenSource: () => openedSource += 1,
+              onLongPress: () {},
+              onSelectionChanged: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byIcon(Icons.image_outlined), findsOneWidget);
+      await tester.tap(find.text('scan.png'));
+      await tester.pumpAndSettle();
+      expect(openedChunks, 1);
+      await tester.tap(
+        find.byKey(const ValueKey('knowledge-document-source-img-1')),
+      );
+      await tester.pumpAndSettle();
       expect(openedSource, 1);
     },
   );

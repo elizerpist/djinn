@@ -1084,7 +1084,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       ),
       floatingActionButton: widget.showFloatingActionButton
           ? FloatingActionButton(
-              tooltip: 'PDF/PNG hozzáadása',
+              tooltip: 'PDF/kép hozzáadása',
               onPressed: _importing ? null : _importPdfs,
               child: _importing
                   ? const CircularProgressIndicator(strokeWidth: 2)
