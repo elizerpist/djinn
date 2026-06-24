@@ -133,7 +133,7 @@ void main() {
       findsOneWidget,
     );
   });
-  testWidgets('pipeline menu and type chips filter extracted chunks', (
+  testWidgets('pdf chunk menu exposes only AI and manual OCR-assisted modes', (
     tester,
   ) async {
     final repository = KnowledgeDocumentRepository();
@@ -159,7 +159,7 @@ void main() {
       LocalChunk(
         id: 'local-table',
         documentId: 'document-1',
-        text: 'Lokális táblázat chunk',
+        text: 'Régi lokális OCR chunk',
         pageNumber: 2,
         pipeline: LocalExtractionPipeline.localOcr,
         kind: LocalChunkKind.table,
@@ -184,34 +184,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('AI chunkok'), findsOneWidget);
     expect(find.text('AI szöveg chunk'), findsOneWidget);
-    expect(find.text('Lokális táblázat chunk'), findsNothing);
-    expect(find.text('Szöveg'), findsOneWidget);
-    expect(find.text('Táblázat'), findsOneWidget);
-    expect(find.text('Flowchart'), findsOneWidget);
+    expect(find.text('Régi lokális OCR chunk'), findsNothing);
+    expect(find.text('Lokális chunkok'), findsNothing);
+    expect(find.text('Összehasonlítás'), findsNothing);
     expect(find.text('Score'), findsNothing);
     expect(find.text('Kép'), findsNothing);
     expect(find.text('Vizuális tény'), findsNothing);
+    expect(find.byKey(const ValueKey('extracted-type-all')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('extracted-pipeline-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Lokális chunkok').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('extracted-type-table')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Lokális táblázat chunk'), findsOneWidget);
-    expect(find.text('AI szöveg chunk'), findsNothing);
-
-    await tester.tap(find.byKey(const Key('extracted-pipeline-menu')));
+    await tester.tap(find.byKey(const Key('pdf-chunk-mode-menu')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Manuális chunkok').last);
     await tester.pumpAndSettle();
-    expect(find.text('Manuális chunkok'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('extracted-type-all')));
-    await tester.pumpAndSettle();
 
+    expect(find.text('Manuális chunkok'), findsOneWidget);
     expect(find.text('Manuális szöveg chunk'), findsOneWidget);
+    expect(find.text('Régi lokális OCR chunk'), findsOneWidget);
+    expect(find.text('AI szöveg chunk'), findsNothing);
   });
 
   testWidgets(
@@ -246,9 +237,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('extracted-pipeline-menu')));
+      await tester.tap(find.byKey(const Key('pdf-chunk-mode-menu')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Lokális chunkok').last);
+      await tester.tap(find.text('Manuális chunkok').last);
       await tester.pumpAndSettle();
 
       await tester.longPress(

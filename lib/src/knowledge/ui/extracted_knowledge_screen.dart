@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
 import '../data/knowledge_document_repository.dart';
 import '../models/extracted_knowledge_item.dart';
@@ -30,8 +31,7 @@ class ExtractedKnowledgeScreen extends StatefulWidget {
 
 class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
   late Future<_ExtractedKnowledgeData> _dataFuture;
-  _ExtractedPipelineView _pipelineView = _ExtractedPipelineView.ai;
-  _ExtractedTypeFilter _typeFilter = _ExtractedTypeFilter.all;
+  _PdfChunkMode _mode = _PdfChunkMode.ai;
 
   @override
   void initState() {
@@ -43,26 +43,17 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
     final allItems = await widget.repository.listExtractedKnowledgeItems(
       widget.document.id,
     );
-    final comparison = await widget.repository.compareExtractedChunks(
-      widget.document.id,
+    final aiItems = allItems
+        .where((item) => item.pipeline == LocalExtractionPipeline.ai)
+        .toList(growable: false);
+    final manualItems = allItems
+        .where((item) => item.pipeline != LocalExtractionPipeline.ai)
+        .toList(growable: false);
+    DebugConsole.log(
+      '[PDFChunks] load document=${widget.document.id} '
+      'ai=${aiItems.length} manual=${manualItems.length}',
     );
-    return _ExtractedKnowledgeData(
-      allItems: allItems,
-      aiItems: allItems
-          .where((item) => item.pipeline == LocalExtractionPipeline.ai)
-          .toList(growable: false),
-      localItems: allItems
-          .where(
-            (item) =>
-                item.pipeline != LocalExtractionPipeline.ai &&
-                item.pipeline != LocalExtractionPipeline.manual,
-          )
-          .toList(growable: false),
-      manualItems: allItems
-          .where((item) => item.pipeline == LocalExtractionPipeline.manual)
-          .toList(growable: false),
-      comparison: comparison,
-    );
+    return _ExtractedKnowledgeData(aiItems: aiItems, manualItems: manualItems);
   }
 
   void _reloadData() {
@@ -124,21 +115,22 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_pipelineView.title),
+        title: Text(_mode.title),
         actions: [
-          PopupMenuButton<_ExtractedPipelineView>(
-            key: const Key('extracted-pipeline-menu'),
-            tooltip: 'Kinyert tartalom nézet',
-            initialValue: _pipelineView,
+          PopupMenuButton<_PdfChunkMode>(
+            key: const Key('pdf-chunk-mode-menu'),
+            tooltip: 'Chunk mód',
+            initialValue: _mode,
             onSelected: (value) {
-              setState(() {
-                _pipelineView = value;
-                _typeFilter = _ExtractedTypeFilter.all;
-              });
+              DebugConsole.log(
+                '[PDFChunks] mode changed document=${widget.document.id} '
+                'mode=${value.name}',
+              );
+              setState(() => _mode = value);
             },
             itemBuilder: (context) => [
-              for (final view in _ExtractedPipelineView.values)
-                PopupMenuItem(value: view, child: Text(view.title)),
+              for (final mode in _PdfChunkMode.values)
+                PopupMenuItem(value: mode, child: Text(mode.title)),
             ],
           ),
         ],
@@ -150,11 +142,13 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           final data = snapshot.data;
-          if (data == null || data.allItems.isEmpty) {
+          if (data == null ||
+              (data.aiItems.isEmpty && data.manualItems.isEmpty)) {
             return _EmptyExtractedKnowledge(filename: widget.document.filename);
           }
-          final sourceItems = _itemsFor(data);
-          final filteredItems = _filterByType(sourceItems);
+          final items = _mode == _PdfChunkMode.ai
+              ? data.aiItems
+              : data.manualItems;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -162,22 +156,15 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: _DocumentSummary(
                   filename: widget.document.filename,
-                  count: sourceItems.length,
+                  count: items.length,
                 ),
               ),
-              if (_pipelineView != _ExtractedPipelineView.comparison)
-                _ContentTypeFilterBar(
-                  selected: _typeFilter,
-                  onSelected: (value) => setState(() => _typeFilter = value),
-                ),
               Expanded(
-                child: _pipelineView == _ExtractedPipelineView.comparison
-                    ? _ChunkComparisonList(comparison: data.comparison)
-                    : _ExtractedKnowledgeList(
-                        items: filteredItems,
-                        onValidate: _openValidationCard,
-                        onEditFlowchart: _openFlowchartEditor,
-                      ),
+                child: _ExtractedKnowledgeList(
+                  items: items,
+                  onValidate: _openValidationCard,
+                  onEditFlowchart: _openFlowchartEditor,
+                ),
               ),
             ],
           );
@@ -185,119 +172,27 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
       ),
     );
   }
-
-  List<ExtractedKnowledgeItem> _itemsFor(_ExtractedKnowledgeData data) {
-    return switch (_pipelineView) {
-      _ExtractedPipelineView.ai => data.aiItems,
-      _ExtractedPipelineView.local => data.localItems,
-      _ExtractedPipelineView.manual => data.manualItems,
-      _ExtractedPipelineView.comparison => data.allItems,
-    };
-  }
-
-  List<ExtractedKnowledgeItem> _filterByType(
-    List<ExtractedKnowledgeItem> items,
-  ) {
-    if (_typeFilter == _ExtractedTypeFilter.all) {
-      return items;
-    }
-    return items.where(_typeFilter.matches).toList(growable: false);
-  }
 }
 
-enum _ExtractedPipelineView { ai, local, manual, comparison }
+enum _PdfChunkMode { ai, manual }
 
-extension _ExtractedPipelineViewLabel on _ExtractedPipelineView {
+extension _PdfChunkModeLabel on _PdfChunkMode {
   String get title {
     return switch (this) {
-      _ExtractedPipelineView.ai => 'AI chunkok',
-      _ExtractedPipelineView.local => 'Lokális chunkok',
-      _ExtractedPipelineView.manual => 'Manuális chunkok',
-      _ExtractedPipelineView.comparison => 'Összehasonlítás',
+      _PdfChunkMode.ai => 'AI chunkok',
+      _PdfChunkMode.manual => 'Manuális chunkok',
     };
-  }
-}
-
-enum _ExtractedTypeFilter { all, text, list, table, flowchart }
-
-extension _ExtractedTypeFilterLabel on _ExtractedTypeFilter {
-  String get label {
-    return switch (this) {
-      _ExtractedTypeFilter.all => 'Összes',
-      _ExtractedTypeFilter.text => 'Szöveg',
-      _ExtractedTypeFilter.list => 'Felsorolás',
-      _ExtractedTypeFilter.table => 'Táblázat',
-      _ExtractedTypeFilter.flowchart => 'Flowchart',
-    };
-  }
-
-  bool matches(ExtractedKnowledgeItem item) {
-    return switch (this) {
-      _ExtractedTypeFilter.all => true,
-      _ExtractedTypeFilter.text =>
-        item.chunkKind == LocalChunkKind.text ||
-            item.sourceType == EvidenceSourceType.textChunk,
-      _ExtractedTypeFilter.list => item.chunkKind == LocalChunkKind.list,
-      _ExtractedTypeFilter.table =>
-        item.chunkKind == LocalChunkKind.table ||
-            item.sourceType == EvidenceSourceType.tableChunk ||
-            item.sourceType == EvidenceSourceType.scoreChunk,
-      _ExtractedTypeFilter.flowchart =>
-        item.chunkKind == LocalChunkKind.flowchart ||
-            item.sourceType == EvidenceSourceType.flowchartNode ||
-            item.sourceType == EvidenceSourceType.flowchartEdge,
-    };
-  }
-}
-
-class _ContentTypeFilterBar extends StatelessWidget {
-  const _ContentTypeFilterBar({
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final _ExtractedTypeFilter selected;
-  final ValueChanged<_ExtractedTypeFilter> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        child: Row(
-          children: [
-            for (final filter in _ExtractedTypeFilter.values) ...[
-              ChoiceChip(
-                key: ValueKey('extracted-type-${filter.name}'),
-                label: Text(filter.label),
-                selected: filter == selected,
-                onSelected: (_) => onSelected(filter),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ],
-        ),
-      ),
-    );
   }
 }
 
 class _ExtractedKnowledgeData {
   const _ExtractedKnowledgeData({
-    required this.allItems,
     required this.aiItems,
-    required this.localItems,
     required this.manualItems,
-    required this.comparison,
   });
 
-  final List<ExtractedKnowledgeItem> allItems;
   final List<ExtractedKnowledgeItem> aiItems;
-  final List<ExtractedKnowledgeItem> localItems;
   final List<ExtractedKnowledgeItem> manualItems;
-  final ChunkComparison comparison;
 }
 
 class _DocumentSummary extends StatelessWidget {
@@ -377,187 +272,6 @@ class _ExtractedKnowledgeList extends StatelessWidget {
         item: items[index],
         onValidate: () => onValidate(items[index]),
       ),
-    );
-  }
-}
-
-class _ChunkComparisonList extends StatelessWidget {
-  const _ChunkComparisonList({required this.comparison});
-
-  final ChunkComparison comparison;
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = comparison.rows;
-    if (rows.isEmpty) {
-      return const Center(
-        child: Text(
-          'Nincs összehasonlítható chunk',
-          style: TextStyle(color: Color(0xFF6B7280)),
-        ),
-      );
-    }
-    return ListView.separated(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-      itemCount: rows.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) => _ChunkComparisonTile(row: rows[index]),
-    );
-  }
-}
-
-class _ChunkComparisonTile extends StatelessWidget {
-  const _ChunkComparisonTile({required this.row});
-
-  final ChunkComparisonRow row;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _statusColor(row.status);
-    return Material(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: color.withValues(alpha: 0.38)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(_statusIcon(row.status), color: color, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _statusLabel(row.status),
-                    style: TextStyle(color: color, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                Text(
-                  row.pageNumber == null ? '' : '${row.pageNumber}. oldal',
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            if (row.sectionTitle.trim().isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                row.sectionTitle,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ],
-            const SizedBox(height: 10),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _ComparisonSide(
-                    title: 'AI',
-                    item: row.aiChunk,
-                    emptyLabel: 'Nincs AI chunk',
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _ComparisonSide(
-                    title: 'Lokális',
-                    item: row.localChunk,
-                    emptyLabel: 'Nincs lokális chunk',
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static Color _statusColor(ChunkComparisonStatus status) {
-    return switch (status) {
-      ChunkComparisonStatus.matched => const Color(0xFF047857),
-      ChunkComparisonStatus.aiOnly => const Color(0xFFB45309),
-      ChunkComparisonStatus.localOnly => const Color(0xFF7C3AED),
-    };
-  }
-
-  static IconData _statusIcon(ChunkComparisonStatus status) {
-    return switch (status) {
-      ChunkComparisonStatus.matched => Icons.link,
-      ChunkComparisonStatus.aiOnly => Icons.cloud_outlined,
-      ChunkComparisonStatus.localOnly => Icons.phone_android_outlined,
-    };
-  }
-
-  static String _statusLabel(ChunkComparisonStatus status) {
-    return switch (status) {
-      ChunkComparisonStatus.matched => 'Egyező oldal/szekció',
-      ChunkComparisonStatus.aiOnly => 'Csak AI chunk',
-      ChunkComparisonStatus.localOnly => 'Csak lokális chunk',
-    };
-  }
-}
-
-class _ComparisonSide extends StatelessWidget {
-  const _ComparisonSide({
-    required this.title,
-    required this.item,
-    required this.emptyLabel,
-  });
-
-  final String title;
-  final ChunkComparisonItem? item;
-  final String emptyLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final resolved = item;
-    return Container(
-      constraints: const BoxConstraints(minHeight: 96),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: resolved == null
-          ? Text(emptyLabel, style: const TextStyle(color: Color(0xFF9CA3AF)))
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$title - ${resolved.typeLabel}',
-                  style: const TextStyle(
-                    color: Color(0xFF111827),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                SelectableText(
-                  resolved.text,
-                  style: const TextStyle(fontSize: 12, height: 1.25),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${resolved.pipelineLabel} - ${resolved.auditState.label}',
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
     );
   }
 }

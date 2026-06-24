@@ -112,16 +112,15 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
   String get pipelineLabel {
     return switch (pipeline) {
       LocalExtractionPipeline.ai => 'AI chunk',
-      LocalExtractionPipeline.localPdfText => 'Lokális PDF szöveg',
-      LocalExtractionPipeline.localOcr => 'Lokális OCR',
-      LocalExtractionPipeline.localTable => 'Lokális táblázat',
-      LocalExtractionPipeline.localFlowchart => 'Lokális flowchart',
-      LocalExtractionPipeline.localVisual => 'Lokális kép',
-      LocalExtractionPipeline.manual => 'Kézi chunk',
+      LocalExtractionPipeline.localPdfText ||
+      LocalExtractionPipeline.localOcr ||
+      LocalExtractionPipeline.localTable ||
+      LocalExtractionPipeline.localFlowchart ||
+      LocalExtractionPipeline.localVisual ||
+      LocalExtractionPipeline.manual => 'Manuális OCR chunk',
     };
   }
 }
-
 
 EvidenceSourceType evidenceSourceTypeFromWireName(String value) {
   return EvidenceSourceType.values.firstWhere(
