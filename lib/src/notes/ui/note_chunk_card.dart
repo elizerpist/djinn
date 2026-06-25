@@ -154,7 +154,7 @@ class NoteChunkCard extends StatelessWidget {
     return switch (block.type) {
       NoteBlockType.heading => 'Címsor chunk',
       NoteBlockType.paragraph => 'Szöveg chunk',
-      NoteBlockType.mixed => 'Szöveg chunk',
+      NoteBlockType.mixed => 'Kevert chunk',
       NoteBlockType.listItem => 'Lista chunk',
       NoteBlockType.table => 'Táblázat chunk',
       NoteBlockType.flowchart => 'Flowchart chunk',

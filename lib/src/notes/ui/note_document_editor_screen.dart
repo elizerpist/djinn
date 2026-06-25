@@ -104,6 +104,24 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
     });
   }
 
+  void _addMixedBlock() {
+    setState(() {
+      _blocks.add(
+        NoteBlock(
+          id: _nextBlockId(),
+          type: NoteBlockType.mixed,
+          mixedSections: const [
+            NoteMixedSection(
+              id: 'section-1',
+              type: NoteMixedSectionType.paragraph,
+              text: '',
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
   Future<void> _addTableBlock() async {
     final block = NoteBlock(
       id: _nextBlockId(),
@@ -289,6 +307,13 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
                   onPressed: _addFlowchartBlock,
                   icon: const Icon(Icons.account_tree_outlined),
                   label: const Text('Flowchart'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  key: const ValueKey('note-document-add-mixed'),
+                  onPressed: _addMixedBlock,
+                  icon: const Icon(Icons.article_outlined),
+                  label: const Text('Kevert'),
                 ),
               ],
             ),

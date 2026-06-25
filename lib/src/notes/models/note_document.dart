@@ -874,12 +874,29 @@ enum NoteMixedSectionType {
   }
 }
 
+enum NoteMixedParagraphRole {
+  paragraph('paragraph'),
+  heading('heading');
+
+  const NoteMixedParagraphRole(this.wireName);
+
+  final String wireName;
+
+  static NoteMixedParagraphRole fromWireName(String? value) {
+    return switch (value) {
+      'heading' => NoteMixedParagraphRole.heading,
+      _ => NoteMixedParagraphRole.paragraph,
+    };
+  }
+}
+
 class NoteMixedSection {
   const NoteMixedSection({
     required this.id,
     required this.type,
     this.title,
     this.text = '',
+    this.paragraphRole = NoteMixedParagraphRole.paragraph,
     this.rangeTags = const [],
     this.paragraphStyles = const [],
     this.listItems = const [],
@@ -894,6 +911,7 @@ class NoteMixedSection {
   final NoteMixedSectionType type;
   final String? title;
   final String text;
+  final NoteMixedParagraphRole paragraphRole;
   final List<NoteTextRangeTag> rangeTags;
   final List<NoteTextParagraphStyle> paragraphStyles;
   final List<NoteListItem> listItems;
@@ -909,6 +927,9 @@ class NoteMixedSection {
       type: NoteMixedSectionType.fromWireName(json['type']?.toString()),
       title: json['title']?.toString(),
       text: json['text']?.toString() ?? '',
+      paragraphRole: NoteMixedParagraphRole.fromWireName(
+        json['paragraphRole']?.toString(),
+      ),
       rangeTags: _rangeTagsFromJson(json['rangeTags']),
       paragraphStyles: _paragraphStylesFromJson(json['paragraphStyles']),
       listItems: NoteBlock._listItemsFromJson(json['listItems']),
@@ -928,6 +949,8 @@ class NoteMixedSection {
       'type': type.wireName,
       if (title != null && title!.trim().isNotEmpty) 'title': title,
       if (text.isNotEmpty) 'text': text,
+      if (paragraphRole != NoteMixedParagraphRole.paragraph)
+        'paragraphRole': paragraphRole.wireName,
       if (rangeTags.isNotEmpty)
         'rangeTags': rangeTags.map((tag) => tag.toJson()).toList(),
       if (paragraphStyles.isNotEmpty)
@@ -1023,6 +1046,7 @@ class NoteMixedSection {
     NoteMixedSectionType? type,
     String? title,
     String? text,
+    NoteMixedParagraphRole? paragraphRole,
     List<NoteTextRangeTag>? rangeTags,
     List<NoteTextParagraphStyle>? paragraphStyles,
     List<NoteListItem>? listItems,
@@ -1037,6 +1061,7 @@ class NoteMixedSection {
       type: type ?? this.type,
       title: title ?? this.title,
       text: text ?? this.text,
+      paragraphRole: paragraphRole ?? this.paragraphRole,
       rangeTags: rangeTags ?? this.rangeTags,
       paragraphStyles: paragraphStyles ?? this.paragraphStyles,
       listItems: listItems ?? this.listItems,

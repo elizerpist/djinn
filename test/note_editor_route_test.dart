@@ -42,7 +42,9 @@ void main() {
     expect(saved.title, 'Új cím');
   });
 
-  testWidgets('editor FAB expands icon-only chunk actions', (tester) async {
+  testWidgets('editor FAB expands five icon-only chunk actions', (
+    tester,
+  ) async {
     final repository = MemoryNoteRepository();
     final note = await repository.createDocumentNote(
       title: 'N',
@@ -58,16 +60,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('note-editor-add-text')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-editor-add-list')), findsNothing);
-    expect(find.byKey(const ValueKey('note-editor-add-table')), findsNothing);
+    expect(find.byKey(const ValueKey('note-editor-add-list')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-editor-add-table')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('note-editor-add-flowchart')),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('note-editor-add-mixed')), findsOneWidget);
     expect(find.text('Szöveg'), findsNothing);
   });
 
-  testWidgets('editor text FAB creates a mixed text chunk', (tester) async {
+  testWidgets('editor text FAB creates a legacy text chunk', (tester) async {
     final repository = MemoryNoteRepository();
     final note = await repository.createDocumentNote(
       title: 'N',
@@ -82,6 +85,27 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('note-editor-add-fab')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('note-editor-add-text')));
+    await tester.pump();
+
+    final saved = (await repository.listNotes()).single;
+    expect(saved.document.blocks.last.type, NoteBlockType.paragraph);
+  });
+
+  testWidgets('editor mixed FAB creates a mixed chunk', (tester) async {
+    final repository = MemoryNoteRepository();
+    final note = await repository.createDocumentNote(
+      title: 'N',
+      document: NoteDocument.empty(),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteEditorRoute(repository: repository, initialNote: note),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-editor-add-fab')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-editor-add-mixed')));
     await tester.pump();
 
     final saved = (await repository.listNotes()).single;

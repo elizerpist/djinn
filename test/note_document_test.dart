@@ -296,6 +296,7 @@ void main() {
           id: 'p1',
           type: NoteMixedSectionType.paragraph,
           text: 'Az eljárásrend célja:',
+          paragraphRole: NoteMixedParagraphRole.heading,
         ),
         NoteMixedSection(
           id: 'l1',
@@ -325,6 +326,10 @@ void main() {
 
     expect(parsed.type, NoteBlockType.mixed);
     expect(parsed.mixedSections, hasLength(3));
+    expect(
+      parsed.mixedSections.first.paragraphRole,
+      NoteMixedParagraphRole.heading,
+    );
     expect(parsed.plainText, contains('Az eljárásrend célja:'));
     expect(parsed.plainText, contains('az ellátás során'));
     expect(parsed.plainText, contains('AED | 1'));

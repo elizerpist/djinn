@@ -26,6 +26,8 @@ The user approved this design direction on 2026-06-25 with "ok" after reviewing 
 - Current note model: `lib/src/notes/models/note_document.dart`.
 - Current PDF chunk adapter: `lib/src/knowledge/ui/pdf_chunk_note_block_adapter.dart`.
 - Current manual PDF region text joiner: `lib/src/knowledge/ui/manual_pdf_region_text.dart`.
+- Latest current mixed-editor screenshot showing the rejected boxed/card UI: `/storage/emulated/0/Pictures/Screenshots/Screenshot_20260625-205513.png`.
+- Interactive visual companion prototype: `prototypes/mixed-chunk-menu/index.html`.
 
 ## Evidence And Root Cause
 
@@ -97,12 +99,16 @@ Out of scope for this first implementation:
 | COMPAT-02 | Existing ObjectBox rows store string text | local storage/repository | Mixed structure is persisted without breaking older string-only chunks. | ObjectBox/in-memory repository tests. | DONE |
 | EXPORT-01 | Existing note PDF export supports text/list/table separately | `note_pdf_document_builder.dart` | Mixed chunks export paragraphs, lists, and tables in their stored order. | PDF builder tests for mixed block output. | DONE |
 | SEARCH-01 | Existing local retrieval indexes note blocks | note indexing/retrieval | Mixed chunks contribute searchable paragraph/list/table text and metadata. | Retrieval/indexing tests for mixed block content. | DONE |
+| UX-03 | User correction 2026-06-25: "5 féla chunkot akarok látni, az eddigi négyet plusz a kevertet" | `note_chunk_fab.dart`, `note_editor_route.dart`, note document editor add controls | Creation UI exposes five visible chunk types: legacy text, legacy list, legacy table, flowchart, and mixed. Mixed must not replace/hide list/table. | Widget tests for FAB/add controls and block type created by each action. | DONE |
+| UX-04 | User correction 2026-06-25: "zavaró, hogy a kevert chunkban boxok vannak" | `note_mixed_text_chunk_editor_screen.dart` | Mixed editor renders a continuous document surface, not repeated cards with "Bekezdés/Lista" headers and boxed paragraph/list sections. | Screenshot review plus widget tests asserting no section `Card`/label chrome for paragraph/list/table sections. | DONE |
+| UX-05 | User question 2026-06-25: sentence should be switchable to bekezdés/cím/bold/lista | mixed editor keyboard rail | Active paragraph/list/table text can be converted through keyboard-top actions: paragraph, heading, list, table insertion, and bold marker action. | Widget tests for paragraph-to-list conversion, heading styling, table insertion, and bold action. | PARTIAL |
 
 Partial status notes:
 
 - MIX-05 is PARTIAL because the mixed editor supports table section add/edit, row/column add-delete-move, and cell scoped tags through the keyboard rail, but it does not yet expose the full legacy table editor parity such as column/row resizing and row/column scoped tag targets.
 - UX-02 is PARTIAL because automated widget coverage verifies readable full-width sections and keyboard rail layout, but no post-implementation screenshot review was captured in this pass.
-- PDF-02 is PARTIAL because new note text creation defaults to mixed text and legacy note list/table FAB actions are no longer primary, but the manual PDF selection type sheet still exposes legacy list/table modes for existing manual workflows.
+- PDF-02 is superseded by UX-03 after the user's correction: the app must show five creation types, not hide legacy list/table. Keep PDF-02 only as historical context for the earlier rejected direction.
+- UX-05 is PARTIAL because the mixed editor now has keyboard-top paragraph, heading, list, table, and bold actions, but bold is persisted as markdown-style emphasis markers rather than a full hidden-marker rich text span model.
 
 ## Architecture
 
