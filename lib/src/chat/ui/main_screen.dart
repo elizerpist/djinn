@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../ai/ai_provider.dart';
@@ -16,8 +18,8 @@ import '../../knowledge/ui/knowledge_base_screen.dart';
 import '../../notes/data/note_repository.dart';
 import '../../notes/data/tag_repository.dart';
 import '../../notes/models/note_item.dart';
-import '../../notes/ui/note_editor_route.dart';
-import '../../notes/ui/notes_screen.dart';
+import '../../notes/ui/note_editor_route.dart' hide unawaited;
+import '../../notes/ui/notes_screen.dart' hide unawaited;
 import '../../settings/data/api_key_store.dart';
 import '../../settings/models/app_settings.dart';
 import '../../settings/ui/settings_screen.dart';
@@ -85,6 +87,17 @@ class _MainScreenState extends State<MainScreen> {
         debugLabel: 'main-${destination.id.name}-navigator',
       ),
   };
+  late final Map<AppDestinationId, NavigatorObserver>
+  _destinationNavigatorObservers = {
+    for (final destination in appDestinations)
+      destination.id: _DestinationNavigatorObserver(
+        destination.id,
+        _handleDestinationNavigationChanged,
+      ),
+  };
+  final Map<AppDestinationId, bool> _destinationCanPop = {
+    for (final destination in appDestinations) destination.id: false,
+  };
 
   @override
   void initState() {
@@ -150,54 +163,95 @@ class _MainScreenState extends State<MainScreen> {
     final index = appDestinations.indexWhere(
       (destination) => destination.id == _selectedDestination,
     );
-    return Scaffold(
-      appBar: _destinationOwnsScaffold(_selectedDestination)
-          ? null
-          : AppBar(
-              title: DjinnAppBarTitle(
-                title: _titleForDestination(_selectedDestination),
+    final destinationCanPop = _activeDestinationCanPop;
+    return PopScope<void>(
+      canPop: !destinationCanPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || !destinationCanPop) {
+          return;
+        }
+        unawaited(_popActiveDestinationRoute());
+      },
+      child: Scaffold(
+        appBar: _destinationOwnsScaffold(_selectedDestination)
+            ? null
+            : AppBar(
+                title: DjinnAppBarTitle(
+                  title: _titleForDestination(_selectedDestination),
+                ),
+                backgroundColor: Colors.white,
+                surfaceTintColor: Colors.white,
+                actions: const [DebugHeaderButton()],
               ),
-              backgroundColor: Colors.white,
-              surfaceTintColor: Colors.white,
-              actions: const [DebugHeaderButton()],
-            ),
-      body: IndexedStack(
-        index: index < 0 ? 2 : index,
-        children: [
-          for (final destination in appDestinations)
-            _buildDestinationShell(destination.id),
-        ],
+        body: IndexedStack(
+          index: index < 0 ? 2 : index,
+          children: [
+            for (final destination in appDestinations)
+              _buildDestinationShell(destination.id),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: index < 0 ? 2 : index,
+          onDestinationSelected: (index) {
+            final destination = appDestinations[index].id;
+            if (destination == _selectedDestination) {
+              return;
+            }
+            DebugConsole.log(
+              '[MainNav] switch from=${_selectedDestination.name} '
+              'to=${destination.name}',
+            );
+            setState(() {
+              _selectedDestination = destination;
+            });
+          },
+          destinations: [
+            for (final destination in appDestinations)
+              NavigationDestination(
+                icon: Icon(destination.icon),
+                selectedIcon: Icon(destination.icon),
+                label: destination.compactLabel,
+                tooltip: destination.label,
+              ),
+          ],
+        ),
+        floatingActionButton: _buildDestinationFab(),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index < 0 ? 2 : index,
-        onDestinationSelected: (index) {
-          final destination = appDestinations[index].id;
-          if (destination == _selectedDestination) {
-            return;
-          }
-          DebugConsole.log(
-            '[MainNav] switch from=${_selectedDestination.name} '
-            'to=${destination.name}',
-          );
-          setState(() {
-            _selectedDestination = destination;
-          });
-        },
-        destinations: [
-          for (final destination in appDestinations)
-            NavigationDestination(
-              icon: Icon(destination.icon),
-              selectedIcon: Icon(destination.icon),
-              label: destination.compactLabel,
-              tooltip: destination.label,
-            ),
-        ],
-      ),
-      floatingActionButton: _buildDestinationFab(),
     );
   }
 
-  Widget _buildDestinationFab() {
+  bool get _activeDestinationCanPop =>
+      _destinationCanPop[_selectedDestination] ?? false;
+
+  Future<void> _popActiveDestinationRoute() async {
+    final navigator =
+        _destinationNavigatorKeys[_selectedDestination]?.currentState;
+    if (navigator == null) {
+      return;
+    }
+    await navigator.maybePop();
+    _handleDestinationNavigationChanged(_selectedDestination);
+  }
+
+  void _handleDestinationNavigationChanged(AppDestinationId destination) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final canPop =
+          _destinationNavigatorKeys[destination]?.currentState?.canPop() ??
+          false;
+      if (_destinationCanPop[destination] == canPop) {
+        return;
+      }
+      setState(() => _destinationCanPop[destination] = canPop);
+    });
+  }
+
+  Widget? _buildDestinationFab() {
+    if (_activeDestinationCanPop) {
+      return null;
+    }
     final child = switch (_selectedDestination) {
       AppDestinationId.chat => FloatingActionButton(
         key: const ValueKey('main-destination-fab-chat'),
@@ -256,6 +310,7 @@ class _MainScreenState extends State<MainScreen> {
       key: ValueKey('main-destination-shell-${destination.name}'),
       child: Navigator(
         key: _destinationNavigatorKeys[destination],
+        observers: [_destinationNavigatorObservers[destination]!],
         onGenerateInitialRoutes: (navigator, initialRoute) => [
           MaterialPageRoute<void>(
             builder: (_) => _buildDestinationBody(destination),
@@ -388,5 +443,36 @@ class _MainScreenState extends State<MainScreen> {
       AppDestinationId.chat => 'Djinn',
       AppDestinationId.settings => 'Beállítások',
     };
+  }
+}
+
+class _DestinationNavigatorObserver extends NavigatorObserver {
+  _DestinationNavigatorObserver(this.destination, this.onChanged);
+
+  final AppDestinationId destination;
+  final ValueChanged<AppDestinationId> onChanged;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    onChanged(destination);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    onChanged(destination);
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didRemove(route, previousRoute);
+    onChanged(destination);
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    onChanged(destination);
   }
 }

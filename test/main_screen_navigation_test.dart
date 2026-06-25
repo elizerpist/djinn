@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:djinn/src/ai/ai_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -222,10 +223,25 @@ void main() {
     expect(find.text('AI chunkok'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.text('Tudástár'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('main-destination-fab-knowledge')),
+      findsNothing,
+    );
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('AI chunkok'), findsNothing);
+    expect(find.text('chunks.pdf'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('main-destination-fab-knowledge')),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
-    'note chunk list keeps bottom nav and chunk editor is fullscreen',
+    'note chunk list keeps bottom nav hides destination FAB and handles back',
     (tester) async {
       final noteRepository = MemoryNoteRepository();
       final note = await noteRepository.createDocumentNote(
@@ -249,17 +265,113 @@ void main() {
 
       expect(find.byKey(const ValueKey('note-editor-route')), findsOneWidget);
       expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byKey(const ValueKey('note-editor-add-fab')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('main-destination-fab-notes')),
+        findsNothing,
+      );
 
-      await tester.tap(find.byKey(const ValueKey('note-chunk-card-a')));
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
 
+      expect(find.byKey(const ValueKey('note-editor-route')), findsNothing);
+      expect(find.byKey(ValueKey('note-box-${note.id}')), findsOneWidget);
+      expect(find.byType(NavigationBar), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('note-text-chunk-editor')),
+        find.byKey(const ValueKey('main-destination-fab-notes')),
         findsOneWidget,
       );
-      expect(find.byType(NavigationBar), findsNothing);
     },
   );
+
+  testWidgets(
+    'all note chunk editor types open fullscreen from tabbed chunk list',
+    (tester) async {
+      final noteRepository = MemoryNoteRepository();
+      final note = await noteRepository.createDocumentNote(
+        title: 'Chunk típusok',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(id: 'text', type: NoteBlockType.paragraph, text: 'Régi'),
+            NoteBlock(
+              id: 'list',
+              type: NoteBlockType.listItem,
+              listItems: [NoteListItem(id: 'item-1', text: 'Elem')],
+            ),
+            NoteBlock(
+              id: 'table',
+              type: NoteBlockType.table,
+              rows: [
+                ['A', 'B'],
+              ],
+            ),
+            NoteBlock(
+              id: 'flow',
+              type: NoteBlockType.flowchart,
+              nodes: [
+                NoteFlowchartNode(
+                  id: 'node-1',
+                  label: 'Kezdés',
+                  shape: AiFlowchartNodeShape.startEnd,
+                  order: 1,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      await tester.pumpWidget(
+        _mainScreenApp(AppSettings.defaults(), noteRepository: noteRepository),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Jegyzetek'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('note-box-${note.id}')));
+      await tester.pumpAndSettle();
+
+      await _expectChunkEditorFullscreen(
+        tester,
+        chunkKey: const ValueKey('note-chunk-card-text'),
+        editorKey: const ValueKey('note-text-chunk-editor'),
+      );
+      await _expectChunkEditorFullscreen(
+        tester,
+        chunkKey: const ValueKey('note-chunk-card-list'),
+        editorKey: const ValueKey('note-list-chunk-editor'),
+      );
+      await _expectChunkEditorFullscreen(
+        tester,
+        chunkKey: const ValueKey('note-chunk-card-table'),
+        editorKey: const ValueKey('note-table-zoomable-content'),
+      );
+      await _expectChunkEditorFullscreen(
+        tester,
+        chunkKey: const ValueKey('note-chunk-card-flow'),
+        editorKey: const ValueKey('note-flowchart-canvas-editor'),
+      );
+    },
+  );
+}
+
+Future<void> _expectChunkEditorFullscreen(
+  WidgetTester tester, {
+  required ValueKey<String> chunkKey,
+  required ValueKey<String> editorKey,
+}) async {
+  await tester.tap(find.byKey(chunkKey));
+  await tester.pumpAndSettle();
+
+  expect(find.byKey(editorKey), findsOneWidget);
+  expect(find.byType(NavigationBar), findsNothing);
+
+  await tester.binding.handlePopRoute();
+  await tester.pumpAndSettle();
+
+  expect(find.byKey(editorKey), findsNothing);
+  expect(find.byKey(chunkKey), findsOneWidget);
+  expect(find.byType(NavigationBar), findsOneWidget);
 }
 
 Widget _mainScreenApp(

@@ -46,5 +46,6 @@ Run targeted Flutter tests and `flutter analyze` inside Ubuntu proot. APK builds
 
 - `flutter analyze`: PASS.
 - Targeted navigation/scroll tests: PASS for `test/main_screen_navigation_test.dart`, `test/notes_screen_test.dart`, `test/note_editor_route_test.dart`, `test/extracted_knowledge_screen_test.dart`, `test/widget_test.dart`, and `test/mobile_flowchart_viewer_test.dart`.
+- Review-fix coverage: PASS for active-tab system back handling, destination FAB hiding on PDF/note chunk-list routes, and fullscreen text/list/table/flowchart note chunk editors.
 - Source review: `rg "BouncingScrollPhysics" lib/src` returns no matches.
 - Full `flutter test`: 446 passed, 8 skipped, 1 failed. The failure is the pre-existing dirty `test/knowledge_base_screen_test.dart` case `manual chunk sheet keeps its header pinned above the form`, which was already present in the worktree before this implementation and is not part of the bottom navigation or global scroll behavior changes.
