@@ -1,8 +1,14 @@
+import 'dart:convert';
+
 import '../../notes/models/note_document.dart';
 import '../models/extracted_knowledge_item.dart';
 import '../models/local_extraction.dart';
 
 NoteBlock noteBlockFromPdfChunk(ExtractedKnowledgeItem item) {
+  final structured = _structuredNoteBlockFromPdfChunk(item);
+  if (structured != null) {
+    return structured;
+  }
   final title = item.sectionTitle?.trim();
   final blockTitle = title == null || title.isEmpty ? null : title;
   return switch (item.chunkKind) {
@@ -43,6 +49,32 @@ NoteBlock noteBlockFromPdfChunk(ExtractedKnowledgeItem item) {
       tags: item.tags,
     ),
   };
+}
+
+NoteBlock? _structuredNoteBlockFromPdfChunk(ExtractedKnowledgeItem item) {
+  final raw = item.structuredContentJson?.trim();
+  if (raw == null || raw.isEmpty) {
+    return null;
+  }
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) {
+      return null;
+    }
+    final block = NoteBlock.fromJson(Map<String, Object?>.from(decoded));
+    if (block.type != NoteBlockType.mixed) {
+      return null;
+    }
+    final title = block.title?.trim();
+    final fallbackTitle = item.sectionTitle?.trim();
+    return block.copyWith(
+      id: block.id.trim().isEmpty ? item.id : block.id,
+      title: title?.isNotEmpty == true ? block.title : fallbackTitle,
+      tags: block.tags.isEmpty ? item.tags : block.tags,
+    );
+  } catch (_) {
+    return null;
+  }
 }
 
 LocalChunkKind localChunkKindFromNoteBlock(NoteBlock block) {

@@ -542,7 +542,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         ],
       ),
       floatingActionButton: NoteChunkFab(
-        onAddText: () => _addBlock(NoteBlockType.paragraph),
+        onAddText: () => _addBlock(NoteBlockType.mixed),
         onAddList: () => _addBlock(NoteBlockType.listItem),
         onAddTable: () => _addBlock(NoteBlockType.table),
         onAddFlowchart: () => _addBlock(NoteBlockType.flowchart),

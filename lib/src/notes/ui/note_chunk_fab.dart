@@ -43,20 +43,6 @@ class _NoteChunkFabState extends State<NoteChunkFab> {
           ),
           const SizedBox(height: 10),
           _MiniFab(
-            key: const ValueKey('note-editor-add-table'),
-            tooltip: 'Táblázat chunk hozzáadása',
-            icon: Icons.table_chart_outlined,
-            onPressed: () => _run(widget.onAddTable),
-          ),
-          const SizedBox(height: 10),
-          _MiniFab(
-            key: const ValueKey('note-editor-add-list'),
-            tooltip: 'Lista chunk hozzáadása',
-            icon: Icons.checklist_outlined,
-            onPressed: () => _run(widget.onAddList),
-          ),
-          const SizedBox(height: 10),
-          _MiniFab(
             key: const ValueKey('note-editor-add-text'),
             tooltip: 'Szöveg chunk hozzáadása',
             icon: Icons.notes_outlined,

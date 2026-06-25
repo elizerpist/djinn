@@ -105,6 +105,22 @@ void main() {
     expect(text, 'A |  | C\n1 | 2 |');
   });
 
+  test('pdf chunk adapter loads structured mixed content when present', () {
+    final block = noteBlockFromPdfChunk(
+      const ExtractedKnowledgeItem(
+        id: 'mixed-1',
+        documentId: 'doc-1',
+        sourceType: EvidenceSourceType.textChunk,
+        text: 'Fallback',
+        structuredContentJson:
+            '{"id":"mixed-1","type":"mixed","mixedSections":[{"id":"p1","type":"paragraph","text":"Structured"}]}',
+      ),
+    );
+
+    expect(block.type, NoteBlockType.mixed);
+    expect(block.plainText, 'Structured');
+  });
+
   test('manual pdf chunk tags round trip through repository', () async {
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
@@ -219,9 +235,7 @@ void main() {
     await tester.tap(find.text('Manuális chunkok').last);
     await tester.pumpAndSettle();
 
-    final scrollable = tester.widget<Scrollable>(
-      find.byType(Scrollable).first,
-    );
+    final scrollable = tester.widget<Scrollable>(find.byType(Scrollable).first);
     expect(scrollable.physics, isNot(isA<BouncingScrollPhysics>()));
   });
 
@@ -750,10 +764,7 @@ void main() {
         find.byKey(const ValueKey('chunk-card-pdf-first')),
       );
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('chunk-validation-card')),
-        findsNothing,
-      );
+      expect(find.byKey(const ValueKey('chunk-validation-card')), findsNothing);
 
       expect(
         find.byKey(const ValueKey('shared-chunk-drag-pdf-first')),

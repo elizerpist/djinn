@@ -58,13 +58,38 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('note-editor-add-text')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-editor-add-list')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-editor-add-table')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-editor-add-list')), findsNothing);
+    expect(find.byKey(const ValueKey('note-editor-add-table')), findsNothing);
     expect(
       find.byKey(const ValueKey('note-editor-add-flowchart')),
       findsOneWidget,
     );
     expect(find.text('Szöveg'), findsNothing);
+  });
+
+  testWidgets('editor text FAB creates a mixed text chunk', (tester) async {
+    final repository = MemoryNoteRepository();
+    final note = await repository.createDocumentNote(
+      title: 'N',
+      document: NoteDocument.empty(),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteEditorRoute(repository: repository, initialNote: note),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('note-editor-add-fab')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('note-editor-add-text')));
+    await tester.pump();
+
+    final saved = (await repository.listNotes()).single;
+    expect(saved.document.blocks.last.type, NoteBlockType.mixed);
+    expect(
+      saved.document.blocks.last.mixedSections.single.type,
+      NoteMixedSectionType.paragraph,
+    );
   });
 
   testWidgets('delete chunk shows undo and restores original position', (
