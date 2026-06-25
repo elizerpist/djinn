@@ -27,6 +27,7 @@ String _titleFor(NoteBlockType type) {
   return switch (type) {
     NoteBlockType.heading => 'Címsor chunk',
     NoteBlockType.paragraph => 'Szöveg chunk',
+    NoteBlockType.mixed => 'Szöveg chunk',
     NoteBlockType.listItem => 'Lista chunk',
     NoteBlockType.table => 'Táblázat chunk',
     NoteBlockType.flowchart => 'Flowchart chunk',

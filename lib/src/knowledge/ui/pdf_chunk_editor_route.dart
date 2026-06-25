@@ -63,7 +63,8 @@ class _PdfChunkEditorRouteState extends State<PdfChunkEditorRoute> {
         onChanged: (block) => unawaited(_handleChanged(block)),
       ),
       NoteBlockType.heading ||
-      NoteBlockType.paragraph => NoteTextChunkEditorScreen(
+      NoteBlockType.paragraph ||
+      NoteBlockType.mixed => NoteTextChunkEditorScreen(
         block: _block,
         tagRepository: _tagRepository,
         onChanged: (block) => unawaited(_handleChanged(block)),

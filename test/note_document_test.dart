@@ -286,6 +286,76 @@ void main() {
     expect(block.paragraphStyles.single.level, 8);
   });
 
+  test('serializes mixed chunk sections and derives plain text in order', () {
+    const block = NoteBlock(
+      id: 'mixed-1',
+      type: NoteBlockType.mixed,
+      title: 'Célok',
+      mixedSections: [
+        NoteMixedSection(
+          id: 'p1',
+          type: NoteMixedSectionType.paragraph,
+          text: 'Az eljárásrend célja:',
+        ),
+        NoteMixedSection(
+          id: 'l1',
+          type: NoteMixedSectionType.list,
+          listItems: [
+            NoteListItem(id: 'i1', text: 'az ellátás során'),
+            NoteListItem(
+              id: 'i2',
+              text: 'a felszerelés meghatározása',
+              level: 1,
+            ),
+          ],
+          listLayoutMode: NoteListLayoutMode.hierarchy,
+        ),
+        NoteMixedSection(
+          id: 't1',
+          type: NoteMixedSectionType.table,
+          rows: [
+            ['Eszköz', 'Mennyiség'],
+            ['AED', '1'],
+          ],
+        ),
+      ],
+    );
+
+    final parsed = NoteBlock.fromJson(block.toJson());
+
+    expect(parsed.type, NoteBlockType.mixed);
+    expect(parsed.mixedSections, hasLength(3));
+    expect(parsed.plainText, contains('Az eljárásrend célja:'));
+    expect(parsed.plainText, contains('az ellátás során'));
+    expect(parsed.plainText, contains('AED | 1'));
+    expect(parsed.displayTextForIndexing, parsed.plainText);
+  });
+
+  test(
+    'legacy list and table blocks still parse after mixed type is added',
+    () {
+      final list = NoteBlock.fromJson({
+        'id': 'l1',
+        'type': 'list_item',
+        'listItems': [
+          {'id': 'i1', 'text': 'Régi lista'},
+        ],
+      });
+      final table = NoteBlock.fromJson({
+        'id': 't1',
+        'type': 'table',
+        'rows': [
+          ['A', 'B'],
+        ],
+      });
+
+      expect(list.type, NoteBlockType.listItem);
+      expect(list.plainText, contains('Régi lista'));
+      expect(table.type, NoteBlockType.table);
+      expect(table.plainText, contains('A | B'));
+    },
+  );
+
   test(
     'serializes multitag text ranges and scoped table flowchart tag assignments',
     () {

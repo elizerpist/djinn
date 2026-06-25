@@ -1145,6 +1145,7 @@ class NoteAwareLocalRetriever implements LocalRetriever {
         return _flowchartUnitEvidence(block, chunk, baseLabel, state);
       case NoteBlockType.heading:
       case NoteBlockType.paragraph:
+      case NoteBlockType.mixed:
         return _textUnitEvidence(block, chunk, baseLabel, state);
     }
   }
@@ -1155,7 +1156,9 @@ class NoteAwareLocalRetriever implements LocalRetriever {
     String baseLabel,
     ValidationState state,
   ) {
-    final units = _textUnits(block.text);
+    final units = _textUnits(
+      block.type == NoteBlockType.mixed ? block.plainText : block.text,
+    );
     if (units.isEmpty) {
       return const [];
     }

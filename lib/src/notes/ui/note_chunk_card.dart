@@ -154,6 +154,7 @@ class NoteChunkCard extends StatelessWidget {
     return switch (block.type) {
       NoteBlockType.heading => 'Címsor chunk',
       NoteBlockType.paragraph => 'Szöveg chunk',
+      NoteBlockType.mixed => 'Szöveg chunk',
       NoteBlockType.listItem => 'Lista chunk',
       NoteBlockType.table => 'Táblázat chunk',
       NoteBlockType.flowchart => 'Flowchart chunk',
@@ -173,7 +174,8 @@ class _ChunkBody extends StatelessWidget {
       NoteBlockType.flowchart => _FlowchartBody(block: block),
       NoteBlockType.listItem => _ListBody(block: block),
       NoteBlockType.heading ||
-      NoteBlockType.paragraph => _ParagraphBody(block: block),
+      NoteBlockType.paragraph ||
+      NoteBlockType.mixed => _ParagraphBody(block: block),
     };
   }
 }
@@ -185,7 +187,9 @@ class _ParagraphBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = block.text;
+    final text = block.type == NoteBlockType.mixed
+        ? block.plainText
+        : block.text;
     if (text.trim().isEmpty) {
       return const _EmptyBody();
     }

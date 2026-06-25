@@ -445,6 +445,8 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
           onChanged: (value) =>
               onChanged(block.copyWith(text: value, clearIndex: true)),
         );
+      case NoteBlockType.mixed:
+        return _StructuredPreview(text: block.plainText);
       case NoteBlockType.table:
         return _StructuredPreview(
           text: block.plainText,
@@ -725,6 +727,7 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
     return switch (type) {
       NoteBlockType.heading => Icons.title,
       NoteBlockType.paragraph => Icons.subject,
+      NoteBlockType.mixed => Icons.subject,
       NoteBlockType.listItem => Icons.format_list_bulleted,
       NoteBlockType.table => Icons.table_chart_outlined,
       NoteBlockType.flowchart => Icons.account_tree_outlined,
@@ -735,6 +738,7 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
     return switch (type) {
       NoteBlockType.heading => 'Cím',
       NoteBlockType.paragraph => 'Szöveg',
+      NoteBlockType.mixed => 'Szöveg',
       NoteBlockType.listItem => 'Vázlatpont',
       NoteBlockType.table => 'Táblázat',
       NoteBlockType.flowchart => 'Flowchart',
@@ -745,13 +749,13 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
 class _StructuredPreview extends StatelessWidget {
   const _StructuredPreview({
     required this.text,
-    required this.buttonLabel,
-    required this.onPressed,
+    this.buttonLabel,
+    this.onPressed,
   });
 
   final String text;
-  final String buttonLabel;
-  final VoidCallback onPressed;
+  final String? buttonLabel;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -773,12 +777,14 @@ class _StructuredPreview extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 8),
-        FilledButton.icon(
-          onPressed: onPressed,
-          icon: const Icon(Icons.open_in_full),
-          label: Text(buttonLabel),
-        ),
+        if (buttonLabel != null && onPressed != null) ...[
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: onPressed,
+            icon: const Icon(Icons.open_in_full),
+            label: Text(buttonLabel!),
+          ),
+        ],
       ],
     );
   }

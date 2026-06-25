@@ -73,7 +73,9 @@ class NoteChunkBuilder {
       NoteBlockType.listItem => NoteChunkKind.list,
       NoteBlockType.table => NoteChunkKind.table,
       NoteBlockType.flowchart => NoteChunkKind.flowchart,
-      NoteBlockType.heading || NoteBlockType.paragraph => NoteChunkKind.text,
+      NoteBlockType.heading ||
+      NoteBlockType.paragraph ||
+      NoteBlockType.mixed => NoteChunkKind.text,
     };
   }
 

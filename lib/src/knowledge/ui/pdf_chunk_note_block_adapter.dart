@@ -50,7 +50,9 @@ LocalChunkKind localChunkKindFromNoteBlock(NoteBlock block) {
     NoteBlockType.listItem => LocalChunkKind.list,
     NoteBlockType.table => LocalChunkKind.table,
     NoteBlockType.flowchart => LocalChunkKind.flowchart,
-    NoteBlockType.heading || NoteBlockType.paragraph => LocalChunkKind.text,
+    NoteBlockType.heading ||
+    NoteBlockType.paragraph ||
+    NoteBlockType.mixed => LocalChunkKind.text,
   };
 }
 
@@ -60,6 +62,7 @@ String pdfChunkTextFromNoteBlock(NoteBlock block) {
     NoteBlockType.table => _tableText(block),
     NoteBlockType.flowchart => _flowchartText(block),
     NoteBlockType.heading || NoteBlockType.paragraph => block.text.trim(),
+    NoteBlockType.mixed => block.plainText,
   };
 }
 

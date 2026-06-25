@@ -56,6 +56,8 @@ SharedChunkKind sharedKindFromNoteBlockType(NoteBlockType type) {
     NoteBlockType.listItem => SharedChunkKind.list,
     NoteBlockType.table => SharedChunkKind.table,
     NoteBlockType.flowchart => SharedChunkKind.flowchart,
-    NoteBlockType.heading || NoteBlockType.paragraph => SharedChunkKind.text,
+    NoteBlockType.heading ||
+    NoteBlockType.paragraph ||
+    NoteBlockType.mixed => SharedChunkKind.text,
   };
 }

@@ -7,7 +7,8 @@ enum NoteBlockType {
   heading('heading'),
   listItem('list_item'),
   table('table'),
-  flowchart('flowchart');
+  flowchart('flowchart'),
+  mixed('mixed');
 
   const NoteBlockType(this.wireName);
 
@@ -195,9 +196,7 @@ class NoteKnowledgeTag {
       type: type ?? this.type,
       label: label ?? this.label,
       colorValue: clearColorValue ? null : colorValue ?? this.colorValue,
-      colorSlotId: clearColorSlotId
-          ? null
-          : colorSlotId ?? this.colorSlotId,
+      colorSlotId: clearColorSlotId ? null : colorSlotId ?? this.colorSlotId,
       folderId: clearFolderId ? null : folderId ?? this.folderId,
     );
   }
@@ -854,6 +853,202 @@ class NoteListItem {
   }
 }
 
+String _noteIndent(int level) =>
+    List.filled(level.clamp(0, 8).toInt(), '  ').join();
+
+enum NoteMixedSectionType {
+  paragraph('paragraph'),
+  list('list'),
+  table('table');
+
+  const NoteMixedSectionType(this.wireName);
+
+  final String wireName;
+
+  static NoteMixedSectionType fromWireName(String? value) {
+    return switch (value) {
+      'list' => NoteMixedSectionType.list,
+      'table' => NoteMixedSectionType.table,
+      _ => NoteMixedSectionType.paragraph,
+    };
+  }
+}
+
+class NoteMixedSection {
+  const NoteMixedSection({
+    required this.id,
+    required this.type,
+    this.title,
+    this.text = '',
+    this.rangeTags = const [],
+    this.paragraphStyles = const [],
+    this.listItems = const [],
+    this.listLayoutMode = NoteListLayoutMode.checkbox,
+    this.rows = const [],
+    this.tableColumnWidths = const [],
+    this.tableRowHeights = const [],
+    this.scopedTags = const [],
+  });
+
+  final String id;
+  final NoteMixedSectionType type;
+  final String? title;
+  final String text;
+  final List<NoteTextRangeTag> rangeTags;
+  final List<NoteTextParagraphStyle> paragraphStyles;
+  final List<NoteListItem> listItems;
+  final NoteListLayoutMode listLayoutMode;
+  final List<List<String>> rows;
+  final List<double> tableColumnWidths;
+  final List<double> tableRowHeights;
+  final List<NoteScopedTagAssignment> scopedTags;
+
+  factory NoteMixedSection.fromJson(Map<String, Object?> json) {
+    return NoteMixedSection(
+      id: json['id']?.toString() ?? 'section-1',
+      type: NoteMixedSectionType.fromWireName(json['type']?.toString()),
+      title: json['title']?.toString(),
+      text: json['text']?.toString() ?? '',
+      rangeTags: _rangeTagsFromJson(json['rangeTags']),
+      paragraphStyles: _paragraphStylesFromJson(json['paragraphStyles']),
+      listItems: NoteBlock._listItemsFromJson(json['listItems']),
+      listLayoutMode: NoteListLayoutMode.fromWireName(
+        json['listLayoutMode']?.toString(),
+      ),
+      rows: NoteBlock._rowsFromJson(json['rows']),
+      tableColumnWidths: NoteBlock._doublesFromJson(json['tableColumnWidths']),
+      tableRowHeights: NoteBlock._doublesFromJson(json['tableRowHeights']),
+      scopedTags: _scopedTagsFromJson(json['scopedTags']),
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'type': type.wireName,
+      if (title != null && title!.trim().isNotEmpty) 'title': title,
+      if (text.isNotEmpty) 'text': text,
+      if (rangeTags.isNotEmpty)
+        'rangeTags': rangeTags.map((tag) => tag.toJson()).toList(),
+      if (paragraphStyles.isNotEmpty)
+        'paragraphStyles': paragraphStyles
+            .map((style) => style.toJson())
+            .toList(),
+      if (listItems.isNotEmpty)
+        'listItems': listItems.map((item) => item.toJson()).toList(),
+      if (listLayoutMode != NoteListLayoutMode.checkbox)
+        'listLayoutMode': listLayoutMode.wireName,
+      if (rows.isNotEmpty) 'rows': rows,
+      if (tableColumnWidths.isNotEmpty) 'tableColumnWidths': tableColumnWidths,
+      if (tableRowHeights.isNotEmpty) 'tableRowHeights': tableRowHeights,
+      if (scopedTags.isNotEmpty)
+        'scopedTags': scopedTags
+            .map((assignment) => assignment.toJson())
+            .toList(),
+    };
+  }
+
+  String get plainText {
+    final lines = <String>[];
+    if (title?.trim().isNotEmpty == true) {
+      lines.add(title!.trim());
+    }
+    switch (type) {
+      case NoteMixedSectionType.paragraph:
+        if (text.trim().isNotEmpty) {
+          lines.add(text.trim());
+        }
+        break;
+      case NoteMixedSectionType.list:
+        if (listItems.isEmpty) {
+          if (text.trim().isNotEmpty) {
+            lines.add(text.trim());
+          }
+        } else {
+          lines.addAll(
+            listItems
+                .map((item) => '${_noteIndent(item.level)}${item.text.trim()}')
+                .where((line) => line.trim().isNotEmpty),
+          );
+        }
+        break;
+      case NoteMixedSectionType.table:
+        for (final row in rows) {
+          final line = row
+              .map((cell) => cell.trim())
+              .where((cell) => cell.isNotEmpty)
+              .join(' | ');
+          if (line.isNotEmpty) {
+            lines.add(line);
+          }
+        }
+        break;
+    }
+    return lines.join('\n').trim();
+  }
+
+  List<NoteKnowledgeTag> get knownTags {
+    final tagsByMetadata = <String, NoteKnowledgeTag>{};
+
+    void remember(NoteKnowledgeTag tag) {
+      final key = tag.metadataText.trim();
+      if (key.isNotEmpty) {
+        tagsByMetadata[key] = tag;
+      }
+    }
+
+    for (final rangeTag in rangeTags) {
+      for (final tag in rangeTag.resolvedTags) {
+        remember(tag);
+      }
+    }
+    for (final assignment in scopedTags) {
+      for (final tag in assignment.tags) {
+        remember(tag);
+      }
+    }
+    for (final item in listItems) {
+      for (final tag in item.tags) {
+        remember(tag);
+      }
+    }
+
+    final values = tagsByMetadata.values.toList(growable: false);
+    values.sort((a, b) => a.metadataText.compareTo(b.metadataText));
+    return values;
+  }
+
+  NoteMixedSection copyWith({
+    String? id,
+    NoteMixedSectionType? type,
+    String? title,
+    String? text,
+    List<NoteTextRangeTag>? rangeTags,
+    List<NoteTextParagraphStyle>? paragraphStyles,
+    List<NoteListItem>? listItems,
+    NoteListLayoutMode? listLayoutMode,
+    List<List<String>>? rows,
+    List<double>? tableColumnWidths,
+    List<double>? tableRowHeights,
+    List<NoteScopedTagAssignment>? scopedTags,
+  }) {
+    return NoteMixedSection(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      text: text ?? this.text,
+      rangeTags: rangeTags ?? this.rangeTags,
+      paragraphStyles: paragraphStyles ?? this.paragraphStyles,
+      listItems: listItems ?? this.listItems,
+      listLayoutMode: listLayoutMode ?? this.listLayoutMode,
+      rows: rows ?? this.rows,
+      tableColumnWidths: tableColumnWidths ?? this.tableColumnWidths,
+      tableRowHeights: tableRowHeights ?? this.tableRowHeights,
+      scopedTags: scopedTags ?? this.scopedTags,
+    );
+  }
+}
+
 class NoteBlock {
   const NoteBlock({
     required this.id,
@@ -875,6 +1070,7 @@ class NoteBlock {
     this.edges = const [],
     this.listItems = const [],
     this.listLayoutMode = NoteListLayoutMode.checkbox,
+    this.mixedSections = const [],
     this.indexedContentHash,
     this.indexedAt,
   });
@@ -898,6 +1094,7 @@ class NoteBlock {
   final List<NoteFlowchartEdge> edges;
   final List<NoteListItem> listItems;
   final NoteListLayoutMode listLayoutMode;
+  final List<NoteMixedSection> mixedSections;
   final String? indexedContentHash;
   final DateTime? indexedAt;
 
@@ -924,6 +1121,7 @@ class NoteBlock {
       listLayoutMode: NoteListLayoutMode.fromWireName(
         json['listLayoutMode']?.toString(),
       ),
+      mixedSections: _mixedSectionsFromJson(json['mixedSections']),
       indexedContentHash: json['indexedContentHash']?.toString(),
       indexedAt: DateTime.tryParse(json['indexedAt']?.toString() ?? ''),
     );
@@ -967,6 +1165,10 @@ class NoteBlock {
         'listItems': listItems.map((item) => item.toJson()).toList(),
       if (listLayoutMode != NoteListLayoutMode.checkbox)
         'listLayoutMode': listLayoutMode.wireName,
+      if (mixedSections.isNotEmpty)
+        'mixedSections': mixedSections
+            .map((section) => section.toJson())
+            .toList(),
       if (indexedContentHash != null) 'indexedContentHash': indexedContentHash,
       if (indexedAt != null) 'indexedAt': indexedAt!.toIso8601String(),
     };
@@ -977,6 +1179,7 @@ class NoteBlock {
       NoteBlockType.table => _tableText,
       NoteBlockType.flowchart => _flowchartText,
       NoteBlockType.listItem => _listText,
+      NoteBlockType.mixed => _mixedText,
       NoteBlockType.heading || NoteBlockType.paragraph => text.trim(),
     };
   }
@@ -1050,6 +1253,11 @@ class NoteBlock {
         remember(tag);
       }
     }
+    for (final section in mixedSections) {
+      for (final tag in section.knownTags) {
+        remember(tag);
+      }
+    }
 
     final values = tagsByMetadata.values.toList(growable: false);
     values.sort((a, b) => a.metadataText.compareTo(b.metadataText));
@@ -1086,8 +1294,7 @@ class NoteBlock {
     return lines.join('\n').trimRight();
   }
 
-  String _indent(int level) =>
-      List.filled(level.clamp(0, 8).toInt(), '  ').join();
+  String _indent(int level) => _noteIndent(level);
 
   String get _tableText {
     final lines = <String>[];
@@ -1127,6 +1334,22 @@ class NoteBlock {
     return lines.where((line) => line.trim().isNotEmpty).join('\n').trim();
   }
 
+  String get _mixedText {
+    final parts = <String>[];
+    if (title?.trim().isNotEmpty == true) {
+      parts.add(title!.trim());
+    }
+    parts.addAll(
+      mixedSections
+          .map((section) => section.plainText)
+          .where((text) => text.trim().isNotEmpty),
+    );
+    if (parts.isEmpty && text.trim().isNotEmpty) {
+      parts.add(text.trim());
+    }
+    return parts.join('\n\n').trim();
+  }
+
   NoteBlock copyWith({
     String? id,
     NoteBlockType? type,
@@ -1147,6 +1370,7 @@ class NoteBlock {
     List<NoteFlowchartEdge>? edges,
     List<NoteListItem>? listItems,
     NoteListLayoutMode? listLayoutMode,
+    List<NoteMixedSection>? mixedSections,
     String? indexedContentHash,
     DateTime? indexedAt,
     bool clearIndex = false,
@@ -1171,6 +1395,7 @@ class NoteBlock {
       edges: edges ?? this.edges,
       listItems: listItems ?? this.listItems,
       listLayoutMode: listLayoutMode ?? this.listLayoutMode,
+      mixedSections: mixedSections ?? this.mixedSections,
       indexedContentHash: clearIndex
           ? null
           : indexedContentHash ?? this.indexedContentHash,
@@ -1237,6 +1462,18 @@ class NoteBlock {
     return value
         .whereType<Map>()
         .map((item) => NoteListItem.fromJson(Map<String, Object?>.from(item)))
+        .toList(growable: false);
+  }
+
+  static List<NoteMixedSection> _mixedSectionsFromJson(Object? value) {
+    if (value is! List) {
+      return const [];
+    }
+    return value
+        .whereType<Map>()
+        .map(
+          (item) => NoteMixedSection.fromJson(Map<String, Object?>.from(item)),
+        )
         .toList(growable: false);
   }
 

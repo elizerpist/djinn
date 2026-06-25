@@ -138,6 +138,17 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     return switch (type) {
       NoteBlockType.heading => NoteBlock(id: id, type: type, text: ''),
       NoteBlockType.paragraph => NoteBlock(id: id, type: type, text: ''),
+      NoteBlockType.mixed => NoteBlock(
+        id: id,
+        type: type,
+        mixedSections: const [
+          NoteMixedSection(
+            id: 'section-1',
+            type: NoteMixedSectionType.paragraph,
+            text: '',
+          ),
+        ],
+      ),
       NoteBlockType.listItem => NoteBlock(
         id: id,
         type: type,
@@ -388,7 +399,8 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     Widget editorFor(NoteBlock current) {
       return switch (current.type) {
         NoteBlockType.heading ||
-        NoteBlockType.paragraph => NoteTextChunkEditorScreen(
+        NoteBlockType.paragraph ||
+        NoteBlockType.mixed => NoteTextChunkEditorScreen(
           block: current,
           availableTags: availableTags,
           tagRepository: _tagRepository,

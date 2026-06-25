@@ -145,6 +145,7 @@ bool notePdfBlockHasExportableContent(NoteBlock block) {
   return switch (block.type) {
     NoteBlockType.heading ||
     NoteBlockType.paragraph => block.text.trim().isNotEmpty,
+    NoteBlockType.mixed => block.plainText.trim().isNotEmpty,
     NoteBlockType.listItem =>
       block.text.trim().isNotEmpty ||
           block.listItems.any((item) => item.text.trim().isNotEmpty),
@@ -306,6 +307,7 @@ List<pw.Widget> _blockSection(NoteBlock block, _PdfTextTheme textTheme) {
       NoteBlockType.listItem => _listBlock(block, textTheme),
       NoteBlockType.table => _tableBlock(block, textTheme),
       NoteBlockType.flowchart => _paragraphBlock(block, textTheme),
+      NoteBlockType.mixed => _paragraphBlock(block, textTheme),
     },
   ];
 }
@@ -333,7 +335,8 @@ pw.Widget _headingBlock(NoteBlock block, _PdfTextTheme textTheme) {
 }
 
 pw.Widget _paragraphBlock(NoteBlock block, _PdfTextTheme textTheme) {
-  return pw.Text(block.text.trim(), style: textTheme.body);
+  final text = block.text.trim();
+  return pw.Text(text.isEmpty ? block.plainText : text, style: textTheme.body);
 }
 
 pw.Widget _listBlock(NoteBlock block, _PdfTextTheme textTheme) {
@@ -747,6 +750,7 @@ String _blockTypeLabel(NoteBlockType type) {
   return switch (type) {
     NoteBlockType.heading => 'Címsor',
     NoteBlockType.paragraph => 'Szöveg',
+    NoteBlockType.mixed => 'Szöveg',
     NoteBlockType.listItem => 'Lista',
     NoteBlockType.table => 'Táblázat',
     NoteBlockType.flowchart => 'Flowchart',

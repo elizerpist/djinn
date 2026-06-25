@@ -27,6 +27,7 @@ class NoteAtomIndexer {
       switch (block.type) {
         case NoteBlockType.heading:
         case NoteBlockType.paragraph:
+        case NoteBlockType.mixed:
           atoms.addAll(
             _textAtoms(
               noteId: noteId,
@@ -82,7 +83,9 @@ class NoteAtomIndexer {
     required ValidationState state,
     required String inheritedSearchText,
   }) {
-    final units = _textUnits(block.text);
+    final units = _textUnits(
+      block.type == NoteBlockType.mixed ? block.plainText : block.text,
+    );
     if (units.isEmpty) {
       return const [];
     }
@@ -582,6 +585,7 @@ class NoteAtomIndexer {
       NoteBlockType.listItem => 'Lista',
       NoteBlockType.heading => 'Címsor',
       NoteBlockType.paragraph => 'Szöveg',
+      NoteBlockType.mixed => 'Szöveg',
     };
   }
 
