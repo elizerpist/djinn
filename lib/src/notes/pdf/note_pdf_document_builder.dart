@@ -307,7 +307,7 @@ List<pw.Widget> _blockSection(NoteBlock block, _PdfTextTheme textTheme) {
       NoteBlockType.listItem => _listBlock(block, textTheme),
       NoteBlockType.table => _tableBlock(block, textTheme),
       NoteBlockType.flowchart => _paragraphBlock(block, textTheme),
-      NoteBlockType.mixed => _paragraphBlock(block, textTheme),
+      NoteBlockType.mixed => _mixedBlock(block, textTheme),
     },
   ];
 }
@@ -337,6 +337,53 @@ pw.Widget _headingBlock(NoteBlock block, _PdfTextTheme textTheme) {
 pw.Widget _paragraphBlock(NoteBlock block, _PdfTextTheme textTheme) {
   final text = block.text.trim();
   return pw.Text(text.isEmpty ? block.plainText : text, style: textTheme.body);
+}
+
+pw.Widget _mixedBlock(NoteBlock block, _PdfTextTheme textTheme) {
+  if (block.mixedSections.isEmpty) {
+    return _paragraphBlock(block, textTheme);
+  }
+  final children = <pw.Widget>[];
+  for (final section in block.mixedSections) {
+    final sectionBlock = _blockFromMixedSection(block, section);
+    if (!notePdfBlockHasExportableContent(sectionBlock)) {
+      continue;
+    }
+    DebugConsole.log(
+      '[NotePdfExport] render mixed section block=${block.id} '
+      'section=${section.id} type=${section.type.wireName}',
+    );
+    if (children.isNotEmpty) {
+      children.add(pw.SizedBox(height: 10));
+    }
+    final sectionTitle = section.title?.trim();
+    if (sectionTitle != null && sectionTitle.isNotEmpty) {
+      children.add(
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 4),
+          child: pw.Text(
+            sectionTitle,
+            style: textTheme.body.copyWith(fontWeight: pw.FontWeight.bold),
+          ),
+        ),
+      );
+    }
+    children.add(switch (section.type) {
+      NoteMixedSectionType.paragraph => _paragraphBlock(
+        sectionBlock,
+        textTheme,
+      ),
+      NoteMixedSectionType.list => _listBlock(sectionBlock, textTheme),
+      NoteMixedSectionType.table => _tableBlock(sectionBlock, textTheme),
+    });
+  }
+  if (children.isEmpty) {
+    return _paragraphBlock(block, textTheme);
+  }
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: children,
+  );
 }
 
 pw.Widget _listBlock(NoteBlock block, _PdfTextTheme textTheme) {
@@ -392,6 +439,28 @@ pw.Widget _tableBlock(NoteBlock block, _PdfTextTheme textTheme) {
     cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
     headerDecoration: pw.BoxDecoration(color: PdfColor.fromHex('#E5E7EB')),
     border: pw.TableBorder.all(color: _rule, width: 0.5),
+  );
+}
+
+NoteBlock _blockFromMixedSection(NoteBlock block, NoteMixedSection section) {
+  final sectionTitle = section.title?.trim();
+  return NoteBlock(
+    id: '${block.id}:${section.id}',
+    type: switch (section.type) {
+      NoteMixedSectionType.paragraph => NoteBlockType.paragraph,
+      NoteMixedSectionType.list => NoteBlockType.listItem,
+      NoteMixedSectionType.table => NoteBlockType.table,
+    },
+    title: sectionTitle == null || sectionTitle.isEmpty ? null : sectionTitle,
+    text: section.text,
+    rangeTags: section.rangeTags,
+    paragraphStyles: section.paragraphStyles,
+    listItems: section.listItems,
+    listLayoutMode: section.listLayoutMode,
+    rows: section.rows,
+    tableColumnWidths: section.tableColumnWidths,
+    tableRowHeights: section.tableRowHeights,
+    scopedTags: section.scopedTags,
   );
 }
 

@@ -82,6 +82,63 @@ void main() {
       expect(o2.searchableText, contains('O2'));
     },
   );
+
+  test('atomizes mixed list and table sections with full chunk context', () {
+    final atoms = const NoteAtomIndexer().buildEvidence(
+      noteId: 'note-1',
+      noteTitle: 'Eljarasrend',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'mixed-1',
+            type: NoteBlockType.mixed,
+            title: 'Celok',
+            mixedSections: [
+              NoteMixedSection(
+                id: 'p1',
+                type: NoteMixedSectionType.paragraph,
+                text: 'Az eljarasrend celja:',
+              ),
+              NoteMixedSection(
+                id: 'l1',
+                type: NoteMixedSectionType.list,
+                listItems: [
+                  NoteListItem(id: 'i1', text: 'felszereles meghatarozasa'),
+                ],
+              ),
+              NoteMixedSection(
+                id: 't1',
+                type: NoteMixedSectionType.table,
+                rows: [
+                  ['Eszkoz', 'Mennyiseg'],
+                  ['AED', '1'],
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final listAtom = atoms.singleWhere(
+      (atom) => atom.atomType == NoteEvidenceAtomType.listItem,
+    );
+    final tableAtom = atoms.singleWhere(
+      (atom) =>
+          atom.atomType == NoteEvidenceAtomType.tableCell &&
+          atom.id.contains(':mixed-1:t1:row-1-cell-0'),
+    );
+
+    expect(listAtom.chunkId, 'mixed-1');
+    expect(listAtom.id, contains(':mixed-1:l1:item-0'));
+    expect(listAtom.text, contains('felszereles meghatarozasa'));
+    expect(listAtom.fullChunkText, contains('Az eljarasrend celja'));
+    expect(tableAtom.chunkId, 'mixed-1');
+    expect(tableAtom.id, contains(':mixed-1:t1:row-1-cell-0'));
+    expect(tableAtom.searchableText, contains('Eszkoz'));
+    expect(tableAtom.searchableText, contains('AED'));
+    expect(tableAtom.fullChunkText, contains('felszereles meghatarozasa'));
+  });
 }
 
 NoteDocument _documentWithEveryAtomType() {

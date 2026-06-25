@@ -138,6 +138,73 @@ void main() {
     },
   );
 
+  test(
+    'document builder exports mixed paragraph list and table sections',
+    () async {
+      DebugConsole.clear();
+      const document = NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'mixed-1',
+            type: NoteBlockType.mixed,
+            title: 'Célok',
+            mixedSections: [
+              NoteMixedSection(
+                id: 'p1',
+                type: NoteMixedSectionType.paragraph,
+                text: 'Az eljárásrend célja:',
+              ),
+              NoteMixedSection(
+                id: 'l1',
+                type: NoteMixedSectionType.list,
+                listItems: [
+                  NoteListItem(id: 'i1', text: 'felszerelés meghatározása'),
+                ],
+              ),
+              NoteMixedSection(
+                id: 't1',
+                type: NoteMixedSectionType.table,
+                rows: [
+                  ['Eszköz', 'Mennyiség'],
+                  ['AED', '1'],
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+      final note = NoteItem(
+        id: 'mixed-export',
+        type: NoteItemType.document,
+        title: 'Mixed export',
+        plainText: document.plainText,
+        payloadJson: document.toPayloadJson(),
+        auditState: LocalAuditState.edited,
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      );
+
+      final result = await const NotePdfExportService().generate(note);
+
+      expect(String.fromCharCodes(result.bytes.take(4)), '%PDF');
+      final logs = DebugConsole.allText;
+      expect(
+        logs,
+        contains(
+          'render mixed section block=mixed-1 section=p1 type=paragraph',
+        ),
+      );
+      expect(
+        logs,
+        contains('render mixed section block=mixed-1 section=l1 type=list'),
+      );
+      expect(
+        logs,
+        contains('render mixed section block=mixed-1 section=t1 type=table'),
+      );
+    },
+  );
+
   test('document builder starts each batch note on a fresh page', () async {
     DebugConsole.clear();
     NoteItem note(String id, String title, String text) {

@@ -27,9 +27,19 @@ class NoteAtomIndexer {
       switch (block.type) {
         case NoteBlockType.heading:
         case NoteBlockType.paragraph:
-        case NoteBlockType.mixed:
           atoms.addAll(
             _textAtoms(
+              noteId: noteId,
+              noteTitle: noteTitle,
+              block: block,
+              state: state,
+              inheritedSearchText: blockSearchText,
+            ),
+          );
+          break;
+        case NoteBlockType.mixed:
+          atoms.addAll(
+            _mixedAtoms(
               noteId: noteId,
               noteTitle: noteTitle,
               block: block,
@@ -74,6 +84,78 @@ class NoteAtomIndexer {
       }
     }
     return List.unmodifiable(atoms);
+  }
+
+  List<SourceEvidence> _mixedAtoms({
+    required String noteId,
+    required String noteTitle,
+    required NoteBlock block,
+    required ValidationState state,
+    required String inheritedSearchText,
+  }) {
+    if (block.mixedSections.isEmpty) {
+      return _textAtoms(
+        noteId: noteId,
+        noteTitle: noteTitle,
+        block: block,
+        state: state,
+        inheritedSearchText: inheritedSearchText,
+      );
+    }
+    final fullChunkText = block.displayTextForIndexing;
+    final chunkTitle = block.title?.trim();
+    final atoms = <SourceEvidence>[];
+    for (final section in block.mixedSections) {
+      final sectionBlock = _blockFromMixedSection(block, section);
+      final sectionSearchText = _joinSearchText([
+        inheritedSearchText,
+        section.title,
+      ]);
+      final sectionAtoms = switch (section.type) {
+        NoteMixedSectionType.paragraph => _textAtoms(
+          noteId: noteId,
+          noteTitle: noteTitle,
+          block: sectionBlock,
+          state: state,
+          inheritedSearchText: sectionSearchText,
+        ),
+        NoteMixedSectionType.list => _listAtoms(
+          noteId: noteId,
+          noteTitle: noteTitle,
+          block: sectionBlock,
+          state: state,
+          inheritedSearchText: sectionSearchText,
+        ),
+        NoteMixedSectionType.table => _tableAtoms(
+          noteId: noteId,
+          noteTitle: noteTitle,
+          block: sectionBlock,
+          state: state,
+          inheritedSearchText: sectionSearchText,
+        ),
+      };
+      for (final atom in sectionAtoms) {
+        atoms.add(
+          atom.copyWith(
+            chunkId: block.id,
+            chunkTitle: chunkTitle == null || chunkTitle.isEmpty
+                ? null
+                : chunkTitle,
+            fullChunkText: fullChunkText,
+          ),
+        );
+      }
+    }
+    if (atoms.isEmpty && block.plainText.trim().isNotEmpty) {
+      return _textAtoms(
+        noteId: noteId,
+        noteTitle: noteTitle,
+        block: block,
+        state: state,
+        inheritedSearchText: inheritedSearchText,
+      );
+    }
+    return atoms;
   }
 
   List<SourceEvidence> _textAtoms({
@@ -403,6 +485,29 @@ class NoteAtomIndexer {
       parts.add(tagMetadata);
     }
     return parts.join('\n').trim();
+  }
+
+  NoteBlock _blockFromMixedSection(NoteBlock block, NoteMixedSection section) {
+    final sectionTitle = section.title?.trim();
+    final blockTitle = block.title?.trim();
+    return NoteBlock(
+      id: '${block.id}:${section.id}',
+      type: switch (section.type) {
+        NoteMixedSectionType.paragraph => NoteBlockType.paragraph,
+        NoteMixedSectionType.list => NoteBlockType.listItem,
+        NoteMixedSectionType.table => NoteBlockType.table,
+      },
+      title: sectionTitle?.isNotEmpty == true ? sectionTitle : blockTitle,
+      text: section.text,
+      rangeTags: section.rangeTags,
+      paragraphStyles: section.paragraphStyles,
+      listItems: section.listItems,
+      listLayoutMode: section.listLayoutMode,
+      rows: section.rows,
+      tableColumnWidths: section.tableColumnWidths,
+      tableRowHeights: section.tableRowHeights,
+      scopedTags: section.scopedTags,
+    );
   }
 
   List<_TextUnit> _textUnits(String text) {
