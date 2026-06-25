@@ -15,6 +15,7 @@ import 'note_chunk_card.dart';
 import 'note_chunk_fab.dart';
 import 'note_flowchart_editor_screen.dart';
 import 'note_list_chunk_editor_screen.dart';
+import 'note_mixed_text_chunk_editor_screen.dart';
 import 'note_pdf_preview_screen.dart';
 import 'note_table_editor_screen.dart';
 import 'note_text_chunk_editor_screen.dart';
@@ -399,8 +400,14 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     Widget editorFor(NoteBlock current) {
       return switch (current.type) {
         NoteBlockType.heading ||
-        NoteBlockType.paragraph ||
-        NoteBlockType.mixed => NoteTextChunkEditorScreen(
+        NoteBlockType.paragraph => NoteTextChunkEditorScreen(
+          block: current,
+          availableTags: availableTags,
+          tagRepository: _tagRepository,
+          onChanged: _replaceBlock,
+          onDelete: () => _deleteBlock(current),
+        ),
+        NoteBlockType.mixed => NoteMixedTextChunkEditorScreen(
           block: current,
           availableTags: availableTags,
           tagRepository: _tagRepository,

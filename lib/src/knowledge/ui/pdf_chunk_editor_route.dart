@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../notes/data/tag_repository.dart';
 import '../../notes/models/note_document.dart';
 import '../../notes/ui/note_flowchart_editor_screen.dart';
 import '../../notes/ui/note_list_chunk_editor_screen.dart';
+import '../../notes/ui/note_mixed_text_chunk_editor_screen.dart';
 import '../../notes/ui/note_table_editor_screen.dart';
 import '../../notes/ui/note_text_chunk_editor_screen.dart';
 import '../data/knowledge_document_repository.dart';
@@ -41,6 +44,10 @@ class _PdfChunkEditorRouteState extends State<PdfChunkEditorRoute> {
       chunkKind: localChunkKindFromNoteBlock(block),
       auditState: LocalAuditState.edited,
       tags: block.tags,
+      structuredContentJson: block.type == NoteBlockType.mixed
+          ? jsonEncode(block.toJson())
+          : null,
+      clearStructuredContent: block.type != NoteBlockType.mixed,
     );
   }
 
@@ -63,8 +70,12 @@ class _PdfChunkEditorRouteState extends State<PdfChunkEditorRoute> {
         onChanged: (block) => unawaited(_handleChanged(block)),
       ),
       NoteBlockType.heading ||
-      NoteBlockType.paragraph ||
-      NoteBlockType.mixed => NoteTextChunkEditorScreen(
+      NoteBlockType.paragraph => NoteTextChunkEditorScreen(
+        block: _block,
+        tagRepository: _tagRepository,
+        onChanged: (block) => unawaited(_handleChanged(block)),
+      ),
+      NoteBlockType.mixed => NoteMixedTextChunkEditorScreen(
         block: _block,
         tagRepository: _tagRepository,
         onChanged: (block) => unawaited(_handleChanged(block)),
