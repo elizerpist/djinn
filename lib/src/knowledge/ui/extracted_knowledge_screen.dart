@@ -309,6 +309,7 @@ class _ExtractedKnowledgeListState extends State<_ExtractedKnowledgeList> {
     return ReorderableListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       itemCount: _orderedItems.length,
+      // ignore: deprecated_member_use
       onReorder: _reorder,
       itemBuilder: (context, index) {
         final item = _orderedItems[index];
