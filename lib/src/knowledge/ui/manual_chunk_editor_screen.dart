@@ -8,10 +8,12 @@ import '../../debug/debug_console.dart';
 import '../data/knowledge_document_repository.dart';
 import '../data/mlkit_ocr_engine.dart';
 import '../data/pdfrx_local_page_extractor.dart';
+import '../models/extracted_knowledge_item.dart';
 import '../models/knowledge_document.dart';
 import '../models/local_extraction.dart';
 import '../../shared/ui/inline_bottom_sheet_card.dart';
 import '../../flowchart/ui/manual_flowchart_draft_editor_screen.dart';
+import 'source_chunk_box_overlay.dart';
 
 const _manualChunkKinds = [
   LocalChunkKind.text,
@@ -61,6 +63,8 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
   Offset? _dragStart;
   Offset? _dragCurrent;
   Rect? _selectionRect;
+  List<ExtractedKnowledgeItem> _sourceItems = const [];
+  SourceChunkBoxMode _boxMode = SourceChunkBoxMode.hidden;
   int _tableRows = 2;
   int _tableColumns = 2;
 
@@ -74,6 +78,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       'open document=${widget.document.id} filename=${widget.document.filename} '
       'path=${widget.document.localPath} isPng=$_isPng',
     );
+    _reloadSourceItems();
   }
 
   @override
@@ -254,14 +259,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       setState(() => _errorText = 'A chunk tartalma nem lehet üres.');
       return;
     }
-    final page = int.tryParse(_pageController.text.trim());
-    if (page == null || page < 1) {
-      _log(
-        'save rejected reason=invalid_page value=${_pageController.text.trim()}',
-      );
-      setState(() => _errorText = 'Az oldalszám legalább 1 legyen.');
-      return;
-    }
+    final page = _pageNumber < 1 ? 1 : _pageNumber;
     _log(
       'save start document=${widget.document.id} kind=${_kind.wireName} '
       'page=$page chars=${content.length} source=$_sourceMode rect=${_formatRect(_selectionRect)}',
@@ -312,7 +310,19 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
         'save complete document=${widget.document.id} kind=${_kind.wireName} '
         'chunk=${chunk.id} manualCount=$manualCount',
       );
-      Navigator.of(context).pop(true);
+      await _reloadSourceItems();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _saving = false;
+        _selectionKind = null;
+        _selectionRect = null;
+        _dragStart = null;
+        _dragCurrent = null;
+        _errorText = null;
+        _boxMode = SourceChunkBoxMode.manual;
+      });
     } catch (error) {
       if (!mounted) {
         return;
@@ -426,6 +436,23 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
     });
   }
 
+  Future<void> _reloadSourceItems() async {
+    final items = await widget.repository.listExtractedKnowledgeItems(
+      widget.document.id,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _sourceItems = items);
+    _log(
+      'source boxes reloaded document=${widget.document.id} count=${items.length}',
+    );
+  }
+
+  void _handleSourceBoxTap(String chunkId) {
+    _log('source box tap document=${widget.document.id} chunk=$chunkId');
+  }
+
   Future<void> _openFlowchartDraftEditor() async {
     final pageNumber = int.tryParse(_pageController.text.trim()) ?? _pageNumber;
     _log(
@@ -486,6 +513,20 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       body: Stack(
         children: [
           Positioned.fill(child: _buildViewer(context)),
+          if (_sourceItems.isNotEmpty && _boxMode != SourceChunkBoxMode.hidden)
+            Positioned.fill(
+              child: Material(
+                type: MaterialType.transparency,
+                child: SourceChunkBoxOverlay(
+                  boxes: sourceChunkBoxesFromItems(
+                    _sourceItems,
+                    mode: _boxMode,
+                    pageNumber: _pageNumber,
+                  ),
+                  onTapBox: _handleSourceBoxTap,
+                ),
+              ),
+            ),
           if (_selectionKind != null && !_cardVisible)
             Positioned.fill(
               child: _SelectionLayer(
@@ -540,7 +581,6 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
                 onDismiss: _cancelCard,
                 child: _ManualChunkCard(
                   kind: _kind,
-                  pageController: _pageController,
                   titleController: _titleController,
                   contentController: _contentController,
                   loading: _loadingSelectionText,
@@ -849,7 +889,6 @@ class _ExtractionBoxHeader extends StatelessWidget {
 class _ManualChunkCard extends StatelessWidget {
   const _ManualChunkCard({
     required this.kind,
-    required this.pageController,
     required this.titleController,
     required this.contentController,
     required this.loading,
@@ -866,7 +905,6 @@ class _ManualChunkCard extends StatelessWidget {
   });
 
   final LocalChunkKind kind;
-  final TextEditingController pageController;
   final TextEditingController titleController;
   final TextEditingController contentController;
   final bool loading;
@@ -887,6 +925,7 @@ class _ManualChunkCard extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Material(
+        key: const Key('manual-chunk-card-surface'),
         elevation: 14,
         color: Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
@@ -897,151 +936,164 @@ class _ManualChunkCard extends StatelessWidget {
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.sizeOf(context).height * 0.72,
               ),
-              child: SingleChildScrollView(
-                physics: const ClampingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 42,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD1D5DB),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Kijelölt chunk mentése',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<LocalChunkKind>(
-                      key: const Key('manual-chunk-kind-field'),
-                      initialValue: kind,
-                      decoration: const InputDecoration(
-                        labelText: 'Chunk típusa',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        for (final option in _manualChunkKinds)
-                          DropdownMenuItem(
-                            value: option,
-                            child: Text(option.label),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          onKindChanged(value);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _KindSpecificControls(
-                      kind: kind,
-                      tableRows: tableRows,
-                      tableColumns: tableColumns,
-                      loading: loading,
-                      saving: saving,
-                      onTableAction: onTableAction,
-                      onFlowchartAction: onFlowchartAction,
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      key: const Key('manual-chunk-page-field'),
-                      controller: pageController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Oldal',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      key: const Key('manual-chunk-title-field'),
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Cím / szekció',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (kind == LocalChunkKind.flowchart) ...[
-                      OutlinedButton.icon(
-                        key: const Key('manual-flowchart-open-editor'),
-                        onPressed: loading || saving ? null : onEditFlowchart,
-                        icon: const Icon(Icons.account_tree_outlined),
-                        label: const Text('Interaktív flowchart szerkesztő'),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    Stack(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    key: const Key('manual-chunk-card-header'),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TextField(
-                          key: const Key('manual-chunk-content-field'),
-                          controller: contentController,
-                          minLines: 7,
-                          maxLines: 12,
-                          decoration: const InputDecoration(
-                            labelText: 'Kinyert tartalom',
-                            alignLabelWithHint: true,
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        if (loading)
-                          const Positioned.fill(
-                            child: ColoredBox(
-                              color: Color(0x66FFFFFF),
-                              child: Center(child: CircularProgressIndicator()),
+                        Center(
+                          child: Container(
+                            width: 42,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD1D5DB),
+                              borderRadius: BorderRadius.circular(999),
                             ),
                           ),
-                      ],
-                    ),
-                    if (errorText != null) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        errorText!,
-                        style: const TextStyle(
-                          color: Color(0xFFB91C1C),
-                          fontWeight: FontWeight.w700,
                         ),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: saving ? null : onCancel,
-                            child: const Text('Mégse'),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Kijelölt chunk mentése',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton.icon(
-                            key: const Key('manual-chunk-save'),
-                            onPressed: saving || loading ? null : onSave,
-                            icon: saving
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                      ],
+                    ),
+                  ),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      key: const Key('manual-chunk-form-scroll'),
+                      physics: const ClampingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          DropdownButtonFormField<LocalChunkKind>(
+                            key: const Key('manual-chunk-kind-field'),
+                            initialValue: kind,
+                            decoration: const InputDecoration(
+                              labelText: 'Chunk típusa',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              for (final option in _manualChunkKinds)
+                                DropdownMenuItem(
+                                  value: option,
+                                  child: Text(option.label),
+                                ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                onKindChanged(value);
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _KindSpecificControls(
+                            kind: kind,
+                            tableRows: tableRows,
+                            tableColumns: tableColumns,
+                            loading: loading,
+                            saving: saving,
+                            onTableAction: onTableAction,
+                            onFlowchartAction: onFlowchartAction,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            key: const Key('manual-chunk-title-field'),
+                            controller: titleController,
+                            decoration: const InputDecoration(
+                              labelText: 'Cím / szekció',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          if (kind == LocalChunkKind.flowchart) ...[
+                            OutlinedButton.icon(
+                              key: const Key('manual-flowchart-open-editor'),
+                              onPressed: loading || saving
+                                  ? null
+                                  : onEditFlowchart,
+                              icon: const Icon(Icons.account_tree_outlined),
+                              label: const Text(
+                                'Interaktív flowchart szerkesztő',
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          Stack(
+                            children: [
+                              TextField(
+                                key: const Key('manual-chunk-content-field'),
+                                controller: contentController,
+                                minLines: 7,
+                                maxLines: 12,
+                                decoration: const InputDecoration(
+                                  labelText: 'Kinyert tartalom',
+                                  alignLabelWithHint: true,
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              if (loading)
+                                const Positioned.fill(
+                                  child: ColoredBox(
+                                    color: Color(0x66FFFFFF),
+                                    child: Center(
+                                      child: CircularProgressIndicator(),
                                     ),
-                                  )
-                                : const Icon(Icons.save_outlined),
-                            label: const Text('Mentés'),
+                                  ),
+                                ),
+                            ],
                           ),
-                        ),
-                      ],
+                          if (errorText != null) ...[
+                            const SizedBox(height: 10),
+                            Text(
+                              errorText!,
+                              style: const TextStyle(
+                                color: Color(0xFFB91C1C),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: saving ? null : onCancel,
+                                  child: const Text('Mégse'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: FilledButton.icon(
+                                  key: const Key('manual-chunk-save'),
+                                  onPressed: saving || loading ? null : onSave,
+                                  icon: saving
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.save_outlined),
+                                  label: const Text('Mentés'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],

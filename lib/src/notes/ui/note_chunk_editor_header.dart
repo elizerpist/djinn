@@ -16,6 +16,7 @@ class NoteChunkEditorHeader extends StatelessWidget
     this.extraMenuItems = const [],
     this.onExtraMenuSelected,
     this.saveAction,
+    this.canDeleteChunk = true,
   });
 
   final String? title;
@@ -30,6 +31,7 @@ class NoteChunkEditorHeader extends StatelessWidget
   final List<PopupMenuEntry<String>> extraMenuItems;
   final ValueChanged<String>? onExtraMenuSelected;
   final Widget? saveAction;
+  final bool canDeleteChunk;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -93,12 +95,14 @@ class NoteChunkEditorHeader extends StatelessWidget
               child: const Text('Kijelölt tag törlése'),
             ),
             ...extraMenuItems,
-            const PopupMenuDivider(),
-            const PopupMenuItem(
-              key: ValueKey('note-chunk-menu-delete-chunk'),
-              value: 'delete-chunk',
-              child: Text('Chunk törlése'),
-            ),
+            if (canDeleteChunk) ...[
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                key: ValueKey('note-chunk-menu-delete-chunk'),
+                value: 'delete-chunk',
+                child: Text('Chunk törlése'),
+              ),
+            ],
           ],
         ),
         ?saveAction,

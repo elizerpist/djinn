@@ -1349,6 +1349,137 @@ void main() {
     expect(scrollView.physics, isA<ClampingScrollPhysics>());
   });
 
+  testWidgets('manual chunk save sheet omits page field and can drag-dismiss', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    await _openManualChunkEditor(
+      tester,
+      repository,
+      filename: 'manual-sheet-dismiss.pdf',
+    );
+
+    await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Szöveg').last);
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const Key('manual-chunk-selection-layer')),
+      const Offset(260, 160),
+    );
+    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const Key('manual-chunk-title-field')),
+    );
+
+    expect(find.byKey(const Key('manual-chunk-page-field')), findsNothing);
+
+    await tester.drag(
+      find.byKey(const ValueKey('inline-bottom-sheet-card')),
+      const Offset(0, 180),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('manual-chunk-title-field')), findsNothing);
+    expect(find.byKey(const Key('manual-chunk-new-selection')), findsOneWidget);
+  });
+
+  testWidgets('manual chunk save stays in viewer and prints saved source box', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await _openManualChunkEditor(
+      tester,
+      repository,
+      filename: 'manual-print-box.pdf',
+    );
+
+    await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Szöveg').last);
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const Key('manual-chunk-selection-layer')),
+      const Offset(260, 160),
+    );
+    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const Key('manual-chunk-title-field')),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('manual-chunk-title-field')),
+      'Kész szakasz',
+    );
+    await tester.enterText(
+      find.byKey(const Key('manual-chunk-content-field')),
+      'Mentett tartalom',
+    );
+    await tester.ensureVisible(find.byKey(const Key('manual-chunk-save')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('manual-chunk-save')));
+    await tester.pumpAndSettle();
+
+    final items = await repository.listExtractedKnowledgeItems(
+      document.id,
+      pipeline: LocalExtractionPipeline.manual,
+    );
+    expect(items, hasLength(1));
+    expect(find.text('Kézi chunkolás'), findsOneWidget);
+    expect(find.byKey(const Key('manual-chunk-title-field')), findsNothing);
+    expect(
+      find.byKey(ValueKey('source-chunk-box-${items.single.id}')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('manual-chunk-new-selection')), findsOneWidget);
+  });
+
+  testWidgets('manual chunk sheet keeps its header pinned above the form', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    await _openManualChunkEditor(
+      tester,
+      repository,
+      filename: 'manual-sheet-header.pdf',
+    );
+
+    await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Szöveg').last);
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const Key('manual-chunk-selection-layer')),
+      const Offset(260, 160),
+    );
+    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const Key('manual-chunk-title-field')),
+    );
+
+    final surface = find.byKey(const Key('manual-chunk-card-surface'));
+    final header = find.byKey(const Key('manual-chunk-card-header'));
+    final formScroll = find.byKey(const Key('manual-chunk-form-scroll'));
+
+    expect(surface, findsOneWidget);
+    expect(header, findsOneWidget);
+    expect(formScroll, findsOneWidget);
+    expect(
+      find.descendant(
+        of: formScroll,
+        matching: find.text('Kijelölt chunk mentése'),
+      ),
+      findsNothing,
+    );
+
+    final headerGap =
+        tester.getTopLeft(header).dy - tester.getTopLeft(surface).dy;
+    expect(headerGap, inInclusiveRange(0, 24));
+  });
+
   testWidgets(
     'manual table selection exposes box controls and logs operations',
     (tester) async {

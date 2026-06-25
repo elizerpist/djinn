@@ -675,6 +675,16 @@ class ObjectBoxKnowledgeRepository
           chunk.text = text;
         }
         _chunkBox.put(chunk);
+        if (text != null) {
+          _updateChunkDerivedRows(
+            documentPublicId: documentPublicId,
+            sourceId: sourceId,
+            chunk: chunk,
+            textChanged: true,
+            sectionTitleChanged: false,
+            chunkKindChanged: false,
+          );
+        }
         for (final auditItem in _auditItemBox.getAll()) {
           if (auditItem.sourceId == sourceId) {
             auditItem.auditState = auditState.wireName;
@@ -702,6 +712,68 @@ class ObjectBoxKnowledgeRepository
         edge.validationState = validationState.wireName;
         edge.rejectionReason = reason;
         _flowchartEdgeBox.put(edge);
+      }
+    });
+  }
+
+  Future<void> updateExtractedKnowledgeItem(
+    String documentPublicId,
+    String itemId, {
+    String? text,
+    String? sectionTitle,
+    LocalChunkKind? chunkKind,
+    LocalAuditState? auditState,
+    List<NoteKnowledgeTag>? tags,
+  }) async {
+    final sourceId = itemId.startsWith('$documentPublicId:')
+        ? itemId
+        : '$documentPublicId:$itemId';
+    _store.runInTransaction(TxMode.write, () {
+      final chunk = _findChunk(sourceId);
+      if (chunk == null) {
+        return;
+      }
+      if (text != null) {
+        chunk.text = text;
+      }
+      if (sectionTitle != null) {
+        chunk.sectionTitle = sectionTitle;
+      }
+      if (chunkKind != null) {
+        chunk.chunkKind = chunkKind.wireName;
+      }
+      if (auditState != null) {
+        chunk.auditState = auditState.wireName;
+      }
+      if (tags != null) {
+        chunk.tagsJson = _tagsToJson(tags);
+      }
+      _chunkBox.put(chunk);
+      _updateChunkDerivedRows(
+        documentPublicId: documentPublicId,
+        sourceId: sourceId,
+        chunk: chunk,
+        textChanged: text != null,
+        sectionTitleChanged: sectionTitle != null,
+        chunkKindChanged: chunkKind != null,
+      );
+      for (final auditItem in _auditItemBox.getAll()) {
+        if (auditItem.sourceId == sourceId) {
+          if (auditState != null) {
+            auditItem.auditState = auditState.wireName;
+          }
+          if (text != null) {
+            auditItem.previewText = text;
+          }
+          if (sectionTitle != null) {
+            auditItem.title = sectionTitle;
+          }
+          if (chunkKind != null) {
+            auditItem.itemKind = chunkKind.wireName;
+          }
+          auditItem.updatedAtMillis = DateTime.now().millisecondsSinceEpoch;
+          _auditItemBox.put(auditItem);
+        }
       }
     });
   }
@@ -914,6 +986,127 @@ class ObjectBoxKnowledgeRepository
     _knowledgeNodeBox.put(node);
   }
 
+  KnowledgeEdgeEntity? _findKnowledgeEdge(String publicId) {
+    final query = _knowledgeEdgeBox
+        .query(KnowledgeEdgeEntity_.publicId.equals(publicId))
+        .build();
+    try {
+      return query.findFirst();
+    } finally {
+      query.close();
+    }
+  }
+
+  void _putKnowledgeEdge(KnowledgeEdgeEntity edge) {
+    final existing = _findKnowledgeEdge(edge.publicId);
+    if (existing != null) {
+      edge.id = existing.id;
+    }
+    _knowledgeEdgeBox.put(edge);
+  }
+
+  void _updateChunkDerivedRows({
+    required String documentPublicId,
+    required String sourceId,
+    required DocumentChunkEntity chunk,
+    required bool textChanged,
+    required bool sectionTitleChanged,
+    required bool chunkKindChanged,
+  }) {
+    final nodeId = '$sourceId:node';
+    final knowledgeNode = _findKnowledgeNode(nodeId);
+    if (knowledgeNode != null) {
+      if (textChanged || sectionTitleChanged) {
+        knowledgeNode.label = chunk.sectionTitle?.trim().isNotEmpty == true
+            ? chunk.sectionTitle!.trim()
+            : _shortNodeLabel(chunk.text);
+      }
+      if (chunkKindChanged) {
+        knowledgeNode.nodeType = chunk.chunkKind;
+      }
+      _knowledgeNodeBox.put(knowledgeNode);
+    }
+    if (textChanged) {
+      for (final evidence in _knowledgeEvidenceBox.getAll()) {
+        if (evidence.sourceId == sourceId) {
+          evidence.quote = chunk.text;
+          _knowledgeEvidenceBox.put(evidence);
+        }
+      }
+    }
+    if (sectionTitleChanged) {
+      _rewireSectionEdge(
+        documentPublicId: documentPublicId,
+        sourceId: sourceId,
+        nodeId: nodeId,
+        sectionTitle: chunk.sectionTitle,
+        pageNumber: chunk.pageNumber,
+      );
+    }
+    if (textChanged || chunkKindChanged) {
+      _removeEmbeddingsForSource(sourceId);
+    }
+  }
+
+  void _rewireSectionEdge({
+    required String documentPublicId,
+    required String sourceId,
+    required String nodeId,
+    required String? sectionTitle,
+    required int? pageNumber,
+  }) {
+    final partOfEdgeIds = _knowledgeEdgeBox
+        .getAll()
+        .where(
+          (edge) =>
+              edge.documentPublicId == documentPublicId &&
+              edge.fromNodePublicId == nodeId &&
+              edge.relationType == 'part_of',
+        )
+        .map((edge) => edge.id)
+        .toList(growable: false);
+    if (partOfEdgeIds.isNotEmpty) {
+      _knowledgeEdgeBox.removeMany(partOfEdgeIds);
+    }
+    final title = sectionTitle?.trim();
+    if (title == null || title.isEmpty) {
+      return;
+    }
+    final sectionKey = _graphKey(title);
+    final sectionNodeId = '$documentPublicId:section:$sectionKey';
+    _putKnowledgeNode(
+      KnowledgeNodeEntity(
+        publicId: sectionNodeId,
+        documentPublicId: documentPublicId,
+        label: title,
+        nodeType: 'section',
+        pageNumber: pageNumber,
+      ),
+    );
+    _putKnowledgeEdge(
+      KnowledgeEdgeEntity(
+        publicId: '$nodeId:part_of:$sectionNodeId',
+        documentPublicId: documentPublicId,
+        fromNodePublicId: nodeId,
+        toNodePublicId: sectionNodeId,
+        relationType: 'part_of',
+        sourceId: sourceId,
+        weight: 1,
+      ),
+    );
+  }
+
+  void _removeEmbeddingsForSource(String sourceId) {
+    final embeddingIds = _embeddingBox
+        .getAll()
+        .where((embedding) => embedding.sourceId == sourceId)
+        .map((embedding) => embedding.id)
+        .toList(growable: false);
+    if (embeddingIds.isNotEmpty) {
+      _embeddingBox.removeMany(embeddingIds);
+    }
+  }
+
   List<DocumentChunkEntity> _chunksForDocument(String documentPublicId) {
     final query = _chunkBox
         .query(DocumentChunkEntity_.documentPublicId.equals(documentPublicId))
@@ -1099,23 +1292,23 @@ class ObjectBoxKnowledgeRepository
     ChunkEmbeddingEntity? embedding,
   ) {
     final pipeline = LocalExtractionPipeline.fromWireName(chunk.pipeline);
+    final chunkKind = LocalChunkKind.fromWireName(chunk.chunkKind);
+    final embeddedSourceType = embedding == null
+        ? null
+        : evidenceSourceTypeFromWireName(embedding.sourceType);
     return ExtractedKnowledgeItem(
       id: _packageChunkId(documentPublicId, chunk.publicId),
       documentId: documentPublicId,
       sourceType: pipeline == LocalExtractionPipeline.ai
-          ? evidenceSourceTypeFromWireName(
-              embedding?.sourceType ?? EvidenceSourceType.textChunk.wireName,
-            )
-          : _sourceTypeForLocalKind(
-              LocalChunkKind.fromWireName(chunk.chunkKind),
-            ),
+          ? embeddedSourceType ?? _sourceTypeForLocalKind(chunkKind)
+          : _sourceTypeForLocalKind(chunkKind),
       text: chunk.text,
       pageNumber: chunk.pageNumber,
       sectionTitle: chunk.sectionTitle,
       embeddingModel: embedding?.model,
       sourceRectJson: chunk.sourceRectJson,
       pipeline: pipeline,
-      chunkKind: LocalChunkKind.fromWireName(chunk.chunkKind),
+      chunkKind: chunkKind,
       auditState: LocalAuditState.fromWireName(chunk.auditState),
       endPageNumber: chunk.endPageNumber,
       confidence: chunk.confidence,

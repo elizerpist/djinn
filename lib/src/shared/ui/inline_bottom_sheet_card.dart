@@ -18,15 +18,40 @@ class InlineBottomSheetCard extends StatefulWidget {
 
 class _InlineBottomSheetCardState extends State<InlineBottomSheetCard> {
   double _dragOffset = 0;
+  Offset? _dragStart;
+  double _lastPrimaryVelocity = 0;
 
-  void _handleDragUpdate(DragUpdateDetails details) {
-    setState(() {
-      _dragOffset = (_dragOffset + details.delta.dy).clamp(0, double.infinity);
-    });
+  void _handlePointerDown(PointerDownEvent event) {
+    _dragStart = event.position;
+    _lastPrimaryVelocity = 0;
   }
 
-  void _handleDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
+  void _handlePointerMove(PointerMoveEvent event) {
+    final start = _dragStart;
+    if (start == null) {
+      return;
+    }
+    final delta = event.position - start;
+    if (delta.dy <= 0 || delta.dy.abs() < delta.dx.abs()) {
+      return;
+    }
+    setState(() {
+      _dragOffset = delta.dy.clamp(0, double.infinity);
+    });
+    _lastPrimaryVelocity = event.delta.dy;
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    _finishDrag();
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    _finishDrag();
+  }
+
+  void _finishDrag() {
+    _dragStart = null;
+    final velocity = _lastPrimaryVelocity * 60;
     if (_dragOffset >= widget.dismissThreshold || velocity > 700) {
       widget.onDismiss();
       return;
@@ -36,11 +61,13 @@ class _InlineBottomSheetCardState extends State<InlineBottomSheetCard> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Listener(
       key: const ValueKey('inline-bottom-sheet-card'),
       behavior: HitTestBehavior.translucent,
-      onVerticalDragUpdate: _handleDragUpdate,
-      onVerticalDragEnd: _handleDragEnd,
+      onPointerDown: _handlePointerDown,
+      onPointerMove: _handlePointerMove,
+      onPointerUp: _handlePointerUp,
+      onPointerCancel: _handlePointerCancel,
       child: AnimatedSlide(
         duration: _dragOffset == 0
             ? const Duration(milliseconds: 160)

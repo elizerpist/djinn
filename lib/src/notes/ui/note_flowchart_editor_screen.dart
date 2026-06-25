@@ -1330,6 +1330,7 @@ class _NoteFlowchartEditorScreenState extends State<NoteFlowchartEditorScreen> {
         onDeleteSelectedTag: _deleteSelectedTag,
         onDeleteChunk: _deleteChunk,
         canDeleteSelectedTag: _selectedTargetHasTags,
+        canDeleteChunk: widget.onDelete != null,
         saveAction: widget.onChanged == null
             ? TextButton.icon(
                 key: const ValueKey('note-flowchart-save'),

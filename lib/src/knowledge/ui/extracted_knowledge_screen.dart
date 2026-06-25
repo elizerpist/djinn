@@ -7,12 +7,13 @@ import '../models/extracted_knowledge_item.dart';
 import '../models/flowchart_hierarchy.dart';
 import '../models/knowledge_document.dart';
 import '../models/local_extraction.dart';
-import '../../shared/chunks/chunk_card.dart';
 import '../../shared/chunks/chunk_validation_card.dart';
+import '../../shared/chunks/shared_chunk_card.dart';
 import '../../shared/ui/draggable_bottom_card.dart';
 import '../../flowchart/ui/interactive_flowchart_editor_screen.dart';
 import '../../flowchart/ui/mobile_flowchart_viewer.dart';
 import '../../notes/ui/tag_manager_sheet.dart';
+import 'pdf_chunk_editor_route.dart';
 import 'pdf_shared_chunk_adapter.dart';
 
 class ExtractedKnowledgeScreen extends StatefulWidget {
@@ -129,6 +130,24 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
     _reloadData();
   }
 
+  Future<void> _openPdfChunkEditor(ExtractedKnowledgeItem item) async {
+    final flowchartId = item.flowchartId;
+    if (flowchartId != null && flowchartId.isNotEmpty) {
+      await _openFlowchartEditor(flowchartId);
+      return;
+    }
+    await Navigator.of(context, rootNavigator: true).push<void>(
+      MaterialPageRoute(
+        builder: (_) => PdfChunkEditorRoute(
+          repository: widget.repository,
+          documentId: widget.document.id,
+          item: item,
+        ),
+      ),
+    );
+    _reloadData();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -181,6 +200,7 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
                 child: _ExtractedKnowledgeList(
                   items: items,
                   onValidate: _openValidationCard,
+                  onOpenEditor: _openPdfChunkEditor,
                   onEditFlowchart: _openFlowchartEditor,
                   onTag: _openTagSheet,
                 ),
@@ -246,22 +266,32 @@ class _DocumentSummary extends StatelessWidget {
   }
 }
 
-class _ExtractedKnowledgeList extends StatelessWidget {
+class _ExtractedKnowledgeList extends StatefulWidget {
   const _ExtractedKnowledgeList({
     required this.items,
     required this.onValidate,
+    required this.onOpenEditor,
     required this.onEditFlowchart,
     required this.onTag,
   });
 
   final List<ExtractedKnowledgeItem> items;
   final ValueChanged<ExtractedKnowledgeItem> onValidate;
+  final ValueChanged<ExtractedKnowledgeItem> onOpenEditor;
   final ValueChanged<String> onEditFlowchart;
   final ValueChanged<ExtractedKnowledgeItem> onTag;
 
   @override
+  State<_ExtractedKnowledgeList> createState() =>
+      _ExtractedKnowledgeListState();
+}
+
+class _ExtractedKnowledgeListState extends State<_ExtractedKnowledgeList> {
+  final Set<String> _expandedIds = {};
+
+  @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
+    if (widget.items.isEmpty) {
       return const Center(
         child: Text(
           'Nincs ilyen típusú kinyert tartalom',
@@ -269,28 +299,40 @@ class _ExtractedKnowledgeList extends StatelessWidget {
         ),
       );
     }
-    final flowchartItems = items
+    final flowchartItems = widget.items
         .where(
           (item) =>
               item.sourceType == EvidenceSourceType.flowchartNode ||
               item.sourceType == EvidenceSourceType.flowchartEdge,
         )
         .toList(growable: false);
-    if (flowchartItems.length == items.length) {
+    if (flowchartItems.length == widget.items.length) {
       return _FlowchartHierarchyList(
         items: flowchartItems,
-        onEditFlowchart: onEditFlowchart,
+        onEditFlowchart: widget.onEditFlowchart,
       );
     }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-      itemCount: items.length,
+      itemCount: widget.items.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) => _ExtractedKnowledgeTile(
-        item: items[index],
-        onValidate: () => onValidate(items[index]),
-        onTag: () => onTag(items[index]),
-      ),
+      itemBuilder: (context, index) {
+        final item = widget.items[index];
+        return _ExtractedKnowledgeTile(
+          item: item,
+          expanded: _expandedIds.contains(item.id),
+          onToggleExpanded: () {
+            setState(() {
+              if (!_expandedIds.add(item.id)) {
+                _expandedIds.remove(item.id);
+              }
+            });
+          },
+          onOpenEditor: () => widget.onOpenEditor(item),
+          onValidate: () => widget.onValidate(item),
+          onTag: () => widget.onTag(item),
+        );
+      },
     );
   }
 }
@@ -499,40 +541,115 @@ MobileFlowchartData _mobileFlowchartDataFromGroup(
 class _ExtractedKnowledgeTile extends StatelessWidget {
   const _ExtractedKnowledgeTile({
     required this.item,
+    required this.expanded,
+    required this.onToggleExpanded,
+    required this.onOpenEditor,
     required this.onValidate,
     required this.onTag,
   });
 
   final ExtractedKnowledgeItem item;
+  final bool expanded;
+  final VoidCallback onToggleExpanded;
+  final VoidCallback onOpenEditor;
   final VoidCallback onValidate;
   final VoidCallback onTag;
 
   @override
   Widget build(BuildContext context) {
-    return ChunkCard(
-      viewModel: ChunkCardViewModel(
-        id: item.id,
-        title: item.pageLabel,
-        preview: item.text,
-        kind: _cardKindFor(item),
-        auditState: item.auditState,
-        sourceLabel: item.typeLabel,
-        pipelineLabel: item.pipelineLabel,
-        pageLabel: item.pageLabel,
-        tags: item.tags,
-      ),
-      onLongPress: onValidate,
-      onTag: onTag,
-      tagButtonKey: ValueKey('pdf-chunk-tags-${item.id}'),
-      expandedChild: _ExtractedKnowledgeBody(item: item),
-      metadata: _metadata(item),
+    final shared = sharedChunkFromExtractedItem(
+      item,
+      filename: '',
+      isImage: false,
     );
+    return SharedChunkCard(
+      id: item.id,
+      keyPrefix: 'chunk-card',
+      expandKeyPrefix: 'pdf-chunk',
+      kind: shared.kind,
+      title: shared.title,
+      expanded: expanded,
+      statusChips: _statusChips(item),
+      onOpenEditor: onOpenEditor,
+      onLongPress: onValidate,
+      onToggleExpanded: onToggleExpanded,
+      actions: [
+        IconButton(
+          key: ValueKey('pdf-chunk-tags-${item.id}'),
+          tooltip: 'Chunk tagek',
+          onPressed: onTag,
+          icon: const Icon(Icons.sell_outlined),
+        ),
+        IconButton(
+          key: ValueKey('pdf-chunk-validate-${item.id}'),
+          tooltip: 'Chunk audit',
+          onPressed: onValidate,
+          icon: const Icon(Icons.fact_check_outlined),
+        ),
+      ],
+      expandedBodyKey: ValueKey('pdf-chunk-expanded-body-${item.id}'),
+      expandedPadding: item.chunkKind == LocalChunkKind.flowchart
+          ? const EdgeInsets.fromLTRB(8, 10, 8, 2)
+          : const EdgeInsets.fromLTRB(46, 10, 8, 2),
+      expandedBody: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ExtractedKnowledgeBody(item: item),
+          const SizedBox(height: 12),
+          Text(
+            _metadata(item),
+            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static List<SharedChunkStatusChip> _statusChips(ExtractedKnowledgeItem item) {
+    final chips = <SharedChunkStatusChip>[
+      SharedChunkStatusChip(
+        label: item.auditState == LocalAuditState.unreviewed
+            ? 'Review'
+            : item.auditState.label,
+        color: _auditColor(item.auditState),
+      ),
+      SharedChunkStatusChip(
+        label: item.typeLabel,
+        color: const Color(0xFF0F766E),
+      ),
+      SharedChunkStatusChip(
+        label: item.pipelineLabel,
+        color: const Color(0xFF475569),
+      ),
+    ];
+    for (final tag in item.tags) {
+      final label = tag.label.trim();
+      if (label.isEmpty) {
+        continue;
+      }
+      chips.add(
+        SharedChunkStatusChip(
+          label: label,
+          color: Color(tag.resolvedColorValue),
+        ),
+      );
+    }
+    return chips;
+  }
+
+  static Color _auditColor(LocalAuditState state) {
+    return switch (state) {
+      LocalAuditState.accepted => const Color(0xFF047857),
+      LocalAuditState.edited => const Color(0xFF2563EB),
+      LocalAuditState.rejected => const Color(0xFFB91C1C),
+      LocalAuditState.unreviewed => const Color(0xFFB45309),
+    };
   }
 
   static String _metadata(ExtractedKnowledgeItem item) {
     final parts = <String>[
       'id: ${item.id}',
-      'típus: ${item.sourceType.wireName}',
+      'tipus: ${item.sourceType.wireName}',
       'pipeline: ${item.pipeline.wireName}',
       'audit: ${item.auditState.wireName}',
     ];
@@ -540,16 +657,7 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
     if (model != null && model.isNotEmpty) {
       parts.add('embedding: $model');
     }
-    return parts.join('  •  ');
-  }
-
-  static ChunkCardKind _cardKindFor(ExtractedKnowledgeItem item) {
-    final shared = sharedChunkFromExtractedItem(
-      item,
-      filename: '',
-      isImage: false,
-    );
-    return shared.kind;
+    return parts.join('  -  ');
   }
 }
 

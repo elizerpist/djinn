@@ -228,6 +228,25 @@ void main() {
       findsNothing,
     );
 
+    await tester.tap(find.byKey(const Key('pdf-chunk-mode-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manuális chunkok').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chunk-card-manual-chunk-1')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-text-chunk-editor')),
+      findsOneWidget,
+    );
+    expect(find.byType(NavigationBar), findsNothing);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Manuális chunkok'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 

@@ -91,7 +91,9 @@ class SourceChunkBoxOverlay extends StatelessWidget {
     return Stack(
       children: [
         Positioned.fill(
-          child: CustomPaint(painter: _SourceChunkBoxPainter(boxes)),
+          child: IgnorePointer(
+            child: CustomPaint(painter: _SourceChunkBoxPainter(boxes)),
+          ),
         ),
         for (final box in boxes)
           Positioned.fromRect(

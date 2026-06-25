@@ -1094,6 +1094,7 @@ class _NoteTableEditorScreenState extends State<NoteTableEditorScreen> {
         onDeleteSelectedTag: _deleteSelectedTag,
         onDeleteChunk: _deleteChunk,
         canDeleteSelectedTag: _selection != null && _hasTags(_selection!),
+        canDeleteChunk: widget.onDelete != null,
         trailingActions: [
           IconButton(
             key: const ValueKey('note-table-appbar-add-column'),

@@ -511,6 +511,34 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     );
   }
 
+  Future<void> updateExtractedKnowledgeItem(
+    String documentPublicId,
+    String itemId, {
+    String? text,
+    String? sectionTitle,
+    LocalChunkKind? chunkKind,
+    LocalAuditState? auditState,
+    List<NoteKnowledgeTag>? tags,
+  }) async {
+    final extractedItems = _extractedItemsByDocument[documentPublicId];
+    if (extractedItems == null) {
+      return;
+    }
+    final index = extractedItems.indexWhere((item) => item.id == itemId);
+    if (index == -1) {
+      return;
+    }
+    final kind = chunkKind ?? extractedItems[index].chunkKind;
+    extractedItems[index] = extractedItems[index].copyWith(
+      text: text,
+      sectionTitle: sectionTitle,
+      chunkKind: kind,
+      sourceType: _sourceTypeForLocalKind(kind),
+      auditState: auditState,
+      tags: tags,
+    );
+  }
+
   Future<void> updateExtractedKnowledgeTags(
     String documentPublicId,
     String itemId,

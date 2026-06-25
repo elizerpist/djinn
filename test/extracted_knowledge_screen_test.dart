@@ -3,8 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/src/ai/ai_client.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
+import 'package:djinn/src/knowledge/models/extracted_knowledge_item.dart';
 import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/knowledge/ui/extracted_knowledge_screen.dart';
+import 'package:djinn/src/knowledge/ui/pdf_chunk_note_block_adapter.dart';
+import 'package:djinn/src/local_store/entities.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/shared/chunks/chunk_card.dart';
 
@@ -16,6 +19,90 @@ void main() {
       'table',
       'flowchart',
     ]);
+  });
+
+  test('pdf chunk adapter preserves list levels and checkbox states', () {
+    final text = pdfChunkTextFromNoteBlock(
+      const NoteBlock(
+        id: 'list-1',
+        type: NoteBlockType.listItem,
+        listItems: [
+          NoteListItem(id: 'a', text: 'Parent', checked: true),
+          NoteListItem(id: 'b', text: 'Child', level: 2),
+        ],
+      ),
+    );
+
+    expect(text, '[x] Parent\n    [ ] Child');
+
+    final block = noteBlockFromPdfChunk(
+      const ExtractedKnowledgeItem(
+        id: 'list-1',
+        documentId: 'document-1',
+        sourceType: EvidenceSourceType.textChunk,
+        text: '[x] Parent\n    [ ] Child',
+        chunkKind: LocalChunkKind.list,
+      ),
+    );
+
+    expect(block.listItems.first.checked, isTrue);
+    expect(block.listItems.first.level, 0);
+    expect(block.listItems.last.checked, isFalse);
+    expect(block.listItems.last.level, 2);
+  });
+
+  test('pdf chunk adapter regenerates flowchart text from edited nodes', () {
+    final text = pdfChunkTextFromNoteBlock(
+      const NoteBlock(
+        id: 'flow-1',
+        type: NoteBlockType.flowchart,
+        text: 'Régi, stale szöveg',
+        nodes: [
+          NoteFlowchartNode(id: 'start', label: 'Start'),
+          NoteFlowchartNode(id: 'end', label: 'Vége'),
+        ],
+        edges: [
+          NoteFlowchartEdge(
+            id: 'edge-1',
+            fromNodeId: 'start',
+            toNodeId: 'end',
+            label: 'igen',
+          ),
+        ],
+      ),
+    );
+
+    expect(text, 'Start\nVége\nStart -> Vége: igen');
+  });
+
+  test('pdf chunk adapter preserves empty table cells', () {
+    final block = noteBlockFromPdfChunk(
+      const ExtractedKnowledgeItem(
+        id: 'table-1',
+        documentId: 'document-1',
+        sourceType: EvidenceSourceType.tableChunk,
+        text: 'A |  | C\n1 | 2 |',
+        chunkKind: LocalChunkKind.table,
+      ),
+    );
+
+    expect(block.rows, [
+      ['A', '', 'C'],
+      ['1', '2', ''],
+    ]);
+
+    final text = pdfChunkTextFromNoteBlock(
+      const NoteBlock(
+        id: 'table-1',
+        type: NoteBlockType.table,
+        rows: [
+          ['A', '', 'C'],
+          ['1', '2', ''],
+        ],
+      ),
+    );
+
+    expect(text, 'A |  | C\n1 | 2 |');
   });
 
   test('manual pdf chunk tags round trip through repository', () async {
@@ -134,6 +221,233 @@ void main() {
 
     final listView = tester.widget<ListView>(find.byType(ListView).first);
     expect(listView.physics, isNot(isA<BouncingScrollPhysics>()));
+  });
+
+  testWidgets(
+    'manual pdf chunk cards expand scroll and open fullscreen note-style editors',
+    (tester) async {
+      final repository = KnowledgeDocumentRepository();
+      final document = await repository.addDocument(
+        filename: 'manual-card-contract.pdf',
+        localPath: '/memory/manual-card-contract.pdf',
+        sizeBytes: 8,
+        importedAt: DateTime.utc(2026, 6, 25),
+        sha256: 'hash-manual-card-contract',
+      );
+      await repository.saveLocalChunks(document.id, [
+        const LocalChunk(
+          id: 'pdf-text',
+          documentId: 'document-1',
+          text: 'Szöveg chunk tartalom',
+          pageNumber: 1,
+          sectionTitle: 'Szöveg',
+          pipeline: LocalExtractionPipeline.manual,
+          kind: LocalChunkKind.text,
+        ),
+        const LocalChunk(
+          id: 'pdf-list',
+          documentId: 'document-1',
+          text: 'Első pont\nMásodik pont',
+          pageNumber: 1,
+          sectionTitle: 'Lista',
+          pipeline: LocalExtractionPipeline.manual,
+          kind: LocalChunkKind.list,
+        ),
+        const LocalChunk(
+          id: 'pdf-table',
+          documentId: 'document-1',
+          text: 'A | B\n1 | 2',
+          pageNumber: 1,
+          sectionTitle: 'Táblázat',
+          pipeline: LocalExtractionPipeline.manual,
+          kind: LocalChunkKind.table,
+        ),
+        const LocalChunk(
+          id: 'pdf-flow',
+          documentId: 'document-1',
+          text: 'Kezdés -> Vége',
+          pageNumber: 1,
+          sectionTitle: 'Flow',
+          pipeline: LocalExtractionPipeline.manual,
+          kind: LocalChunkKind.flowchart,
+        ),
+        for (var index = 0; index < 8; index += 1)
+          LocalChunk(
+            id: 'pdf-extra-$index',
+            documentId: 'document-1',
+            text: 'Extra chunk $index',
+            pageNumber: 1,
+            pipeline: LocalExtractionPipeline.manual,
+            kind: LocalChunkKind.text,
+          ),
+      ], replaceExisting: false);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ExtractedKnowledgeScreen(
+            repository: repository,
+            document: document,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('pdf-chunk-mode-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Manuális chunkok').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('pdf-chunk-expand-pdf-extra-0')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('pdf-chunk-expanded-body-pdf-extra-0')),
+        findsOneWidget,
+      );
+      await tester.drag(find.byType(ListView).first, const Offset(0, -420));
+      await tester.pumpAndSettle();
+      expect(find.text('Extra chunk 7'), findsWidgets);
+      await tester.drag(find.byType(ListView).first, const Offset(0, 420));
+      await tester.pumpAndSettle();
+
+      await _expectPdfChunkEditor(
+        tester,
+        cardKey: const ValueKey('chunk-card-pdf-text'),
+        editorKey: const ValueKey('note-text-chunk-editor'),
+      );
+      await _expectPdfChunkEditor(
+        tester,
+        cardKey: const ValueKey('chunk-card-pdf-list'),
+        editorKey: const ValueKey('note-list-chunk-editor'),
+      );
+      await _expectPdfChunkEditor(
+        tester,
+        cardKey: const ValueKey('chunk-card-pdf-table'),
+        editorKey: const ValueKey('note-table-zoomable-content'),
+      );
+      await _expectPdfChunkEditor(
+        tester,
+        cardKey: const ValueKey('chunk-card-pdf-flow'),
+        editorKey: const ValueKey('note-flowchart-canvas-editor'),
+      );
+    },
+  );
+
+  testWidgets('mixed flowchart rows open the interactive flowchart editor', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'mixed-flowchart.pdf',
+      localPath: '/memory/mixed-flowchart.pdf',
+      sizeBytes: 8,
+      importedAt: DateTime.utc(2026, 6, 25),
+      sha256: 'hash-mixed-flowchart',
+    );
+    await repository.saveExtractedEvidence(
+      documentPublicId: document.id,
+      evidence: const AiExtractedEvidence(
+        id: 'ai-text',
+        text: 'AI szöveg chunk',
+        pageNumber: 1,
+        sourceType: AiEvidenceSourceType.textChunk,
+      ),
+      embedding: List<double>.filled(3072, 0.1),
+      embeddingModel: 'gemini-embedding-001',
+    );
+    await repository.saveFlowchartCandidate(
+      documentPublicId: document.id,
+      flowchart: const AiFlowchartCandidate(
+        id: 'flow-mixed',
+        pageNumber: 1,
+        title: 'Vegyes flowchart',
+        nodes: [
+          AiFlowchartNode(
+            id: 'n1',
+            label: 'Döntés',
+            shape: AiFlowchartNodeShape.decision,
+          ),
+        ],
+        edges: [],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExtractedKnowledgeScreen(
+          repository: repository,
+          document: document,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('chunk-card-flow-mixed:n1')),
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const ValueKey('chunk-card-flow-mixed:n1')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('flowchart-editor-canvas')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-flowchart-canvas-editor')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('pdf chunk fullscreen editor hides note delete action', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'delete-menu.pdf',
+      localPath: '/memory/delete-menu.pdf',
+      sizeBytes: 8,
+      importedAt: DateTime.utc(2026, 6, 25),
+      sha256: 'hash-delete-menu',
+    );
+    await repository.saveLocalChunks(document.id, const [
+      LocalChunk(
+        id: 'manual-delete-menu',
+        documentId: 'document-1',
+        text: 'Nem törölhető PDF route-ból',
+        pageNumber: 1,
+        pipeline: LocalExtractionPipeline.manual,
+        kind: LocalChunkKind.text,
+      ),
+    ], replaceExisting: false);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExtractedKnowledgeScreen(
+          repository: repository,
+          document: document,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pdf-chunk-mode-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manuális chunkok').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('chunk-card-manual-delete-menu')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note-chunk-menu-delete-chunk')),
+      findsNothing,
+    );
+    expect(find.text('Chunk törlése'), findsNothing);
   });
 
   testWidgets('manual pdf chunk tag button opens sheet and persists tags', (
@@ -504,4 +818,24 @@ void main() {
     );
     expect(saved?.nodes.map((node) => node.label), contains('Újraértékelés'));
   });
+}
+
+Future<void> _expectPdfChunkEditor(
+  WidgetTester tester, {
+  required ValueKey<String> cardKey,
+  required ValueKey<String> editorKey,
+}) async {
+  await tester.scrollUntilVisible(
+    find.byKey(cardKey),
+    220,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(cardKey));
+  await tester.pumpAndSettle();
+
+  expect(find.byKey(editorKey), findsOneWidget);
+
+  await tester.binding.handlePopRoute();
+  await tester.pumpAndSettle();
 }

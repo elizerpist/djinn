@@ -327,6 +327,7 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
         onDeleteSelectedTag: _deleteSelectedTag,
         onDeleteChunk: _deleteChunk,
         canDeleteSelectedTag: _selectedItemHasTags,
+        canDeleteChunk: widget.onDelete != null,
         onExtraMenuSelected: _handleExtraMenuSelection,
         extraMenuItems: [
           const PopupMenuDivider(),
