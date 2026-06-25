@@ -185,6 +185,49 @@ void main() {
   });
 
   test(
+    'manual ObjectBox chunks preserve structured mixed content json',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'djinn-objectbox-mixed-json-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final ObjectBoxStore objectBox;
+      try {
+        objectBox = await ObjectBoxStore.open(directory: directory);
+      } on ArgumentError catch (error) {
+        markTestSkipped('Host ObjectBox library unavailable: $error');
+        return;
+      }
+      addTearDown(objectBox.close);
+
+      final repository = ObjectBoxKnowledgeRepository(store: objectBox.store);
+      final document = await repository.addImportedDocument(
+        filename: 'mixed.pdf',
+        localPath: '/memory/mixed.pdf',
+        sizeBytes: 4,
+        sha256: 'hash-mixed-json',
+      );
+
+      await repository.saveLocalChunks(document.publicId, const [
+        LocalChunk(
+          id: 'mixed-1',
+          documentId: 'ignored',
+          text: 'Az eljárásrend célja:\naz ellátás során',
+          pageNumber: 1,
+          pipeline: LocalExtractionPipeline.manual,
+          kind: LocalChunkKind.text,
+          structuredContentJson: '{"type":"mixed","mixedSections":[]}',
+        ),
+      ], replaceExisting: false);
+
+      final items = await repository.listExtractedKnowledgeItems(
+        document.publicId,
+      );
+      expect(items.single.structuredContentJson, contains('"type":"mixed"'));
+    },
+  );
+
+  test(
     'keeps edited AI table chunks typed as tables without embeddings',
     () async {
       final directory = await Directory.systemTemp.createTemp(

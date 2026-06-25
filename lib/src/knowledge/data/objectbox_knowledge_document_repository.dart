@@ -270,6 +270,8 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
     LocalChunkKind? chunkKind,
     LocalAuditState? auditState,
     List<NoteKnowledgeTag>? tags,
+    String? structuredContentJson,
+    bool clearStructuredContent = false,
   }) {
     return _repository.updateExtractedKnowledgeItem(
       documentPublicId,
@@ -279,6 +281,8 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
       chunkKind: chunkKind,
       auditState: auditState,
       tags: tags,
+      structuredContentJson: structuredContentJson,
+      clearStructuredContent: clearStructuredContent,
     );
   }
 

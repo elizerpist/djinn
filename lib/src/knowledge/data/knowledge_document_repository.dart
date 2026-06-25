@@ -494,9 +494,9 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     String documentPublicId,
     List<String> orderedItemIds,
   ) async {
-    final knownIds = (await listExtractedKnowledgeItems(documentPublicId))
-        .map((item) => item.id)
-        .toList(growable: false);
+    final knownIds = (await listExtractedKnowledgeItems(
+      documentPublicId,
+    )).map((item) => item.id).toList(growable: false);
     final orderedSet = orderedItemIds.toSet();
     _extractedItemOrderByDocument[documentPublicId] = [
       for (final id in orderedItemIds)
@@ -557,6 +557,8 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     LocalChunkKind? chunkKind,
     LocalAuditState? auditState,
     List<NoteKnowledgeTag>? tags,
+    String? structuredContentJson,
+    bool clearStructuredContent = false,
   }) async {
     final extractedItems = _extractedItemsByDocument[documentPublicId];
     if (extractedItems == null) {
@@ -574,6 +576,8 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       sourceType: _sourceTypeForLocalKind(kind),
       auditState: auditState,
       tags: tags,
+      structuredContentJson: structuredContentJson,
+      clearStructuredContent: clearStructuredContent,
     );
   }
 
@@ -688,6 +692,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       confidence: chunk.confidence,
       sourcePageImagePath: chunk.sourcePageImagePath,
       tags: chunk.tags,
+      structuredContentJson: chunk.structuredContentJson,
     );
   }
 

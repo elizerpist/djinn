@@ -429,7 +429,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(6, 9012920818068651330),
     name: 'DocumentChunkEntity',
-    lastPropertyId: const obx_int.IdUid(15, 6100123456789012345),
+    lastPropertyId: const obx_int.IdUid(16, 7328401746589023419),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -522,6 +522,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(15, 6100123456789012345),
         name: 'sortOrder',
         type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(16, 7328401746589023419),
+        name: 'structuredContentJson',
+        type: 9,
         flags: 0,
       ),
     ],
@@ -2241,7 +2247,11 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final tagsJsonOffset = object.tagsJson == null
             ? null
             : fbb.writeString(object.tagsJson!);
-        fbb.startTable(15);
+        final structuredContentJsonOffset =
+            object.structuredContentJson == null
+            ? null
+            : fbb.writeString(object.structuredContentJson!);
+        fbb.startTable(16);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, publicIdOffset);
         fbb.addOffset(2, documentPublicIdOffset);
@@ -2257,6 +2267,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(12, sourcePageImagePathOffset);
         fbb.addOffset(13, tagsJsonOffset);
         fbb.addInt64(14, object.sortOrder);
+        fbb.addOffset(15, structuredContentJsonOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -2321,6 +2332,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           32,
           0,
         );
+        final structuredContentJsonParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 34);
         final object = DocumentChunkEntity(
           id: idParam,
           publicId: publicIdParam,
@@ -2337,6 +2351,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           sourcePageImagePath: sourcePageImagePathParam,
           tagsJson: tagsJsonParam,
           sortOrder: sortOrderParam,
+          structuredContentJson: structuredContentJsonParam,
         );
 
         return object;
@@ -4131,6 +4146,10 @@ class DocumentChunkEntity_ {
   static final sortOrder = obx.QueryIntegerProperty<DocumentChunkEntity>(
     _entities[5].properties[14],
   );
+
+  /// See [DocumentChunkEntity.structuredContentJson].
+  static final structuredContentJson =
+      obx.QueryStringProperty<DocumentChunkEntity>(_entities[5].properties[15]);
 }
 
 /// [FlowchartEdgeEntity] entity fields to define ObjectBox queries.

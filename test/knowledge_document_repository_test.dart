@@ -6,6 +6,7 @@ import 'package:djinn/src/core/storage/json_file_store.dart';
 import 'package:djinn/src/ai/ai_client.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
+import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/local_store/entities.dart';
 import 'package:djinn/src/openai/openai_client.dart';
 
@@ -295,6 +296,32 @@ void main() {
     await repository.clearGeneratedKnowledge(document.id);
 
     expect((await repository.exportChunkPackage(document.id)).chunks, isEmpty);
+  });
+
+  test('manual local chunks preserve structured mixed content json', () async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'mixed.pdf',
+      localPath: '/memory/mixed.pdf',
+      sizeBytes: 1,
+      importedAt: DateTime.utc(2026, 6, 25),
+      sha256: 'mixed-hash',
+    );
+
+    await repository.saveLocalChunks(document.id, [
+      const LocalChunk(
+        id: 'mixed-1',
+        documentId: 'ignored',
+        text: 'Az eljárásrend célja:\naz ellátás során',
+        pageNumber: 1,
+        kind: LocalChunkKind.text,
+        pipeline: LocalExtractionPipeline.manual,
+        structuredContentJson: '{"type":"mixed","mixedSections":[]}',
+      ),
+    ], replaceExisting: false);
+
+    final items = await repository.listExtractedKnowledgeItems(document.id);
+    expect(items.single.structuredContentJson, contains('"type":"mixed"'));
   });
 
   test(

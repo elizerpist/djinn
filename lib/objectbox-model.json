@@ -356,7 +356,7 @@
     },
     {
       "id": "6:9012920818068651330",
-      "lastPropertyId": "14:1230647960012750427",
+      "lastPropertyId": "16:7328401746589023419",
       "name": "DocumentChunkEntity",
       "properties": [
         {
@@ -432,6 +432,16 @@
         {
           "id": "14:1230647960012750427",
           "name": "tagsJson",
+          "type": 9
+        },
+        {
+          "id": "15:6100123456789012345",
+          "name": "sortOrder",
+          "type": 6
+        },
+        {
+          "id": "16:7328401746589023419",
+          "name": "structuredContentJson",
           "type": 9
         }
       ],

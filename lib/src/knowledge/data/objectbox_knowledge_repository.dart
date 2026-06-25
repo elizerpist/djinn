@@ -574,6 +574,7 @@ class ObjectBoxKnowledgeRepository
             confidence: chunk.confidence,
             sourcePageImagePath: chunk.sourcePageImagePath,
             tagsJson: _tagsToJson(chunk.tags),
+            structuredContentJson: chunk.structuredContentJson,
           ),
         );
         _auditItemBox.put(
@@ -744,6 +745,8 @@ class ObjectBoxKnowledgeRepository
     LocalChunkKind? chunkKind,
     LocalAuditState? auditState,
     List<NoteKnowledgeTag>? tags,
+    String? structuredContentJson,
+    bool clearStructuredContent = false,
   }) async {
     final sourceId = itemId.startsWith('$documentPublicId:')
         ? itemId
@@ -767,6 +770,9 @@ class ObjectBoxKnowledgeRepository
       }
       if (tags != null) {
         chunk.tagsJson = _tagsToJson(tags);
+      }
+      if (structuredContentJson != null || clearStructuredContent) {
+        chunk.structuredContentJson = structuredContentJson;
       }
       _chunkBox.put(chunk);
       _updateChunkDerivedRows(
@@ -1345,6 +1351,7 @@ class ObjectBoxKnowledgeRepository
       sourcePageImagePath: chunk.sourcePageImagePath,
       tags: _tagsFromJson(chunk.tagsJson),
       sortOrder: chunk.sortOrder,
+      structuredContentJson: chunk.structuredContentJson,
     );
   }
 

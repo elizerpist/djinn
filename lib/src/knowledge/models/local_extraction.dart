@@ -137,6 +137,7 @@ class LocalChunk {
     this.confidence,
     this.sourcePageImagePath,
     this.tags = const [],
+    this.structuredContentJson,
   });
 
   final String id;
@@ -152,6 +153,7 @@ class LocalChunk {
   final double? confidence;
   final String? sourcePageImagePath;
   final List<NoteKnowledgeTag> tags;
+  final String? structuredContentJson;
 }
 
 enum ChunkComparisonStatus { matched, aiOnly, localOnly }
