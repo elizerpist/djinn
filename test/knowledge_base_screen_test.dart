@@ -1274,7 +1274,7 @@ void main() {
     );
     await tester.enterText(
       find.byKey(const Key('manual-chunk-content-field')),
-      'Infekció, pneumothorax, pulmonális embólia.',
+      'Az eljárásrend célja:\n• az ellátás során a szükséges felszerelés meghatározása.',
     );
     await tester.ensureVisible(find.byKey(const Key('manual-chunk-save')));
     await tester.pumpAndSettle();
@@ -1287,7 +1287,16 @@ void main() {
     );
     expect(manualItems, hasLength(1));
     expect(manualItems.single.sectionTitle, 'COPDAE kiváltó okai');
-    expect(manualItems.single.text, contains('pneumothorax'));
+    expect(manualItems.single.text, contains('az ellátás során'));
+    expect(manualItems.single.text, isNot(contains('Az\neljárásrend\ncélja')));
+    expect(
+      manualItems.single.structuredContentJson,
+      contains('"type":"mixed"'),
+    );
+    expect(
+      manualItems.single.structuredContentJson,
+      contains('"mixedSections"'),
+    );
     expect(manualItems.single.auditState, LocalAuditState.edited);
     expect(
       DebugConsole.allText,

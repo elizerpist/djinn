@@ -16,6 +16,7 @@ import '../models/knowledge_document.dart';
 import '../models/local_extraction.dart';
 import '../../shared/ui/inline_bottom_sheet_card.dart';
 import '../../flowchart/ui/manual_flowchart_draft_editor_screen.dart';
+import '../../notes/models/mixed_chunk_parser.dart';
 import 'manual_pdf_region_text.dart';
 import 'source_chunk_box_overlay.dart';
 import 'source_chunk_rect.dart';
@@ -384,16 +385,30 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
     });
     try {
       final now = DateTime.now().microsecondsSinceEpoch;
+      final chunkId = 'manual-$now';
+      final sectionTitle = _emptyToNull(_titleController.text);
+      var chunkText = content;
+      String? structuredContentJson;
+      if (_kind == LocalChunkKind.text) {
+        final mixedBlock = mixedBlockFromPlainText(
+          id: chunkId,
+          title: sectionTitle,
+          text: content,
+        );
+        chunkText = mixedBlock.plainText;
+        structuredContentJson = jsonEncode(mixedBlock.toJson());
+      }
       final chunk = LocalChunk(
-        id: 'manual-$now',
+        id: chunkId,
         documentId: widget.document.id,
-        text: content,
+        text: chunkText,
         pageNumber: page,
-        sectionTitle: _emptyToNull(_titleController.text),
+        sectionTitle: sectionTitle,
         pipeline: LocalExtractionPipeline.manual,
         kind: _kind,
         auditState: LocalAuditState.edited,
         sourceRectJson: _sourceRectJson(page),
+        structuredContentJson: structuredContentJson,
         confidence: 1,
       );
       await widget.repository.saveLocalChunks(widget.document.id, [
