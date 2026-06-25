@@ -182,6 +182,7 @@ class DocumentChunkEntity {
     this.confidence,
     this.sourcePageImagePath,
     this.tagsJson,
+    this.sortOrder = 0,
   });
 
   @Id()
@@ -204,6 +205,7 @@ class DocumentChunkEntity {
   double? confidence;
   String? sourcePageImagePath;
   String? tagsJson;
+  int sortOrder;
 }
 
 @Entity()

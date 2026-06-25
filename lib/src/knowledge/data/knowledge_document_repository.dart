@@ -34,6 +34,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
   final Map<String, List<ChunkPackageItem>> _chunksByDocument = {};
   final Map<String, List<ExtractedKnowledgeItem>> _extractedItemsByDocument =
       {};
+  final Map<String, List<String>> _extractedItemOrderByDocument = {};
   final Map<String, String> _embeddingModelByDocument = {};
   final Map<String, List<AiFlowchartCandidate>> _flowchartsByDocument = {};
   int _nextDocumentId = 1;
@@ -465,7 +466,44 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
         ? items
         : items.where((item) => item.pipeline == pipeline).toList();
     filtered.sort(_compareExtractedItems);
+    final order = _extractedItemOrderByDocument[documentPublicId];
+    if (order != null) {
+      final position = {
+        for (var index = 0; index < order.length; index += 1)
+          order[index]: index,
+      };
+      filtered.sort((a, b) {
+        final aIndex = position[a.id];
+        final bIndex = position[b.id];
+        if (aIndex != null && bIndex != null) {
+          return aIndex.compareTo(bIndex);
+        }
+        if (aIndex != null) {
+          return -1;
+        }
+        if (bIndex != null) {
+          return 1;
+        }
+        return _compareExtractedItems(a, b);
+      });
+    }
     return List.unmodifiable(filtered);
+  }
+
+  Future<void> reorderExtractedKnowledgeItems(
+    String documentPublicId,
+    List<String> orderedItemIds,
+  ) async {
+    final knownIds = (await listExtractedKnowledgeItems(documentPublicId))
+        .map((item) => item.id)
+        .toList(growable: false);
+    final orderedSet = orderedItemIds.toSet();
+    _extractedItemOrderByDocument[documentPublicId] = [
+      for (final id in orderedItemIds)
+        if (knownIds.contains(id)) id,
+      for (final id in knownIds)
+        if (!orderedSet.contains(id)) id,
+    ];
   }
 
   Future<void> saveLocalChunks(

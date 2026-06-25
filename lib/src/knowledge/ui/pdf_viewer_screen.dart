@@ -166,6 +166,23 @@ class _PdfDocumentViewerState extends State<_PdfDocumentViewer> {
       params: PdfViewerParams(
         scrollPhysics: PdfViewerParams.getScrollPhysics(context),
         scrollPhysicsScale: PdfViewerParams.getScrollPhysics(context),
+        pageOverlaysBuilder: (context, pageRect, page) => [
+          if (widget.boxMode != SourceChunkBoxMode.hidden)
+            Positioned.fill(
+              child: Material(
+                type: MaterialType.transparency,
+                child: SourceChunkBoxOverlay(
+                  boxes: sourceChunkBoxesFromItems(
+                    widget.items,
+                    mode: widget.boxMode,
+                    pageNumber: page.pageNumber,
+                    pageSize: pageRect.size,
+                  ),
+                  onTapBox: widget.onTapBox,
+                ),
+              ),
+            ),
+        ],
         onViewerReady: (_, controller) {
           if (!mounted) {
             return;
@@ -183,16 +200,6 @@ class _PdfDocumentViewerState extends State<_PdfDocumentViewer> {
           setState(() => _pageNumber = pageNumber);
         },
         viewerOverlayBuilder: (context, size, handleLinkTap) => [
-          Positioned.fill(
-            child: SourceChunkBoxOverlay(
-              boxes: sourceChunkBoxesFromItems(
-                widget.items,
-                mode: widget.boxMode,
-                pageNumber: _pageNumber,
-              ),
-              onTapBox: widget.onTapBox,
-            ),
-          ),
           PdfViewerScrollThumb(
             controller: _controller,
             orientation: ScrollbarOrientation.right,

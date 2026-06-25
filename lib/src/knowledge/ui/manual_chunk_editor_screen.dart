@@ -1,19 +1,24 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../debug/debug_console.dart';
 import '../data/knowledge_document_repository.dart';
 import '../data/mlkit_ocr_engine.dart';
-import '../data/pdfrx_local_page_extractor.dart';
 import '../models/extracted_knowledge_item.dart';
 import '../models/knowledge_document.dart';
 import '../models/local_extraction.dart';
 import '../../shared/ui/inline_bottom_sheet_card.dart';
 import '../../flowchart/ui/manual_flowchart_draft_editor_screen.dart';
+import 'manual_pdf_region_text.dart';
 import 'source_chunk_box_overlay.dart';
+import 'source_chunk_rect.dart';
 
 const _manualChunkKinds = [
   LocalChunkKind.text,
@@ -63,6 +68,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
   Offset? _dragStart;
   Offset? _dragCurrent;
   Rect? _selectionRect;
+  Size? _selectionPageSize;
   List<ExtractedKnowledgeItem> _sourceItems = const [];
   SourceChunkBoxMode _boxMode = SourceChunkBoxMode.hidden;
   int _tableRows = 2;
@@ -126,6 +132,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       _kind = kind;
       _selectionKind = kind;
       _selectionRect = null;
+      _selectionPageSize = null;
       _dragStart = null;
       _dragCurrent = null;
       _errorText = null;
@@ -139,7 +146,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
     _log('selection type selected kind=${kind.wireName} source=$sourceMode');
   }
 
-  Future<void> _completeSelection(Rect rect) async {
+  Future<void> _completeSelection(Rect rect, {Size? pageSize}) async {
     if (rect.width < 18 || rect.height < 18 || _selectionKind == null) {
       _log(
         'selection ignored reason=too_small_or_missing_kind '
@@ -153,6 +160,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
     }
     setState(() {
       _selectionRect = rect;
+      _selectionPageSize = pageSize;
       _dragStart = null;
       _dragCurrent = null;
       _loadingSelectionText = true;
@@ -216,21 +224,96 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
     );
     final engine = MlKitOcrEngine();
     try {
-      final pages =
-          await PdfrxLocalPageExtractor(
-            ocrEngine: engine,
-            renderScale: 2.0,
-          ).extractPages(
-            documentId: widget.document.id,
-            path: widget.document.localPath,
-          );
-      final page = pages.where((item) => item.pageNumber == _pageNumber);
-      if (page.isEmpty) {
-        return pdfText.trim();
+      final selectedOcr = await _loadSelectedPdfOcrText(engine);
+      if (selectedOcr.trim().isNotEmpty) {
+        return selectedOcr.trim();
       }
-      return page.first.bestText.trim();
+      return pdfText.trim();
     } finally {
       await engine.close();
+    }
+  }
+
+  Future<String> _loadSelectedPdfOcrText(OcrEngine engine) async {
+    final document = await PdfDocument.openFile(widget.document.localPath);
+    try {
+      for (final page in document.pages) {
+        if (page.pageNumber != _pageNumber) {
+          continue;
+        }
+        final selectedRect = _selectedPdfRectForPage(page);
+        if (selectedRect == null || selectedRect.isEmpty) {
+          _log('ocr crop skipped reason=missing_selection page=$_pageNumber');
+          return '';
+        }
+        final imagePath = await _renderPdfRectToPng(page, selectedRect);
+        final ocr = await engine.recognizeImage(imagePath);
+        _log(
+          'ocr crop complete page=$_pageNumber chars=${ocr.text.trim().length}',
+        );
+        return ocr.text.trim();
+      }
+      return '';
+    } finally {
+      await document.dispose();
+    }
+  }
+
+  Future<String> _renderPdfRectToPng(PdfPage page, PdfRect rect) async {
+    const renderScale = 2.0;
+    final fullWidth = (page.width * renderScale).round().clamp(1, 4096);
+    final fullHeight = (page.height * renderScale).round().clamp(1, 4096);
+    final x = (rect.left * renderScale).round().clamp(0, fullWidth - 1);
+    final y = ((page.height - rect.top) * renderScale)
+        .round()
+        .clamp(0, fullHeight - 1);
+    final width = (rect.width * renderScale).round().clamp(
+      1,
+      fullWidth - x,
+    );
+    final height = (rect.height * renderScale).round().clamp(
+      1,
+      fullHeight - y,
+    );
+    final pdfImage = await page.render(
+      x: x,
+      y: y,
+      width: width,
+      height: height,
+      fullWidth: fullWidth.toDouble(),
+      fullHeight: fullHeight.toDouble(),
+      backgroundColor: 0xffffffff,
+    );
+    if (pdfImage == null) {
+      throw StateError('PDF region render failed: ${page.pageNumber}');
+    }
+    ui.Image? uiImage;
+    try {
+      uiImage = await pdfImage.createImage();
+      final byteData = await uiImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      if (byteData == null) {
+        throw StateError('PDF region PNG encoding failed: ${page.pageNumber}');
+      }
+      final cacheDir = await getTemporaryDirectory();
+      final safeName = path.basenameWithoutExtension(
+        widget.document.localPath,
+      ).replaceAll(RegExp(r'[^A-Za-z0-9_.-]+'), '_');
+      final output = File(
+        path.join(
+          cacheDir.path,
+          'djinn-manual-crop-$safeName-p${page.pageNumber}.png',
+        ),
+      );
+      await output.writeAsBytes(
+        Uint8List.view(byteData.buffer),
+        flush: true,
+      );
+      return output.path;
+    } finally {
+      uiImage?.dispose();
+      pdfImage.dispose();
     }
   }
 
@@ -241,8 +324,21 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       for (final page in document.pages) {
         if (page.pageNumber == _pageNumber) {
           final text = (await page.loadText())?.fullText ?? '';
-          _log('pdf text loaded page=$_pageNumber chars=${text.length}');
-          return text;
+          final selectedRect = _selectedPdfRectForPage(page);
+          if (selectedRect == null) {
+            _log('pdf text loaded page=$_pageNumber chars=${text.length}');
+            return text;
+          }
+          final structuredText = await page.loadStructuredText();
+          final selectedText = textFromFragmentsInPdfRect(
+            fragments: textRegionFragmentsFromPageText(structuredText),
+            selectedRect: selectedRect,
+          );
+          _log(
+            'pdf text loaded page=$_pageNumber chars=${text.length} '
+            'selectedChars=${selectedText.length}',
+          );
+          return selectedText;
         }
       }
       _log('pdf text page missing page=$_pageNumber');
@@ -250,6 +346,24 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
     } finally {
       await document.dispose();
     }
+  }
+
+  PdfRect? _selectedPdfRectForPage(PdfPage page) {
+    final rect = _selectionRect;
+    final pageSize = _selectionPageSize;
+    if (rect == null || pageSize == null) {
+      return null;
+    }
+    final normalized = Rect.fromLTRB(
+      rect.left / pageSize.width,
+      rect.top / pageSize.height,
+      rect.right / pageSize.width,
+      rect.bottom / pageSize.height,
+    );
+    return SourceChunkRect(
+      pageNumber: page.pageNumber,
+      normalizedRect: normalized,
+    ).pdfRectForPageSize(Size(page.width, page.height));
   }
 
   Future<void> _save() async {
@@ -318,6 +432,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
         _saving = false;
         _selectionKind = null;
         _selectionRect = null;
+        _selectionPageSize = null;
         _dragStart = null;
         _dragCurrent = null;
         _errorText = null;
@@ -337,17 +452,23 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
 
   String _sourceRectJson(int pageNumber) {
     final rect = _selectionRect;
+    final pageSize = _selectionPageSize ?? MediaQuery.sizeOf(context);
+    final json = rect == null
+        ? jsonEncode({
+            'source': _sourceMode,
+            'created_by': 'manual_chunk_editor',
+            'page': pageNumber,
+          })
+        : sourceRectJsonFromPageRect(
+            pageNumber: pageNumber,
+            source: _sourceMode,
+            pageRect: rect,
+            pageSize: pageSize,
+            extra: const {'created_by': 'manual_chunk_editor'},
+          );
+    final decoded = jsonDecode(json) as Map<String, Object?>;
     return jsonEncode({
-      'source': _sourceMode,
-      'created_by': 'manual_chunk_editor',
-      'page': pageNumber,
-      if (rect != null)
-        'viewport_rect': {
-          'left': rect.left,
-          'top': rect.top,
-          'right': rect.right,
-          'bottom': rect.bottom,
-        },
+      ...decoded,
       if (_kind == LocalChunkKind.table)
         'table': {'rows': _tableRows, 'columns': _tableColumns},
     });
@@ -429,6 +550,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
     setState(() {
       _selectionKind = null;
       _selectionRect = null;
+      _selectionPageSize = null;
       _dragStart = null;
       _dragCurrent = null;
       _errorText = null;
@@ -513,7 +635,9 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       body: Stack(
         children: [
           Positioned.fill(child: _buildViewer(context)),
-          if (_sourceItems.isNotEmpty && _boxMode != SourceChunkBoxMode.hidden)
+          if ((_isPng || !_viewerReady) &&
+              _sourceItems.isNotEmpty &&
+              _boxMode != SourceChunkBoxMode.hidden)
             Positioned.fill(
               child: Material(
                 type: MaterialType.transparency,
@@ -527,7 +651,9 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
                 ),
               ),
             ),
-          if (_selectionKind != null && !_cardVisible)
+          if ((_isPng || !_viewerReady) &&
+              _selectionKind != null &&
+              !_cardVisible)
             Positioned.fill(
               child: _SelectionLayer(
                 key: const Key('manual-chunk-selection-layer'),
@@ -561,7 +687,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
               top: 16,
               child: _SelectionBanner(),
             ),
-          if (_cardVisible)
+          if ((_isPng || !_viewerReady) && _cardVisible)
             Positioned.fill(
               child: IgnorePointer(
                 child: _ExtractionBoxOverlay(
@@ -629,6 +755,59 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       params: PdfViewerParams(
         scrollPhysics: PdfViewerParams.getScrollPhysics(context),
         scrollPhysicsScale: PdfViewerParams.getScrollPhysics(context),
+        panAxis: PanAxis.vertical,
+        scaleEnabled: false,
+        pageOverlaysBuilder: (context, pageRect, page) => [
+          if (_sourceItems.isNotEmpty && _boxMode != SourceChunkBoxMode.hidden)
+            Positioned.fill(
+              child: Material(
+                type: MaterialType.transparency,
+                child: SourceChunkBoxOverlay(
+                  boxes: sourceChunkBoxesFromItems(
+                    _sourceItems,
+                    mode: _boxMode,
+                    pageNumber: page.pageNumber,
+                    pageSize: pageRect.size,
+                  ),
+                  onTapBox: _handleSourceBoxTap,
+                ),
+              ),
+            ),
+          if (_selectionKind != null &&
+              !_cardVisible &&
+              page.pageNumber == _pageNumber)
+            Positioned.fill(
+              child: _PageSelectionLayer(
+                key: const Key('manual-chunk-selection-layer'),
+                onDragStart: (position) {
+                  _log('selection drag start at=${_formatOffset(position)}');
+                },
+                onDragEnd: (start, end, size) {
+                  _log(
+                    'selection drag end start=${_formatOffset(start)} '
+                    'end=${_formatOffset(end)}',
+                  );
+                  _completeSelection(
+                    Rect.fromPoints(start, end),
+                    pageSize: size,
+                  );
+                },
+              ),
+            ),
+          if (_cardVisible &&
+              _selectionRect != null &&
+              page.pageNumber == _pageNumber)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: _ExtractionBoxOverlay(
+                  rect: _selectionRect!,
+                  kind: _kind,
+                  tableRows: _tableRows,
+                  tableColumns: _tableColumns,
+                ),
+              ),
+            ),
+        ],
         onViewerReady: (_, controller) {
           if (!mounted) {
             return;
@@ -710,6 +889,62 @@ class _SelectionLayer extends StatelessWidget {
       child: CustomPaint(
         painter: _SelectionPainter(start: start, current: current),
       ),
+    );
+  }
+}
+
+class _PageSelectionLayer extends StatefulWidget {
+  const _PageSelectionLayer({
+    super.key,
+    required this.onDragStart,
+    required this.onDragEnd,
+  });
+
+  final ValueChanged<Offset> onDragStart;
+  final void Function(Offset start, Offset end, Size size) onDragEnd;
+
+  @override
+  State<_PageSelectionLayer> createState() => _PageSelectionLayerState();
+}
+
+class _PageSelectionLayerState extends State<_PageSelectionLayer> {
+  Offset? _start;
+  Offset? _current;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanStart: (details) {
+            widget.onDragStart(details.localPosition);
+            setState(() {
+              _start = details.localPosition;
+              _current = details.localPosition;
+            });
+          },
+          onPanUpdate: (details) {
+            setState(() => _current = details.localPosition);
+          },
+          onPanEnd: (_) {
+            final start = _start;
+            final current = _current;
+            if (start != null && current != null) {
+              widget.onDragEnd(start, current, size);
+            }
+            setState(() {
+              _start = null;
+              _current = null;
+            });
+          },
+          child: CustomPaint(
+            painter: _SelectionPainter(start: _start, current: _current),
+            size: size,
+          ),
+        );
+      },
     );
   }
 }

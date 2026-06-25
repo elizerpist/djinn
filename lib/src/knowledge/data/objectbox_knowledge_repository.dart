@@ -657,6 +657,26 @@ class ObjectBoxKnowledgeRepository
     });
   }
 
+  Future<void> reorderExtractedKnowledgeItems(
+    String documentPublicId,
+    List<String> orderedItemIds,
+  ) async {
+    final position = {
+      for (var index = 0; index < orderedItemIds.length; index += 1)
+        _sourceIdForItem(documentPublicId, orderedItemIds[index]): index,
+    };
+    _store.runInTransaction(TxMode.write, () {
+      for (final chunk in _chunksForDocument(documentPublicId)) {
+        final order = position[chunk.publicId];
+        if (order == null) {
+          continue;
+        }
+        chunk.sortOrder = order;
+        _chunkBox.put(chunk);
+      }
+    });
+  }
+
   Future<void> updateExtractedKnowledgeAuditState(
     String documentPublicId,
     String itemId,
@@ -1275,6 +1295,10 @@ class ObjectBoxKnowledgeRepository
     ExtractedKnowledgeItem a,
     ExtractedKnowledgeItem b,
   ) {
+    final order = a.sortOrder.compareTo(b.sortOrder);
+    if (order != 0) {
+      return order;
+    }
     final page = (a.pageNumber ?? 0).compareTo(b.pageNumber ?? 0);
     if (page != 0) {
       return page;
@@ -1284,6 +1308,12 @@ class ObjectBoxKnowledgeRepository
       return type;
     }
     return a.id.compareTo(b.id);
+  }
+
+  String _sourceIdForItem(String documentPublicId, String itemId) {
+    return itemId.startsWith('$documentPublicId:')
+        ? itemId
+        : '$documentPublicId:$itemId';
   }
 
   ExtractedKnowledgeItem _itemFromChunk(
@@ -1314,6 +1344,7 @@ class ObjectBoxKnowledgeRepository
       confidence: chunk.confidence,
       sourcePageImagePath: chunk.sourcePageImagePath,
       tags: _tagsFromJson(chunk.tagsJson),
+      sortOrder: chunk.sortOrder,
     );
   }
 

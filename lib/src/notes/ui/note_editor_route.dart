@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../ai/ai_client.dart';
 import '../../debug/debug_console.dart';
+import '../../shared/chunks/shared_chunk_drag_handle.dart';
 import '../data/note_repository.dart';
 import '../data/tag_repository.dart';
 import '../models/note_document.dart';
@@ -507,12 +508,9 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
                     block: block,
                     expanded: _expandedBlockIds.contains(block.id),
                     inheritedTags: _document.tags,
-                    dragHandle: ReorderableDragStartListener(
+                    dragHandle: SharedChunkDragHandle(
+                      chunkId: block.id,
                       index: index,
-                      child: const Icon(
-                        Icons.drag_indicator,
-                        color: Color(0xFF9CA3AF),
-                      ),
                     ),
                     onToggleExpanded: () {
                       setState(() {

@@ -234,6 +234,17 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
   }
 
   @override
+  Future<void> reorderExtractedKnowledgeItems(
+    String documentPublicId,
+    List<String> orderedItemIds,
+  ) {
+    return _repository.reorderExtractedKnowledgeItems(
+      documentPublicId,
+      orderedItemIds,
+    );
+  }
+
+  @override
   Future<void> updateExtractedKnowledgeAuditState(
     String documentPublicId,
     String itemId,

@@ -7,9 +7,8 @@ import '../models/extracted_knowledge_item.dart';
 import '../models/flowchart_hierarchy.dart';
 import '../models/knowledge_document.dart';
 import '../models/local_extraction.dart';
-import '../../shared/chunks/chunk_validation_card.dart';
 import '../../shared/chunks/shared_chunk_card.dart';
-import '../../shared/ui/draggable_bottom_card.dart';
+import '../../shared/chunks/shared_chunk_drag_handle.dart';
 import '../../flowchart/ui/interactive_flowchart_editor_screen.dart';
 import '../../flowchart/ui/mobile_flowchart_viewer.dart';
 import '../../notes/ui/tag_manager_sheet.dart';
@@ -64,40 +63,6 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
     });
   }
 
-  Future<void> _openValidationCard(ExtractedKnowledgeItem item) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      enableDrag: false,
-      isDismissible: false,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableBottomCard(
-        onDismiss: () => Navigator.of(context).pop(),
-        child: ChunkValidationCard(
-          title: item.sectionTitle?.trim().isNotEmpty == true
-              ? item.sectionTitle!.trim()
-              : item.pageLabel,
-          initialText: item.text,
-          initialAuditState: item.auditState,
-          onCancel: () => Navigator.of(context).pop(),
-          onSave: (result) async {
-            await widget.repository.updateExtractedKnowledgeAuditState(
-              widget.document.id,
-              item.id,
-              result.auditState,
-              text: result.text,
-              reason: result.reason,
-            );
-            if (context.mounted) {
-              Navigator.of(context).pop();
-            }
-            _reloadData();
-          },
-        ),
-      ),
-    );
-  }
-
   Future<void> _openFlowchartEditor(String flowchartId) async {
     final changed = await Navigator.of(context, rootNavigator: true).push<bool>(
       MaterialPageRoute(
@@ -145,6 +110,17 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
         ),
       ),
     );
+    _reloadData();
+  }
+
+  Future<void> _reorderPdfChunks(List<String> orderedIds) async {
+    await widget.repository.reorderExtractedKnowledgeItems(
+      widget.document.id,
+      orderedIds,
+    );
+    if (!mounted) {
+      return;
+    }
     _reloadData();
   }
 
@@ -199,10 +175,12 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
               Expanded(
                 child: _ExtractedKnowledgeList(
                   items: items,
-                  onValidate: _openValidationCard,
                   onOpenEditor: _openPdfChunkEditor,
                   onEditFlowchart: _openFlowchartEditor,
                   onTag: _openTagSheet,
+                  onReorder: (ids) {
+                    _reorderPdfChunks(ids);
+                  },
                 ),
               ),
             ],
@@ -269,17 +247,17 @@ class _DocumentSummary extends StatelessWidget {
 class _ExtractedKnowledgeList extends StatefulWidget {
   const _ExtractedKnowledgeList({
     required this.items,
-    required this.onValidate,
     required this.onOpenEditor,
     required this.onEditFlowchart,
     required this.onTag,
+    required this.onReorder,
   });
 
   final List<ExtractedKnowledgeItem> items;
-  final ValueChanged<ExtractedKnowledgeItem> onValidate;
   final ValueChanged<ExtractedKnowledgeItem> onOpenEditor;
   final ValueChanged<String> onEditFlowchart;
   final ValueChanged<ExtractedKnowledgeItem> onTag;
+  final ValueChanged<List<String>> onReorder;
 
   @override
   State<_ExtractedKnowledgeList> createState() =>
@@ -288,6 +266,22 @@ class _ExtractedKnowledgeList extends StatefulWidget {
 
 class _ExtractedKnowledgeListState extends State<_ExtractedKnowledgeList> {
   final Set<String> _expandedIds = {};
+  late List<ExtractedKnowledgeItem> _orderedItems = List.of(widget.items);
+
+  @override
+  void didUpdateWidget(covariant _ExtractedKnowledgeList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldIds = _orderedItems.map((item) => item.id).join('|');
+    final newIds = widget.items.map((item) => item.id).join('|');
+    if (oldIds != newIds) {
+      _orderedItems = List.of(widget.items);
+      return;
+    }
+    final incomingById = {for (final item in widget.items) item.id: item};
+    _orderedItems = [
+      for (final item in _orderedItems) incomingById[item.id] ?? item,
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -299,41 +293,57 @@ class _ExtractedKnowledgeListState extends State<_ExtractedKnowledgeList> {
         ),
       );
     }
-    final flowchartItems = widget.items
+    final flowchartItems = _orderedItems
         .where(
           (item) =>
               item.sourceType == EvidenceSourceType.flowchartNode ||
               item.sourceType == EvidenceSourceType.flowchartEdge,
         )
         .toList(growable: false);
-    if (flowchartItems.length == widget.items.length) {
+    if (flowchartItems.length == _orderedItems.length) {
       return _FlowchartHierarchyList(
         items: flowchartItems,
         onEditFlowchart: widget.onEditFlowchart,
       );
     }
-    return ListView.separated(
+    return ReorderableListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-      itemCount: widget.items.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemCount: _orderedItems.length,
+      onReorder: _reorder,
       itemBuilder: (context, index) {
-        final item = widget.items[index];
-        return _ExtractedKnowledgeTile(
-          item: item,
-          expanded: _expandedIds.contains(item.id),
-          onToggleExpanded: () {
-            setState(() {
-              if (!_expandedIds.add(item.id)) {
-                _expandedIds.remove(item.id);
-              }
-            });
-          },
-          onOpenEditor: () => widget.onOpenEditor(item),
-          onValidate: () => widget.onValidate(item),
-          onTag: () => widget.onTag(item),
+        final item = _orderedItems[index];
+        return Padding(
+          key: ValueKey('pdf-chunk-row-${item.id}'),
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _ExtractedKnowledgeTile(
+            item: item,
+            leading: SharedChunkDragHandle(chunkId: item.id, index: index),
+            expanded: _expandedIds.contains(item.id),
+            onToggleExpanded: () {
+              setState(() {
+                if (!_expandedIds.add(item.id)) {
+                  _expandedIds.remove(item.id);
+                }
+              });
+            },
+            onOpenEditor: () => widget.onOpenEditor(item),
+            onTag: () => widget.onTag(item),
+          ),
         );
       },
     );
+  }
+
+  void _reorder(int oldIndex, int newIndex) {
+    if (oldIndex >= _orderedItems.length || newIndex > _orderedItems.length) {
+      return;
+    }
+    final updated = List<ExtractedKnowledgeItem>.of(_orderedItems);
+    final item = updated.removeAt(oldIndex);
+    final insertIndex = newIndex > oldIndex ? newIndex - 1 : newIndex;
+    updated.insert(insertIndex, item);
+    setState(() => _orderedItems = updated);
+    widget.onReorder([for (final item in updated) item.id]);
   }
 }
 
@@ -541,18 +551,18 @@ MobileFlowchartData _mobileFlowchartDataFromGroup(
 class _ExtractedKnowledgeTile extends StatelessWidget {
   const _ExtractedKnowledgeTile({
     required this.item,
+    required this.leading,
     required this.expanded,
     required this.onToggleExpanded,
     required this.onOpenEditor,
-    required this.onValidate,
     required this.onTag,
   });
 
   final ExtractedKnowledgeItem item;
+  final Widget leading;
   final bool expanded;
   final VoidCallback onToggleExpanded;
   final VoidCallback onOpenEditor;
-  final VoidCallback onValidate;
   final VoidCallback onTag;
 
   @override
@@ -570,8 +580,8 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
       title: shared.title,
       expanded: expanded,
       statusChips: _statusChips(item),
+      leading: leading,
       onOpenEditor: onOpenEditor,
-      onLongPress: onValidate,
       onToggleExpanded: onToggleExpanded,
       actions: [
         IconButton(
@@ -579,12 +589,6 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
           tooltip: 'Chunk tagek',
           onPressed: onTag,
           icon: const Icon(Icons.sell_outlined),
-        ),
-        IconButton(
-          key: ValueKey('pdf-chunk-validate-${item.id}'),
-          tooltip: 'Chunk audit',
-          onPressed: onValidate,
-          icon: const Icon(Icons.fact_check_outlined),
         ),
       ],
       expandedBodyKey: ValueKey('pdf-chunk-expanded-body-${item.id}'),

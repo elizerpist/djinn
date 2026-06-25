@@ -219,8 +219,10 @@ void main() {
     await tester.tap(find.text('Manuális chunkok').last);
     await tester.pumpAndSettle();
 
-    final listView = tester.widget<ListView>(find.byType(ListView).first);
-    expect(listView.physics, isNot(isA<BouncingScrollPhysics>()));
+    final scrollable = tester.widget<Scrollable>(
+      find.byType(Scrollable).first,
+    );
+    expect(scrollable.physics, isNot(isA<BouncingScrollPhysics>()));
   });
 
   testWidgets(
@@ -304,10 +306,10 @@ void main() {
         find.byKey(const ValueKey('pdf-chunk-expanded-body-pdf-extra-0')),
         findsOneWidget,
       );
-      await tester.drag(find.byType(ListView).first, const Offset(0, -420));
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -420));
       await tester.pumpAndSettle();
       expect(find.text('Extra chunk 7'), findsWidgets);
-      await tester.drag(find.byType(ListView).first, const Offset(0, 420));
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, 420));
       await tester.pumpAndSettle();
 
       await _expectPdfChunkEditor(
@@ -692,21 +694,37 @@ void main() {
   });
 
   testWidgets(
-    'long pressing extracted chunk opens validation editor and saves changes',
+    'pdf chunk list reorders with the shared drag handle and does not open validation',
     (tester) async {
       final repository = KnowledgeDocumentRepository();
       final document = await repository.addDocument(
-        filename: 'audit.pdf',
-        localPath: '/memory/audit.pdf',
+        filename: 'reorder.pdf',
+        localPath: '/memory/reorder.pdf',
         sizeBytes: 8,
         importedAt: DateTime.utc(2026, 6, 14),
-        sha256: 'hash-audit-ui',
+        sha256: 'hash-reorder-ui',
       );
       await repository.saveLocalChunks(document.id, const [
         LocalChunk(
-          id: 'local-audit-text',
+          id: 'pdf-first',
           documentId: 'document-1',
-          text: 'Eredeti lokális chunk',
+          text: 'Első PDF chunk',
+          pageNumber: 1,
+          pipeline: LocalExtractionPipeline.localOcr,
+          kind: LocalChunkKind.text,
+        ),
+        LocalChunk(
+          id: 'pdf-second',
+          documentId: 'document-1',
+          text: 'Második PDF chunk',
+          pageNumber: 1,
+          pipeline: LocalExtractionPipeline.localOcr,
+          kind: LocalChunkKind.text,
+        ),
+        LocalChunk(
+          id: 'pdf-third',
+          documentId: 'document-1',
+          text: 'Harmadik PDF chunk',
           pageNumber: 1,
           pipeline: LocalExtractionPipeline.localOcr,
           kind: LocalChunkKind.text,
@@ -729,27 +747,30 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.longPress(
-        find.byKey(const ValueKey('chunk-card-local-audit-text')),
+        find.byKey(const ValueKey('chunk-card-pdf-first')),
       );
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('chunk-validation-card')),
-        findsOneWidget,
+        findsNothing,
       );
 
-      await tester.enterText(
-        find.byKey(const ValueKey('chunk-validation-text-field')),
-        'Javított lokális chunk',
+      expect(
+        find.byKey(const ValueKey('shared-chunk-drag-pdf-first')),
+        findsOneWidget,
       );
-      await tester.tap(find.text('Elfogad'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('chunk-validation-save')));
+      await tester.drag(
+        find.byKey(const ValueKey('shared-chunk-drag-pdf-first')),
+        const Offset(0, 190),
+      );
       await tester.pumpAndSettle();
 
       final items = await repository.listExtractedKnowledgeItems(document.id);
-      final edited = items.singleWhere((item) => item.id == 'local-audit-text');
-      expect(edited.text, 'Javított lokális chunk');
-      expect(edited.auditState, LocalAuditState.accepted);
+      expect(items.map((item) => item.id), [
+        'pdf-second',
+        'pdf-first',
+        'pdf-third',
+      ]);
     },
   );
 

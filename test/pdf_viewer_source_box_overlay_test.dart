@@ -23,7 +23,7 @@ void main() {
         pageNumber: 2,
         pipeline: LocalExtractionPipeline.manual,
         sourceRectJson:
-            '{"page":2,"viewport_rect":{"left":10,"top":20,"right":110,"bottom":70}}',
+            '{"page":2,"page_rect_normalized":{"left":0.1,"top":0.2,"right":0.6,"bottom":0.4}}',
       ),
       ExtractedKnowledgeItem(
         id: 'ai-1',
@@ -41,22 +41,26 @@ void main() {
       items,
       mode: SourceChunkBoxMode.manual,
       pageNumber: 2,
+      pageSize: const Size(200, 400),
     );
     final ai = sourceChunkBoxesFromItems(
       items,
       mode: SourceChunkBoxMode.ai,
       pageNumber: 2,
+      pageSize: const Size(200, 400),
     );
     final hidden = sourceChunkBoxesFromItems(
       items,
       mode: SourceChunkBoxMode.hidden,
       pageNumber: 2,
+      pageSize: const Size(200, 400),
     );
 
     expect(manual.map((box) => box.chunkId), ['manual-1']);
     expect(ai.map((box) => box.chunkId), ['ai-1']);
     expect(hidden, isEmpty);
-    expect(manual.single.rect.left, 10);
+    expect(manual.single.rect, const Rect.fromLTRB(20, 80, 120, 160));
+    expect(ai.single.rect.left, 20);
   });
 
   testWidgets('pdf viewer exposes source box mode menu and logs changes', (

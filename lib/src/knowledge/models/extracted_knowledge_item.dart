@@ -26,6 +26,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
     this.confidence,
     this.sourcePageImagePath,
     this.tags = const [],
+    this.sortOrder = 0,
   });
 
   @override
@@ -55,6 +56,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
   final double? confidence;
   final String? sourcePageImagePath;
   final List<NoteKnowledgeTag> tags;
+  final int sortOrder;
 
   ExtractedKnowledgeItem copyWith({
     String? text,
@@ -63,6 +65,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
     EvidenceSourceType? sourceType,
     LocalChunkKind? chunkKind,
     List<NoteKnowledgeTag>? tags,
+    int? sortOrder,
   }) {
     return ExtractedKnowledgeItem(
       id: id,
@@ -87,6 +90,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
       confidence: confidence,
       sourcePageImagePath: sourcePageImagePath,
       tags: tags ?? this.tags,
+      sortOrder: sortOrder ?? this.sortOrder,
     );
   }
 

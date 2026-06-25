@@ -1427,6 +1427,8 @@ void main() {
       pipeline: LocalExtractionPipeline.manual,
     );
     expect(items, hasLength(1));
+    expect(items.single.sourceRectJson, contains('page_rect_normalized'));
+    expect(items.single.sourceRectJson, isNot(contains('viewport_rect')));
     expect(find.text('Kézi chunkolás'), findsOneWidget);
     expect(find.byKey(const Key('manual-chunk-title-field')), findsNothing);
     expect(
