@@ -371,9 +371,6 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
             ),
           Expanded(
             child: ReorderableListView.builder(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
               itemCount: _items.length,
               // ignore: deprecated_member_use

@@ -34,7 +34,6 @@ class FlowchartEditorCanvas extends StatelessWidget {
     final visibleRoots = roots.isEmpty ? flowchart.nodes : roots;
     return SingleChildScrollView(
       key: const ValueKey('flowchart-editor-canvas'),
-      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 120),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -93,7 +92,8 @@ class _NodeTree extends StatelessWidget {
           ),
           for (final edge in edges) ...[
             _EditableEdgePill(edge: edge, onDelete: () => onDeleteEdge(edge)),
-            if (!nextVisited.contains(edge.toNodeId) && nodesById[edge.toNodeId] != null)
+            if (!nextVisited.contains(edge.toNodeId) &&
+                nodesById[edge.toNodeId] != null)
               _NodeTree(
                 node: nodesById[edge.toNodeId]!,
                 nodesById: nodesById,
@@ -138,9 +138,19 @@ class _EditableNodeCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_shapeLabel(node.shape), style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280), fontWeight: FontWeight.w700)),
+                  Text(
+                    _shapeLabel(node.shape),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF6B7280),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(node.label, style: const TextStyle(fontWeight: FontWeight.w800)),
+                  Text(
+                    node.label,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 ],
               ),
             ),

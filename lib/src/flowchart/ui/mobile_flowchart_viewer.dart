@@ -150,77 +150,93 @@ class _MobileFlowchartViewerState extends State<MobileFlowchartViewer> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final content = Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.account_tree_outlined, color: Color(0xFF7C3AED), size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    widget.data.title.trim().isEmpty ? 'Flowchart' : widget.data.title.trim(),
-                    style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF111827)),
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                Row(
                   children: [
-                    if (sourceSummary?.isNotEmpty == true)
-                      Text(
-                        sourceSummary!,
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280)),
+                    const Icon(
+                      Icons.account_tree_outlined,
+                      color: Color(0xFF7C3AED),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.data.title.trim().isEmpty
+                            ? 'Flowchart'
+                            : widget.data.title.trim(),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF111827),
+                        ),
                       ),
-                    _DepthPill(label: routeSummary),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (sourceSummary?.isNotEmpty == true)
+                          Text(
+                            sourceSummary!,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                        _DepthPill(label: routeSummary),
+                      ],
+                    ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                _ModeSelector(
+                  selected: _mode,
+                  onSelected: (mode) => setState(() => _mode = mode),
+                ),
+                const SizedBox(height: 8),
+                if (_mode == MobileFlowchartViewMode.list) ...[
+                  _ListToolbar(
+                    onOpenAll: _openAllBranches,
+                    onCloseDeep: _closeDeepBranches,
+                  ),
+                  const SizedBox(height: 10),
+                ] else
+                  const SizedBox(height: 10),
+                switch (_mode) {
+                  MobileFlowchartViewMode.list => _FlowchartListView(
+                    key: ValueKey(
+                      'mobile-flowchart-view-list-${widget.data.id}',
+                    ),
+                    data: widget.data,
+                    closedBranches: _closedBranches,
+                    onToggleBranch: _toggleBranch,
+                  ),
+                  MobileFlowchartViewMode.canvas => _FlowchartCanvasView(
+                    key: ValueKey(
+                      'mobile-flowchart-view-canvas-${widget.data.id}',
+                    ),
+                    data: widget.data,
+                    controller: _canvasController,
+                    onZoom: _zoomCanvas,
+                  ),
+                  MobileFlowchartViewMode.guide => _FlowchartGuideView(
+                    key: ValueKey(
+                      'mobile-flowchart-view-guide-${widget.data.id}',
+                    ),
+                    data: widget.data,
+                    step: _guideStep,
+                    canGoBack: _guideBackStack.isNotEmpty,
+                    pathLabel: _guidePathLabel(),
+                    onAnswer: _chooseGuideAnswer,
+                    onBack: _goGuideBack,
+                  ),
+                },
               ],
-            ),
-            const SizedBox(height: 10),
-            _ModeSelector(
-              selected: _mode,
-              onSelected: (mode) => setState(() => _mode = mode),
-            ),
-            const SizedBox(height: 8),
-            if (_mode == MobileFlowchartViewMode.list) ...[
-              _ListToolbar(
-                onOpenAll: _openAllBranches,
-                onCloseDeep: _closeDeepBranches,
-              ),
-              const SizedBox(height: 10),
-            ] else
-              const SizedBox(height: 10),
-            switch (_mode) {
-              MobileFlowchartViewMode.list => _FlowchartListView(
-                  key: ValueKey('mobile-flowchart-view-list-${widget.data.id}'),
-                  data: widget.data,
-                  closedBranches: _closedBranches,
-                  onToggleBranch: _toggleBranch,
-                ),
-              MobileFlowchartViewMode.canvas => _FlowchartCanvasView(
-                  key: ValueKey('mobile-flowchart-view-canvas-${widget.data.id}'),
-                  data: widget.data,
-                  controller: _canvasController,
-                  onZoom: _zoomCanvas,
-                ),
-              MobileFlowchartViewMode.guide => _FlowchartGuideView(
-                  key: ValueKey('mobile-flowchart-view-guide-${widget.data.id}'),
-                  data: widget.data,
-                  step: _guideStep,
-                  canGoBack: _guideBackStack.isNotEmpty,
-                  pathLabel: _guidePathLabel(),
-                  onAnswer: _chooseGuideAnswer,
-                  onBack: _goGuideBack,
-                ),
-            },
-          ],
             );
             if (!constraints.hasBoundedHeight) {
               return content;
             }
-            return SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: content,
-            );
+            return SingleChildScrollView(child: content);
           },
         ),
       ),
@@ -293,7 +309,9 @@ class _ModeSelector extends StatelessWidget {
         for (final item in MobileFlowchartViewMode.values)
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(right: item == MobileFlowchartViewMode.values.last ? 0 : 6),
+              padding: EdgeInsets.only(
+                right: item == MobileFlowchartViewMode.values.last ? 0 : 6,
+              ),
               child: _ModeButton(
                 mode: item,
                 selected: selected == item,
@@ -321,7 +339,14 @@ class _DepthPill extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF617080))),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF617080),
+          ),
+        ),
       ),
     );
   }
@@ -344,11 +369,16 @@ class _ListToolbar extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF263747),
               side: const BorderSide(color: Color(0xFFCAD4DD)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
               minimumSize: const Size(0, 34),
               padding: const EdgeInsets.symmetric(horizontal: 8),
             ),
-            child: const Text('Nyit mind', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+            child: const Text(
+              'Nyit mind',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+            ),
           ),
         ),
         const SizedBox(width: 8),
@@ -359,11 +389,17 @@ class _ListToolbar extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF263747),
               side: const BorderSide(color: Color(0xFFCAD4DD)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
               minimumSize: const Size(0, 34),
               padding: const EdgeInsets.symmetric(horizontal: 8),
             ),
-            child: const Text('Mély ágak zárása', overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+            child: const Text(
+              'Mély ágak zárása',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+            ),
           ),
         ),
       ],
@@ -372,7 +408,11 @@ class _ListToolbar extends StatelessWidget {
 }
 
 class _ModeButton extends StatelessWidget {
-  const _ModeButton({required this.mode, required this.selected, required this.onTap});
+  const _ModeButton({
+    required this.mode,
+    required this.selected,
+    required this.onTap,
+  });
 
   final MobileFlowchartViewMode mode;
   final bool selected;
@@ -400,14 +440,24 @@ class _ModeButton extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: selected ? const Color(0xFF1B6B6F) : const Color(0xFFCAD4DD)),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFF1B6B6F)
+                  : const Color(0xFFCAD4DD),
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 17, color: selected ? const Color(0xFF134F52) : const Color(0xFF334454)),
+                Icon(
+                  icon,
+                  size: 17,
+                  color: selected
+                      ? const Color(0xFF134F52)
+                      : const Color(0xFF334454),
+                ),
                 const SizedBox(width: 5),
                 Flexible(
                   child: Text(
@@ -416,7 +466,9 @@ class _ModeButton extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
-                      color: selected ? const Color(0xFF134F52) : const Color(0xFF334454),
+                      color: selected
+                          ? const Color(0xFF134F52)
+                          : const Color(0xFF334454),
                     ),
                   ),
                 ),
@@ -445,18 +497,24 @@ class _FlowchartListView extends StatelessWidget {
   Widget build(BuildContext context) {
     final root = _rootNode(data);
     if (root == null) {
-      return const Text('Nincs flowchart tartalom', style: TextStyle(color: Color(0xFF6B7280)));
+      return const Text(
+        'Nincs flowchart tartalom',
+        style: TextStyle(color: Color(0xFF6B7280)),
+      );
     }
     final branches = _branchesFor(data, root);
     if (branches.isEmpty) {
-      return _ProcessCard(key: ValueKey('mobile-flowchart-process-${root.id}'), node: root, terminal: true);
+      return _ProcessCard(
+        key: ValueKey('mobile-flowchart-process-${root.id}'),
+        node: root,
+        terminal: true,
+      );
     }
     final keyCounts = <String, int>{};
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_isStartNode(root))
-          const _ListStartStep(),
+        if (_isStartNode(root)) const _ListStartStep(),
         ..._branchWidgets(
           root,
           path: const [],
@@ -477,11 +535,19 @@ class _FlowchartListView extends StatelessWidget {
     final widgets = <Widget>[];
     for (var i = 0; i < branches.length; i += 1) {
       final branch = branches[i];
-      final branchKey = _nextWidgetKey(keyCounts, 'mobile-flowchart-branch-${node.id}-${branch.key}');
+      final branchKey = _nextWidgetKey(
+        keyCounts,
+        'mobile-flowchart-branch-${node.id}-${branch.key}',
+      );
       if (i > 0) {
         widgets.add(
           _SiblingDivider(
-            key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-sibling-divider-${node.id}')),
+            key: ValueKey(
+              _nextWidgetKey(
+                keyCounts,
+                'mobile-flowchart-sibling-divider-${node.id}',
+              ),
+            ),
             label: '${node.label} · másik ág',
           ),
         );
@@ -502,10 +568,29 @@ class _FlowchartListView extends StatelessWidget {
       if (closed) {
         continue;
       }
-      widgets.add(_Arrow(key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-arrow-${node.id}-${branch.key}-target'))));
+      widgets.add(
+        _Arrow(
+          key: ValueKey(
+            _nextWidgetKey(
+              keyCounts,
+              'mobile-flowchart-arrow-${node.id}-${branch.key}-target',
+            ),
+          ),
+        ),
+      );
       final target = branch.target;
       if (target == null) {
-        widgets.add(_LeafCard(key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-leaf-${node.id}-${branch.key}')), label: branch.label));
+        widgets.add(
+          _LeafCard(
+            key: ValueKey(
+              _nextWidgetKey(
+                keyCounts,
+                'mobile-flowchart-leaf-${node.id}-${branch.key}',
+              ),
+            ),
+            label: branch.label,
+          ),
+        );
         continue;
       }
       final childBranches = _branchesFor(data, target);
@@ -515,19 +600,50 @@ class _FlowchartListView extends StatelessWidget {
       if (showTargetCard) {
         widgets.add(
           _ProcessCard(
-            key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-process-${target.id}')),
+            key: ValueKey(
+              _nextWidgetKey(
+                keyCounts,
+                'mobile-flowchart-process-${target.id}',
+              ),
+            ),
             node: target,
             terminal: childBranches.isEmpty && !targetIsDecision,
           ),
         );
       }
       if (visited.contains(target.id)) {
-        widgets.add(_LeafCard(key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-cycle-${node.id}-${branch.key}')), label: 'Visszacsatolás'));
+        widgets.add(
+          _LeafCard(
+            key: ValueKey(
+              _nextWidgetKey(
+                keyCounts,
+                'mobile-flowchart-cycle-${node.id}-${branch.key}',
+              ),
+            ),
+            label: 'Visszacsatolás',
+          ),
+        );
         continue;
       }
       if (childBranches.isNotEmpty) {
-        widgets.add(_Arrow(key: ValueKey(_nextWidgetKey(keyCounts, 'mobile-flowchart-arrow-${node.id}-${target.id}-${branch.key}-children'))));
-        widgets.addAll(_branchWidgets(target, path: nextPath, visited: {...visited, node.id}, keyCounts: keyCounts));
+        widgets.add(
+          _Arrow(
+            key: ValueKey(
+              _nextWidgetKey(
+                keyCounts,
+                'mobile-flowchart-arrow-${node.id}-${target.id}-${branch.key}-children',
+              ),
+            ),
+          ),
+        );
+        widgets.addAll(
+          _branchWidgets(
+            target,
+            path: nextPath,
+            visited: {...visited, node.id},
+            keyCounts: keyCounts,
+          ),
+        );
       }
     }
     return widgets;
@@ -543,12 +659,15 @@ class _ListStartStep extends StatelessWidget {
       padding: EdgeInsets.only(bottom: 6),
       child: Text(
         'Start',
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF617080)),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF617080),
+        ),
       ),
     );
   }
 }
-
 
 String _nextWidgetKey(Map<String, int> counts, String base) {
   final next = (counts[base] ?? 0) + 1;
@@ -557,7 +676,14 @@ String _nextWidgetKey(Map<String, int> counts, String base) {
 }
 
 class _BranchCard extends StatelessWidget {
-  const _BranchCard({super.key, required this.node, required this.answer, required this.pathLabel, required this.closed, required this.onTap});
+  const _BranchCard({
+    super.key,
+    required this.node,
+    required this.answer,
+    required this.pathLabel,
+    required this.closed,
+    required this.onTap,
+  });
 
   final MobileFlowchartNode node;
   final String answer;
@@ -572,18 +698,18 @@ class _BranchCard extends StatelessWidget {
     final color = yes
         ? const Color(0xFF16613B)
         : no
-            ? const Color(0xFF8A3428)
-            : const Color(0xFF374151);
+        ? const Color(0xFF8A3428)
+        : const Color(0xFF374151);
     final bg = yes
         ? const Color(0xFFECF8F0)
         : no
-            ? const Color(0xFFFFF1EF)
-            : Colors.white;
+        ? const Color(0xFFFFF1EF)
+        : Colors.white;
     final border = yes
         ? const Color(0xFF238354)
         : no
-            ? const Color(0xFFB25444)
-            : const Color(0xFFD2DAE2);
+        ? const Color(0xFFB25444)
+        : const Color(0xFFD2DAE2);
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
@@ -593,7 +719,10 @@ class _BranchCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           onTap: onTap,
           child: DecoratedBox(
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: border)),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: border),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(10),
               child: Row(
@@ -604,14 +733,24 @@ class _BranchCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SelectableText(
-                          node.label.trim().isEmpty ? 'Döntés' : node.label.trim(),
-                          style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF21313F), height: 1.22),
+                          node.label.trim().isEmpty
+                              ? 'Döntés'
+                              : node.label.trim(),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF21313F),
+                            height: 1.22,
+                          ),
                         ),
                         if (!_isYes(answer) && !_isNo(answer)) ...[
                           const SizedBox(height: 3),
                           Text(
                             '${node.label.trim().isEmpty ? 'Döntés' : node.label.trim()} $answer',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF334155)),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF334155),
+                            ),
                           ),
                         ],
                         const SizedBox(height: 6),
@@ -622,7 +761,14 @@ class _BranchCard extends StatelessWidget {
                           children: [
                             _AnswerChip(label: answer, color: color),
                             if (pathLabel.isNotEmpty)
-                              Text(pathLabel, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF617080))),
+                              Text(
+                                pathLabel,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF617080),
+                                ),
+                              ),
                           ],
                         ),
                       ],
@@ -637,7 +783,11 @@ class _BranchCard extends StatelessWidget {
                     ),
                     child: SizedBox.square(
                       dimension: 28,
-                      child: Icon(closed ? Icons.chevron_right : Icons.expand_more, color: color, size: 19),
+                      child: Icon(
+                        closed ? Icons.chevron_right : Icons.expand_more,
+                        color: color,
+                        size: 19,
+                      ),
                     ),
                   ),
                 ],
@@ -659,10 +809,21 @@ class _AnswerChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.11), borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(999),
+      ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        child: Text(label, style: TextStyle(fontSize: 12, height: 1, fontWeight: FontWeight.w900, color: color)),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            height: 1,
+            fontWeight: FontWeight.w900,
+            color: color,
+          ),
+        ),
       ),
     );
   }
@@ -695,15 +856,35 @@ class _ProcessCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_nodeTypeText(node), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF617080))),
+                    Text(
+                      _nodeTypeText(node),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF617080),
+                      ),
+                    ),
                     const SizedBox(height: 3),
                     SelectableText(
-                      node.label.trim().isEmpty ? 'Névtelen lépés' : node.label.trim(),
-                      style: const TextStyle(fontWeight: FontWeight.w700, height: 1.28, color: Color(0xFF263747)),
+                      node.label.trim().isEmpty
+                          ? 'Névtelen lépés'
+                          : node.label.trim(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        height: 1.28,
+                        color: Color(0xFF263747),
+                      ),
                     ),
                     if (terminal) ...[
                       const SizedBox(height: 6),
-                      const Text('Ág vége', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF6B7280))),
+                      const Text(
+                        'Ág vége',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
                     ],
                   ],
                 ),
@@ -736,9 +917,23 @@ class _LeafCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Ág vége', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF617080))),
+              const Text(
+                'Ág vége',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF617080),
+                ),
+              ),
               const SizedBox(height: 3),
-              SelectableText(label, style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF6B7280), height: 1.26)),
+              SelectableText(
+                label,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF6B7280),
+                  height: 1.26,
+                ),
+              ),
             ],
           ),
         ),
@@ -754,7 +949,9 @@ class _Arrow extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Padding(
       padding: EdgeInsets.only(bottom: 6),
-      child: Center(child: Icon(Icons.arrow_downward, size: 16, color: Color(0xFF9CA3AF))),
+      child: Center(
+        child: Icon(Icons.arrow_downward, size: 16, color: Color(0xFF9CA3AF)),
+      ),
     );
   }
 }
@@ -773,7 +970,14 @@ class _SiblingDivider extends StatelessWidget {
           const Expanded(child: Divider(color: Color(0xFFD5DDE5))),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF617080))),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF617080),
+              ),
+            ),
           ),
           const Expanded(child: Divider(color: Color(0xFFD5DDE5))),
         ],
@@ -783,7 +987,12 @@ class _SiblingDivider extends StatelessWidget {
 }
 
 class _FlowchartCanvasView extends StatefulWidget {
-  const _FlowchartCanvasView({super.key, required this.data, required this.controller, required this.onZoom});
+  const _FlowchartCanvasView({
+    super.key,
+    required this.data,
+    required this.controller,
+    required this.onZoom,
+  });
 
   final MobileFlowchartData data;
   final TransformationController controller;
@@ -802,7 +1011,10 @@ class _FlowchartCanvasViewState extends State<_FlowchartCanvasView> {
     final data = widget.data;
     final layout = _canvasLayout(data);
     final bounds = _canvasBounds(data, layout).inflate(120);
-    final size = Size(math.max(640, bounds.width), math.max(520, bounds.height));
+    final size = Size(
+      math.max(640, bounds.width),
+      math.max(520, bounds.height),
+    );
     final nodes = {for (final node in data.nodes) node.id: node};
     return SizedBox(
       height: 360,
@@ -819,7 +1031,11 @@ class _FlowchartCanvasViewState extends State<_FlowchartCanvasView> {
               if (!mounted || _lastFitSignature != signature) {
                 return;
               }
-              _fitCanvasToViewport(widget.controller, contentSize: size, viewportSize: viewport);
+              _fitCanvasToViewport(
+                widget.controller,
+                contentSize: size,
+                viewportSize: viewport,
+              );
             });
           }
           final previewGesturesEnabled = _activePointers >= 2;
@@ -834,7 +1050,10 @@ class _FlowchartCanvasViewState extends State<_FlowchartCanvasView> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: DecoratedBox(
-                      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFE5E7EB))),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
                       child: InteractiveViewer(
                         transformationController: widget.controller,
                         constrained: false,
@@ -848,20 +1067,49 @@ class _FlowchartCanvasViewState extends State<_FlowchartCanvasView> {
                           height: size.height,
                           child: Stack(
                             children: [
-                              Positioned.fill(child: CustomPaint(painter: _CanvasEdgePainter(data: data, layout: layout, bounds: bounds))),
+                              Positioned.fill(
+                                child: CustomPaint(
+                                  painter: _CanvasEdgePainter(
+                                    data: data,
+                                    layout: layout,
+                                    bounds: bounds,
+                                  ),
+                                ),
+                              ),
                               for (final edge in data.edges)
-                                if (nodes[edge.fromNodeId] != null && nodes[edge.toNodeId] != null)
-                                  _CanvasEdgeAnchor(edge: edge, data: data, layout: layout, bounds: bounds),
+                                if (nodes[edge.fromNodeId] != null &&
+                                    nodes[edge.toNodeId] != null)
+                                  _CanvasEdgeAnchor(
+                                    edge: edge,
+                                    data: data,
+                                    layout: layout,
+                                    bounds: bounds,
+                                  ),
                               for (final edge in data.edges)
                                 if (nodes[edge.fromNodeId] != null &&
                                     nodes[edge.toNodeId] != null &&
                                     _isLoopClosingEdge(data, edge))
-                                  _CanvasLoopEdgeAnchor(edge: edge, data: data, layout: layout, bounds: bounds),
+                                  _CanvasLoopEdgeAnchor(
+                                    edge: edge,
+                                    data: data,
+                                    layout: layout,
+                                    bounds: bounds,
+                                  ),
                               for (final edge in data.edges)
-                                if (nodes[edge.fromNodeId] != null && nodes[edge.toNodeId] != null)
-                                  _CanvasEdgeLabel(edge: edge, data: data, layout: layout, bounds: bounds),
+                                if (nodes[edge.fromNodeId] != null &&
+                                    nodes[edge.toNodeId] != null)
+                                  _CanvasEdgeLabel(
+                                    edge: edge,
+                                    data: data,
+                                    layout: layout,
+                                    bounds: bounds,
+                                  ),
                               for (final node in data.nodes)
-                                _CanvasNodePreview(data: data, node: node, offset: layout[node.id]! - bounds.topLeft),
+                                _CanvasNodePreview(
+                                  data: data,
+                                  node: node,
+                                  offset: layout[node.id]! - bounds.topLeft,
+                                ),
                             ],
                           ),
                         ),
@@ -907,7 +1155,11 @@ class _FlowchartCanvasViewState extends State<_FlowchartCanvasView> {
   }
 }
 
-String _canvasFitSignature(MobileFlowchartData data, Size contentSize, Size viewportSize) {
+String _canvasFitSignature(
+  MobileFlowchartData data,
+  Size contentSize,
+  Size viewportSize,
+) {
   return [
     data.id,
     contentSize.width.toStringAsFixed(1),
@@ -933,10 +1185,13 @@ void _fitCanvasToViewport(
     controller.value = Matrix4.identity();
     return;
   }
-  final scale = math.min(
-    viewportSize.width / contentSize.width,
-    viewportSize.height / contentSize.height,
-  ).clamp(0.08, 1.0).toDouble();
+  final scale = math
+      .min(
+        viewportSize.width / contentSize.width,
+        viewportSize.height / contentSize.height,
+      )
+      .clamp(0.08, 1.0)
+      .toDouble();
   final dx = (viewportSize.width - contentSize.width * scale) / 2;
   final dy = (viewportSize.height - contentSize.height * scale) / 2;
   controller.value = Matrix4.identity()
@@ -945,7 +1200,11 @@ void _fitCanvasToViewport(
 }
 
 class _CanvasNodePreview extends StatelessWidget {
-  const _CanvasNodePreview({required this.data, required this.node, required this.offset});
+  const _CanvasNodePreview({
+    required this.data,
+    required this.node,
+    required this.offset,
+  });
 
   final MobileFlowchartData data;
   final MobileFlowchartNode node;
@@ -965,9 +1224,7 @@ class _CanvasNodePreview extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: CustomPaint(
-              painter: const _CanvasNodeShapePainter(),
-            ),
+            child: CustomPaint(painter: const _CanvasNodeShapePainter()),
           ),
           Positioned.fill(
             child: Padding(
@@ -978,19 +1235,30 @@ class _CanvasNodePreview extends StatelessWidget {
                   textAlign: TextAlign.center,
                   maxLines: 5,
                   overflow: TextOverflow.fade,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, height: 1.16, color: Color(0xFF263747)),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    height: 1.16,
+                    color: Color(0xFF263747),
+                  ),
                 ),
               ),
             ),
           ),
           for (final port in ports)
             _CanvasPortDot(
-              key: ValueKey('mobile-flowchart-canvas-port-${node.id}-${port.id}'),
+              key: ValueKey(
+                'mobile-flowchart-canvas-port-${node.id}-${port.id}',
+              ),
               nodeId: node.id,
               port: port,
               usage: _portUsageState(data, node.id, port.id),
               nodeSize: size,
-              unitOffset: _portUnitOffset(port.side, ports.where((p) => p.side == port.side).toList().indexOf(port), ports.where((p) => p.side == port.side).length),
+              unitOffset: _portUnitOffset(
+                port.side,
+                ports.where((p) => p.side == port.side).toList().indexOf(port),
+                ports.where((p) => p.side == port.side).length,
+              ),
             ),
         ],
       ),
@@ -1015,7 +1283,10 @@ class _CanvasNodeShapePainter extends CustomPainter {
       ..color = const Color(0x12111827)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
 
-    final rrect = RRect.fromRectAndRadius(rect.deflate(2), const Radius.circular(10));
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(2),
+      const Radius.circular(10),
+    );
     canvas.drawRRect(rrect.shift(const Offset(0, 2)), shadow);
     canvas.drawRRect(rrect, fill);
     canvas.drawRRect(rrect, stroke);
@@ -1063,7 +1334,9 @@ class _CanvasPortDot extends StatelessWidget {
         children: [
           if (usage == _PortUsageState.inputAndOutput)
             DecoratedBox(
-              key: ValueKey('mobile-flowchart-canvas-port-outer-$nodeId-${port.id}'),
+              key: ValueKey(
+                'mobile-flowchart-canvas-port-outer-$nodeId-${port.id}',
+              ),
               decoration: BoxDecoration(
                 color: Colors.transparent,
                 shape: BoxShape.circle,
@@ -1072,9 +1345,18 @@ class _CanvasPortDot extends StatelessWidget {
               child: const SizedBox.square(dimension: 30),
             ),
           DecoratedBox(
-            key: ValueKey('mobile-flowchart-canvas-port-state-$nodeId-${port.id}-${usage.name}'),
-            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: color, width: 1.5)),
-            child: SizedBox.square(dimension: 22, child: Icon(icon, size: 12, color: color)),
+            key: ValueKey(
+              'mobile-flowchart-canvas-port-state-$nodeId-${port.id}-${usage.name}',
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 1.5),
+            ),
+            child: SizedBox.square(
+              dimension: 22,
+              child: Icon(icon, size: 12, color: color),
+            ),
           ),
         ],
       ),
@@ -1083,7 +1365,11 @@ class _CanvasPortDot extends StatelessWidget {
 }
 
 class _CanvasEdgePainter extends CustomPainter {
-  const _CanvasEdgePainter({required this.data, required this.layout, required this.bounds});
+  const _CanvasEdgePainter({
+    required this.data,
+    required this.layout,
+    required this.bounds,
+  });
 
   final MobileFlowchartData data;
   final Map<String, Offset> layout;
@@ -1096,7 +1382,12 @@ class _CanvasEdgePainter extends CustomPainter {
       final from = nodesById[edge.fromNodeId];
       final to = nodesById[edge.toNodeId];
       if (from == null || to == null) continue;
-      final route = _routeEdge(edge, from, to, layout).map((point) => point - bounds.topLeft).toList(growable: false);
+      final route = _routeEdge(
+        edge,
+        from,
+        to,
+        layout,
+      ).map((point) => point - bounds.topLeft).toList(growable: false);
       if (route.length < 2) continue;
       final loop = _isLoopClosingEdge(data, edge);
       final color = loop ? const Color(0xFFEA580C) : const Color(0xFF7C3AED);
@@ -1134,17 +1425,42 @@ class _CanvasEdgePainter extends CustomPainter {
   void _drawArrow(Canvas canvas, Offset previous, Offset end, Paint paint) {
     final angle = math.atan2(end.dy - previous.dy, end.dx - previous.dx);
     const size = 8.0;
-    final p1 = end - Offset(math.cos(angle - math.pi / 7) * size, math.sin(angle - math.pi / 7) * size);
-    final p2 = end - Offset(math.cos(angle + math.pi / 7) * size, math.sin(angle + math.pi / 7) * size);
-    canvas.drawPath(Path()..moveTo(end.dx, end.dy)..lineTo(p1.dx, p1.dy)..lineTo(p2.dx, p2.dy)..close(), paint);
+    final p1 =
+        end -
+        Offset(
+          math.cos(angle - math.pi / 7) * size,
+          math.sin(angle - math.pi / 7) * size,
+        );
+    final p2 =
+        end -
+        Offset(
+          math.cos(angle + math.pi / 7) * size,
+          math.sin(angle + math.pi / 7) * size,
+        );
+    canvas.drawPath(
+      Path()
+        ..moveTo(end.dx, end.dy)
+        ..lineTo(p1.dx, p1.dy)
+        ..lineTo(p2.dx, p2.dy)
+        ..close(),
+      paint,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant _CanvasEdgePainter oldDelegate) => oldDelegate.data != data || oldDelegate.layout != layout || oldDelegate.bounds != bounds;
+  bool shouldRepaint(covariant _CanvasEdgePainter oldDelegate) =>
+      oldDelegate.data != data ||
+      oldDelegate.layout != layout ||
+      oldDelegate.bounds != bounds;
 }
 
 class _CanvasEdgeAnchor extends StatelessWidget {
-  const _CanvasEdgeAnchor({required this.edge, required this.data, required this.layout, required this.bounds});
+  const _CanvasEdgeAnchor({
+    required this.edge,
+    required this.data,
+    required this.layout,
+    required this.bounds,
+  });
 
   final MobileFlowchartEdge edge;
   final MobileFlowchartData data;
@@ -1157,7 +1473,12 @@ class _CanvasEdgeAnchor extends StatelessWidget {
     final from = nodes[edge.fromNodeId];
     final to = nodes[edge.toNodeId];
     if (from == null || to == null) return const SizedBox.shrink();
-    final route = _routeEdge(edge, from, to, layout).map((point) => point - bounds.topLeft).toList(growable: false);
+    final route = _routeEdge(
+      edge,
+      from,
+      to,
+      layout,
+    ).map((point) => point - bounds.topLeft).toList(growable: false);
     if (route.isEmpty) return const SizedBox.shrink();
     final middle = route[route.length ~/ 2];
     return Positioned(
@@ -1172,7 +1493,12 @@ class _CanvasEdgeAnchor extends StatelessWidget {
 }
 
 class _CanvasLoopEdgeAnchor extends StatelessWidget {
-  const _CanvasLoopEdgeAnchor({required this.edge, required this.data, required this.layout, required this.bounds});
+  const _CanvasLoopEdgeAnchor({
+    required this.edge,
+    required this.data,
+    required this.layout,
+    required this.bounds,
+  });
 
   final MobileFlowchartEdge edge;
   final MobileFlowchartData data;
@@ -1185,7 +1511,12 @@ class _CanvasLoopEdgeAnchor extends StatelessWidget {
     final from = nodes[edge.fromNodeId];
     final to = nodes[edge.toNodeId];
     if (from == null || to == null) return const SizedBox.shrink();
-    final route = _routeEdge(edge, from, to, layout).map((point) => point - bounds.topLeft).toList(growable: false);
+    final route = _routeEdge(
+      edge,
+      from,
+      to,
+      layout,
+    ).map((point) => point - bounds.topLeft).toList(growable: false);
     if (route.isEmpty) return const SizedBox.shrink();
     final middle = route[route.length ~/ 2];
     return Positioned(
@@ -1200,7 +1531,12 @@ class _CanvasLoopEdgeAnchor extends StatelessWidget {
 }
 
 class _CanvasEdgeLabel extends StatelessWidget {
-  const _CanvasEdgeLabel({required this.edge, required this.data, required this.layout, required this.bounds});
+  const _CanvasEdgeLabel({
+    required this.edge,
+    required this.data,
+    required this.layout,
+    required this.bounds,
+  });
 
   final MobileFlowchartEdge edge;
   final MobileFlowchartData data;
@@ -1213,7 +1549,12 @@ class _CanvasEdgeLabel extends StatelessWidget {
     final from = nodes[edge.fromNodeId];
     final to = nodes[edge.toNodeId];
     if (from == null || to == null) return const SizedBox.shrink();
-    final route = _routeEdge(edge, from, to, layout).map((point) => point - bounds.topLeft).toList(growable: false);
+    final route = _routeEdge(
+      edge,
+      from,
+      to,
+      layout,
+    ).map((point) => point - bounds.topLeft).toList(growable: false);
     if (route.isEmpty) return const SizedBox.shrink();
     final middle = route[route.length ~/ 2];
     final label = _edgeDisplayLabel(data, edge, fallback: 1);
@@ -1227,11 +1568,24 @@ class _CanvasEdgeLabel extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: const Color(0xFFE9D5FF)),
-          boxShadow: const [BoxShadow(color: Color(0x14111827), blurRadius: 8, offset: Offset(0, 2))],
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14111827),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ],
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF374151))),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF374151),
+            ),
+          ),
         ),
       ),
     );
@@ -1265,15 +1619,23 @@ class _FlowchartGuideView extends StatelessWidget {
     final branch = current.branch;
     final node = _nodeById(data, current.nodeId);
     if (branch == null) {
-      final outgoing = node == null ? <_ResolvedBranch>[] : _branchesFor(data, node);
+      final outgoing = node == null
+          ? <_ResolvedBranch>[]
+          : _branchesFor(data, node);
       return _GuidePanel(
         children: [
           if (canGoBack) _GuideBackButton(onBack: onBack),
           _GuideCard(
             kicker: pathLabel,
             child: SelectableText(
-              node?.label.trim().isNotEmpty == true ? node!.label.trim() : 'Döntés',
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, height: 1.25),
+              node?.label.trim().isNotEmpty == true
+                  ? node!.label.trim()
+                  : 'Döntés',
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+                height: 1.25,
+              ),
             ),
           ),
           if (outgoing.isEmpty)
@@ -1281,9 +1643,16 @@ class _FlowchartGuideView extends StatelessWidget {
           else
             for (final item in outgoing)
               if (item.target == null)
-                _GuideDisabledChoice(key: ValueKey('mobile-flowchart-guide-disabled-${item.key}'), label: item.label)
+                _GuideDisabledChoice(
+                  key: ValueKey('mobile-flowchart-guide-disabled-${item.key}'),
+                  label: item.label,
+                )
               else
-                _GuideChoice(key: ValueKey('mobile-flowchart-guide-answer-${item.key}'), branch: item, onTap: () => onAnswer(item)),
+                _GuideChoice(
+                  key: ValueKey('mobile-flowchart-guide-answer-${item.key}'),
+                  branch: item,
+                  onTap: () => onAnswer(item),
+                ),
         ],
       );
     }
@@ -1295,8 +1664,14 @@ class _FlowchartGuideView extends StatelessWidget {
         _GuideCard(
           kicker: pathLabel,
           child: SelectableText(
-            target?.label.trim().isNotEmpty == true ? target!.label.trim() : 'Ág vége',
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.3),
+            target?.label.trim().isNotEmpty == true
+                ? target!.label.trim()
+                : 'Ág vége',
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              height: 1.3,
+            ),
           ),
         ),
         if (outgoing.isEmpty)
@@ -1304,7 +1679,10 @@ class _FlowchartGuideView extends StatelessWidget {
         else
           for (final item in outgoing)
             if (item.target == null)
-              _GuideDisabledChoice(key: ValueKey('mobile-flowchart-guide-disabled-${item.key}'), label: item.label)
+              _GuideDisabledChoice(
+                key: ValueKey('mobile-flowchart-guide-disabled-${item.key}'),
+                label: item.label,
+              )
             else
               _GuideChoice(
                 key: ValueKey('mobile-flowchart-guide-answer-${item.key}'),
@@ -1324,7 +1702,13 @@ class _GuidePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (final child in children) Padding(padding: const EdgeInsets.only(bottom: 8), child: child)]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final child in children)
+          Padding(padding: const EdgeInsets.only(bottom: 8), child: child),
+      ],
+    );
   }
 }
 
@@ -1337,7 +1721,12 @@ class _GuideBackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: TextButton.icon(key: const ValueKey('mobile-flowchart-guide-back'), onPressed: onBack, icon: const Icon(Icons.arrow_back), label: const Text('Vissza')),
+      child: TextButton.icon(
+        key: const ValueKey('mobile-flowchart-guide-back'),
+        onPressed: onBack,
+        icon: const Icon(Icons.arrow_back),
+        label: const Text('Vissza'),
+      ),
     );
   }
 }
@@ -1351,14 +1740,35 @@ class _GuideCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFD2DAE2)), boxShadow: const [BoxShadow(color: Color(0x111F2D3A), blurRadius: 12, offset: Offset(0, 4))]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFD2DAE2)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x111F2D3A),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(kicker, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF617080))),
-          const SizedBox(height: 6),
-          child,
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              kicker,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF617080),
+              ),
+            ),
+            const SizedBox(height: 6),
+            child,
+          ],
+        ),
       ),
     );
   }
@@ -1378,8 +1788,13 @@ class _GuideChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _isYes(branch.label) ? const Color(0xFF16613B) : _isNo(branch.label) ? const Color(0xFF8A3428) : const Color(0xFF374151);
-    final targetLabel = showTargetLabel && branch.target?.label.trim().isNotEmpty == true
+    final color = _isYes(branch.label)
+        ? const Color(0xFF16613B)
+        : _isNo(branch.label)
+        ? const Color(0xFF8A3428)
+        : const Color(0xFF374151);
+    final targetLabel =
+        showTargetLabel && branch.target?.label.trim().isNotEmpty == true
         ? branch.target!.label.trim()
         : 'Választás';
     return Material(
@@ -1389,14 +1804,24 @@ class _GuideChoice extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: DecoratedBox(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFCAD4DD))),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFCAD4DD)),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(10),
-            child: Row(children: [
-              _AnswerChip(label: branch.label, color: color),
-              const SizedBox(width: 8),
-              Expanded(child: Text(targetLabel, style: const TextStyle(fontWeight: FontWeight.w800))),
-            ]),
+            child: Row(
+              children: [
+                _AnswerChip(label: branch.label, color: color),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    targetLabel,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1412,10 +1837,20 @@ class _GuideDisabledChoice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFD1D5DB))),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFD1D5DB)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(10),
-        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF6B7280))),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF6B7280),
+          ),
+        ),
       ),
     );
   }
@@ -1425,14 +1860,23 @@ class _GuideStep {
   const _GuideStep._({required this.nodeId, this.branch});
 
   factory _GuideStep.decision(String nodeId) => _GuideStep._(nodeId: nodeId);
-  factory _GuideStep.answer(_ResolvedBranch branch) => _GuideStep._(nodeId: branch.source.id, branch: branch);
+  factory _GuideStep.answer(_ResolvedBranch branch) =>
+      _GuideStep._(nodeId: branch.source.id, branch: branch);
 
   final String nodeId;
   final _ResolvedBranch? branch;
 }
 
 class _ResolvedBranch {
-  const _ResolvedBranch({required this.source, required this.port, required this.edge, required this.target, required this.label, required this.key, required this.order});
+  const _ResolvedBranch({
+    required this.source,
+    required this.port,
+    required this.edge,
+    required this.target,
+    required this.label,
+    required this.key,
+    required this.order,
+  });
 
   final MobileFlowchartNode source;
   final MobileFlowchartPort? port;
@@ -1450,7 +1894,11 @@ String _routeSummary(MobileFlowchartData data) {
   return '1 -> $count';
 }
 
-int _terminalPathCount(MobileFlowchartData data, MobileFlowchartNode node, Set<String> visited) {
+int _terminalPathCount(
+  MobileFlowchartData data,
+  MobileFlowchartNode node,
+  Set<String> visited,
+) {
   final branches = _branchesFor(data, node);
   if (branches.isEmpty) return 1;
   var count = 0;
@@ -1470,11 +1918,19 @@ MobileFlowchartNode? _rootNode(MobileFlowchartData data) {
   final sorted = [...data.nodes]..sort((a, b) => a.order.compareTo(b.order));
   final explicitStart = _firstWhereOrNull(
     sorted,
-    (node) => node.role.trim().toLowerCase() == 'start' || node.shape.trim().toLowerCase() == 'start_end',
+    (node) =>
+        node.role.trim().toLowerCase() == 'start' ||
+        node.shape.trim().toLowerCase() == 'start_end',
   );
   if (explicitStart != null) return explicitStart;
-  final incoming = data.edges.map((edge) => edge.toNodeId).where((id) => id.trim().isNotEmpty).toSet();
-  return sorted.firstWhere((node) => !incoming.contains(node.id), orElse: () => sorted.first);
+  final incoming = data.edges
+      .map((edge) => edge.toNodeId)
+      .where((id) => id.trim().isNotEmpty)
+      .toSet();
+  return sorted.firstWhere(
+    (node) => !incoming.contains(node.id),
+    orElse: () => sorted.first,
+  );
 }
 
 MobileFlowchartNode? _nodeById(MobileFlowchartData data, String id) {
@@ -1484,40 +1940,51 @@ MobileFlowchartNode? _nodeById(MobileFlowchartData data, String id) {
   return null;
 }
 
-List<_ResolvedBranch> _branchesFor(MobileFlowchartData data, MobileFlowchartNode node) {
+List<_ResolvedBranch> _branchesFor(
+  MobileFlowchartData data,
+  MobileFlowchartNode node,
+) {
   final ports = _effectivePorts(node);
   final usedPortIds = <String>{};
   final result = <_ResolvedBranch>[];
   final edges = data.edges.where((edge) => edge.fromNodeId == node.id).toList()
-    ..sort((a, b) => a.order == b.order ? a.id.compareTo(b.id) : a.order.compareTo(b.order));
+    ..sort(
+      (a, b) => a.order == b.order
+          ? a.id.compareTo(b.id)
+          : a.order.compareTo(b.order),
+    );
   var fallback = 1;
   for (final edge in edges) {
     final port = _portForEdge(node, edge, ports);
     if (port != null) usedPortIds.add(port.id);
     final label = _branchLabel(port, edge, fallback: fallback);
-    result.add(_ResolvedBranch(
-      source: node,
-      port: port,
-      edge: edge,
-      target: _nodeById(data, edge.toNodeId),
-      label: label,
-      key: _labelKey(label, fallback: fallback),
-      order: _portOrder(ports, port, edge.order),
-    ));
+    result.add(
+      _ResolvedBranch(
+        source: node,
+        port: port,
+        edge: edge,
+        target: _nodeById(data, edge.toNodeId),
+        label: label,
+        key: _labelKey(label, fallback: fallback),
+        order: _portOrder(ports, port, edge.order),
+      ),
+    );
     fallback += 1;
   }
   for (final port in ports) {
     if (usedPortIds.contains(port.id) || !_isBranchPort(port)) continue;
     final label = _branchLabel(port, null, fallback: fallback);
-    result.add(_ResolvedBranch(
-      source: node,
-      port: port,
-      edge: null,
-      target: null,
-      label: label,
-      key: _labelKey(label, fallback: fallback),
-      order: _portOrder(ports, port, 1000 + fallback),
-    ));
+    result.add(
+      _ResolvedBranch(
+        source: node,
+        port: port,
+        edge: null,
+        target: null,
+        label: label,
+        key: _labelKey(label, fallback: fallback),
+        order: _portOrder(ports, port, 1000 + fallback),
+      ),
+    );
     fallback += 1;
   }
   result.sort((a, b) {
@@ -1535,13 +2002,21 @@ int _normalizedOrderKey(String label) {
   return 10;
 }
 
-int _portOrder(List<MobileFlowchartPort> ports, MobileFlowchartPort? port, int fallback) {
+int _portOrder(
+  List<MobileFlowchartPort> ports,
+  MobileFlowchartPort? port,
+  int fallback,
+) {
   if (port == null) return fallback;
   final index = ports.indexWhere((item) => item.id == port.id);
   return index < 0 ? fallback : index;
 }
 
-MobileFlowchartPort? _portForEdge(MobileFlowchartNode node, MobileFlowchartEdge edge, List<MobileFlowchartPort> ports) {
+MobileFlowchartPort? _portForEdge(
+  MobileFlowchartNode node,
+  MobileFlowchartEdge edge,
+  List<MobileFlowchartPort> ports,
+) {
   if (edge.fromPortId != null) {
     for (final port in ports) {
       if (port.id == edge.fromPortId) return port;
@@ -1559,7 +2034,11 @@ MobileFlowchartPort? _portForEdge(MobileFlowchartNode node, MobileFlowchartEdge 
   return null;
 }
 
-String _branchLabel(MobileFlowchartPort? port, MobileFlowchartEdge? edge, {required int fallback}) {
+String _branchLabel(
+  MobileFlowchartPort? port,
+  MobileFlowchartEdge? edge, {
+  required int fallback,
+}) {
   if (port != null) {
     final semantic = port.semantic.trim().toLowerCase();
     if (semantic == 'yes') return 'Igen';
@@ -1572,12 +2051,25 @@ String _branchLabel(MobileFlowchartPort? port, MobileFlowchartEdge? edge, {requi
   return 'Ág $fallback';
 }
 
-bool _isBranchPort(MobileFlowchartPort port) => port.semantic == 'yes' || port.semantic == 'no' || port.semantic == 'custom';
-bool _isOutputLike(MobileFlowchartPort port) => _isBranchPort(port) || port.id == 'out' || port.side == 'right' || port.side == 'bottom';
+bool _isBranchPort(MobileFlowchartPort port) =>
+    port.semantic == 'yes' ||
+    port.semantic == 'no' ||
+    port.semantic == 'custom';
+bool _isOutputLike(MobileFlowchartPort port) =>
+    _isBranchPort(port) ||
+    port.id == 'out' ||
+    port.side == 'right' ||
+    port.side == 'bottom';
 
-String _edgeDisplayLabel(MobileFlowchartData data, MobileFlowchartEdge edge, {required int fallback}) {
+String _edgeDisplayLabel(
+  MobileFlowchartData data,
+  MobileFlowchartEdge edge, {
+  required int fallback,
+}) {
   final source = _nodeById(data, edge.fromNodeId);
-  final port = source == null ? null : _portForEdge(source, edge, _effectivePorts(source));
+  final port = source == null
+      ? null
+      : _portForEdge(source, edge, _effectivePorts(source));
   return _branchLabel(port, edge, fallback: fallback);
 }
 
@@ -1589,19 +2081,41 @@ List<MobileFlowchartPort> _effectivePorts(MobileFlowchartNode node) {
   if (kind == 'binary_decision' || shape == 'decision') {
     return const [
       MobileFlowchartPort(id: 'in', side: 'top', label: 'Bemenet'),
-      MobileFlowchartPort(id: 'yes', side: 'bottom', label: 'Igen', semantic: 'yes'),
-      MobileFlowchartPort(id: 'no', side: 'bottom', label: 'Nem', semantic: 'no'),
+      MobileFlowchartPort(
+        id: 'yes',
+        side: 'bottom',
+        label: 'Igen',
+        semantic: 'yes',
+      ),
+      MobileFlowchartPort(
+        id: 'no',
+        side: 'bottom',
+        label: 'Nem',
+        semantic: 'no',
+      ),
     ];
   }
   if (kind == 'multi_decision') {
     return const [
       MobileFlowchartPort(id: 'in', side: 'top', label: 'Bemenet'),
-      MobileFlowchartPort(id: 'branch-1', side: 'right', label: 'Ág 1', semantic: 'custom'),
-      MobileFlowchartPort(id: 'branch-2', side: 'bottom', label: 'Ág 2', semantic: 'custom'),
+      MobileFlowchartPort(
+        id: 'branch-1',
+        side: 'right',
+        label: 'Ág 1',
+        semantic: 'custom',
+      ),
+      MobileFlowchartPort(
+        id: 'branch-2',
+        side: 'bottom',
+        label: 'Ág 2',
+        semantic: 'custom',
+      ),
     ];
   }
   if (role == 'start' || shape == 'start_end') {
-    return const [MobileFlowchartPort(id: 'out', side: 'bottom', label: 'Kimenet')];
+    return const [
+      MobileFlowchartPort(id: 'out', side: 'bottom', label: 'Kimenet'),
+    ];
   }
   if (role == 'end') {
     return const [MobileFlowchartPort(id: 'in', side: 'top', label: 'Bemenet')];
@@ -1613,12 +2127,18 @@ List<MobileFlowchartPort> _effectivePorts(MobileFlowchartNode node) {
 }
 
 String _labelKey(String value, {required int fallback}) {
-  final key = value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9áéíóöőúüű]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
+  final key = value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9áéíóöőúüű]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
   return key.isEmpty ? 'ag-$fallback' : key;
 }
 
-bool _isYes(String value) => value.trim().toLowerCase() == 'igen' || value.trim().toLowerCase() == 'yes';
-bool _isNo(String value) => value.trim().toLowerCase() == 'nem' || value.trim().toLowerCase() == 'no';
+bool _isYes(String value) =>
+    value.trim().toLowerCase() == 'igen' || value.trim().toLowerCase() == 'yes';
+bool _isNo(String value) =>
+    value.trim().toLowerCase() == 'nem' || value.trim().toLowerCase() == 'no';
 
 Set<String> _deepBranchIds(MobileFlowchartData data, {required int minLevel}) {
   final root = _rootNode(data);
@@ -1641,20 +2161,35 @@ Set<String> _deepBranchIds(MobileFlowchartData data, {required int minLevel}) {
   return result;
 }
 
-String _pathBranchId(List<String> parts) => parts.asMap().entries.map((entry) => '${entry.key + 1}-${_labelKey(entry.value, fallback: entry.key + 1)}').join('--');
+String _pathBranchId(List<String> parts) => parts
+    .asMap()
+    .entries
+    .map(
+      (entry) =>
+          '${entry.key + 1}-${_labelKey(entry.value, fallback: entry.key + 1)}',
+    )
+    .join('--');
 
 String _pathLabel(List<String> parts) {
   if (parts.isEmpty) return '';
-  return 'L${parts.length} · ${parts.map((part) => _isYes(part) ? 'I' : _isNo(part) ? 'N' : 'A').join()}';
+  return 'L${parts.length} · ${parts.map((part) => _isYes(part)
+      ? 'I'
+      : _isNo(part)
+      ? 'N'
+      : 'A').join()}';
 }
 
 IconData _shapeIcon(MobileFlowchartNode node) {
   final kind = node.kind.trim().toLowerCase();
   final role = node.role.trim().toLowerCase();
   final shape = node.shape.trim().toLowerCase();
-  if (role == 'start' || role == 'end' || shape == 'start_end') return Icons.trip_origin;
+  if (role == 'start' || role == 'end' || shape == 'start_end') {
+    return Icons.trip_origin;
+  }
   if (kind == 'multi_decision') return Icons.account_tree_outlined;
-  if (kind == 'binary_decision' || shape == 'decision') return Icons.change_history;
+  if (kind == 'binary_decision' || shape == 'decision') {
+    return Icons.change_history;
+  }
   if (shape == 'input_output') return Icons.input;
   if (shape == 'subprocess') return Icons.integration_instructions_outlined;
   if (shape == 'data_store') return Icons.storage;
@@ -1779,7 +2314,10 @@ Map<String, Offset> _canvasLayout(MobileFlowchartData data) {
     final x = node.x;
     final y = node.y;
     if (x != null || y != null) {
-      result[node.id] = Offset(x ?? auto[node.id]?.dx ?? 80, y ?? auto[node.id]?.dy ?? 80);
+      result[node.id] = Offset(
+        x ?? auto[node.id]?.dx ?? 80,
+        y ?? auto[node.id]?.dy ?? 80,
+      );
     } else {
       result[node.id] = auto[node.id] ?? const Offset(80, 80);
     }
@@ -1802,6 +2340,7 @@ Map<String, Offset> _autoLayout(MobileFlowchartData data) {
       if (target != null) visit(target, depth + 1, {...path, node.id});
     }
   }
+
   visit(root, 0, const {});
   for (final node in data.nodes) {
     result.putIfAbsent(node.id, () => Offset(80, 70 + row++ * 112));
@@ -1841,11 +2380,23 @@ Rect _canvasBounds(MobileFlowchartData data, Map<String, Offset> layout) {
 }
 
 Size _nodeSize(MobileFlowchartNode node) {
-  final text = node.label.trim().isEmpty ? _nodeTypeText(node) : node.label.trim();
-  final longest = text.split('\n').fold<int>(0, (value, line) => math.max(value, line.length));
+  final text = node.label.trim().isEmpty
+      ? _nodeTypeText(node)
+      : node.label.trim();
+  final longest = text
+      .split('\n')
+      .fold<int>(0, (value, line) => math.max(value, line.length));
   final width = (188 + longest * 3.8).clamp(210.0, 370.0).toDouble();
-  final lines = math.max(1, (text.length / math.max(16, ((width - 76) / 7.2).floor())).ceil());
-  final minHeight = node.kind == 'binary_decision' || node.kind == 'multi_decision' || node.shape == 'decision' ? 96.0 : 78.0;
+  final lines = math.max(
+    1,
+    (text.length / math.max(16, ((width - 76) / 7.2).floor())).ceil(),
+  );
+  final minHeight =
+      node.kind == 'binary_decision' ||
+          node.kind == 'multi_decision' ||
+          node.shape == 'decision'
+      ? 96.0
+      : 78.0;
   final height = (48 + lines * 20.0).clamp(minHeight, 240.0).toDouble();
   return Size(width, height);
 }
@@ -1860,27 +2411,56 @@ Offset _portUnitOffset(String side, int index, int count) {
   };
 }
 
-Offset _portOffset(MobileFlowchartNode node, MobileFlowchartPort? port, Map<String, Offset> layout) {
+Offset _portOffset(
+  MobileFlowchartNode node,
+  MobileFlowchartPort? port,
+  Map<String, Offset> layout,
+) {
   final nodeOffset = layout[node.id] ?? Offset.zero;
   final size = _nodeSize(node);
   final ports = _effectivePorts(node);
   final actual = port ?? (ports.isEmpty ? null : ports.last);
-  if (actual == null) return nodeOffset + Offset(size.width / 2, size.height / 2);
-  final sameSide = ports.where((item) => item.side == actual.side).toList(growable: false);
-  final unit = _portUnitOffset(actual.side, sameSide.indexWhere((item) => item.id == actual.id), sameSide.length);
+  if (actual == null) {
+    return nodeOffset + Offset(size.width / 2, size.height / 2);
+  }
+  final sameSide = ports
+      .where((item) => item.side == actual.side)
+      .toList(growable: false);
+  final unit = _portUnitOffset(
+    actual.side,
+    sameSide.indexWhere((item) => item.id == actual.id),
+    sameSide.length,
+  );
   return nodeOffset + Offset(size.width * unit.dx, size.height * unit.dy);
 }
 
-List<Offset> _routeEdge(MobileFlowchartEdge edge, MobileFlowchartNode from, MobileFlowchartNode to, Map<String, Offset> layout) {
+List<Offset> _routeEdge(
+  MobileFlowchartEdge edge,
+  MobileFlowchartNode from,
+  MobileFlowchartNode to,
+  Map<String, Offset> layout,
+) {
   final fromPort = _portForEdge(from, edge, _effectivePorts(from));
   final toPorts = _effectivePorts(to);
-  final toPort = edge.toPortId == null ? (toPorts.isEmpty ? null : toPorts.first) : _firstWhereOrNull(toPorts, (port) => port.id == edge.toPortId);
+  final toPort = edge.toPortId == null
+      ? (toPorts.isEmpty ? null : toPorts.first)
+      : _firstWhereOrNull(toPorts, (port) => port.id == edge.toPortId);
   final start = _portOffset(from, fromPort, layout);
   final end = _portOffset(to, toPort, layout);
   final fromSize = _nodeSize(from);
   final toSize = _nodeSize(to);
-  final fromRect = Rect.fromLTWH((layout[from.id] ?? Offset.zero).dx, (layout[from.id] ?? Offset.zero).dy, fromSize.width, fromSize.height).inflate(18);
-  final toRect = Rect.fromLTWH((layout[to.id] ?? Offset.zero).dx, (layout[to.id] ?? Offset.zero).dy, toSize.width, toSize.height).inflate(18);
+  final fromRect = Rect.fromLTWH(
+    (layout[from.id] ?? Offset.zero).dx,
+    (layout[from.id] ?? Offset.zero).dy,
+    fromSize.width,
+    fromSize.height,
+  ).inflate(18);
+  final toRect = Rect.fromLTWH(
+    (layout[to.id] ?? Offset.zero).dx,
+    (layout[to.id] ?? Offset.zero).dy,
+    toSize.width,
+    toSize.height,
+  ).inflate(18);
   final isBackEdge = toRect.center.dy < fromRect.center.dy - 8;
   final startExit = _exitPoint(start, fromPort?.side ?? 'bottom', 30);
   final endEntry = _entryPoint(end, toPort?.side ?? 'top', 24);
@@ -1890,12 +2470,27 @@ List<Offset> _routeEdge(MobileFlowchartEdge edge, MobileFlowchartNode from, Mobi
   if (isBackEdge) {
     final leftLane = math.min(fromRect.left, toRect.left) - 56;
     final rightLane = math.max(fromRect.right, toRect.right) + 56;
-    final useLeft = (startExit.dx - leftLane).abs() <= (rightLane - startExit.dx).abs();
+    final useLeft =
+        (startExit.dx - leftLane).abs() <= (rightLane - startExit.dx).abs();
     final laneX = useLeft ? leftLane : rightLane;
-    return [start, startExit, Offset(laneX, startExit.dy), Offset(laneX, endEntry.dy), endEntry, end];
+    return [
+      start,
+      startExit,
+      Offset(laneX, startExit.dy),
+      Offset(laneX, endEntry.dy),
+      endEntry,
+      end,
+    ];
   }
   final midY = (startExit.dy + endEntry.dy) / 2;
-  return [start, startExit, Offset(startExit.dx, midY), Offset(endEntry.dx, midY), endEntry, end];
+  return [
+    start,
+    startExit,
+    Offset(startExit.dx, midY),
+    Offset(endEntry.dx, midY),
+    endEntry,
+    end,
+  ];
 }
 
 Offset _exitPoint(Offset point, String side, double distance) {
@@ -1915,7 +2510,6 @@ Offset _entryPoint(Offset point, String side, double distance) {
     _ => point.translate(0, distance),
   };
 }
-
 
 T? _firstWhereOrNull<T>(Iterable<T> values, bool Function(T value) test) {
   for (final value in values) {

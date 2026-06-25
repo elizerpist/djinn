@@ -272,9 +272,9 @@ class _FlowchartBuilderScreenState extends State<FlowchartBuilderScreen> {
             children: [
               Text(
                 'Elem hozzáadása',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -341,12 +341,10 @@ class _FlowchartBuilderScreenState extends State<FlowchartBuilderScreen> {
                 child: CustomPaint(
                   painter: _GridPainter(),
                   child: ListView.separated(
-                    physics: const BouncingScrollPhysics(
-                      parent: AlwaysScrollableScrollPhysics(),
-                    ),
                     padding: const EdgeInsets.all(16),
                     itemCount: _nodes.length,
-                    separatorBuilder: (_, _) => const _BuilderArrow(label: 'Utána'),
+                    separatorBuilder: (_, _) =>
+                        const _BuilderArrow(label: 'Utána'),
                     itemBuilder: (context, index) {
                       final node = _nodes[index];
                       return _BuilderNodeCard(
@@ -409,9 +407,9 @@ class _BuilderToolbar extends StatelessWidget {
             Expanded(
               child: Text(
                 'Flowchart építő',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
             IconButton(
@@ -462,7 +460,9 @@ class _BuilderNodeCard extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
             side: BorderSide(
-              color: selected ? const Color(0xFF155EEF) : const Color(0xFFE5E7EB),
+              color: selected
+                  ? const Color(0xFF155EEF)
+                  : const Color(0xFFE5E7EB),
               width: selected ? 1.6 : 1,
             ),
           ),
@@ -526,7 +526,11 @@ class _BuilderArrow extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.arrow_downward, size: 18, color: Color(0xFF64748B)),
+            const Icon(
+              Icons.arrow_downward,
+              size: 18,
+              color: Color(0xFF64748B),
+            ),
             const SizedBox(width: 6),
             Text(label, style: const TextStyle(color: Color(0xFF64748B))),
           ],

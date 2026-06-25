@@ -313,9 +313,6 @@ class _AuditPaneState extends State<_AuditPane> {
                       ),
                     )
                   : ListView.separated(
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
                       padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
                       itemCount: filtered.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -603,9 +600,6 @@ class _ExtractedPaneState extends State<_ExtractedPane> {
           );
         }
         return ListView.separated(
-          physics: const BouncingScrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
-          ),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           itemCount: items.length,
           separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -673,9 +667,6 @@ class _TemplatePane extends StatelessWidget {
     final templates = FlowchartBuilderTemplates.all;
     return ListView.separated(
       key: const ValueKey('flowchart-template-list'),
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       itemCount: templates.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),

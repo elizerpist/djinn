@@ -96,6 +96,46 @@ void main() {
     expect(find.text('súlyos'), findsOneWidget);
   });
 
+  testWidgets('pdf chunk list relies on ambient scroll physics', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await repository.addDocument(
+      filename: 'scroll.pdf',
+      localPath: '/memory/scroll.pdf',
+      sizeBytes: 8,
+      importedAt: DateTime.utc(2026, 6, 25),
+      sha256: 'hash-scroll',
+    );
+    await repository.saveLocalChunks(document.id, const [
+      LocalChunk(
+        id: 'manual-scroll',
+        documentId: 'document-1',
+        text: 'Scroll tartalom',
+        pageNumber: 1,
+        pipeline: LocalExtractionPipeline.manual,
+        kind: LocalChunkKind.text,
+      ),
+    ], replaceExisting: false);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ExtractedKnowledgeScreen(
+          repository: repository,
+          document: document,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pdf-chunk-mode-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manuális chunkok').last);
+    await tester.pumpAndSettle();
+
+    final listView = tester.widget<ListView>(find.byType(ListView).first);
+    expect(listView.physics, isNot(isA<BouncingScrollPhysics>()));
+  });
+
   testWidgets('manual pdf chunk tag button opens sheet and persists tags', (
     tester,
   ) async {

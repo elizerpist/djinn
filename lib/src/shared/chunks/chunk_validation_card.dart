@@ -81,7 +81,6 @@ class _ChunkValidationCardState extends State<ChunkValidationCard> {
             children: [
               Flexible(
                 child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -105,9 +104,7 @@ class _ChunkValidationCardState extends State<ChunkValidationCard> {
                       ),
                       const SizedBox(height: 12),
                       SegmentedButton<ChunkValidationChoice>(
-                        key: const ValueKey(
-                          'chunk-validation-status-selector',
-                        ),
+                        key: const ValueKey('chunk-validation-status-selector'),
                         segments: [
                           for (final choice in ChunkValidationChoice.values)
                             ButtonSegment(

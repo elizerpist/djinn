@@ -55,6 +55,25 @@ void main() {
     expect(find.text('Üres mappa'), findsOneWidget);
   });
 
+  testWidgets('notes list relies on ambient scroll physics', (tester) async {
+    final repository = MemoryNoteRepository();
+    await repository.createDocumentNote(
+      title: 'Scroll note',
+      document: const NoteDocument(
+        blocks: [
+          NoteBlock(id: 'p1', type: NoteBlockType.paragraph, text: 'Tartalom'),
+        ],
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: NotesScreen(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    final listView = tester.widget<ListView>(find.byType(ListView).first);
+    expect(listView.physics, isNot(isA<BouncingScrollPhysics>()));
+  });
+
   testWidgets('notes FAB opens full-screen note editor route', (tester) async {
     final repository = MemoryNoteRepository();
     await tester.pumpWidget(

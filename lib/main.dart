@@ -40,6 +40,7 @@ import 'src/debug/debug_console.dart';
 import 'src/settings/data/api_key_store.dart';
 import 'src/settings/data/app_settings_repository.dart';
 import 'src/settings/models/app_settings.dart';
+import 'src/shared/ui/djinn_scroll_behavior.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -260,6 +261,7 @@ class _DjinnAppState extends State<DjinnApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       navigatorKey: _navigatorKey,
+      scrollBehavior: const DjinnScrollBehavior(),
       title: 'Djinn',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

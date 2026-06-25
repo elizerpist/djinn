@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -28,6 +29,8 @@ typedef ShareKnowledgePackForTest =
 typedef ImportKnowledgePackForTest = Future<KnowledgePack?> Function();
 typedef ReadDocumentBytesForTest =
     Future<List<int>> Function(KnowledgeDocument document);
+typedef KnowledgeExtractedChunkOpener =
+    FutureOr<void> Function(KnowledgeDocument document);
 typedef ChooseDuplicatePackImportForTest =
     Future<KnowledgePackDuplicateChoice> Function(
       KnowledgeDocument existing,
@@ -89,6 +92,7 @@ class KnowledgeBaseScreen extends StatefulWidget {
     this.chooseDuplicatePackImportForTest,
     this.controller,
     this.showFloatingActionButton = true,
+    this.onOpenExtractedKnowledge,
   });
 
   final KnowledgeDocumentRepository repository;
@@ -106,6 +110,7 @@ class KnowledgeBaseScreen extends StatefulWidget {
   final ChooseDuplicatePackImportForTest? chooseDuplicatePackImportForTest;
   final KnowledgeBaseScreenController? controller;
   final bool showFloatingActionButton;
+  final KnowledgeExtractedChunkOpener? onOpenExtractedKnowledge;
 
   @override
   State<KnowledgeBaseScreen> createState() => _KnowledgeBaseScreenState();
@@ -387,7 +392,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
       callback(document);
       return;
     }
-    Navigator.of(context).push(
+    Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
         builder: (_) => PdfViewerScreen(
           title: document.filename,
@@ -618,18 +623,23 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
     } else if (selected == 'manual_chunk') {
       await _openManualChunkEditor(selectedDocuments.single);
     } else if (selected == 'inspect_extracted') {
-      _openExtractedKnowledge(selectedDocuments.single);
+      await _openExtractedKnowledge(selectedDocuments.single);
     } else if (selected == 'export_chunks') {
       await _exportKnowledgePack(_selectedDocuments);
     }
   }
 
-  void _openExtractedKnowledge(KnowledgeDocument document) {
+  Future<void> _openExtractedKnowledge(KnowledgeDocument document) async {
     DebugConsole.log(
       '[Knowledge/List] open chunks document=${document.id} '
       'filename=${document.filename}',
     );
-    Navigator.of(context).push(
+    final opener = widget.onOpenExtractedKnowledge;
+    if (opener != null) {
+      await opener(document);
+      return;
+    }
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ExtractedKnowledgeScreen(
           repository: widget.repository,
@@ -640,7 +650,7 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
   }
 
   Future<void> _openManualChunkEditor(KnowledgeDocument document) async {
-    final saved = await Navigator.of(context).push<bool>(
+    final saved = await Navigator.of(context, rootNavigator: true).push<bool>(
       MaterialPageRoute<bool>(
         builder: (_) => ManualChunkEditorScreen(
           repository: widget.repository,

@@ -11,8 +11,10 @@ import 'package:djinn/src/chat/data/local_chat_repository.dart';
 import 'package:djinn/src/chat/models/chat_message.dart';
 import 'package:djinn/src/chat/ui/main_screen.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
+import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/knowledge/data/pdf_import_service.dart';
 import 'package:djinn/src/notes/data/note_repository.dart';
+import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/models/note_item.dart';
 import 'package:djinn/src/settings/data/api_key_store.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
@@ -33,6 +35,23 @@ void main() {
     expect(find.text('Audit'), findsNothing);
     expect(find.text('Validálás'), findsNothing);
     expect(find.text('Flow'), findsNothing);
+  });
+
+  testWidgets('main shell creates stable destination containers up front', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_mainScreenApp(AppSettings.defaults()));
+    await tester.pumpAndSettle();
+
+    for (final destination in ['notes', 'knowledge', 'chat', 'settings']) {
+      expect(
+        find.byKey(
+          ValueKey('main-destination-shell-$destination'),
+          skipOffstage: false,
+        ),
+        findsOneWidget,
+      );
+    }
   });
 
   testWidgets('bottom navigation opens notes, knowledge, chat and settings', (
@@ -164,14 +183,93 @@ void main() {
 
     expect(noteRepository.listNotesCalls, callsAfterFirstOpen);
   });
+
+  testWidgets('pdf chunk list stays inside knowledge tab navigation shell', (
+    tester,
+  ) async {
+    final knowledgeRepository = KnowledgeDocumentRepository();
+    final document = await knowledgeRepository.addDocument(
+      filename: 'chunks.pdf',
+      localPath: '/memory/chunks.pdf',
+      sizeBytes: 8,
+      importedAt: DateTime.utc(2026, 6, 25),
+      sha256: 'hash-chunks',
+    );
+    await knowledgeRepository.saveLocalChunks(document.id, const [
+      LocalChunk(
+        id: 'manual-chunk-1',
+        documentId: 'document-1',
+        text: 'Manuális chunk',
+        pageNumber: 1,
+        pipeline: LocalExtractionPipeline.manual,
+        kind: LocalChunkKind.text,
+      ),
+    ], replaceExisting: false);
+
+    await tester.pumpWidget(
+      _mainScreenApp(
+        AppSettings.defaults(),
+        knowledgeRepository: knowledgeRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tudástár'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('chunks.pdf'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('AI chunkok'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.text('Tudástár'), findsWidgets);
+  });
+
+  testWidgets(
+    'note chunk list keeps bottom nav and chunk editor is fullscreen',
+    (tester) async {
+      final noteRepository = MemoryNoteRepository();
+      final note = await noteRepository.createDocumentNote(
+        title: 'Oxigén cél',
+        document: const NoteDocument(
+          blocks: [
+            NoteBlock(id: 'a', type: NoteBlockType.paragraph, text: 'Régi'),
+          ],
+        ),
+      );
+
+      await tester.pumpWidget(
+        _mainScreenApp(AppSettings.defaults(), noteRepository: noteRepository),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Jegyzetek'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('note-box-${note.id}')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('note-editor-route')), findsOneWidget);
+      expect(find.byType(NavigationBar), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('note-chunk-card-a')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('note-text-chunk-editor')),
+        findsOneWidget,
+      );
+      expect(find.byType(NavigationBar), findsNothing);
+    },
+  );
 }
 
 Widget _mainScreenApp(
   AppSettings initialSettings, {
   NoteRepository? noteRepository,
+  KnowledgeDocumentRepository? knowledgeRepository,
 }) {
   final chatRepository = LocalChatRepository();
-  final knowledgeRepository = KnowledgeDocumentRepository();
+  final resolvedKnowledgeRepository =
+      knowledgeRepository ?? KnowledgeDocumentRepository();
   var settings = initialSettings;
   return MaterialApp(
     home: MainScreen(
@@ -180,10 +278,10 @@ Widget _mainScreenApp(
         repository: chatRepository,
         answerService: const _StubAnswerService(),
       ),
-      knowledgeRepository: knowledgeRepository,
+      knowledgeRepository: resolvedKnowledgeRepository,
       noteRepository: noteRepository ?? MemoryNoteRepository(),
       pdfImportService: PdfImportService(importDirectory: Directory('/memory')),
-      refreshKnowledgeReadiness: knowledgeRepository.state,
+      refreshKnowledgeReadiness: resolvedKnowledgeRepository.state,
       apiKeyStore: MemoryApiKeyStore(),
       loadSettings: () async => settings,
       saveSettings: (value) async => settings = value,

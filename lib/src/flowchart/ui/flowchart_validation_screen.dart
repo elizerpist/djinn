@@ -153,17 +153,13 @@ class _FlowchartValidationScreenState extends State<FlowchartValidationScreen> {
           : _flowcharts.isEmpty
           ? _EmptyFlowchartState(
               reasonText: _zeroText(_zeroReason),
-              onCreateSample:
-                  widget.repository is DebugFlowchartSeedRepository
+              onCreateSample: widget.repository is DebugFlowchartSeedRepository
                   ? () {
                       unawaited(_createDebugFlowchartCandidate());
                     }
                   : null,
             )
           : ListView.separated(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
               padding: const EdgeInsets.all(16),
               itemCount: _flowcharts.length,
               separatorBuilder: (_, _) => const SizedBox(height: 8),

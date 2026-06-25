@@ -11,9 +11,12 @@ import '../../knowledge/data/knowledge_document_repository.dart';
 import '../../knowledge/data/local_document_processing_service.dart';
 import '../../knowledge/data/pdf_import_service.dart';
 import '../../knowledge/models/knowledge_document.dart';
+import '../../knowledge/ui/extracted_knowledge_screen.dart';
 import '../../knowledge/ui/knowledge_base_screen.dart';
 import '../../notes/data/note_repository.dart';
 import '../../notes/data/tag_repository.dart';
+import '../../notes/models/note_item.dart';
+import '../../notes/ui/note_editor_route.dart';
 import '../../notes/ui/notes_screen.dart';
 import '../../settings/data/api_key_store.dart';
 import '../../settings/models/app_settings.dart';
@@ -75,8 +78,13 @@ class _MainScreenState extends State<MainScreen> {
       KnowledgeBaseScreenController();
   List<ChatConversation> _conversations = const [];
   AppDestinationId _selectedDestination = AppDestinationId.chat;
-  final Map<AppDestinationId, Widget> _destinationBodyCache =
-      <AppDestinationId, Widget>{};
+  late final Map<AppDestinationId, GlobalKey<NavigatorState>>
+  _destinationNavigatorKeys = {
+    for (final destination in appDestinations)
+      destination.id: GlobalKey<NavigatorState>(
+        debugLabel: 'main-${destination.id.name}-navigator',
+      ),
+  };
 
   @override
   void initState() {
@@ -142,10 +150,6 @@ class _MainScreenState extends State<MainScreen> {
     final index = appDestinations.indexWhere(
       (destination) => destination.id == _selectedDestination,
     );
-    _destinationBodyCache.putIfAbsent(
-      _selectedDestination,
-      () => _buildDestinationBody(_selectedDestination),
-    );
     return Scaffold(
       appBar: _destinationOwnsScaffold(_selectedDestination)
           ? null
@@ -161,7 +165,7 @@ class _MainScreenState extends State<MainScreen> {
         index: index < 0 ? 2 : index,
         children: [
           for (final destination in appDestinations)
-            _destinationBodyCache[destination.id] ?? const SizedBox.shrink(),
+            _buildDestinationShell(destination.id),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -177,10 +181,6 @@ class _MainScreenState extends State<MainScreen> {
           );
           setState(() {
             _selectedDestination = destination;
-            _destinationBodyCache.putIfAbsent(
-              destination,
-              () => _buildDestinationBody(destination),
-            );
           });
         },
         destinations: [
@@ -251,6 +251,20 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  Widget _buildDestinationShell(AppDestinationId destination) {
+    return KeyedSubtree(
+      key: ValueKey('main-destination-shell-${destination.name}'),
+      child: Navigator(
+        key: _destinationNavigatorKeys[destination],
+        onGenerateInitialRoutes: (navigator, initialRoute) => [
+          MaterialPageRoute<void>(
+            builder: (_) => _buildDestinationBody(destination),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDestinationBody(AppDestinationId destination) {
     return switch (destination) {
       AppDestinationId.notes => NotesScreen(
@@ -258,6 +272,7 @@ class _MainScreenState extends State<MainScreen> {
         tagRepository: _tagRepository,
         controller: _notesController,
         showFloatingActionButton: false,
+        onOpenChunkList: _openNoteChunkListInDestination,
       ),
       AppDestinationId.knowledge => KnowledgeBaseScreen(
         repository: widget.knowledgeRepository,
@@ -266,6 +281,7 @@ class _MainScreenState extends State<MainScreen> {
         localProcessingService: widget.localProcessingService,
         controller: _knowledgeController,
         showFloatingActionButton: false,
+        onOpenExtractedKnowledge: _openExtractedKnowledgeInDestination,
       ),
       AppDestinationId.chat => _buildChatListBody(),
       AppDestinationId.settings => SettingsScreen(
@@ -279,6 +295,55 @@ class _MainScreenState extends State<MainScreen> {
     };
   }
 
+  Future<T?> _pushDestinationRoute<T>(
+    AppDestinationId destination,
+    Route<T> route,
+  ) {
+    final navigator = _destinationNavigatorKeys[destination]?.currentState;
+    if (navigator != null) {
+      return navigator.push(route);
+    }
+    return Navigator.of(context).push(route);
+  }
+
+  Future<void> _openExtractedKnowledgeInDestination(
+    KnowledgeDocument document,
+  ) async {
+    await _pushDestinationRoute<void>(
+      AppDestinationId.knowledge,
+      MaterialPageRoute<void>(
+        builder: (_) => ExtractedKnowledgeScreen(
+          repository: widget.knowledgeRepository,
+          document: document,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openNoteChunkListInDestination(NoteItem note) async {
+    await _pushDestinationRoute<void>(
+      AppDestinationId.notes,
+      PageRouteBuilder<void>(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            NoteEditorRoute(
+              repository: widget.noteRepository,
+              tagRepository: _tagRepository,
+              initialNote: note,
+              useRootNavigatorForChunkEditors: true,
+            ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(1, 0),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildChatListBody() {
     return _conversations.isEmpty
         ? const Center(
@@ -288,9 +353,6 @@ class _MainScreenState extends State<MainScreen> {
             ),
           )
         : ListView.separated(
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
             itemCount: _conversations.length,
             separatorBuilder: (_, _) => const SizedBox(height: 8),

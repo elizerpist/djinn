@@ -27,7 +27,7 @@ class SettingsScreen extends StatefulWidget {
   final Future<void> Function(AppSettings settings) saveSettings;
   final Future<bool> Function() testApiKey;
   final Future<bool> Function(AiProvider provider, String model)?
-      testApiKeyForProvider;
+  testApiKeyForProvider;
   final ValueChanged<AppSettings>? onSettingsChanged;
 
   @override
@@ -297,9 +297,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
               children: [
                 _SettingsMenuCard(
@@ -376,15 +373,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _openSection({
     required String title,
     required IconData icon,
-    required Widget Function(BuildContext context, VoidCallback refresh) builder,
+    required Widget Function(BuildContext context, VoidCallback refresh)
+    builder,
   }) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => _SettingsSectionPage(
-          title: title,
-          icon: icon,
-          builder: builder,
-        ),
+        builder: (context) =>
+            _SettingsSectionPage(title: title, icon: icon, builder: builder),
       ),
     );
   }
@@ -489,10 +484,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         if (_statusText != null) ...[
           const SizedBox(height: 12),
-          Text(
-            _statusText!,
-            style: const TextStyle(color: Color(0xFF166534)),
-          ),
+          Text(_statusText!, style: const TextStyle(color: Color(0xFF166534))),
         ],
       ],
     );
@@ -801,9 +793,6 @@ class _SettingsSectionPageState extends State<_SettingsSectionPage> {
         ),
       ),
       body: ListView(
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
-        ),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [widget.builder(context, _refresh)],
       ),

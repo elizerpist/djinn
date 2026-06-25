@@ -36,6 +36,7 @@ class NoteEditorRoute extends StatefulWidget {
     this.pdfExportService,
     this.pdfPreviewViewerBuilder,
     this.pdfPreviewOpener,
+    this.useRootNavigatorForChunkEditors = false,
   });
 
   final NoteRepository repository;
@@ -44,6 +45,7 @@ class NoteEditorRoute extends StatefulWidget {
   final NotePdfExportService? pdfExportService;
   final WidgetBuilder? pdfPreviewViewerBuilder;
   final NoteEditorPdfPreviewOpener? pdfPreviewOpener;
+  final bool useRootNavigatorForChunkEditors;
 
   @override
   State<NoteEditorRoute> createState() => _NoteEditorRouteState();
@@ -416,21 +418,26 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
       };
     }
 
-    final result = await Navigator.of(context).push<NoteBlock>(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            editorFor(block),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(1, 0),
-              end: Offset.zero,
-            ).animate(animation),
-            child: child,
-          );
-        },
-      ),
-    );
+    final result =
+        await Navigator.of(
+          context,
+          rootNavigator: widget.useRootNavigatorForChunkEditors,
+        ).push<NoteBlock>(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                editorFor(block),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(1, 0),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  );
+                },
+          ),
+        );
     if (result != null && mounted) {
       _replaceBlock(result);
     }
@@ -487,9 +494,6 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         children: [
           Expanded(
             child: ReorderableListView.builder(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 108),
               itemCount: _document.blocks.length,
               // ignore: deprecated_member_use

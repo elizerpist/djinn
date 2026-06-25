@@ -324,9 +324,6 @@ class _ChatScreenState extends State<ChatScreen> {
             child: _messages.isEmpty
                 ? const Center(child: Text('Ird be az elso kerdest'))
                 : ListView.builder(
-                    physics: const BouncingScrollPhysics(
-                      parent: AlwaysScrollableScrollPhysics(),
-                    ),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     itemCount: _messages.length,
                     itemBuilder: (context, index) {

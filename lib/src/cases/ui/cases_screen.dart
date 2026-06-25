@@ -5,9 +5,8 @@ import '../../debug/debug_header_button.dart';
 import '../data/case_repository.dart';
 import '../models/case_workspace.dart';
 
-typedef CaseLinkCandidatesLoader = Future<List<CaseLinkCandidate>> Function(
-  String caseId,
-);
+typedef CaseLinkCandidatesLoader =
+    Future<List<CaseLinkCandidate>> Function(String caseId);
 
 class CasesScreen extends StatefulWidget {
   const CasesScreen({
@@ -123,9 +122,6 @@ class _CasesScreenState extends State<CasesScreen> {
       );
     }
     return ListView.separated(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
       itemCount: _cases.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -322,9 +318,6 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
         actions: const [DebugHeaderButton()],
       ),
       body: ListView(
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
-        ),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
           const Text(

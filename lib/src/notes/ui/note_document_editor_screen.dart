@@ -23,7 +23,8 @@ class NoteDocumentEditorScreen extends StatefulWidget {
   final NoteDocument document;
 
   @override
-  State<NoteDocumentEditorScreen> createState() => _NoteDocumentEditorScreenState();
+  State<NoteDocumentEditorScreen> createState() =>
+      _NoteDocumentEditorScreenState();
 }
 
 class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
@@ -64,7 +65,14 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
 
   void _deleteBlock(NoteBlock block) {
     if (_blocks.length == 1) {
-      _replaceBlock(block.copyWith(text: '', rows: const [], nodes: const [], edges: const []));
+      _replaceBlock(
+        block.copyWith(
+          text: '',
+          rows: const [],
+          nodes: const [],
+          edges: const [],
+        ),
+      );
       return;
     }
     setState(() => _blocks.removeWhere((item) => item.id == block.id));
@@ -143,7 +151,9 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
       ],
     );
     final edited = await Navigator.of(context).push<NoteBlock>(
-      MaterialPageRoute(builder: (_) => NoteFlowchartEditorScreen(block: block)),
+      MaterialPageRoute(
+        builder: (_) => NoteFlowchartEditorScreen(block: block),
+      ),
     );
     if (edited == null || !mounted) {
       return;
@@ -162,7 +172,9 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
 
   Future<void> _editFlowchartBlock(NoteBlock block) async {
     final edited = await Navigator.of(context).push<NoteBlock>(
-      MaterialPageRoute(builder: (_) => NoteFlowchartEditorScreen(block: block)),
+      MaterialPageRoute(
+        builder: (_) => NoteFlowchartEditorScreen(block: block),
+      ),
     );
     if (edited != null && mounted) {
       _replaceBlock(edited);
@@ -176,14 +188,20 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
 
   void _save() {
     final normalizedBlocks = _blocks
-        .where((block) => block.plainText.trim().isNotEmpty || block.type == NoteBlockType.paragraph)
+        .where(
+          (block) =>
+              block.plainText.trim().isNotEmpty ||
+              block.type == NoteBlockType.paragraph,
+        )
         .toList(growable: false);
     Navigator.of(context).pop(
       NoteDocumentEditorResult(
         title: _titleController.text.trim(),
         document: NoteDocument(
           tags: widget.document.tags,
-          blocks: normalizedBlocks.isEmpty ? NoteDocument.empty().blocks : normalizedBlocks,
+          blocks: normalizedBlocks.isEmpty
+              ? NoteDocument.empty().blocks
+              : normalizedBlocks,
         ),
       ),
     );
@@ -204,15 +222,14 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
         ],
       ),
       body: ListView(
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 120),
         children: [
           TextField(
             key: const ValueKey('note-document-title-field'),
             controller: _titleController,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
             decoration: const InputDecoration(
               labelText: 'Cím',
               border: OutlineInputBorder(),
@@ -343,12 +360,7 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
       label: label,
       colorValue: tagSeed.resolvedColorValue,
     );
-    onChanged(
-      block.copyWith(
-        tags: [...block.tags, tag],
-        clearIndex: true,
-      ),
-    );
+    onChanged(block.copyWith(tags: [...block.tags, tag], clearIndex: true));
     _tagLabelController.clear();
   }
 
@@ -488,11 +500,7 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
         if (constraints.maxWidth < 520) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              contextField,
-              const SizedBox(height: 8),
-              roleField,
-            ],
+            children: [contextField, const SizedBox(height: 8), roleField],
           );
         }
         return Row(
@@ -537,9 +545,9 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
           const SizedBox(height: 8),
           Text(
             warning,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF92400E),
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: const Color(0xFF92400E)),
           ),
         ],
       ],
@@ -565,10 +573,12 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
     for (final tag in block.tags) {
       final label = tag.label.trim();
       if (label.isNotEmpty) {
-        chips.add(_metadataChip(
-          'Tag: ${NoteKnowledgeTagTypes.normalize(tag.type)} $label',
-          color: Color(tag.resolvedColorValue),
-        ));
+        chips.add(
+          _metadataChip(
+            'Tag: ${NoteKnowledgeTagTypes.normalize(tag.type)} $label',
+            color: Color(tag.resolvedColorValue),
+          ),
+        );
       }
     }
     final directTagKeys = {
@@ -580,10 +590,12 @@ class _BlockEditorCardState extends State<_BlockEditorCard> {
       final key =
           '${NoteKnowledgeTagTypes.normalize(tag.type)}:${label.toLowerCase()}';
       if (label.isNotEmpty && !directTagKeys.contains(key)) {
-        chips.add(_metadataChip(
-          'Örökölt tag: ${NoteKnowledgeTagTypes.normalize(tag.type)} $label',
-          color: Color(tag.resolvedColorValue),
-        ));
+        chips.add(
+          _metadataChip(
+            'Örökölt tag: ${NoteKnowledgeTagTypes.normalize(tag.type)} $label',
+            color: Color(tag.resolvedColorValue),
+          ),
+        );
       }
     }
     if (chips.isEmpty) {

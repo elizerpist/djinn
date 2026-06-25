@@ -33,6 +33,14 @@ void main() {
     expect(DebugConsole.allText, contains('ref='));
   });
 
+  testWidgets('Djinn installs one global scroll behavior', (tester) async {
+    await tester.pumpWidget(_testApp());
+    await _pumpUntilFound(tester, find.text('Djinn'));
+
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.scrollBehavior?.runtimeType.toString(), 'DjinnScrollBehavior');
+  });
+
   testWidgets('Djinn opens a new chat and sends a text message', (
     tester,
   ) async {

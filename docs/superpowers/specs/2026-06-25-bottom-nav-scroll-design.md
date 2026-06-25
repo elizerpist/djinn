@@ -16,11 +16,11 @@ The Knowledge PDF list uses the ambient Material scroll behavior. Several other 
 
 | ID | Source Instruction | Intended Code Area | Acceptance Condition | Verification Method | Status |
 | --- | --- | --- | --- | --- | --- |
-| NAV-01 | User: bottom navigation switch is not smooth/immediate and FAB animation janks on app entry | `lib/src/chat/ui/main_screen.dart` | Destination bodies/navigators are stable before first destination switch; switching tabs changes selected index/FAB state without constructing the destination body in the tap handler | Widget test for eager/stable destination shell plus targeted manual code inspection | NOT DONE |
-| NAV-02 | User: bottom nav should be visible inside PDF chunks list | `lib/src/chat/ui/main_screen.dart`, `lib/src/knowledge/ui/knowledge_base_screen.dart`, `lib/src/knowledge/ui/extracted_knowledge_screen.dart` | Opening a document's extracted PDF chunk list keeps the main `NavigationBar` visible and Knowledge selected | Widget test opening PDF chunks through the main shell | NOT DONE |
-| NAV-03 | User: bottom nav should be visible inside note chunks list | `lib/src/chat/ui/main_screen.dart`, `lib/src/notes/ui/notes_screen.dart`, `lib/src/notes/ui/note_editor_route.dart` | Opening a note's chunk list keeps the main `NavigationBar` visible and Notes selected | Widget test opening note chunks through the main shell | NOT DONE |
-| NAV-04 | User: only chunk editor menus should be fullscreen | `lib/src/notes/ui/note_editor_route.dart`, editor screen route calls | Opening an individual text/list/table/flowchart chunk editor uses the root navigator and covers the bottom navigation | Widget test from note chunk list to individual chunk editor | NOT DONE |
-| SCROLL-01 | User: all scrollable menus should use the same overscroll seen in the Knowledge PDF list, globally centralized | `lib/main.dart`, new shared UI scroll behavior file, list screens with explicit local physics | App-level scroll behavior owns default menu/list physics; menu/list screens no longer opt into local `BouncingScrollPhysics` unless they are specialized canvases/editors | Widget/source tests and `rg "BouncingScrollPhysics"` review | NOT DONE |
+| NAV-01 | User: bottom navigation switch is not smooth/immediate and FAB animation janks on app entry | `lib/src/chat/ui/main_screen.dart` | Destination bodies/navigators are stable before first destination switch; switching tabs changes selected index/FAB state without constructing the destination body in the tap handler | Widget test for eager/stable destination shell plus targeted manual code inspection | DONE |
+| NAV-02 | User: bottom nav should be visible inside PDF chunks list | `lib/src/chat/ui/main_screen.dart`, `lib/src/knowledge/ui/knowledge_base_screen.dart`, `lib/src/knowledge/ui/extracted_knowledge_screen.dart` | Opening a document's extracted PDF chunk list keeps the main `NavigationBar` visible and Knowledge selected | Widget test opening PDF chunks through the main shell | DONE |
+| NAV-03 | User: bottom nav should be visible inside note chunks list | `lib/src/chat/ui/main_screen.dart`, `lib/src/notes/ui/notes_screen.dart`, `lib/src/notes/ui/note_editor_route.dart` | Opening a note's chunk list keeps the main `NavigationBar` visible and Notes selected | Widget test opening note chunks through the main shell | DONE |
+| NAV-04 | User: only chunk editor menus should be fullscreen | `lib/src/notes/ui/note_editor_route.dart`, editor screen route calls | Opening an individual text/list/table/flowchart chunk editor uses the root navigator and covers the bottom navigation | Widget test from note chunk list to individual chunk editor | DONE |
+| SCROLL-01 | User: all scrollable menus should use the same overscroll seen in the Knowledge PDF list, globally centralized | `lib/main.dart`, new shared UI scroll behavior file, list screens with explicit local physics | App-level scroll behavior owns default menu/list physics; menu/list screens no longer opt into local `BouncingScrollPhysics` unless they are specialized canvases/editors | Widget/source tests and `rg "BouncingScrollPhysics"` review | DONE |
 
 ## Architecture
 
@@ -41,3 +41,10 @@ Use widget tests for the behavioral contract:
 - App scroll behavior is installed globally and target menu/list screens no longer expose local `BouncingScrollPhysics`.
 
 Run targeted Flutter tests and `flutter analyze` inside Ubuntu proot. APK builds are not run locally on Termux; the final branch push triggers GitHub Actions.
+
+## Verification Notes
+
+- `flutter analyze`: PASS.
+- Targeted navigation/scroll tests: PASS for `test/main_screen_navigation_test.dart`, `test/notes_screen_test.dart`, `test/note_editor_route_test.dart`, `test/extracted_knowledge_screen_test.dart`, `test/widget_test.dart`, and `test/mobile_flowchart_viewer_test.dart`.
+- Source review: `rg "BouncingScrollPhysics" lib/src` returns no matches.
+- Full `flutter test`: 446 passed, 8 skipped, 1 failed. The failure is the pre-existing dirty `test/knowledge_base_screen_test.dart` case `manual chunk sheet keeps its header pinned above the form`, which was already present in the worktree before this implementation and is not part of the bottom navigation or global scroll behavior changes.

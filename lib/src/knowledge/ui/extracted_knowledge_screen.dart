@@ -98,7 +98,7 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
   }
 
   Future<void> _openFlowchartEditor(String flowchartId) async {
-    final changed = await Navigator.of(context).push<bool>(
+    final changed = await Navigator.of(context, rootNavigator: true).push<bool>(
       MaterialPageRoute(
         builder: (_) => InteractiveFlowchartEditorScreen(
           repository: widget.repository,
@@ -283,9 +283,6 @@ class _ExtractedKnowledgeList extends StatelessWidget {
       );
     }
     return ListView.separated(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       itemCount: items.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -364,9 +361,6 @@ class _FlowchartHierarchyListState extends State<_FlowchartHierarchyList> {
     }
     final groups = const FlowchartHierarchyBuilder().build(widget.items);
     return ListView.separated(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       itemCount: groups.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),

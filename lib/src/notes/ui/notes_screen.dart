@@ -32,6 +32,7 @@ typedef NotePdfPreviewOpener =
       NotePdfExportService service,
       WidgetBuilder? viewerBuilder,
     );
+typedef NoteChunkListOpener = FutureOr<void> Function(NoteItem note);
 
 enum _NoteSortMode { newestFirst, oldestFirst, titleAsc, titleDesc }
 
@@ -64,6 +65,7 @@ class NotesScreen extends StatefulWidget {
     this.pdfExportService,
     this.pdfPreviewViewerBuilder,
     this.pdfPreviewOpener,
+    this.onOpenChunkList,
   });
 
   final NoteRepository repository;
@@ -74,6 +76,7 @@ class NotesScreen extends StatefulWidget {
   final NotePdfExportService? pdfExportService;
   final WidgetBuilder? pdfPreviewViewerBuilder;
   final NotePdfPreviewOpener? pdfPreviewOpener;
+  final NoteChunkListOpener? onOpenChunkList;
 
   @override
   State<NotesScreen> createState() => _NotesScreenState();
@@ -235,6 +238,14 @@ class _NotesScreenState extends State<NotesScreen> {
           folderId: _activeFolderId,
         );
     if (!mounted) {
+      return;
+    }
+    final opener = widget.onOpenChunkList;
+    if (opener != null) {
+      await opener(target);
+      if (mounted) {
+        await _load();
+      }
       return;
     }
     await Navigator.of(context).push<void>(
@@ -873,9 +884,6 @@ class _NotesScreenState extends State<NotesScreen> {
       );
     }
     return ListView.separated(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
       itemCount: _notes.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
