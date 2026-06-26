@@ -8,6 +8,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../debug/debug_console.dart';
 import '../models/note_document.dart';
 import '../models/note_item.dart';
+import '../models/note_list_hierarchy_markers.dart';
 import 'note_flowchart_pdf_layout.dart';
 import 'note_pdf_export_models.dart';
 
@@ -160,11 +161,13 @@ bool notePdfBlockHasExportableContent(NoteBlock block) {
 }
 
 List<String> notePdfListMarkersForBlock(NoteBlock block) {
-  var topLevelIndex = 0;
+  final hierarchyMarkers = block.listLayoutMode == NoteListLayoutMode.hierarchy
+      ? noteHierarchyMarkersForItems(block.listItems)
+      : const <String, String>{};
   return [
     for (final item in block.listItems)
       if (block.listLayoutMode == NoteListLayoutMode.hierarchy)
-        item.level <= 0 ? '${++topLevelIndex}.' : '-'
+        hierarchyMarkers[item.id] ?? ''
       else
         item.checked ? '[x]' : '[ ]',
   ];

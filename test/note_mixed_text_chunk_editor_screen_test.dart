@@ -139,6 +139,74 @@ void main() {
   });
 
   testWidgets(
+    'mixed hierarchy list markers number mothers and style nested levels',
+    (tester) async {
+      await _pumpMixedEditor(
+        tester,
+        const NoteBlock(
+          id: 'mixed-1',
+          type: NoteBlockType.mixed,
+          mixedSections: [
+            NoteMixedSection(
+              id: 'list-1',
+              type: NoteMixedSectionType.list,
+              listLayoutMode: NoteListLayoutMode.hierarchy,
+              listItems: [
+                NoteListItem(id: 'm1', text: 'Mother one'),
+                NoteListItem(id: 'c1', text: 'Child square', level: 1),
+                NoteListItem(id: 'c2', text: 'Child dot', level: 2),
+                NoteListItem(id: 'c3', text: 'Child hollow dot', level: 3),
+                NoteListItem(id: 'm2', text: 'Mother two'),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('note-mixed-list-marker-m1')),
+            )
+            .data,
+        '1.',
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('note-mixed-list-marker-c1')),
+            )
+            .data,
+        '▪',
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('note-mixed-list-marker-c2')),
+            )
+            .data,
+        '•',
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('note-mixed-list-marker-c3')),
+            )
+            .data,
+        '◦',
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('note-mixed-list-marker-m2')),
+            )
+            .data,
+        '2.',
+      );
+    },
+  );
+
+  testWidgets(
     'header table button inserts a 2x2 table after the active paragraph',
     (tester) async {
       NoteBlock? latest;

@@ -256,12 +256,14 @@ void main() {
       listItems: [
         NoteListItem(id: 'a', text: 'A'),
         NoteListItem(id: 'b', text: 'B', level: 1),
-        NoteListItem(id: 'c', text: 'C'),
+        NoteListItem(id: 'c', text: 'C', level: 2),
+        NoteListItem(id: 'd', text: 'D', level: 3),
+        NoteListItem(id: 'e', text: 'E'),
       ],
     );
 
     expect(notePdfListMarkersForBlock(checkbox), ['[ ]', '[x]']);
-    expect(notePdfListMarkersForBlock(hierarchy), ['1.', '-', '2.']);
+    expect(notePdfListMarkersForBlock(hierarchy), ['1.', '▪', '•', '◦', '2.']);
   });
 
   test(

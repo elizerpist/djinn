@@ -281,15 +281,11 @@ void main() {
     );
     expect(field.style.decoration, TextDecoration.none);
     expect(
-      find.byKey(
-        const ValueKey('note-list-item-item-1-secondary-underline-1'),
-      ),
+      find.byKey(const ValueKey('note-list-item-item-1-secondary-underline-1')),
       findsNothing,
     );
     expect(
-      find.byKey(
-        const ValueKey('note-list-item-item-1-secondary-underline-2'),
-      ),
+      find.byKey(const ValueKey('note-list-item-item-1-secondary-underline-2')),
       findsNothing,
     );
   });
@@ -344,8 +340,10 @@ void main() {
               type: NoteBlockType.listItem,
               listItems: [
                 NoteListItem(id: 'i1', text: 'Mother one'),
-                NoteListItem(id: 'i2', text: 'Child', level: 1),
-                NoteListItem(id: 'i3', text: 'Mother two'),
+                NoteListItem(id: 'i2', text: 'Child square', level: 1),
+                NoteListItem(id: 'i3', text: 'Child dot', level: 2),
+                NoteListItem(id: 'i4', text: 'Child hollow dot', level: 3),
+                NoteListItem(id: 'i5', text: 'Mother two'),
               ],
             ),
             onChanged: (block) => latest = block,
@@ -353,6 +351,7 @@ void main() {
         ),
       );
 
+      expect(find.byKey(const ValueKey('note-list-marker-i1')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
       await tester.pumpAndSettle();
       expect(
@@ -379,11 +378,23 @@ void main() {
         tester
             .widget<Text>(find.byKey(const ValueKey('note-list-marker-i2')))
             .data,
-        '-',
+        '▪',
       );
       expect(
         tester
             .widget<Text>(find.byKey(const ValueKey('note-list-marker-i3')))
+            .data,
+        '•',
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('note-list-marker-i4')))
+            .data,
+        '◦',
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('note-list-marker-i5')))
             .data,
         '2.',
       );
@@ -409,6 +420,18 @@ void main() {
       expect(
         tester
             .widget<Text>(find.byKey(const ValueKey('note-list-marker-i3')))
+            .data,
+        '•',
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('note-list-marker-i4')))
+            .data,
+        '◦',
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('note-list-marker-i5')))
             .data,
         '3.',
       );

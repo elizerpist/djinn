@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/tag_repository.dart';
 import '../models/note_document.dart';
+import '../models/note_list_hierarchy_markers.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
 import 'tag_manager_sheet.dart';
@@ -221,14 +222,6 @@ class _NoteMixedTextChunkEditorScreenState
       return section.listItems;
     }
     return [NoteListItem(id: _nextId('item'), text: section.text)];
-  }
-
-  Map<String, String> _hierarchyMarkers(NoteMixedSection section) {
-    var motherIndex = 0;
-    return {
-      for (final item in _itemsFor(section))
-        item.id: item.level <= 0 ? '${++motherIndex}.' : '-',
-    };
   }
 
   void _replaceListItem(
@@ -1170,7 +1163,7 @@ class _NoteMixedTextChunkEditorScreenState
   Widget _buildListSection(NoteMixedSection section) {
     final items = _itemsFor(section);
     final markers = section.listLayoutMode == NoteListLayoutMode.hierarchy
-        ? _hierarchyMarkers(section)
+        ? noteHierarchyMarkersForItems(items)
         : const <String, String>{};
     return Column(
       key: ValueKey('note-mixed-list-items-${section.id}'),

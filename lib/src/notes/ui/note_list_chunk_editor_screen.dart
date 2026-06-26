@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/tag_repository.dart';
 import '../models/note_document.dart';
+import '../models/note_list_hierarchy_markers.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
 import 'tagged_text_visual.dart';
@@ -303,18 +304,10 @@ class _NoteListChunkEditorScreenState extends State<NoteListChunkEditorScreen> {
     _emit();
   }
 
-  Map<String, String> _hierarchyMarkers() {
-    var motherIndex = 0;
-    return {
-      for (final item in _items)
-        item.id: item.level <= 0 ? '${++motherIndex}.' : '-',
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
     final markers = _block.listLayoutMode == NoteListLayoutMode.hierarchy
-        ? _hierarchyMarkers()
+        ? noteHierarchyMarkersForItems(_items)
         : const <String, String>{};
     return Scaffold(
       key: const ValueKey('note-list-chunk-editor'),
