@@ -297,6 +297,11 @@ void main() {
           type: NoteMixedSectionType.paragraph,
           text: 'Az eljárásrend célja:',
           paragraphRole: NoteMixedParagraphRole.heading,
+          headingLevel: 2,
+          paragraphIndentLevel: 1,
+          textColorValue: 0xFF2563EB,
+          underlineColorValue: 0xFFDC2626,
+          backgroundColorValue: 0xFFFFF7ED,
         ),
         NoteMixedSection(
           id: 'l1',
@@ -330,6 +335,11 @@ void main() {
       parsed.mixedSections.first.paragraphRole,
       NoteMixedParagraphRole.heading,
     );
+    expect(parsed.mixedSections.first.headingLevel, 2);
+    expect(parsed.mixedSections.first.paragraphIndentLevel, 1);
+    expect(parsed.mixedSections.first.textColorValue, 0xFF2563EB);
+    expect(parsed.mixedSections.first.underlineColorValue, 0xFFDC2626);
+    expect(parsed.mixedSections.first.backgroundColorValue, 0xFFFFF7ED);
     expect(parsed.plainText, contains('Az eljárásrend célja:'));
     expect(parsed.plainText, contains('az ellátás során'));
     expect(parsed.plainText, contains('AED | 1'));

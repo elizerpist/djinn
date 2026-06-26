@@ -897,6 +897,11 @@ class NoteMixedSection {
     this.title,
     this.text = '',
     this.paragraphRole = NoteMixedParagraphRole.paragraph,
+    this.headingLevel = 1,
+    this.paragraphIndentLevel = 0,
+    this.textColorValue,
+    this.underlineColorValue,
+    this.backgroundColorValue,
     this.rangeTags = const [],
     this.paragraphStyles = const [],
     this.listItems = const [],
@@ -912,6 +917,11 @@ class NoteMixedSection {
   final String? title;
   final String text;
   final NoteMixedParagraphRole paragraphRole;
+  final int headingLevel;
+  final int paragraphIndentLevel;
+  final int? textColorValue;
+  final int? underlineColorValue;
+  final int? backgroundColorValue;
   final List<NoteTextRangeTag> rangeTags;
   final List<NoteTextParagraphStyle> paragraphStyles;
   final List<NoteListItem> listItems;
@@ -930,6 +940,15 @@ class NoteMixedSection {
       paragraphRole: NoteMixedParagraphRole.fromWireName(
         json['paragraphRole']?.toString(),
       ),
+      headingLevel: (_tagIntFromJson(json['headingLevel']) ?? 1)
+          .clamp(1, 3)
+          .toInt(),
+      paragraphIndentLevel: (_tagIntFromJson(json['paragraphIndentLevel']) ?? 0)
+          .clamp(0, 8)
+          .toInt(),
+      textColorValue: _tagColorFromJson(json['textColorValue']),
+      underlineColorValue: _tagColorFromJson(json['underlineColorValue']),
+      backgroundColorValue: _tagColorFromJson(json['backgroundColorValue']),
       rangeTags: _rangeTagsFromJson(json['rangeTags']),
       paragraphStyles: _paragraphStylesFromJson(json['paragraphStyles']),
       listItems: NoteBlock._listItemsFromJson(json['listItems']),
@@ -951,6 +970,14 @@ class NoteMixedSection {
       if (text.isNotEmpty) 'text': text,
       if (paragraphRole != NoteMixedParagraphRole.paragraph)
         'paragraphRole': paragraphRole.wireName,
+      if (headingLevel != 1) 'headingLevel': headingLevel.clamp(1, 3).toInt(),
+      if (paragraphIndentLevel != 0)
+        'paragraphIndentLevel': paragraphIndentLevel.clamp(0, 8).toInt(),
+      if (textColorValue != null) 'textColorValue': textColorValue,
+      if (underlineColorValue != null)
+        'underlineColorValue': underlineColorValue,
+      if (backgroundColorValue != null)
+        'backgroundColorValue': backgroundColorValue,
       if (rangeTags.isNotEmpty)
         'rangeTags': rangeTags.map((tag) => tag.toJson()).toList(),
       if (paragraphStyles.isNotEmpty)
@@ -1047,6 +1074,11 @@ class NoteMixedSection {
     String? title,
     String? text,
     NoteMixedParagraphRole? paragraphRole,
+    int? headingLevel,
+    int? paragraphIndentLevel,
+    int? textColorValue,
+    int? underlineColorValue,
+    int? backgroundColorValue,
     List<NoteTextRangeTag>? rangeTags,
     List<NoteTextParagraphStyle>? paragraphStyles,
     List<NoteListItem>? listItems,
@@ -1062,6 +1094,13 @@ class NoteMixedSection {
       title: title ?? this.title,
       text: text ?? this.text,
       paragraphRole: paragraphRole ?? this.paragraphRole,
+      headingLevel: (headingLevel ?? this.headingLevel).clamp(1, 3).toInt(),
+      paragraphIndentLevel: (paragraphIndentLevel ?? this.paragraphIndentLevel)
+          .clamp(0, 8)
+          .toInt(),
+      textColorValue: textColorValue ?? this.textColorValue,
+      underlineColorValue: underlineColorValue ?? this.underlineColorValue,
+      backgroundColorValue: backgroundColorValue ?? this.backgroundColorValue,
       rangeTags: rangeTags ?? this.rangeTags,
       paragraphStyles: paragraphStyles ?? this.paragraphStyles,
       listItems: listItems ?? this.listItems,

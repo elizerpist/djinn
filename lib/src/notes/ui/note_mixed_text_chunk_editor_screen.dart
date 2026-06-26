@@ -32,6 +32,9 @@ class NoteMixedTextChunkEditorScreen extends StatefulWidget {
 class _NoteMixedTextChunkEditorScreenState
     extends State<NoteMixedTextChunkEditorScreen> {
   static const double _keyboardRailReserve = 112;
+  static const double _defaultColumnWidth = 150;
+  static const double _defaultRowHeight = 52;
+  static const double _rowHeadWidth = 52;
 
   late final TagRepository _tagRepository =
       widget.tagRepository ?? MemoryTagRepository();
@@ -41,9 +44,10 @@ class _NoteMixedTextChunkEditorScreenState
   _MixedSelectionTarget? _selection;
   String? _activeTextControllerKey;
   bool _railBottomExpanded = true;
-  final bool _railRoundedCard = false;
-  final bool _railTransparentBackground = false;
-  final bool _railBorderVisible = true;
+  bool _railRoundedCard = false;
+  bool _railTransparentBackground = false;
+  bool _railBorderVisible = true;
+  _MixedRailPanel? _railPanel;
 
   @override
   void initState() {
@@ -165,40 +169,32 @@ class _NoteMixedTextChunkEditorScreenState
     );
   }
 
-  void _addParagraphSection() {
-    final section = NoteMixedSection(
-      id: _nextId('paragraph'),
-      type: NoteMixedSectionType.paragraph,
-    );
-    _commitSections([..._sections, section]);
-  }
-
-  void _addListSection() {
-    final item = NoteListItem(id: _nextId('item'), text: '');
-    final section = NoteMixedSection(
-      id: _nextId('list'),
-      type: NoteMixedSectionType.list,
-      listItems: [item],
-      listLayoutMode: NoteListLayoutMode.hierarchy,
-    );
-    _commitSections([
-      ..._sections,
-      section,
-    ], selection: _MixedSelectionTarget.listItem(section.id, item.id));
-  }
-
   void _addTableSection() {
     final section = NoteMixedSection(
       id: _nextId('table'),
       type: NoteMixedSectionType.table,
       rows: const [
         ['', ''],
+        ['', ''],
       ],
     );
-    _commitSections([
-      ..._sections,
-      section,
-    ], selection: _MixedSelectionTarget.tableCell(section.id, 0, 0));
+    final next = [..._sections];
+    next.insert(_insertIndexAfterSelection(), section);
+    _commitSections(
+      next,
+      selection: _MixedSelectionTarget.tableCell(section.id, 0, 0),
+    );
+  }
+
+  int _insertIndexAfterSelection() {
+    final selection = _selection;
+    if (selection == null) {
+      return _sections.length;
+    }
+    final index = _sections.indexWhere(
+      (section) => section.id == selection.sectionId,
+    );
+    return index < 0 ? _sections.length : index + 1;
   }
 
   void _deleteSection(NoteMixedSection section) {
@@ -214,19 +210,6 @@ class _NoteMixedTextChunkEditorScreenState
       _sections.where((current) => current.id != section.id).toList(),
       clearSelection: true,
     );
-  }
-
-  void _reorderSections(int oldIndex, int newIndex) {
-    if (oldIndex >= _sections.length || newIndex > _sections.length) {
-      return;
-    }
-    if (newIndex > oldIndex) {
-      newIndex -= 1;
-    }
-    final next = [..._sections];
-    final moved = next.removeAt(oldIndex);
-    next.insert(newIndex, moved);
-    _commitSections(next);
   }
 
   void _updateParagraph(NoteMixedSection section, String text) {
@@ -304,37 +287,6 @@ class _NoteMixedTextChunkEditorScreenState
     );
   }
 
-  void _moveListItem(NoteMixedSection section, String itemId, int delta) {
-    final items = [..._itemsFor(section)];
-    final oldIndex = items.indexWhere((item) => item.id == itemId);
-    if (oldIndex < 0) {
-      return;
-    }
-    final newIndex = (oldIndex + delta).clamp(0, items.length - 1).toInt();
-    if (newIndex == oldIndex) {
-      return;
-    }
-    final moved = items.removeAt(oldIndex);
-    items.insert(newIndex, moved);
-    _replaceSection(
-      section.copyWith(listItems: items),
-      selection: _MixedSelectionTarget.listItem(section.id, itemId),
-    );
-  }
-
-  void _reorderListItems(NoteMixedSection section, int oldIndex, int newIndex) {
-    final items = [..._itemsFor(section)];
-    if (oldIndex >= items.length || newIndex > items.length) {
-      return;
-    }
-    if (newIndex > oldIndex) {
-      newIndex -= 1;
-    }
-    final moved = items.removeAt(oldIndex);
-    items.insert(newIndex, moved);
-    _replaceSection(section.copyWith(listItems: items));
-  }
-
   int _columnCount(List<List<String>> rows) {
     var count = 0;
     for (final row in rows) {
@@ -349,6 +301,7 @@ class _NoteMixedTextChunkEditorScreenState
     final rows = section.rows.isEmpty
         ? [
             ['', ''],
+            ['', ''],
           ]
         : [
             for (final row in section.rows) [...row],
@@ -360,6 +313,20 @@ class _NoteMixedTextChunkEditorScreenState
       }
     }
     return rows;
+  }
+
+  double _tableColumnWidth(NoteMixedSection section, int column) {
+    if (column >= 0 && column < section.tableColumnWidths.length) {
+      return section.tableColumnWidths[column];
+    }
+    return _defaultColumnWidth;
+  }
+
+  double _tableRowHeight(NoteMixedSection section, int row) {
+    if (row >= 0 && row < section.tableRowHeights.length) {
+      return section.tableRowHeights[row];
+    }
+    return _defaultRowHeight;
   }
 
   void _updateTableCell(
@@ -480,9 +447,65 @@ class _NoteMixedTextChunkEditorScreenState
       return;
     }
     _replaceSection(
-      section.copyWith(paragraphRole: role),
+      section.copyWith(
+        paragraphRole: role,
+        headingLevel: role == NoteMixedParagraphRole.heading
+            ? section.headingLevel
+            : 1,
+      ),
       selection: _MixedSelectionTarget.paragraph(section.id),
     );
+  }
+
+  void _setSelectedHeadingLevel(int level) {
+    final selection = _selection;
+    if (selection?.kind != _MixedSelectionKind.paragraph) {
+      setState(() => _railPanel = null);
+      return;
+    }
+    final section = _sectionById(selection!.sectionId);
+    if (section == null || section.type != NoteMixedSectionType.paragraph) {
+      setState(() => _railPanel = null);
+      return;
+    }
+    _replaceSection(
+      section.copyWith(
+        paragraphRole: NoteMixedParagraphRole.heading,
+        headingLevel: level.clamp(1, 3).toInt(),
+      ),
+      selection: _MixedSelectionTarget.paragraph(section.id),
+    );
+    setState(() => _railPanel = null);
+  }
+
+  void _toggleRailPanel(_MixedRailPanel panel) {
+    setState(() => _railPanel = _railPanel == panel ? null : panel);
+  }
+
+  void _applySelectedColor(int colorValue) {
+    final panel = _railPanel;
+    final selection = _selection;
+    if (panel == null || selection == null) {
+      setState(() => _railPanel = null);
+      return;
+    }
+    final section = _sectionById(selection.sectionId);
+    if (section == null) {
+      setState(() => _railPanel = null);
+      return;
+    }
+    final nextSection = switch (panel) {
+      _MixedRailPanel.textColor => section.copyWith(textColorValue: colorValue),
+      _MixedRailPanel.underlineColor => section.copyWith(
+        underlineColorValue: colorValue,
+      ),
+      _MixedRailPanel.backgroundColor => section.copyWith(
+        backgroundColorValue: colorValue,
+      ),
+      _MixedRailPanel.heading => section,
+    };
+    _replaceSection(nextSection, selection: selection);
+    setState(() => _railPanel = null);
   }
 
   void _convertSelectedParagraphToList(NoteListLayoutMode mode) {
@@ -525,46 +548,15 @@ class _NoteMixedTextChunkEditorScreenState
         .trim();
   }
 
-  void _convertSelectedTextToTable() {
-    final selection = _selection;
-    if (selection?.kind != _MixedSelectionKind.paragraph) {
-      _addTableSection();
-      return;
-    }
-    final section = _sectionById(selection!.sectionId);
-    if (section == null || section.type != NoteMixedSectionType.paragraph) {
-      return;
-    }
-    final rows = section.text
-        .split('\n')
-        .map((line) {
-          final parts = line.contains('|')
-              ? line.split('|')
-              : line.contains('\t')
-              ? line.split('\t')
-              : [line, ''];
-          return parts.map((part) => part.trim()).toList(growable: false);
-        })
-        .where((row) => row.any((cell) => cell.isNotEmpty))
-        .toList(growable: false);
-    final nextRows = rows.isEmpty
-        ? const [
-            ['', ''],
-          ]
-        : rows;
-    final next = section.copyWith(
-      type: NoteMixedSectionType.table,
-      text: '',
-      paragraphRole: NoteMixedParagraphRole.paragraph,
-      rows: nextRows,
-    );
-    _replaceSection(
-      next,
-      selection: _MixedSelectionTarget.tableCell(next.id, 0, 0),
-    );
+  void _toggleBoldInActiveText() {
+    _toggleWrappedInActiveText('**', '**');
   }
 
-  void _toggleBoldInActiveText() {
+  void _toggleItalicInActiveText() {
+    _toggleWrappedInActiveText('_', '_');
+  }
+
+  void _toggleWrappedInActiveText(String prefix, String suffix) {
     final key = _activeTextControllerKey;
     final controller = key == null ? null : _textControllers[key];
     if (key == null || controller == null) {
@@ -586,12 +578,15 @@ class _NoteMixedTextChunkEditorScreenState
     }
     final selectedText = text.substring(start, end);
     final hasBoldMarkers =
-        selectedText.startsWith('**') &&
-        selectedText.endsWith('**') &&
-        selectedText.length > 4;
+        selectedText.startsWith(prefix) &&
+        selectedText.endsWith(suffix) &&
+        selectedText.length > prefix.length + suffix.length;
     final replacement = hasBoldMarkers
-        ? selectedText.substring(2, selectedText.length - 2)
-        : '**$selectedText**';
+        ? selectedText.substring(
+            prefix.length,
+            selectedText.length - suffix.length,
+          )
+        : '$prefix$selectedText$suffix';
     final nextText = text.replaceRange(start, end, replacement);
     controller.value = TextEditingValue(
       text: nextText,
@@ -787,28 +782,56 @@ class _NoteMixedTextChunkEditorScreenState
 
   void _handleRailIndent() {
     final selection = _selection;
-    if (selection?.kind != _MixedSelectionKind.listItem) {
+    if (selection == null) {
       return;
     }
-    final section = _sectionById(selection!.sectionId);
-    final item = _selectedListItem();
-    if (section == null || item == null) {
+    final section = _sectionById(selection.sectionId);
+    if (section == null) {
       return;
     }
-    _changeListIndent(section, item, 1);
+    if (selection.kind == _MixedSelectionKind.paragraph) {
+      _replaceSection(
+        section.copyWith(
+          paragraphIndentLevel: section.paragraphIndentLevel + 1,
+        ),
+        selection: _MixedSelectionTarget.paragraph(section.id),
+      );
+      return;
+    }
+    if (selection.kind == _MixedSelectionKind.listItem) {
+      final item = _selectedListItem();
+      if (item == null) {
+        return;
+      }
+      _changeListIndent(section, item, 1);
+    }
   }
 
   void _handleRailOutdent() {
     final selection = _selection;
-    if (selection?.kind != _MixedSelectionKind.listItem) {
+    if (selection == null) {
       return;
     }
-    final section = _sectionById(selection!.sectionId);
-    final item = _selectedListItem();
-    if (section == null || item == null) {
+    final section = _sectionById(selection.sectionId);
+    if (section == null) {
       return;
     }
-    _changeListIndent(section, item, -1);
+    if (selection.kind == _MixedSelectionKind.paragraph) {
+      _replaceSection(
+        section.copyWith(
+          paragraphIndentLevel: section.paragraphIndentLevel - 1,
+        ),
+        selection: _MixedSelectionTarget.paragraph(section.id),
+      );
+      return;
+    }
+    if (selection.kind == _MixedSelectionKind.listItem) {
+      final item = _selectedListItem();
+      if (item == null) {
+        return;
+      }
+      _changeListIndent(section, item, -1);
+    }
   }
 
   void _handleRailAdd() {
@@ -851,6 +874,39 @@ class _NoteMixedTextChunkEditorScreenState
     action(section, selection.rowIndex ?? 0, selection.columnIndex ?? 0);
   }
 
+  void _deleteSelectedTable() {
+    final selection = _selection;
+    if (selection?.kind != _MixedSelectionKind.tableCell) {
+      return;
+    }
+    final section = _sectionById(selection!.sectionId);
+    if (section == null || section.type != NoteMixedSectionType.table) {
+      return;
+    }
+    _deleteSection(section);
+  }
+
+  void _convertSelectedListMode(NoteListLayoutMode mode) {
+    final selection = _selection;
+    if (selection == null) {
+      return;
+    }
+    final section = _sectionById(selection.sectionId);
+    if (section == null) {
+      return;
+    }
+    if (section.type == NoteMixedSectionType.paragraph) {
+      _convertSelectedParagraphToList(mode);
+      return;
+    }
+    if (section.type == NoteMixedSectionType.list) {
+      _replaceSection(
+        section.copyWith(listLayoutMode: mode),
+        selection: selection,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -869,18 +925,6 @@ class _NoteMixedTextChunkEditorScreenState
         canDeleteSelectedTag: _selectedTags.isNotEmpty,
         canDeleteChunk: widget.onDelete != null,
         trailingActions: [
-          IconButton(
-            key: const ValueKey('note-mixed-add-paragraph'),
-            tooltip: 'Uj bekezdes',
-            onPressed: _addParagraphSection,
-            icon: const Icon(Icons.subject),
-          ),
-          IconButton(
-            key: const ValueKey('note-mixed-add-list'),
-            tooltip: 'Uj lista',
-            onPressed: _addListSection,
-            icon: const Icon(Icons.format_list_bulleted),
-          ),
           IconButton(
             key: const ValueKey('note-mixed-add-table'),
             tooltip: 'Uj tablazat',
@@ -912,15 +956,12 @@ class _NoteMixedTextChunkEditorScreenState
                     bottom:
                         bottomInset + (railVisible ? _keyboardRailReserve : 0),
                   ),
-                  child: ReorderableListView.builder(
+                  child: ListView.builder(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
                     itemCount: _sections.length,
-                    buildDefaultDragHandles: false,
-                    // ignore: deprecated_member_use
-                    onReorder: _reorderSections,
                     itemBuilder: (context, index) {
                       final section = _sections[index];
-                      return _buildSection(section, index);
+                      return _buildSection(section);
                     },
                   ),
                 ),
@@ -937,67 +978,102 @@ class _NoteMixedTextChunkEditorScreenState
                         top: false,
                         child: SizedBox(
                           key: const ValueKey('note-mixed-keyboard-rail'),
-                          child: _MixedKeyboardRail(
-                            tags: _selectedTags,
-                            selectionKind: _selection!.kind,
-                            bottomRowExpanded: _railBottomExpanded,
-                            roundedCard: _railRoundedCard,
-                            transparentBackground: _railTransparentBackground,
-                            showBorder: _railBorderVisible,
-                            onToggleBottomRow: () => setState(
-                              () => _railBottomExpanded = !_railBottomExpanded,
-                            ),
-                            onParagraph: () => _setSelectedParagraphRole(
-                              NoteMixedParagraphRole.paragraph,
-                            ),
-                            onHeading: () => _setSelectedParagraphRole(
-                              NoteMixedParagraphRole.heading,
-                            ),
-                            onBold: _toggleBoldInActiveText,
-                            onList: () => _convertSelectedParagraphToList(
-                              NoteListLayoutMode.hierarchy,
-                            ),
-                            onTable: _convertSelectedTextToTable,
-                            onTag: () => unawaited(_tagSelection()),
-                            onClearTags: _selectedTags.isEmpty
-                                ? null
-                                : _deleteSelectedTag,
-                            onDeleteTag: (_) => _deleteSelectedTag(),
-                            onOutdent: _handleRailOutdent,
-                            onIndent: _handleRailIndent,
-                            onAddListItem: _handleRailAdd,
-                            onDeleteListItem: _handleRailDelete,
-                            onAddRow: () => _handleTableRailAction(
-                              (section, row, column) => _addTableRow(section),
-                            ),
-                            onAddColumn: () => _handleTableRailAction(
-                              (section, row, column) =>
-                                  _addTableColumn(section),
-                            ),
-                            onDeleteRow: () => _handleTableRailAction(
-                              (section, row, column) =>
-                                  _deleteTableRow(section, row),
-                            ),
-                            onDeleteColumn: () => _handleTableRailAction(
-                              (section, row, column) =>
-                                  _deleteTableColumn(section, column),
-                            ),
-                            onMoveRowUp: () => _handleTableRailAction(
-                              (section, row, column) =>
-                                  _moveTableRow(section, row, -1),
-                            ),
-                            onMoveRowDown: () => _handleTableRailAction(
-                              (section, row, column) =>
-                                  _moveTableRow(section, row, 1),
-                            ),
-                            onMoveColumnLeft: () => _handleTableRailAction(
-                              (section, row, column) =>
-                                  _moveTableColumn(section, column, -1),
-                            ),
-                            onMoveColumnRight: () => _handleTableRailAction(
-                              (section, row, column) =>
-                                  _moveTableColumn(section, column, 1),
-                            ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _MixedRailPopover(
+                                panel: _railPanel,
+                                onHeadingLevel: _setSelectedHeadingLevel,
+                                onColor: _applySelectedColor,
+                              ),
+                              _MixedKeyboardRail(
+                                tags: _selectedTags,
+                                selectionKind: _selection!.kind,
+                                bottomRowExpanded: _railBottomExpanded,
+                                roundedCard: _railRoundedCard,
+                                transparentBackground:
+                                    _railTransparentBackground,
+                                showBorder: _railBorderVisible,
+                                onToggleBottomRow: () => setState(
+                                  () => _railBottomExpanded =
+                                      !_railBottomExpanded,
+                                ),
+                                onText: () => _setSelectedParagraphRole(
+                                  NoteMixedParagraphRole.paragraph,
+                                ),
+                                onHeading: () =>
+                                    _toggleRailPanel(_MixedRailPanel.heading),
+                                onBold: _toggleBoldInActiveText,
+                                onItalic: _toggleItalicInActiveText,
+                                onTextColor: () =>
+                                    _toggleRailPanel(_MixedRailPanel.textColor),
+                                onUnderlineColor: () => _toggleRailPanel(
+                                  _MixedRailPanel.underlineColor,
+                                ),
+                                onBackgroundColor: () => _toggleRailPanel(
+                                  _MixedRailPanel.backgroundColor,
+                                ),
+                                onDynamicList: () => _convertSelectedListMode(
+                                  NoteListLayoutMode.hierarchy,
+                                ),
+                                onStaticList: () => _convertSelectedListMode(
+                                  NoteListLayoutMode.checkbox,
+                                ),
+                                onTag: () => unawaited(_tagSelection()),
+                                onClearTags: _selectedTags.isEmpty
+                                    ? null
+                                    : _deleteSelectedTag,
+                                onDeleteTag: (_) => _deleteSelectedTag(),
+                                onOutdent: _handleRailOutdent,
+                                onIndent: _handleRailIndent,
+                                onAddListItem: _handleRailAdd,
+                                onDeleteListItem: _handleRailDelete,
+                                onAddRow: () => _handleTableRailAction(
+                                  (section, row, column) =>
+                                      _addTableRow(section),
+                                ),
+                                onAddColumn: () => _handleTableRailAction(
+                                  (section, row, column) =>
+                                      _addTableColumn(section),
+                                ),
+                                onDeleteRow: () => _handleTableRailAction(
+                                  (section, row, column) =>
+                                      _deleteTableRow(section, row),
+                                ),
+                                onDeleteColumn: () => _handleTableRailAction(
+                                  (section, row, column) =>
+                                      _deleteTableColumn(section, column),
+                                ),
+                                onDeleteTable: _deleteSelectedTable,
+                                onMoveRowUp: () => _handleTableRailAction(
+                                  (section, row, column) =>
+                                      _moveTableRow(section, row, -1),
+                                ),
+                                onMoveRowDown: () => _handleTableRailAction(
+                                  (section, row, column) =>
+                                      _moveTableRow(section, row, 1),
+                                ),
+                                onMoveColumnLeft: () => _handleTableRailAction(
+                                  (section, row, column) =>
+                                      _moveTableColumn(section, column, -1),
+                                ),
+                                onMoveColumnRight: () => _handleTableRailAction(
+                                  (section, row, column) =>
+                                      _moveTableColumn(section, column, 1),
+                                ),
+                                onToggleRounded: () => setState(
+                                  () => _railRoundedCard = !_railRoundedCard,
+                                ),
+                                onToggleTransparent: () => setState(
+                                  () => _railTransparentBackground =
+                                      !_railTransparentBackground,
+                                ),
+                                onToggleBorder: () => setState(
+                                  () =>
+                                      _railBorderVisible = !_railBorderVisible,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -1011,117 +1087,83 @@ class _NoteMixedTextChunkEditorScreenState
     );
   }
 
-  Widget _buildSection(NoteMixedSection section, int index) {
+  Widget _buildSection(NoteMixedSection section) {
     return Padding(
       key: ValueKey('note-mixed-section-${section.id}'),
       padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ReorderableDragStartListener(
-            index: index,
-            child: const SizedBox(
-              width: 34,
-              height: 42,
-              child: Icon(
-                Icons.drag_indicator,
-                size: 18,
-                color: Color(0xFF9CA3AF),
-              ),
-            ),
-          ),
-          Expanded(
-            child: switch (section.type) {
-              NoteMixedSectionType.paragraph => _buildParagraphSection(section),
-              NoteMixedSectionType.list => _buildListSection(section),
-              NoteMixedSectionType.table => _buildTableSection(section),
-            },
-          ),
-          PopupMenuButton<String>(
-            key: ValueKey('note-mixed-section-menu-${section.id}'),
-            tooltip: 'Blokk műveletek',
-            padding: EdgeInsets.zero,
-            icon: const Icon(Icons.more_vert, size: 20),
-            onSelected: (value) {
-              switch (value) {
-                case 'paragraph':
-                  if (section.type == NoteMixedSectionType.paragraph) {
-                    _replaceSection(
-                      section.copyWith(
-                        paragraphRole: NoteMixedParagraphRole.paragraph,
-                      ),
-                      selection: _MixedSelectionTarget.paragraph(section.id),
-                    );
-                  }
-                  break;
-                case 'heading':
-                  if (section.type == NoteMixedSectionType.paragraph) {
-                    _replaceSection(
-                      section.copyWith(
-                        paragraphRole: NoteMixedParagraphRole.heading,
-                      ),
-                      selection: _MixedSelectionTarget.paragraph(section.id),
-                    );
-                  }
-                  break;
-                case 'list':
-                  if (section.type == NoteMixedSectionType.paragraph) {
-                    _selection = _MixedSelectionTarget.paragraph(section.id);
-                    _convertSelectedParagraphToList(
-                      NoteListLayoutMode.hierarchy,
-                    );
-                  }
-                  break;
-                case 'table':
-                  if (section.type == NoteMixedSectionType.paragraph) {
-                    _selection = _MixedSelectionTarget.paragraph(section.id);
-                    _convertSelectedTextToTable();
-                  }
-                  break;
-                case 'delete':
-                  _deleteSection(section);
-                  break;
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'paragraph', child: Text('Bekezdés')),
-              PopupMenuItem(value: 'heading', child: Text('Cím')),
-              PopupMenuItem(value: 'list', child: Text('Listává alakítás')),
-              PopupMenuItem(value: 'table', child: Text('Táblázattá alakítás')),
-              PopupMenuDivider(),
-              PopupMenuItem(value: 'delete', child: Text('Blokk törlése')),
-            ],
-          ),
-        ],
-      ),
+      child: switch (section.type) {
+        NoteMixedSectionType.paragraph => _buildParagraphSection(section),
+        NoteMixedSectionType.list => _buildListSection(section),
+        NoteMixedSectionType.table => _buildTableSection(section),
+      },
     );
   }
 
   Widget _buildParagraphSection(NoteMixedSection section) {
     final key = 'paragraph:${section.id}';
     final controller = _controllerFor(key, section.text);
+    return Padding(
+      padding: EdgeInsets.only(left: section.paragraphIndentLevel * 22.0),
+      child: TextField(
+        key: ValueKey('note-mixed-paragraph-${section.id}'),
+        controller: controller,
+        minLines: 1,
+        maxLines: null,
+        keyboardType: TextInputType.multiline,
+        textInputAction: TextInputAction.newline,
+        style: _textStyleForSection(section),
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          isDense: true,
+          hintText: section.paragraphRole == NoteMixedParagraphRole.heading
+              ? 'Cím'
+              : 'Bekezdés',
+          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+        ),
+        onTap: () => _activateTextTarget(
+          key,
+          _MixedSelectionTarget.paragraph(section.id),
+        ),
+        onChanged: (value) => _updateParagraph(section, value),
+      ),
+    );
+  }
+
+  TextStyle _textStyleForSection(NoteMixedSection section) {
     final isHeading = section.paragraphRole == NoteMixedParagraphRole.heading;
-    return TextField(
-      key: ValueKey('note-mixed-paragraph-${section.id}'),
-      controller: controller,
-      minLines: 1,
-      maxLines: null,
-      keyboardType: TextInputType.multiline,
-      textInputAction: TextInputAction.newline,
-      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-        fontSize: isHeading ? 20 : 17,
-        height: isHeading ? 1.25 : 1.38,
-        fontWeight: isHeading ? FontWeight.w800 : FontWeight.w400,
-      ),
-      decoration: InputDecoration(
-        border: InputBorder.none,
-        isDense: true,
-        hintText: isHeading ? 'Cím' : 'Bekezdés',
-        contentPadding: const EdgeInsets.symmetric(vertical: 8),
-      ),
-      onTap: () =>
-          _activateTextTarget(key, _MixedSelectionTarget.paragraph(section.id)),
-      onChanged: (value) => _updateParagraph(section, value),
+    final headingLevel = section.headingLevel.clamp(1, 3).toInt();
+    final base = Theme.of(context).textTheme.bodyLarge ?? const TextStyle();
+    final fontSize = isHeading
+        ? switch (headingLevel) {
+            1 => 24.0,
+            2 => 21.0,
+            _ => 18.0,
+          }
+        : 17.0;
+    final lineHeight = isHeading
+        ? switch (headingLevel) {
+            1 => 1.16,
+            2 => 1.22,
+            _ => 1.30,
+          }
+        : 1.38;
+    return base.copyWith(
+      color: section.textColorValue == null
+          ? const Color(0xFF111827)
+          : Color(section.textColorValue!),
+      fontSize: fontSize,
+      height: lineHeight,
+      fontWeight: isHeading ? FontWeight.w800 : FontWeight.w400,
+      backgroundColor: section.backgroundColorValue == null
+          ? null
+          : Color(section.backgroundColorValue!).withValues(alpha: 0.35),
+      decoration: section.underlineColorValue == null
+          ? TextDecoration.none
+          : TextDecoration.underline,
+      decorationColor: section.underlineColorValue == null
+          ? null
+          : Color(section.underlineColorValue!),
+      decorationThickness: section.underlineColorValue == null ? null : 2,
     );
   }
 
@@ -1130,63 +1172,106 @@ class _NoteMixedTextChunkEditorScreenState
     final markers = section.listLayoutMode == NoteListLayoutMode.hierarchy
         ? _hierarchyMarkers(section)
         : const <String, String>{};
-    return ReorderableListView.builder(
+    return Column(
       key: ValueKey('note-mixed-list-items-${section.id}'),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      buildDefaultDragHandles: false,
-      itemCount: items.length,
-      // ignore: deprecated_member_use
-      onReorder: (oldIndex, newIndex) =>
-          _reorderListItems(section, oldIndex, newIndex),
-      itemBuilder: (context, index) {
-        final item = items[index];
-        final key = 'list:${section.id}:${item.id}';
-        return _MixedListItemRow(
-          key: ValueKey('note-mixed-list-row-${item.id}'),
-          controller: _controllerFor(key, item.text),
-          item: item,
-          index: index,
-          selected:
-              _selection?.kind == _MixedSelectionKind.listItem &&
-              _selection?.sectionId == section.id &&
-              _selection?.itemId == item.id,
-          marker: markers[item.id],
-          layoutMode: section.listLayoutMode,
-          onSelect: () => _activateTextTarget(
-            key,
-            _MixedSelectionTarget.listItem(section.id, item.id),
+      children: [
+        for (var index = 0; index < items.length; index += 1)
+          _MixedListItemRow(
+            key: ValueKey('note-mixed-list-row-${items[index].id}'),
+            controller: _controllerFor(
+              'list:${section.id}:${items[index].id}',
+              items[index].text,
+            ),
+            item: items[index],
+            selected:
+                _selection?.kind == _MixedSelectionKind.listItem &&
+                _selection?.sectionId == section.id &&
+                _selection?.itemId == items[index].id,
+            marker: markers[items[index].id],
+            layoutMode: section.listLayoutMode,
+            style: _textStyleForSection(section),
+            onSelect: () => _activateTextTarget(
+              'list:${section.id}:${items[index].id}',
+              _MixedSelectionTarget.listItem(section.id, items[index].id),
+            ),
+            onChanged: (value) =>
+                _replaceListItem(section, items[index].copyWith(text: value)),
+            onCheckedChanged: (checked) => _replaceListItem(
+              section,
+              items[index].copyWith(checked: checked ?? false),
+            ),
+            onSubmit: () => _insertListItemAfter(section, items[index]),
           ),
-          onChanged: (value) =>
-              _replaceListItem(section, item.copyWith(text: value)),
-          onCheckedChanged: (checked) => _replaceListItem(
-            section,
-            item.copyWith(checked: checked ?? false),
-          ),
-          onMoveUp: () => _moveListItem(section, item.id, -1),
-          onMoveDown: () => _moveListItem(section, item.id, 1),
-          onSubmit: () => _insertListItemAfter(section, item),
-        );
-      },
+      ],
     );
   }
 
   Widget _buildTableSection(NoteMixedSection section) {
     final rows = _normalizedRows(section);
     final width = _columnCount(rows);
+    final columnWidths = [
+      for (var column = 0; column < width; column += 1)
+        _tableColumnWidth(section, column),
+    ];
+    final tableWidth =
+        _rowHeadWidth +
+        4 +
+        columnWidths.fold<double>(0, (sum, item) => sum + item + 4);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var row = 0; row < rows.length; row += 1)
+      child: SizedBox(
+        width: tableWidth,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const _MixedTableHeadCell(
+                  key: ValueKey('note-mixed-table-corner-head'),
+                  width: _rowHeadWidth,
+                  height: _defaultRowHeight,
+                  label: '',
+                  icon: Icons.grid_on_outlined,
+                  selected: false,
+                ),
                 for (var column = 0; column < width; column += 1)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4, bottom: 4),
-                    child: SizedBox(
-                      width: 150,
+                  _MixedTableHeadCell(
+                    key: ValueKey('note-mixed-table-column-head-$column'),
+                    width: columnWidths[column],
+                    height: _defaultRowHeight,
+                    label: 'Oszlop ${column + 1}',
+                    selected:
+                        _selection?.kind == _MixedSelectionKind.tableCell &&
+                        _selection?.sectionId == section.id &&
+                        _selection?.columnIndex == column,
+                  ),
+              ],
+            ),
+            for (var row = 0; row < rows.length; row += 1)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _MixedTableHeadCell(
+                    key: ValueKey('note-mixed-table-row-head-$row'),
+                    width: _rowHeadWidth,
+                    height: _tableRowHeight(section, row),
+                    label: '${row + 1}',
+                    icon: Icons.table_rows_outlined,
+                    selected:
+                        _selection?.kind == _MixedSelectionKind.tableCell &&
+                        _selection?.sectionId == section.id &&
+                        _selection?.rowIndex == row,
+                  ),
+                  for (var column = 0; column < width; column += 1)
+                    _MixedTableCell(
+                      width: columnWidths[column],
+                      height: _tableRowHeight(section, row),
+                      selected:
+                          _selection?.kind == _MixedSelectionKind.tableCell &&
+                          _selection?.sectionId == section.id &&
+                          _selection?.rowIndex == row &&
+                          _selection?.columnIndex == column,
                       child: TextField(
                         key: ValueKey(
                           'note-mixed-table-cell-${section.id}-$row-$column',
@@ -1197,20 +1282,16 @@ class _NoteMixedTextChunkEditorScreenState
                         ),
                         minLines: 1,
                         maxLines: null,
-                        decoration: InputDecoration(
+                        style: _textStyleForSection(
+                          section,
+                        ).copyWith(fontSize: 15, height: 1.35),
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
                           isDense: true,
-                          border: const OutlineInputBorder(),
-                          contentPadding: const EdgeInsets.symmetric(
+                          contentPadding: EdgeInsets.symmetric(
                             horizontal: 10,
-                            vertical: 9,
+                            vertical: 10,
                           ),
-                          filled:
-                              _selection?.kind ==
-                                  _MixedSelectionKind.tableCell &&
-                              _selection?.sectionId == section.id &&
-                              _selection?.rowIndex == row &&
-                              _selection?.columnIndex == column,
-                          fillColor: const Color(0xFFEFF6FF),
                         ),
                         onTap: () => _activateTextTarget(
                           'table:${section.id}:$row:$column',
@@ -1224,16 +1305,18 @@ class _NoteMixedTextChunkEditorScreenState
                             _updateTableCell(section, row, column, value),
                       ),
                     ),
-                  ),
-              ],
-            ),
-        ],
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
 enum _MixedSelectionKind { paragraph, listItem, tableCell }
+
+enum _MixedRailPanel { heading, textColor, underlineColor, backgroundColor }
 
 class _MixedSelectionTarget {
   const _MixedSelectionTarget._({
@@ -1277,29 +1360,25 @@ class _MixedListItemRow extends StatelessWidget {
     super.key,
     required this.controller,
     required this.item,
-    required this.index,
     required this.selected,
     required this.marker,
     required this.layoutMode,
+    required this.style,
     required this.onSelect,
     required this.onChanged,
     required this.onCheckedChanged,
-    required this.onMoveUp,
-    required this.onMoveDown,
     required this.onSubmit,
   });
 
   final TextEditingController controller;
   final NoteListItem item;
-  final int index;
   final bool selected;
   final String? marker;
   final NoteListLayoutMode layoutMode;
+  final TextStyle style;
   final VoidCallback onSelect;
   final ValueChanged<String> onChanged;
   final ValueChanged<bool?> onCheckedChanged;
-  final VoidCallback onMoveUp;
-  final VoidCallback onMoveDown;
   final VoidCallback onSubmit;
 
   @override
@@ -1315,14 +1394,6 @@ class _MixedListItemRow extends StatelessWidget {
           : null,
       child: Row(
         children: [
-          ReorderableDragStartListener(
-            key: ValueKey('note-mixed-list-drag-${item.id}'),
-            index: index,
-            child: const Padding(
-              padding: EdgeInsets.all(8),
-              child: Icon(Icons.drag_indicator, size: 18),
-            ),
-          ),
           if (layoutMode == NoteListLayoutMode.checkbox)
             Checkbox(value: item.checked, onChanged: onCheckedChanged)
           else
@@ -1339,6 +1410,7 @@ class _MixedListItemRow extends StatelessWidget {
             child: TextField(
               key: ValueKey('note-mixed-list-item-${item.id}'),
               controller: controller,
+              style: style,
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 isDense: true,
@@ -1350,20 +1422,197 @@ class _MixedListItemRow extends StatelessWidget {
               onSubmitted: (_) => onSubmit(),
             ),
           ),
-          IconButton(
-            key: ValueKey('note-mixed-list-move-up-${item.id}'),
-            tooltip: 'Fel',
-            onPressed: onMoveUp,
-            icon: const Icon(Icons.keyboard_arrow_up, size: 18),
-          ),
-          IconButton(
-            key: ValueKey('note-mixed-list-move-down-${item.id}'),
-            tooltip: 'Le',
-            onPressed: onMoveDown,
-            icon: const Icon(Icons.keyboard_arrow_down, size: 18),
-          ),
         ],
       ),
+    );
+  }
+}
+
+class _MixedTableHeadCell extends StatelessWidget {
+  const _MixedTableHeadCell({
+    super.key,
+    required this.width,
+    required this.height,
+    required this.label,
+    required this.selected,
+    this.icon,
+  });
+
+  final double width;
+  final double height;
+  final String label;
+  final bool selected;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: width,
+      constraints: BoxConstraints(minHeight: height),
+      alignment: Alignment.center,
+      margin: const EdgeInsets.only(right: 4, bottom: 4),
+      decoration: BoxDecoration(
+        color: selected
+            ? colorScheme.primary.withValues(alpha: 0.12)
+            : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: selected ? colorScheme.primary : const Color(0xFFE5E7EB),
+        ),
+      ),
+      child: icon != null && label.isEmpty
+          ? Icon(icon, size: 18, color: const Color(0xFF475569))
+          : Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? colorScheme.primary : const Color(0xFF475569),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+    );
+  }
+}
+
+class _MixedTableCell extends StatelessWidget {
+  const _MixedTableCell({
+    required this.width,
+    required this.height,
+    required this.selected,
+    required this.child,
+  });
+
+  final double width;
+  final double height;
+  final bool selected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      constraints: BoxConstraints(minHeight: height),
+      margin: const EdgeInsets.only(right: 4, bottom: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Stack(
+        children: [
+          if (selected)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFF2563EB), width: 2),
+                ),
+              ),
+            ),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _MixedRailPopover extends StatelessWidget {
+  const _MixedRailPopover({
+    required this.panel,
+    required this.onHeadingLevel,
+    required this.onColor,
+  });
+
+  static const List<int> _colors = [
+    0xFF111827,
+    0xFF2563EB,
+    0xFF16A34A,
+    0xFFDC2626,
+    0xFFD97706,
+    0xFF7C3AED,
+    0xFFFFF7ED,
+    0xFFEFF6FF,
+  ];
+
+  final _MixedRailPanel? panel;
+  final ValueChanged<int> onHeadingLevel;
+  final ValueChanged<int> onColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final panel = this.panel;
+    if (panel == null) {
+      return const SizedBox.shrink();
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Material(
+        key: panel == _MixedRailPanel.heading
+            ? const ValueKey('note-mixed-rail-heading-popover')
+            : const ValueKey('note-mixed-rail-color-popover'),
+        color: Colors.white,
+        elevation: 4,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          child: panel == _MixedRailPanel.heading
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var level = 1; level <= 3; level += 1)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: OutlinedButton(
+                          key: ValueKey('note-mixed-rail-heading-level-$level'),
+                          onPressed: () => onHeadingLevel(level),
+                          child: Text('H$level'),
+                        ),
+                      ),
+                  ],
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final colorValue in _colors)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 7),
+                        child: InkWell(
+                          key: ValueKey(
+                            'note-mixed-rail-color-'
+                            '0x${colorValue.toRadixString(16).padLeft(8, '0')}',
+                          ),
+                          onTap: () => onColor(colorValue),
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: Color(colorValue),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFFE5E7EB),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MixedRailSeparator extends StatelessWidget {
+  const _MixedRailSeparator({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 1,
+      height: 28,
+      child: DecoratedBox(decoration: BoxDecoration(color: Color(0xFFE5E7EB))),
     );
   }
 }
@@ -1377,11 +1626,15 @@ class _MixedKeyboardRail extends StatelessWidget {
     required this.transparentBackground,
     required this.showBorder,
     required this.onToggleBottomRow,
-    required this.onParagraph,
+    required this.onText,
     required this.onHeading,
     required this.onBold,
-    required this.onList,
-    required this.onTable,
+    required this.onItalic,
+    required this.onTextColor,
+    required this.onUnderlineColor,
+    required this.onBackgroundColor,
+    required this.onDynamicList,
+    required this.onStaticList,
     required this.onTag,
     required this.onClearTags,
     required this.onDeleteTag,
@@ -1393,10 +1646,14 @@ class _MixedKeyboardRail extends StatelessWidget {
     required this.onAddColumn,
     required this.onDeleteRow,
     required this.onDeleteColumn,
+    required this.onDeleteTable,
     required this.onMoveRowUp,
     required this.onMoveRowDown,
     required this.onMoveColumnLeft,
     required this.onMoveColumnRight,
+    required this.onToggleRounded,
+    required this.onToggleTransparent,
+    required this.onToggleBorder,
   });
 
   final List<NoteKnowledgeTag> tags;
@@ -1406,11 +1663,15 @@ class _MixedKeyboardRail extends StatelessWidget {
   final bool transparentBackground;
   final bool showBorder;
   final VoidCallback onToggleBottomRow;
-  final VoidCallback onParagraph;
+  final VoidCallback onText;
   final VoidCallback onHeading;
   final VoidCallback onBold;
-  final VoidCallback onList;
-  final VoidCallback onTable;
+  final VoidCallback onItalic;
+  final VoidCallback onTextColor;
+  final VoidCallback onUnderlineColor;
+  final VoidCallback onBackgroundColor;
+  final VoidCallback onDynamicList;
+  final VoidCallback onStaticList;
   final VoidCallback onTag;
   final VoidCallback? onClearTags;
   final ValueChanged<NoteKnowledgeTag> onDeleteTag;
@@ -1422,10 +1683,14 @@ class _MixedKeyboardRail extends StatelessWidget {
   final VoidCallback onAddColumn;
   final VoidCallback onDeleteRow;
   final VoidCallback onDeleteColumn;
+  final VoidCallback onDeleteTable;
   final VoidCallback onMoveRowUp;
   final VoidCallback onMoveRowDown;
   final VoidCallback onMoveColumnLeft;
   final VoidCallback onMoveColumnRight;
+  final VoidCallback onToggleRounded;
+  final VoidCallback onToggleTransparent;
+  final VoidCallback onToggleBorder;
 
   @override
   Widget build(BuildContext context) {
@@ -1442,48 +1707,6 @@ class _MixedKeyboardRail extends StatelessWidget {
       showBorder: showBorder,
       debugLogPrefix: 'MixedRail',
       actions: [
-        if (selectionKind == _MixedSelectionKind.paragraph) ...[
-          IconButton(
-            key: const ValueKey('note-mixed-rail-paragraph'),
-            tooltip: 'Bekezdés',
-            onPressed: onParagraph,
-            constraints: constraints,
-            padding: padding,
-            icon: const Icon(Icons.subject, size: 18),
-          ),
-          IconButton(
-            key: const ValueKey('note-mixed-rail-heading'),
-            tooltip: 'Cím',
-            onPressed: onHeading,
-            constraints: constraints,
-            padding: padding,
-            icon: const Icon(Icons.title, size: 18),
-          ),
-          IconButton(
-            key: const ValueKey('note-mixed-rail-list'),
-            tooltip: 'Listává alakítás',
-            onPressed: onList,
-            constraints: constraints,
-            padding: padding,
-            icon: const Icon(Icons.format_list_bulleted, size: 18),
-          ),
-          IconButton(
-            key: const ValueKey('note-mixed-rail-table'),
-            tooltip: 'Táblázattá alakítás',
-            onPressed: onTable,
-            constraints: constraints,
-            padding: padding,
-            icon: const Icon(Icons.table_chart_outlined, size: 18),
-          ),
-        ],
-        IconButton(
-          key: const ValueKey('note-mixed-rail-bold'),
-          tooltip: 'Félkövér',
-          onPressed: onBold,
-          constraints: constraints,
-          padding: padding,
-          icon: const Icon(Icons.format_bold, size: 18),
-        ),
         IconButton(
           key: const ValueKey('note-mixed-rail-tag'),
           tooltip: 'Tageles',
@@ -1500,23 +1723,116 @@ class _MixedKeyboardRail extends StatelessWidget {
           padding: padding,
           icon: const Icon(Icons.delete_outline, size: 18),
         ),
+        const _MixedRailSeparator(
+          key: ValueKey('note-mixed-rail-separator-tags'),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-heading'),
+          tooltip: 'Címsor',
+          onPressed: selectionKind == _MixedSelectionKind.paragraph
+              ? onHeading
+              : null,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.title, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-bold'),
+          tooltip: 'Félkövér',
+          onPressed: onBold,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.format_bold, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-italic'),
+          tooltip: 'Dőlt',
+          onPressed: onItalic,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.format_italic, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-text-color'),
+          tooltip: 'Betűszín',
+          onPressed: onTextColor,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.format_color_text, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-underline-color'),
+          tooltip: 'Aláhúzás színe',
+          onPressed: onUnderlineColor,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.format_underlined, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-background-color'),
+          tooltip: 'Szöveg háttérszín',
+          onPressed: onBackgroundColor,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.format_color_fill, size: 18),
+        ),
+        const _MixedRailSeparator(
+          key: ValueKey('note-mixed-rail-separator-format'),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-text'),
+          tooltip: 'Szöveg',
+          onPressed: selectionKind == _MixedSelectionKind.paragraph
+              ? onText
+              : null,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.subject, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-list-dynamic'),
+          tooltip: 'Hierarchikus lista',
+          onPressed: selectionKind == _MixedSelectionKind.tableCell
+              ? null
+              : onDynamicList,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.format_list_numbered, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-list-static'),
+          tooltip: 'Nem dinamikus lista',
+          onPressed: selectionKind == _MixedSelectionKind.tableCell
+              ? null
+              : onStaticList,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.check_box_outlined, size: 18),
+        ),
+        const _MixedRailSeparator(
+          key: ValueKey('note-mixed-rail-separator-list'),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-outdent'),
+          tooltip: 'Kijjebb',
+          onPressed: selectionKind == _MixedSelectionKind.tableCell
+              ? null
+              : onOutdent,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.format_indent_decrease, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-indent'),
+          tooltip: 'Beljebb',
+          onPressed: selectionKind == _MixedSelectionKind.tableCell
+              ? null
+              : onIndent,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.format_indent_increase, size: 18),
+        ),
         if (selectionKind == _MixedSelectionKind.listItem) ...[
-          IconButton(
-            key: const ValueKey('note-mixed-rail-outdent'),
-            tooltip: 'Kijjebb',
-            onPressed: onOutdent,
-            constraints: constraints,
-            padding: padding,
-            icon: const Icon(Icons.format_indent_decrease, size: 18),
-          ),
-          IconButton(
-            key: const ValueKey('note-mixed-rail-indent'),
-            tooltip: 'Beljebb',
-            onPressed: onIndent,
-            constraints: constraints,
-            padding: padding,
-            icon: const Icon(Icons.format_indent_increase, size: 18),
-          ),
           IconButton(
             key: const ValueKey('note-mixed-rail-add-list-item'),
             tooltip: 'Listaelem hozzaadasa',
@@ -1535,6 +1851,9 @@ class _MixedKeyboardRail extends StatelessWidget {
           ),
         ],
         if (selectionKind == _MixedSelectionKind.tableCell) ...[
+          const _MixedRailSeparator(
+            key: ValueKey('note-mixed-rail-separator-table'),
+          ),
           IconButton(
             key: const ValueKey('note-mixed-rail-add-row'),
             tooltip: 'Sor hozzaadasa',
@@ -1566,6 +1885,14 @@ class _MixedKeyboardRail extends StatelessWidget {
             constraints: constraints,
             padding: padding,
             icon: const Icon(Icons.remove_circle_outline, size: 18),
+          ),
+          IconButton(
+            key: const ValueKey('note-mixed-rail-delete-table'),
+            tooltip: 'Táblázat törlése',
+            onPressed: onDeleteTable,
+            constraints: constraints,
+            padding: padding,
+            icon: const Icon(Icons.table_chart, size: 18),
           ),
           IconButton(
             key: const ValueKey('note-mixed-rail-row-up'),
@@ -1600,6 +1927,33 @@ class _MixedKeyboardRail extends StatelessWidget {
             icon: const Icon(Icons.chevron_right, size: 18),
           ),
         ],
+        const _MixedRailSeparator(
+          key: ValueKey('note-mixed-rail-separator-design'),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-toggle-rounded'),
+          tooltip: roundedCard ? 'Vonalas rail' : 'Cellaszerű rail',
+          onPressed: onToggleRounded,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.crop_square_outlined, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-toggle-transparent'),
+          tooltip: transparentBackground ? 'Fehér háttér' : 'Szürke háttér',
+          onPressed: onToggleTransparent,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.opacity, size: 18),
+        ),
+        IconButton(
+          key: const ValueKey('note-mixed-rail-toggle-border'),
+          tooltip: showBorder ? 'Border nélkül' : 'Borderrel',
+          onPressed: onToggleBorder,
+          constraints: constraints,
+          padding: padding,
+          icon: const Icon(Icons.border_outer, size: 18),
+        ),
       ],
     );
   }

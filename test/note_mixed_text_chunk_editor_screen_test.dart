@@ -44,9 +44,9 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('note-mixed-add-paragraph')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(find.byKey(const ValueKey('note-mixed-add-list')), findsOneWidget);
+      expect(find.byKey(const ValueKey('note-mixed-add-list')), findsNothing);
       expect(
         find.byKey(const ValueKey('note-mixed-add-table')),
         findsOneWidget,
@@ -64,6 +64,19 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(Card), findsNothing);
+      expect(
+        find.byKey(const ValueKey('note-mixed-section-menu-p1')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('note-mixed-section-menu-list-1')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('note-mixed-section-menu-table-1')),
+        findsNothing,
+      );
+      expect(find.byType(ReorderableDragStartListener), findsNothing);
       expect(find.text('Bekezdes'), findsNothing);
       expect(find.text('Lista'), findsNothing);
       expect(find.text('Tablazat'), findsNothing);
@@ -82,7 +95,9 @@ void main() {
     },
   );
 
-  testWidgets('mixed list section reorders and indents items', (tester) async {
+  testWidgets('mixed list section indents items from the universal rail', (
+    tester,
+  ) async {
     NoteBlock? latest;
     await _pumpMixedEditor(
       tester,
@@ -104,17 +119,6 @@ void main() {
       onChanged: (block) => latest = block,
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('note-mixed-list-move-down-l1')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(latest, isNotNull);
-    expect(latest!.mixedSections.single.listItems.map((item) => item.id), [
-      'l2',
-      'l1',
-    ]);
-
     await tester.tap(find.byKey(const ValueKey('note-mixed-list-item-l1')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('note-mixed-rail-indent')));
@@ -124,7 +128,59 @@ void main() {
       (candidate) => candidate.id == 'l1',
     );
     expect(item.level, 1);
+    expect(
+      find.byKey(const ValueKey('note-mixed-list-move-up-l1')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('note-mixed-list-move-down-l1')),
+      findsNothing,
+    );
   });
+
+  testWidgets(
+    'header table button inserts a 2x2 table after the active paragraph',
+    (tester) async {
+      NoteBlock? latest;
+      await _pumpMixedEditor(
+        tester,
+        const NoteBlock(
+          id: 'mixed-1',
+          type: NoteBlockType.mixed,
+          mixedSections: [
+            NoteMixedSection(
+              id: 'p1',
+              type: NoteMixedSectionType.paragraph,
+              text: 'Before',
+            ),
+            NoteMixedSection(
+              id: 'p2',
+              type: NoteMixedSectionType.paragraph,
+              text: 'After',
+            ),
+          ],
+        ),
+        onChanged: (block) => latest = block,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('note-mixed-paragraph-p1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('note-mixed-add-table')));
+      await tester.pumpAndSettle();
+
+      expect(latest, isNotNull);
+      final sections = latest!.mixedSections;
+      expect(sections.map((section) => section.type), [
+        NoteMixedSectionType.paragraph,
+        NoteMixedSectionType.table,
+        NoteMixedSectionType.paragraph,
+      ]);
+      expect(sections[1].rows, [
+        ['', ''],
+        ['', ''],
+      ]);
+    },
+  );
 
   testWidgets('mixed table section edits cells and adds rows and columns', (
     tester,
@@ -159,6 +215,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('note-mixed-rail-add-row')));
     await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const ValueKey('note-selection-action-row')),
+      const Offset(-520, 0),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('note-mixed-rail-add-column')));
     await tester.pumpAndSettle();
 
@@ -171,9 +232,86 @@ void main() {
       find.byKey(const ValueKey('note-mixed-table-cell-table-1-1-2')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('note-mixed-rail-delete-table')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-mixed-rail-toggle-rounded')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-mixed-rail-toggle-transparent')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-mixed-rail-toggle-border')),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('mixed rail converts paragraph to heading list table and bold', (
+  testWidgets(
+    'mixed rail converts paragraph to heading list table and paragraph indent',
+    (tester) async {
+      NoteBlock? latest;
+      await _pumpMixedEditor(
+        tester,
+        const NoteBlock(
+          id: 'mixed-1',
+          type: NoteBlockType.mixed,
+          mixedSections: [
+            NoteMixedSection(
+              id: 'p1',
+              type: NoteMixedSectionType.paragraph,
+              text: 'Célok:',
+            ),
+          ],
+        ),
+        onChanged: (block) => latest = block,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('note-mixed-paragraph-p1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('note-mixed-rail-heading')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('note-mixed-rail-heading-level-2')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        latest!.mixedSections.single.paragraphRole,
+        NoteMixedParagraphRole.heading,
+      );
+      expect(latest!.mixedSections.single.headingLevel, 2);
+
+      await tester.tap(find.byKey(const ValueKey('note-mixed-rail-bold')));
+      await tester.pumpAndSettle();
+      expect(latest!.mixedSections.single.text, '**Célok:**');
+
+      await tester.tap(find.byKey(const ValueKey('note-mixed-rail-indent')));
+      await tester.pumpAndSettle();
+      expect(latest!.mixedSections.single.paragraphIndentLevel, 1);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('note-mixed-paragraph-p1')),
+        'az ellátás során\na felszerelés táskákban',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('note-mixed-rail-list-dynamic')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(latest!.mixedSections.single.type, NoteMixedSectionType.list);
+      expect(latest!.mixedSections.single.listItems.map((item) => item.text), [
+        'az ellátás során',
+        'a felszerelés táskákban',
+      ]);
+    },
+  );
+
+  testWidgets('mixed rail color palette expands upward and closes on choice', (
     tester,
   ) async {
     NoteBlock? latest;
@@ -186,7 +324,7 @@ void main() {
           NoteMixedSection(
             id: 'p1',
             type: NoteMixedSectionType.paragraph,
-            text: 'Célok:',
+            text: 'Célok',
           ),
         ],
       ),
@@ -195,31 +333,24 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('note-mixed-paragraph-p1')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('note-mixed-rail-heading')));
+    await tester.tap(find.byKey(const ValueKey('note-mixed-rail-text-color')));
     await tester.pumpAndSettle();
 
     expect(
-      latest!.mixedSections.single.paragraphRole,
-      NoteMixedParagraphRole.heading,
+      find.byKey(const ValueKey('note-mixed-rail-color-popover')),
+      findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('note-mixed-rail-bold')));
-    await tester.pumpAndSettle();
-    expect(latest!.mixedSections.single.text, '**Célok:**');
-
-    await tester.enterText(
-      find.byKey(const ValueKey('note-mixed-paragraph-p1')),
-      'az ellátás során\na felszerelés táskákban',
+    await tester.tap(
+      find.byKey(const ValueKey('note-mixed-rail-color-0xff2563eb')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('note-mixed-rail-list')));
-    await tester.pumpAndSettle();
 
-    expect(latest!.mixedSections.single.type, NoteMixedSectionType.list);
-    expect(latest!.mixedSections.single.listItems.map((item) => item.text), [
-      'az ellátás során',
-      'a felszerelés táskákban',
-    ]);
+    expect(
+      find.byKey(const ValueKey('note-mixed-rail-color-popover')),
+      findsNothing,
+    );
+    expect(latest!.mixedSections.single.textColorValue, 0xFF2563EB);
   });
 
   testWidgets(
