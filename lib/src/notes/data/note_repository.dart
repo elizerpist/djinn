@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:uuid/uuid.dart';
 
+import '../../chunks/models/chunk.dart';
 import '../../debug/debug_console.dart';
+import '../../knowledge/models/chunk_package.dart';
 import '../../knowledge/models/local_extraction.dart';
 import '../models/note_document.dart';
 import '../models/note_folder.dart';
@@ -27,10 +29,7 @@ abstract class NoteRepository {
     required String payloadJson,
     String? folderId,
   });
-  Future<List<NoteItem>> importNotes(
-    List<NoteItem> notes, {
-    String? folderId,
-  });
+  Future<List<NoteItem>> importNotes(List<NoteItem> notes, {String? folderId});
   Future<NoteItem> updateNoteDocument(
     String noteId, {
     required String title,
@@ -47,18 +46,39 @@ abstract class NoteRepository {
   });
   Future<NoteItem> markNoteBlocksIndexed(String noteId, List<String> blockIds);
   Future<NoteItem> moveNoteToFolder(String noteId, String? folderId);
+  Future<ChunkLinkResult> linkChunksToNote(
+    String noteId,
+    Iterable<String> chunkIds,
+  );
+  Future<Set<String>> listLinkedChunkIds(String noteId);
+  Future<List<Chunk>> listChunksForNote(String noteId);
+  Future<ChunkPackage> exportChunkPackageForNote(
+    String noteId, {
+    bool includeSourceMetadata = true,
+  });
   Future<void> deleteNotes(List<String> noteIds);
+}
+
+class ChunkLinkResult {
+  const ChunkLinkResult({
+    required this.addedCount,
+    required this.alreadyLinkedCount,
+  });
+
+  final int addedCount;
+  final int alreadyLinkedCount;
 }
 
 class MemoryNoteRepository implements NoteRepository {
   MemoryNoteRepository({Uuid? uuid, DateTime Function()? clock})
-      : _uuid = uuid ?? const Uuid(),
-        _clock = clock ?? DateTime.now;
+    : _uuid = uuid ?? const Uuid(),
+      _clock = clock ?? DateTime.now;
 
   final Uuid _uuid;
   final DateTime Function() _clock;
   final List<NoteFolder> _folders = [];
   final List<NoteItem> _notes = [];
+  final Map<String, Set<String>> _linkedChunkIdsByNote = {};
 
   @override
   Future<void> load() async {}
@@ -99,23 +119,32 @@ class MemoryNoteRepository implements NoteRepository {
     _folders.removeWhere((folder) => folder.id == folderId);
     for (var i = 0; i < _notes.length; i += 1) {
       if (_notes[i].folderId == folderId) {
-        _notes[i] = _notes[i].copyWith(clearFolderId: true, updatedAt: _clock());
+        _notes[i] = _notes[i].copyWith(
+          clearFolderId: true,
+          updatedAt: _clock(),
+        );
       }
     }
   }
 
   @override
-  Future<List<NoteItem>> listNotes({String? folderId, NoteItemType? type}) async {
-    final notes = _notes.where((note) {
-      if (folderId != null && note.folderId != folderId) {
-        return false;
-      }
-      if (type != null && note.type != type) {
-        return false;
-      }
-      return true;
-    }).toList(growable: false)
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  Future<List<NoteItem>> listNotes({
+    String? folderId,
+    NoteItemType? type,
+  }) async {
+    final notes =
+        _notes
+            .where((note) {
+              if (folderId != null && note.folderId != folderId) {
+                return false;
+              }
+              if (type != null && note.type != type) {
+                return false;
+              }
+              return true;
+            })
+            .toList(growable: false)
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return List.unmodifiable(notes);
   }
 
@@ -176,7 +205,9 @@ class MemoryNoteRepository implements NoteRepository {
     for (final incoming in notes) {
       final now = _clock();
       final document = incoming.document;
-      final title = incoming.title.trim().isEmpty ? 'Importált jegyzet' : incoming.title.trim();
+      final title = incoming.title.trim().isEmpty
+          ? 'Importált jegyzet'
+          : incoming.title.trim();
       final note = NoteItem(
         id: _uuid.v4(),
         folderId: folderId,
@@ -191,7 +222,9 @@ class MemoryNoteRepository implements NoteRepository {
       );
       _notes.insert(0, note);
       imported.add(note);
-      DebugConsole.log('[Notes] import note title=$title blocks=${document.blocks.length}');
+      DebugConsole.log(
+        '[Notes] import note title=$title blocks=${document.blocks.length}',
+      );
     }
     return List.unmodifiable(imported);
   }
@@ -217,7 +250,9 @@ class MemoryNoteRepository implements NoteRepository {
       title: trimmedTitle,
       document: document,
       auditState: auditState,
-      reason: trimmedReason == null || trimmedReason.isEmpty ? null : trimmedReason,
+      reason: trimmedReason == null || trimmedReason.isEmpty
+          ? null
+          : trimmedReason,
       clearReason: trimmedReason == null || trimmedReason.isEmpty,
       updatedAt: _clock(),
     );
@@ -239,13 +274,15 @@ class MemoryNoteRepository implements NoteRepository {
     }
     final existing = _notes[index];
     final document = payloadJson == null && plainText != null
-        ? NoteDocument(blocks: [
-            NoteBlock(
-              id: 'block-1',
-              type: NoteBlockType.paragraph,
-              text: plainText.trim(),
-            ),
-          ])
+        ? NoteDocument(
+            blocks: [
+              NoteBlock(
+                id: 'block-1',
+                type: NoteBlockType.paragraph,
+                text: plainText.trim(),
+              ),
+            ],
+          )
         : NoteDocument.fromPayload(
             payloadJson ?? existing.payloadJson,
             legacyType: existing.type.wireName,
@@ -261,10 +298,11 @@ class MemoryNoteRepository implements NoteRepository {
     );
   }
 
-
-
   @override
-  Future<NoteItem> markNoteBlocksIndexed(String noteId, List<String> blockIds) async {
+  Future<NoteItem> markNoteBlocksIndexed(
+    String noteId,
+    List<String> blockIds,
+  ) async {
     final index = _notes.indexWhere((note) => note.id == noteId);
     if (index == -1) {
       throw StateError('note not found: $noteId');
@@ -284,7 +322,9 @@ class MemoryNoteRepository implements NoteRepository {
             block,
       ],
     );
-    for (final block in document.blocks.where((block) => ids.contains(block.id))) {
+    for (final block in document.blocks.where(
+      (block) => ids.contains(block.id),
+    )) {
       DebugConsole.log(
         '[LocalIndex] note block indexed note=$noteId block=${block.id} '
         'hash=${block.indexedContentHash} chars=${block.plainTextForIndexing.length}',
@@ -315,9 +355,122 @@ class MemoryNoteRepository implements NoteRepository {
   }
 
   @override
+  Future<ChunkLinkResult> linkChunksToNote(
+    String noteId,
+    Iterable<String> chunkIds,
+  ) async {
+    if (!_notes.any((note) => note.id == noteId)) {
+      throw StateError('note not found: $noteId');
+    }
+    final linked = _linkedChunkIdsByNote.putIfAbsent(noteId, () => {});
+    var addedCount = 0;
+    var alreadyLinkedCount = 0;
+    for (final rawId in chunkIds) {
+      final chunkId = rawId.trim();
+      if (chunkId.isEmpty) {
+        continue;
+      }
+      if (linked.add(chunkId)) {
+        addedCount += 1;
+      } else {
+        alreadyLinkedCount += 1;
+      }
+    }
+    return ChunkLinkResult(
+      addedCount: addedCount,
+      alreadyLinkedCount: alreadyLinkedCount,
+    );
+  }
+
+  @override
+  Future<Set<String>> listLinkedChunkIds(String noteId) async {
+    if (!_notes.any((note) => note.id == noteId)) {
+      throw StateError('note not found: $noteId');
+    }
+    return Set.unmodifiable(_linkedChunkIdsByNote[noteId] ?? const <String>{});
+  }
+
+  @override
+  Future<List<Chunk>> listChunksForNote(String noteId) async {
+    final note = _notes.where((item) => item.id == noteId).firstOrNull;
+    if (note == null) {
+      throw StateError('note not found: $noteId');
+    }
+    return List.unmodifiable([
+      for (final block in note.document.blocks)
+        if (block.type == NoteBlockType.flowchart)
+          FlowchartChunk(
+            id: block.id,
+            creationMethod: ChunkCreationMethod.manualSelection,
+            validationState: note.auditState,
+            source: ChunkSource(
+              sourceType: ChunkSourceType.note,
+              sourceId: note.id,
+              originalText: block.plainText,
+            ),
+            createdAt: note.createdAt,
+            updatedAt: note.updatedAt,
+            content: block,
+          )
+        else
+          NoteChunk.fromLegacyBlock(
+            block: block,
+            creationMethod: ChunkCreationMethod.manualSelection,
+            validationState: note.auditState,
+            source: ChunkSource(
+              sourceType: ChunkSourceType.note,
+              sourceId: note.id,
+              originalText: block.plainText,
+            ),
+            createdAt: note.createdAt,
+            updatedAt: note.updatedAt,
+          ),
+    ]);
+  }
+
+  @override
+  Future<ChunkPackage> exportChunkPackageForNote(
+    String noteId, {
+    bool includeSourceMetadata = true,
+  }) async {
+    final note = _notes.where((item) => item.id == noteId).firstOrNull;
+    if (note == null) {
+      throw StateError('note not found: $noteId');
+    }
+    final chunks = await listChunksForNote(noteId);
+    return ChunkPackage(
+      schemaVersion: 2,
+      documentHash: '',
+      filename: note.title,
+      provider: '',
+      extractionModel: '',
+      embeddingModel: '',
+      embeddingDimension: 0,
+      chunks: [
+        for (final chunk in chunks)
+          ChunkPackageItem(
+            id: chunk.id,
+            text: chunk.plainText,
+            pageNumber: includeSourceMetadata ? chunk.source.pageStart ?? 0 : 0,
+            sectionTitle: chunk.content.title,
+            embedding: const [],
+            kind: chunk.kind,
+            creationMethod: chunk.creationMethod,
+            validationState: chunk.validationState,
+            source: includeSourceMetadata ? chunk.source : const ChunkSource(),
+            content: chunk.content,
+          ),
+      ],
+    );
+  }
+
+  @override
   Future<void> deleteNotes(List<String> noteIds) async {
     final ids = noteIds.toSet();
     _notes.removeWhere((note) => ids.contains(note.id));
+    for (final id in ids) {
+      _linkedChunkIdsByNote.remove(id);
+    }
   }
 
   void replaceMemoryState({
@@ -330,12 +483,15 @@ class MemoryNoteRepository implements NoteRepository {
     _notes
       ..clear()
       ..addAll(notes);
+    _linkedChunkIdsByNote.removeWhere(
+      (noteId, _) => !_notes.any((note) => note.id == noteId),
+    );
   }
 }
 
 class FileNoteRepository extends MemoryNoteRepository {
   FileNoteRepository({required File file, super.uuid, super.clock})
-      : _file = file;
+    : _file = file;
 
   final File _file;
 
@@ -453,10 +609,11 @@ class FileNoteRepository extends MemoryNoteRepository {
     return note;
   }
 
-
-
   @override
-  Future<NoteItem> markNoteBlocksIndexed(String noteId, List<String> blockIds) async {
+  Future<NoteItem> markNoteBlocksIndexed(
+    String noteId,
+    List<String> blockIds,
+  ) async {
     final note = await super.markNoteBlocksIndexed(noteId, blockIds);
     await _persist();
     return note;

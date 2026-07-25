@@ -1,18 +1,28 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../chunks/models/chunk.dart';
 import '../../debug/debug_console.dart';
-import '../../local_store/entities.dart';
+import '../../notes/data/note_repository.dart';
+import '../../notes/data/tag_repository.dart';
+import '../../notes/models/note_item.dart';
+import '../../notes/ui/note_chunk_card.dart';
 import '../data/knowledge_document_repository.dart';
 import '../models/extracted_knowledge_item.dart';
 import '../models/flowchart_hierarchy.dart';
 import '../models/knowledge_document.dart';
 import '../models/local_extraction.dart';
+import '../../flowchart/ui/mobile_flowchart_viewer.dart';
 import '../../shared/chunks/shared_chunk_card.dart';
 import '../../shared/chunks/shared_chunk_drag_handle.dart';
-import '../../flowchart/ui/interactive_flowchart_editor_screen.dart';
-import '../../flowchart/ui/mobile_flowchart_viewer.dart';
+import '../../shared/chunks/chunk_export_sheet.dart';
 import '../../notes/ui/tag_manager_sheet.dart';
+import '../models/chunk_package.dart';
 import 'pdf_chunk_editor_route.dart';
+import 'pdf_chunk_note_block_adapter.dart';
 import 'pdf_shared_chunk_adapter.dart';
 
 class ExtractedKnowledgeScreen extends StatefulWidget {
@@ -20,10 +30,16 @@ class ExtractedKnowledgeScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.document,
+    this.noteRepository,
+    this.tagRepository,
+    this.chunkExportSaver,
   });
 
   final KnowledgeDocumentRepository repository;
   final KnowledgeDocument document;
+  final NoteRepository? noteRepository;
+  final TagRepository? tagRepository;
+  final Future<String?> Function(ChunkPackage package)? chunkExportSaver;
 
   @override
   State<ExtractedKnowledgeScreen> createState() =>
@@ -31,8 +47,8 @@ class ExtractedKnowledgeScreen extends StatefulWidget {
 }
 
 class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
-  late Future<_ExtractedKnowledgeData> _dataFuture;
-  _PdfChunkMode _mode = _PdfChunkMode.ai;
+  late Future<List<ExtractedKnowledgeItem>> _dataFuture;
+  final Set<String> _selectedIds = {};
 
   @override
   void initState() {
@@ -40,21 +56,42 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
     _dataFuture = _loadData();
   }
 
-  Future<_ExtractedKnowledgeData> _loadData() async {
-    final allItems = await widget.repository.listExtractedKnowledgeItems(
+  Future<List<ExtractedKnowledgeItem>> _loadData() async {
+    final items = await widget.repository.listExtractedKnowledgeItems(
       widget.document.id,
     );
-    final aiItems = allItems
-        .where((item) => item.pipeline == LocalExtractionPipeline.ai)
-        .toList(growable: false);
-    final manualItems = allItems
-        .where((item) => item.pipeline != LocalExtractionPipeline.ai)
-        .toList(growable: false);
+    final hydratedItems = await _hydrateCreationMethods(items);
     DebugConsole.log(
       '[PDFChunks] load document=${widget.document.id} '
-      'ai=${aiItems.length} manual=${manualItems.length}',
+      'items=${hydratedItems.length}',
     );
-    return _ExtractedKnowledgeData(aiItems: aiItems, manualItems: manualItems);
+    return hydratedItems;
+  }
+
+  Future<List<ExtractedKnowledgeItem>> _hydrateCreationMethods(
+    List<ExtractedKnowledgeItem> items,
+  ) async {
+    if (items.isEmpty) {
+      return items;
+    }
+    try {
+      final package = await widget.repository.exportChunkPackage(
+        widget.document.id,
+      );
+      final creationMethodById = {
+        for (final chunk in package.chunks) chunk.id: chunk.creationMethod,
+      };
+      return [
+        for (final item in items)
+          item.copyWith(creationMethod: creationMethodById[item.id]),
+      ];
+    } catch (error) {
+      DebugConsole.log(
+        '[PDFChunks] provenance unavailable document=${widget.document.id} '
+        'error=$error',
+      );
+      return items;
+    }
   }
 
   void _reloadData() {
@@ -63,25 +100,13 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
     });
   }
 
-  Future<void> _openFlowchartEditor(String flowchartId) async {
-    final changed = await Navigator.of(context, rootNavigator: true).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => InteractiveFlowchartEditorScreen(
-          repository: widget.repository,
-          documentId: widget.document.id,
-          flowchartId: flowchartId,
-        ),
-      ),
-    );
-    if (changed == true) {
-      _reloadData();
-    }
-  }
-
   Future<void> _openTagSheet(ExtractedKnowledgeItem item) async {
+    final block = noteBlockFromPdfChunk(item);
     final tags = await showTagManagerSheet(
       context,
-      initialTags: item.tags,
+      initialTags: block.tags,
+      availableTags: block.knownTags,
+      tagRepository: widget.tagRepository,
       title: 'Chunk tagjei',
     );
     if (tags == null) {
@@ -96,17 +121,13 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
   }
 
   Future<void> _openPdfChunkEditor(ExtractedKnowledgeItem item) async {
-    final flowchartId = item.flowchartId;
-    if (flowchartId != null && flowchartId.isNotEmpty) {
-      await _openFlowchartEditor(flowchartId);
-      return;
-    }
     await Navigator.of(context, rootNavigator: true).push<void>(
       MaterialPageRoute(
         builder: (_) => PdfChunkEditorRoute(
           repository: widget.repository,
           documentId: widget.document.id,
           item: item,
+          tagRepository: widget.tagRepository,
         ),
       ),
     );
@@ -124,44 +145,224 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
     _reloadData();
   }
 
+  void _toggleSelection(String itemId) {
+    setState(() {
+      if (!_selectedIds.add(itemId)) {
+        _selectedIds.remove(itemId);
+      }
+    });
+  }
+
+  void _clearSelection() {
+    if (_selectedIds.isEmpty) {
+      return;
+    }
+    setState(_selectedIds.clear);
+  }
+
+  String _globalChunkId(String itemId) {
+    final prefix = '${widget.document.id}:';
+    return itemId.startsWith(prefix) ? itemId : '$prefix$itemId';
+  }
+
+  Future<void> _sendSelectedToNote(List<ExtractedKnowledgeItem> items) async {
+    final repository = widget.noteRepository;
+    if (repository == null || _selectedIds.isEmpty) {
+      return;
+    }
+    final notes = await repository.listNotes(type: NoteItemType.document);
+    if (!mounted) {
+      return;
+    }
+    if (notes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Előbb hozz létre egy Jegyzetet')),
+      );
+      return;
+    }
+    final note = await showDialog<NoteItem>(
+      context: context,
+      builder: (context) => _SendToNoteDialog(notes: notes),
+    );
+    if (note == null) {
+      return;
+    }
+    final selectedItemIds = {
+      for (final item in items)
+        if (_selectedIds.contains(item.id)) _globalChunkId(item.id),
+    };
+    final result = await repository.linkChunksToNote(note.id, selectedItemIds);
+    if (!mounted) {
+      return;
+    }
+    _clearSelection();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.addedCount == 0
+              ? 'A kijelölt chunkok már a Jegyzetben vannak'
+              : '${result.addedCount} chunk bekerült: ${note.title}',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportChunks(List<ExtractedKnowledgeItem> items) async {
+    final selectedItems = _selectedIds.isEmpty
+        ? items
+        : items
+              .where((item) => _selectedIds.contains(item.id))
+              .toList(growable: false);
+    final scope = switch (_selectedIds.length) {
+      0 => ChunkExportScope.currentPdf,
+      1 => ChunkExportScope.currentChunk,
+      _ => ChunkExportScope.selectedChunks,
+    };
+    final selection = await showChunkExportSheet(
+      context,
+      chunks: [
+        for (final item in selectedItems)
+          item.chunkKind == LocalChunkKind.flowchart
+              ? ChunkKind.flowchartChunk
+              : ChunkKind.noteChunk,
+      ],
+      scopes: [scope],
+      initialScope: scope,
+    );
+    if (selection == null || !mounted) {
+      return;
+    }
+    final complete = await widget.repository.exportChunkPackage(
+      widget.document.id,
+    );
+    final selectedIds = selectedItems.map((item) => item.id).toSet();
+    final exportsSubset =
+        selection.scope == ChunkExportScope.currentChunk ||
+        selection.scope == ChunkExportScope.selectedChunks;
+    final scopedChunks = exportsSubset
+        ? complete.chunks
+              .where((chunk) => selectedIds.contains(chunk.id))
+              .toList(growable: false)
+        : complete.chunks;
+    final exportPackage = ChunkPackage(
+      schemaVersion: 2,
+      documentHash: complete.documentHash,
+      filename: complete.filename,
+      provider: complete.provider,
+      extractionModel: complete.extractionModel,
+      embeddingModel: complete.embeddingModel,
+      embeddingDimension: complete.embeddingDimension,
+      chunks: [
+        for (final chunk in scopedChunks)
+          selection.includeSourceMetadata
+              ? chunk
+              : chunk.copyWith(pageNumber: 0, source: const ChunkSource()),
+      ],
+    );
+    final saver = widget.chunkExportSaver;
+    final path = saver != null
+        ? await saver(exportPackage)
+        : await FilePicker.saveFile(
+            dialogTitle: 'Chunk export',
+            fileName: '${_safeExportBaseName(widget.document.filename)}.json',
+            type: FileType.custom,
+            allowedExtensions: const ['json'],
+            bytes: Uint8List.fromList(
+              utf8.encode(
+                const JsonEncoder.withIndent(
+                  '  ',
+                ).convert(exportPackage.toJson()),
+              ),
+            ),
+          );
+    if (!mounted || path == null) {
+      return;
+    }
+    _clearSelection();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${exportPackage.chunks.length} chunk exportálva'),
+      ),
+    );
+  }
+
+  String _safeExportBaseName(String filename) {
+    final withoutExtension = filename.replaceFirst(RegExp(r'\.[^.]+$'), '');
+    final safe = withoutExtension
+        .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    return safe.isEmpty ? 'djinn-chunks' : '$safe-chunks';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_mode.title),
+        leading: _selectedIds.isEmpty
+            ? null
+            : IconButton(
+                key: const ValueKey('pdf-chunk-selection-close'),
+                tooltip: 'Kijelölés megszüntetése',
+                onPressed: _clearSelection,
+                icon: const Icon(Icons.close),
+              ),
+        title: Text(
+          _selectedIds.isEmpty
+              ? 'PDF chunkok'
+              : '${_selectedIds.length} kijelölve',
+        ),
         actions: [
-          PopupMenuButton<_PdfChunkMode>(
-            key: const Key('pdf-chunk-mode-menu'),
-            tooltip: 'Chunk mód',
-            initialValue: _mode,
-            onSelected: (value) {
-              DebugConsole.log(
-                '[PDFChunks] mode changed document=${widget.document.id} '
-                'mode=${value.name}',
-              );
-              setState(() => _mode = value);
-            },
-            itemBuilder: (context) => [
-              for (final mode in _PdfChunkMode.values)
-                PopupMenuItem(value: mode, child: Text(mode.title)),
-            ],
-          ),
+          if (_selectedIds.isEmpty)
+            IconButton(
+              key: const ValueKey('pdf-chunk-export-action'),
+              tooltip: 'Chunk export',
+              onPressed: () => unawaited(_dataFuture.then(_exportChunks)),
+              icon: const Icon(Icons.ios_share_outlined),
+            ),
+          if (_selectedIds.isNotEmpty)
+            PopupMenuButton<_PdfSelectionAction>(
+              key: const ValueKey('pdf-chunk-selection-menu'),
+              tooltip: 'Kijelölt chunkok műveletei',
+              onSelected: (value) {
+                if (value == _PdfSelectionAction.sendToNote) {
+                  unawaited(_dataFuture.then(_sendSelectedToNote));
+                } else if (value == _PdfSelectionAction.export) {
+                  unawaited(_dataFuture.then(_exportChunks));
+                }
+              },
+              itemBuilder: (context) => [
+                if (widget.noteRepository != null)
+                  const PopupMenuItem(
+                    value: _PdfSelectionAction.sendToNote,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.drive_file_move_outline),
+                      title: Text('Jegyzetbe küldés'),
+                    ),
+                  ),
+                const PopupMenuItem(
+                  value: _PdfSelectionAction.export,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.ios_share_outlined),
+                    title: Text('Chunk export'),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
-      body: FutureBuilder<_ExtractedKnowledgeData>(
+      body: FutureBuilder<List<ExtractedKnowledgeItem>>(
         future: _dataFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
-          final data = snapshot.data;
-          if (data == null ||
-              (data.aiItems.isEmpty && data.manualItems.isEmpty)) {
+          final items = snapshot.data;
+          if (items == null || items.isEmpty) {
             return _EmptyExtractedKnowledge(filename: widget.document.filename);
           }
-          final items = _mode == _PdfChunkMode.ai
-              ? data.aiItems
-              : data.manualItems;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -175,9 +376,10 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
               Expanded(
                 child: _ExtractedKnowledgeList(
                   items: items,
+                  selectedIds: _selectedIds,
                   onOpenEditor: _openPdfChunkEditor,
-                  onEditFlowchart: _openFlowchartEditor,
                   onTag: _openTagSheet,
+                  onToggleSelection: _toggleSelection,
                   onReorder: (ids) {
                     _reorderPdfChunks(ids);
                   },
@@ -191,25 +393,51 @@ class _ExtractedKnowledgeScreenState extends State<ExtractedKnowledgeScreen> {
   }
 }
 
-enum _PdfChunkMode { ai, manual }
+enum _PdfSelectionAction { sendToNote, export }
 
-extension _PdfChunkModeLabel on _PdfChunkMode {
-  String get title {
-    return switch (this) {
-      _PdfChunkMode.ai => 'AI chunkok',
-      _PdfChunkMode.manual => 'Manuális chunkok',
-    };
+class _SendToNoteDialog extends StatelessWidget {
+  const _SendToNoteDialog({required this.notes});
+
+  final List<NoteItem> notes;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      key: const ValueKey('send-chunks-to-note-dialog'),
+      title: const Text('Jegyzetbe küldés'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 420),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: notes.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final note = notes[index];
+              return ListTile(
+                key: ValueKey('send-chunks-to-note-${note.id}'),
+                leading: const Icon(Icons.note_outlined),
+                title: Text(note.title),
+                subtitle: Text(
+                  '${note.document.blocks.length} chunk',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => Navigator.of(context).pop(note),
+              );
+            },
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Mégse'),
+        ),
+      ],
+    );
   }
-}
-
-class _ExtractedKnowledgeData {
-  const _ExtractedKnowledgeData({
-    required this.aiItems,
-    required this.manualItems,
-  });
-
-  final List<ExtractedKnowledgeItem> aiItems;
-  final List<ExtractedKnowledgeItem> manualItems;
 }
 
 class _DocumentSummary extends StatelessWidget {
@@ -247,16 +475,18 @@ class _DocumentSummary extends StatelessWidget {
 class _ExtractedKnowledgeList extends StatefulWidget {
   const _ExtractedKnowledgeList({
     required this.items,
+    required this.selectedIds,
     required this.onOpenEditor,
-    required this.onEditFlowchart,
     required this.onTag,
+    required this.onToggleSelection,
     required this.onReorder,
   });
 
   final List<ExtractedKnowledgeItem> items;
+  final Set<String> selectedIds;
   final ValueChanged<ExtractedKnowledgeItem> onOpenEditor;
-  final ValueChanged<String> onEditFlowchart;
   final ValueChanged<ExtractedKnowledgeItem> onTag;
+  final ValueChanged<String> onToggleSelection;
   final ValueChanged<List<String>> onReorder;
 
   @override
@@ -293,19 +523,6 @@ class _ExtractedKnowledgeListState extends State<_ExtractedKnowledgeList> {
         ),
       );
     }
-    final flowchartItems = _orderedItems
-        .where(
-          (item) =>
-              item.sourceType == EvidenceSourceType.flowchartNode ||
-              item.sourceType == EvidenceSourceType.flowchartEdge,
-        )
-        .toList(growable: false);
-    if (flowchartItems.length == _orderedItems.length) {
-      return _FlowchartHierarchyList(
-        items: flowchartItems,
-        onEditFlowchart: widget.onEditFlowchart,
-      );
-    }
     return ReorderableListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       itemCount: _orderedItems.length,
@@ -318,7 +535,17 @@ class _ExtractedKnowledgeListState extends State<_ExtractedKnowledgeList> {
           padding: const EdgeInsets.only(bottom: 8),
           child: _ExtractedKnowledgeTile(
             item: item,
-            leading: SharedChunkDragHandle(chunkId: item.id, index: index),
+            leading: widget.selectedIds.isEmpty
+                ? SharedChunkDragHandle(chunkId: item.id, index: index)
+                : Icon(
+                    widget.selectedIds.contains(item.id)
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    color: widget.selectedIds.contains(item.id)
+                        ? const Color(0xFF2563EB)
+                        : const Color(0xFF94A3B8),
+                  ),
+            selected: widget.selectedIds.contains(item.id),
             expanded: _expandedIds.contains(item.id),
             onToggleExpanded: () {
               setState(() {
@@ -327,7 +554,14 @@ class _ExtractedKnowledgeListState extends State<_ExtractedKnowledgeList> {
                 }
               });
             },
-            onOpenEditor: () => widget.onOpenEditor(item),
+            onOpenEditor: () {
+              if (widget.selectedIds.isNotEmpty) {
+                widget.onToggleSelection(item.id);
+                return;
+              }
+              widget.onOpenEditor(item);
+            },
+            onLongPress: () => widget.onToggleSelection(item.id),
             onTag: () => widget.onTag(item),
           ),
         );
@@ -553,17 +787,21 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
   const _ExtractedKnowledgeTile({
     required this.item,
     required this.leading,
+    required this.selected,
     required this.expanded,
     required this.onToggleExpanded,
     required this.onOpenEditor,
+    required this.onLongPress,
     required this.onTag,
   });
 
   final ExtractedKnowledgeItem item;
   final Widget leading;
+  final bool selected;
   final bool expanded;
   final VoidCallback onToggleExpanded;
   final VoidCallback onOpenEditor;
+  final VoidCallback onLongPress;
   final VoidCallback onTag;
 
   @override
@@ -573,6 +811,7 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
       filename: '',
       isImage: false,
     );
+    final structuredTags = noteBlockFromPdfChunk(item).knownTags;
     return SharedChunkCard(
       id: item.id,
       keyPrefix: 'chunk-card',
@@ -580,9 +819,15 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
       kind: shared.kind,
       title: shared.title,
       expanded: expanded,
+      selected: selected,
       statusChips: _statusChips(item),
+      tagCount: structuredTags.length,
+      tagBadgeColor: structuredTags.isEmpty
+          ? null
+          : Color(structuredTags.first.resolvedColorValue),
       leading: leading,
       onOpenEditor: onOpenEditor,
+      onLongPress: onLongPress,
       onToggleExpanded: onToggleExpanded,
       actions: [
         IconButton(
@@ -599,7 +844,7 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
       expandedBody: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ExtractedKnowledgeBody(item: item),
+          NoteChunkBody(block: noteBlockFromPdfChunk(item)),
           const SizedBox(height: 12),
           Text(
             _metadata(item),
@@ -627,18 +872,6 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
         color: const Color(0xFF475569),
       ),
     ];
-    for (final tag in item.tags) {
-      final label = tag.label.trim();
-      if (label.isEmpty) {
-        continue;
-      }
-      chips.add(
-        SharedChunkStatusChip(
-          label: label,
-          color: Color(tag.resolvedColorValue),
-        ),
-      );
-    }
     return chips;
   }
 
@@ -654,154 +887,15 @@ class _ExtractedKnowledgeTile extends StatelessWidget {
   static String _metadata(ExtractedKnowledgeItem item) {
     final parts = <String>[
       'id: ${item.id}',
-      'tipus: ${item.sourceType.wireName}',
-      'pipeline: ${item.pipeline.wireName}',
-      'audit: ${item.auditState.wireName}',
+      'típus: ${item.typeLabel}',
+      'létrehozás: ${item.pipelineLabel}',
+      'állapot: ${item.auditState.label}',
     ];
     final model = item.embeddingModel;
     if (model != null && model.isNotEmpty) {
       parts.add('embedding: $model');
     }
     return parts.join('  -  ');
-  }
-}
-
-class _ExtractedKnowledgeBody extends StatelessWidget {
-  const _ExtractedKnowledgeBody({required this.item});
-
-  final ExtractedKnowledgeItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return switch (item.sourceType) {
-      EvidenceSourceType.tableChunk ||
-      EvidenceSourceType.scoreChunk => _StructuredTableBlock(item: item),
-      EvidenceSourceType.flowchartNode ||
-      EvidenceSourceType.flowchartEdge => _FlowchartBlock(item: item),
-      EvidenceSourceType.textChunk => Align(
-        alignment: Alignment.centerLeft,
-        child: SelectableText(item.text),
-      ),
-    };
-  }
-}
-
-class _StructuredTableBlock extends StatelessWidget {
-  const _StructuredTableBlock({required this.item});
-
-  final ExtractedKnowledgeItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = _rows(item.text);
-    if (rows.isEmpty) {
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: SelectableText(item.text),
-      );
-    }
-    final columns = rows.fold<int>(
-      0,
-      (max, row) => row.length > max ? row.length : max,
-    );
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Table(
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        columnWidths: {
-          for (var i = 0; i < columns; i += 1) i: const FlexColumnWidth(),
-        },
-        children: [
-          for (var index = 0; index < rows.length; index += 1)
-            TableRow(
-              decoration: BoxDecoration(
-                color: index == 0 ? const Color(0xFFF8FAFC) : Colors.white,
-              ),
-              children: [
-                for (var column = 0; column < columns; column += 1)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
-                    ),
-                    child: SelectableText(
-                      column < rows[index].length ? rows[index][column] : '',
-                      style: TextStyle(
-                        color: const Color(0xFF111827),
-                        fontSize: 12,
-                        fontWeight: index == 0
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  List<List<String>> _rows(String value) {
-    final lines = value
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList(growable: false);
-    return [
-      for (final line in lines)
-        line
-            .split(line.contains('|') ? '|' : ';')
-            .map((part) => part.trim())
-            .where((part) => part.isNotEmpty)
-            .toList(growable: false),
-    ].where((row) => row.isNotEmpty).toList(growable: false);
-  }
-}
-
-class _FlowchartBlock extends StatelessWidget {
-  const _FlowchartBlock({required this.item});
-
-  final ExtractedKnowledgeItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final isEdge = item.sourceType == EvidenceSourceType.flowchartEdge;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAF5FF),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE9D5FF)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            isEdge ? Icons.arrow_forward : Icons.radio_button_unchecked,
-            size: 18,
-            color: const Color(0xFF7C3AED),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: SelectableText(
-              item.text,
-              style: const TextStyle(
-                color: Color(0xFF4C1D95),
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                height: 1.3,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

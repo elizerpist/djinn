@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:uuid/uuid.dart';
 
 import '../../ai/ai_client.dart';
+import '../../chunks/models/chunk.dart';
 import '../../flowchart/models/editable_flowchart.dart';
 import '../../core/storage/json_file_store.dart';
 import '../../local_store/entities.dart';
@@ -37,6 +38,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
   final Map<String, List<String>> _extractedItemOrderByDocument = {};
   final Map<String, String> _embeddingModelByDocument = {};
   final Map<String, List<AiFlowchartCandidate>> _flowchartsByDocument = {};
+  final Map<String, Map<String, NoteBlock>> _flowchartBlocksByDocument = {};
   int _nextDocumentId = 1;
 
   static JsonFileStore? _defaultFolderStore(JsonFileStore? store) {
@@ -156,6 +158,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       _extractedItemsByDocument.remove(document.id);
       _embeddingModelByDocument.remove(document.id);
       _flowchartsByDocument.remove(document.id);
+      _flowchartBlocksByDocument.remove(document.id);
       await _deleteLocalFileIfPresent(document.localPath);
     }
     await _persist();
@@ -327,6 +330,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     }
     _embeddingModelByDocument.remove(documentPublicId);
     _flowchartsByDocument.remove(documentPublicId);
+    _flowchartBlocksByDocument.remove(documentPublicId);
   }
 
   @override
@@ -383,6 +387,7 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     final items = _flowchartsByDocument.putIfAbsent(documentPublicId, () => []);
     items.removeWhere((item) => item.id == flowchart.id);
     items.add(flowchart);
+    _flowchartBlocksByDocument[documentPublicId]?.remove(flowchart.id);
   }
 
   Future<EditableFlowchart?> loadEditableFlowchart({
@@ -561,15 +566,42 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     bool clearStructuredContent = false,
   }) async {
     final extractedItems = _extractedItemsByDocument[documentPublicId];
-    if (extractedItems == null) {
-      return;
-    }
-    final index = extractedItems.indexWhere((item) => item.id == itemId);
+    final index = extractedItems?.indexWhere((item) => item.id == itemId) ?? -1;
     if (index == -1) {
+      final raw = structuredContentJson?.trim();
+      if (raw == null || raw.isEmpty) {
+        return;
+      }
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! Map) {
+          return;
+        }
+        final block = NoteBlock.fromJson(Map<String, Object?>.from(decoded));
+        if (block.type != NoteBlockType.flowchart) {
+          return;
+        }
+        final knownFlowchart =
+            (_flowchartsByDocument[documentPublicId] ??
+                    const <AiFlowchartCandidate>[])
+                .any((flowchart) => flowchart.id == itemId);
+        if (!knownFlowchart) {
+          return;
+        }
+        _flowchartBlocksByDocument.putIfAbsent(
+          documentPublicId,
+          () => <String, NoteBlock>{},
+        )[itemId] = block.copyWith(
+          id: itemId,
+        );
+      } catch (_) {
+        return;
+      }
       return;
     }
-    final kind = chunkKind ?? extractedItems[index].chunkKind;
-    extractedItems[index] = extractedItems[index].copyWith(
+    final items = extractedItems!;
+    final kind = chunkKind ?? items[index].chunkKind;
+    items[index] = items[index].copyWith(
       text: text,
       sectionTitle: sectionTitle,
       chunkKind: kind,
@@ -587,14 +619,61 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
     List<NoteKnowledgeTag> tags,
   ) async {
     final extractedItems = _extractedItemsByDocument[documentPublicId];
-    if (extractedItems == null) {
-      return;
-    }
-    final index = extractedItems.indexWhere((item) => item.id == itemId);
+    final index = extractedItems?.indexWhere((item) => item.id == itemId) ?? -1;
     if (index == -1) {
+      final flowcharts =
+          _flowchartsByDocument[documentPublicId] ??
+          const <AiFlowchartCandidate>[];
+      for (final flowchart in flowcharts) {
+        if (flowchart.id != itemId) {
+          continue;
+        }
+        final current =
+            _flowchartBlocksByDocument[documentPublicId]?[itemId] ??
+            NoteBlock.fromJson(
+              Map<String, Object?>.from(
+                jsonDecode(
+                      _flowchartItems(
+                        documentPublicId,
+                        flowchart,
+                      ).single.structuredContentJson!,
+                    )
+                    as Map,
+              ),
+            );
+        _flowchartBlocksByDocument.putIfAbsent(
+          documentPublicId,
+          () => <String, NoteBlock>{},
+        )[itemId] = current.copyWith(
+          tags: tags,
+          clearIndex: true,
+        );
+        break;
+      }
       return;
     }
-    extractedItems[index] = extractedItems[index].copyWith(tags: tags);
+    final item = extractedItems![index];
+    var aggregateTags = tags;
+    var structuredContentJson = item.structuredContentJson;
+    final raw = structuredContentJson?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          final content = NoteBlock.fromJson(
+            Map<String, Object?>.from(decoded),
+          ).copyWith(tags: tags, clearIndex: true);
+          structuredContentJson = jsonEncode(content.toJson());
+          aggregateTags = content.knownTags;
+        }
+      } catch (_) {
+        // Legacy malformed content keeps its plain tag projection.
+      }
+    }
+    extractedItems[index] = item.copyWith(
+      tags: aggregateTags,
+      structuredContentJson: structuredContentJson,
+    );
   }
 
   Future<ChunkComparison> compareExtractedChunks(
@@ -614,12 +693,22 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
 
   Future<ChunkPackage> exportChunkPackage(String documentPublicId) async {
     final document = _findDocument(documentPublicId);
-    final chunks = _chunksByDocument[documentPublicId] ?? const [];
-    final embeddingDimension = chunks.isEmpty
-        ? 0
-        : chunks.first.embedding.length;
+    final storedById = {
+      for (final item in _chunksByDocument[documentPublicId] ?? const [])
+        item.id: item,
+    };
+    final extractedItems = await listExtractedKnowledgeItems(documentPublicId);
+    final chunks = <ChunkPackageItem>[
+      for (final item in extractedItems)
+        _packageItemFromExtracted(
+          documentPublicId,
+          item,
+          stored: storedById[item.id],
+        ),
+    ];
+    final embeddingDimension = _firstEmbeddingDimension(chunks);
     return ChunkPackage(
-      schemaVersion: 1,
+      schemaVersion: 2,
       documentHash: document.sha256 ?? '',
       filename: document.filename,
       provider: document.activeProvider ?? '',
@@ -641,26 +730,66 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
       documentHash: document.sha256 ?? '',
       expectedDimension: package.embeddingDimension,
     );
-    _chunksByDocument[documentPublicId] = package.chunks;
-    final localItems = (_extractedItemsByDocument[documentPublicId] ?? const [])
-        .where((item) => item.pipeline != LocalExtractionPipeline.ai)
-        .toList(growable: false);
-    _extractedItemsByDocument[documentPublicId] = [
-      for (final item in package.chunks)
+    _chunksByDocument[documentPublicId] = List.unmodifiable(package.chunks);
+    _extractedItemsByDocument[documentPublicId] = [];
+    _flowchartsByDocument[documentPublicId] = [];
+    _flowchartBlocksByDocument[documentPublicId] = {};
+    _extractedItemOrderByDocument.remove(documentPublicId);
+    for (final item in package.chunks) {
+      final content = item.canonicalContent;
+      final pageNumber = item.source.pageStart ?? item.pageNumber;
+      final pipeline = _pipelineForCreationMethod(item.creationMethod);
+      if (item.kind == ChunkKind.flowchartChunk) {
+        _flowchartsByDocument[documentPublicId]!.add(
+          AiFlowchartCandidate(
+            id: item.id,
+            pageNumber: pageNumber,
+            title: content.title ?? item.sectionTitle,
+            nodes: [
+              for (final node in content.nodes)
+                AiFlowchartNode(
+                  id: node.id,
+                  label: node.label,
+                  shape: node.shape,
+                  order: node.order,
+                ),
+            ],
+            edges: [
+              for (final edge in content.edges)
+                AiFlowchartEdge(
+                  id: edge.id,
+                  fromNodeId: edge.fromNodeId,
+                  toNodeId: edge.toNodeId,
+                  label: edge.label,
+                  order: edge.order,
+                ),
+            ],
+          ),
+        );
+        _flowchartBlocksByDocument[documentPublicId]![item.id] = content;
+        continue;
+      }
+      _extractedItemsByDocument[documentPublicId]!.add(
         ExtractedKnowledgeItem(
           id: item.id,
           documentId: documentPublicId,
           sourceType: EvidenceSourceType.textChunk,
-          text: item.text,
-          pageNumber: item.pageNumber,
-          sectionTitle: item.sectionTitle,
-          embeddingModel: package.embeddingModel,
-          pipeline: LocalExtractionPipeline.ai,
+          text: content.plainText,
+          pageNumber: pageNumber,
+          sectionTitle: content.title ?? item.sectionTitle,
+          embeddingModel: item.embedding.isEmpty
+              ? null
+              : package.embeddingModel,
+          sourceRectJson: item.source.sourceRectJson,
+          pipeline: pipeline,
           chunkKind: LocalChunkKind.text,
-          auditState: LocalAuditState.accepted,
+          auditState: item.validationState,
+          endPageNumber: item.source.pageEnd,
+          tags: content.knownTags,
+          structuredContentJson: jsonEncode(content.toJson()),
         ),
-      ...localItems,
-    ];
+      );
+    }
     _embeddingModelByDocument[documentPublicId] = package.embeddingModel;
     await updateStatus(
       document.id,
@@ -671,6 +800,151 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
           : package.extractionModel,
       clearLastErrorCode: true,
     );
+  }
+
+  ChunkPackageItem _packageItemFromExtracted(
+    String documentPublicId,
+    ExtractedKnowledgeItem item, {
+    ChunkPackageItem? stored,
+  }) {
+    final kind = item.chunkKind == LocalChunkKind.flowchart
+        ? ChunkKind.flowchartChunk
+        : ChunkKind.noteChunk;
+    final content = _canonicalContentForExtracted(item, kind: kind);
+    final storedSource = stored?.source;
+    final source = storedSource != null && !storedSource.isEmpty
+        ? storedSource
+        : ChunkSource(
+            sourceType: ChunkSourceType.pdf,
+            sourceId: documentPublicId,
+            pageStart: item.pageNumber,
+            pageEnd: item.endPageNumber,
+            sourceRectJson: item.sourceRectJson,
+            originalText: item.text,
+          );
+    return ChunkPackageItem(
+      id: item.id,
+      text: content.plainText,
+      pageNumber: item.pageNumber ?? source.pageStart ?? 0,
+      sectionTitle: content.title ?? item.sectionTitle,
+      embedding: stored?.embedding ?? const [],
+      kind: kind,
+      creationMethod:
+          stored?.creationMethod ?? _creationMethodForPipeline(item.pipeline),
+      validationState: item.auditState,
+      source: source,
+      content: content,
+    );
+  }
+
+  NoteBlock _canonicalContentForExtracted(
+    ExtractedKnowledgeItem item, {
+    required ChunkKind kind,
+  }) {
+    final raw = item.structuredContentJson?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          final parsed = NoteBlock.fromJson(
+            Map<String, Object?>.from(decoded),
+          ).copyWith(id: item.id);
+          if (kind == ChunkKind.flowchartChunk &&
+              parsed.type == NoteBlockType.flowchart) {
+            return parsed;
+          }
+          if (kind == ChunkKind.noteChunk &&
+              parsed.type != NoteBlockType.flowchart) {
+            return normalizeLegacyNoteBlock(parsed);
+          }
+        }
+      } catch (_) {
+        // The plain-text projection remains exportable if old structured JSON
+        // is malformed.
+      }
+    }
+    if (kind == ChunkKind.flowchartChunk) {
+      return NoteBlock(
+        id: item.id,
+        type: NoteBlockType.flowchart,
+        title: item.sectionTitle,
+        text: item.text,
+        tags: item.tags,
+      );
+    }
+    final legacy = switch (item.chunkKind) {
+      LocalChunkKind.list => NoteBlock(
+        id: item.id,
+        type: NoteBlockType.listItem,
+        title: item.sectionTitle,
+        text: item.text,
+        tags: item.tags,
+      ),
+      LocalChunkKind.table => NoteBlock(
+        id: item.id,
+        type: NoteBlockType.table,
+        title: item.sectionTitle,
+        rows: _tableRowsFromPlainText(item.text),
+        tags: item.tags,
+      ),
+      LocalChunkKind.text || LocalChunkKind.flowchart => NoteBlock(
+        id: item.id,
+        type: NoteBlockType.paragraph,
+        title: item.sectionTitle,
+        text: item.text,
+        tags: item.tags,
+      ),
+    };
+    return normalizeLegacyNoteBlock(legacy);
+  }
+
+  List<List<String>> _tableRowsFromPlainText(String value) {
+    return value
+        .split('\n')
+        .map(
+          (line) => line
+              .split(RegExp(r'\s*\|\s*|\t'))
+              .map((cell) => cell.trim())
+              .toList(growable: false),
+        )
+        .where((row) => row.any((cell) => cell.isNotEmpty))
+        .toList(growable: false);
+  }
+
+  ChunkCreationMethod _creationMethodForPipeline(
+    LocalExtractionPipeline pipeline,
+  ) {
+    return switch (pipeline) {
+      LocalExtractionPipeline.ai => ChunkCreationMethod.aiGenerated,
+      LocalExtractionPipeline.manual => ChunkCreationMethod.manualSelection,
+      LocalExtractionPipeline.localPdfText ||
+      LocalExtractionPipeline.localOcr ||
+      LocalExtractionPipeline.localTable ||
+      LocalExtractionPipeline.localFlowchart ||
+      LocalExtractionPipeline.localVisual =>
+        ChunkCreationMethod.assistedSelection,
+    };
+  }
+
+  LocalExtractionPipeline _pipelineForCreationMethod(
+    ChunkCreationMethod method,
+  ) {
+    return switch (method) {
+      ChunkCreationMethod.manualSelection => LocalExtractionPipeline.manual,
+      ChunkCreationMethod.assistedSelection =>
+        LocalExtractionPipeline.localPdfText,
+      ChunkCreationMethod.aiGenerated ||
+      ChunkCreationMethod.imported => LocalExtractionPipeline.ai,
+    };
+  }
+
+  int _firstEmbeddingDimension(List<ChunkPackageItem> items) {
+    for (final item in items) {
+      if (item.embedding.isNotEmpty) {
+        return item.embedding.length;
+      }
+    }
+    return 0;
   }
 
   ExtractedKnowledgeItem _itemFromLocalChunk(
@@ -815,64 +1089,49 @@ class KnowledgeDocumentRepository implements ProcessingRepository {
   ) {
     final title = (flowchart.title ?? 'Flowchart').trim();
     final sectionTitle = title.isEmpty ? 'Flowchart' : title;
-    final nodeLabels = {
-      for (final node in flowchart.nodes) node.id: node.label.trim(),
-    };
+    final generatedBlock = NoteBlock(
+      id: flowchart.id,
+      type: NoteBlockType.flowchart,
+      title: sectionTitle,
+      nodes: [
+        for (final node in flowchart.nodes)
+          NoteFlowchartNode(
+            id: node.id,
+            label: node.label,
+            shape: node.shape,
+            order: node.order,
+          ),
+      ],
+      edges: [
+        for (final edge in flowchart.edges)
+          NoteFlowchartEdge(
+            id: edge.id,
+            fromNodeId: edge.fromNodeId,
+            toNodeId: edge.toNodeId,
+            label: edge.label,
+            order: edge.order,
+          ),
+      ],
+    );
+    final block =
+        _flowchartBlocksByDocument[documentPublicId]?[flowchart.id] ??
+        generatedBlock;
     return [
-      for (final node in flowchart.nodes)
-        ExtractedKnowledgeItem(
-          id: '${flowchart.id}:${node.id}',
-          documentId: documentPublicId,
-          sourceType: EvidenceSourceType.flowchartNode,
-          text: node.label.trim(),
-          pageNumber: flowchart.pageNumber,
-          sectionTitle: sectionTitle,
-          embeddingModel: _embeddingModelByDocument[documentPublicId],
-          flowchartId: flowchart.id,
-          flowchartElementId: node.id,
-          flowchartShape: node.shape.wireName,
-          flowchartOrder: node.order,
-          sourceRectJson: _sourceRectJson(node.sourceRect),
-          chunkKind: LocalChunkKind.flowchart,
-          auditState: LocalAuditState.unreviewed,
-        ),
-      for (final edge in flowchart.edges)
-        ExtractedKnowledgeItem(
-          id: '${flowchart.id}:${edge.id}',
-          documentId: documentPublicId,
-          sourceType: EvidenceSourceType.flowchartEdge,
-          text: _flowchartEdgeText(edge, nodeLabels),
-          pageNumber: flowchart.pageNumber,
-          sectionTitle: '$sectionTitle kapcsolat',
-          embeddingModel: _embeddingModelByDocument[documentPublicId],
-          flowchartId: flowchart.id,
-          flowchartElementId: edge.id,
-          flowchartFromId: edge.fromNodeId,
-          flowchartToId: edge.toNodeId,
-          flowchartEdgeLabel: edge.label,
-          flowchartOrder: edge.order,
-          sourceRectJson: _sourceRectJson(edge.sourceRect),
-          chunkKind: LocalChunkKind.flowchart,
-          auditState: LocalAuditState.unreviewed,
-        ),
+      ExtractedKnowledgeItem(
+        id: flowchart.id,
+        documentId: documentPublicId,
+        sourceType: EvidenceSourceType.flowchartNode,
+        text: block.plainText,
+        pageNumber: flowchart.pageNumber,
+        sectionTitle: sectionTitle,
+        embeddingModel: _embeddingModelByDocument[documentPublicId],
+        flowchartId: flowchart.id,
+        chunkKind: LocalChunkKind.flowchart,
+        auditState: LocalAuditState.unreviewed,
+        tags: block.knownTags,
+        structuredContentJson: jsonEncode(block.toJson()),
+      ),
     ];
-  }
-
-  String? _sourceRectJson(Map<String, Object?>? sourceRect) {
-    if (sourceRect == null) {
-      return null;
-    }
-    return jsonEncode(sourceRect);
-  }
-
-  String _flowchartEdgeText(
-    AiFlowchartEdge edge,
-    Map<String, String> nodeLabels,
-  ) {
-    final from = nodeLabels[edge.fromNodeId] ?? edge.fromNodeId;
-    final to = nodeLabels[edge.toNodeId] ?? edge.toNodeId;
-    final label = edge.label.trim();
-    return label.isEmpty ? '$from -> $to' : '$from -> $to [$label]';
   }
 
   KnowledgeDocument _findDocument(String documentId) {

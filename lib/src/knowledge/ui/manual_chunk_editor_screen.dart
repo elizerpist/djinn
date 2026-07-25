@@ -8,12 +8,14 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 
+import '../../chunks/models/chunk.dart';
 import '../../debug/debug_console.dart';
 import '../data/knowledge_document_repository.dart';
 import '../data/mlkit_ocr_engine.dart';
 import '../models/extracted_knowledge_item.dart';
 import '../models/knowledge_document.dart';
 import '../models/local_extraction.dart';
+import '../models/manual_flowchart_draft.dart';
 import '../../shared/ui/inline_bottom_sheet_card.dart';
 import '../../flowchart/ui/manual_flowchart_draft_editor_screen.dart';
 import '../../notes/models/mixed_chunk_parser.dart';
@@ -21,11 +23,10 @@ import 'manual_pdf_region_text.dart';
 import 'source_chunk_box_overlay.dart';
 import 'source_chunk_rect.dart';
 
-const _manualChunkKinds = [
+const _noteContentKinds = [
   LocalChunkKind.text,
   LocalChunkKind.list,
   LocalChunkKind.table,
-  LocalChunkKind.flowchart,
 ];
 
 IconData _staticIconForKind(LocalChunkKind kind) {
@@ -102,20 +103,29 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
 
   Future<void> _chooseSelectionType() async {
     _log('type sheet open page=$_pageNumber');
-    final selected = await showModalBottomSheet<LocalChunkKind>(
+    final selected = await showModalBottomSheet<ChunkKind>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: ListView(
           shrinkWrap: true,
           children: [
-            for (final option in _manualChunkKinds)
-              ListTile(
-                leading: Icon(_iconForKind(option)),
-                title: Text(option.label),
-                subtitle: Text(_selectionHelp(option)),
-                onTap: () => Navigator.of(context).pop(option),
+            ListTile(
+              key: const Key('manual-chunk-type-note_chunk'),
+              leading: const Icon(Icons.article_outlined),
+              title: const Text('Jegyzetchunk'),
+              subtitle: const Text(
+                'Bekezdés, lista vagy táblázat egy chunkban',
               ),
+              onTap: () => Navigator.of(context).pop(ChunkKind.noteChunk),
+            ),
+            ListTile(
+              key: const Key('manual-chunk-type-flowchart_chunk'),
+              leading: const Icon(Icons.account_tree_outlined),
+              title: const Text('Flowchart chunk'),
+              subtitle: const Text('Folyamatábra és kapcsolatai'),
+              onTap: () => Navigator.of(context).pop(ChunkKind.flowchartChunk),
+            ),
           ],
         ),
       ),
@@ -124,7 +134,42 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       _log('type sheet cancelled');
       return;
     }
-    _beginSelection(selected);
+    if (selected == ChunkKind.flowchartChunk) {
+      _beginSelection(LocalChunkKind.flowchart);
+      return;
+    }
+    final contentKind = await _chooseNoteContentKind();
+    if (contentKind != null && mounted) {
+      _beginSelection(contentKind);
+    }
+  }
+
+  Future<LocalChunkKind?> _chooseNoteContentKind() {
+    return showModalBottomSheet<LocalChunkKind>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(
+              title: Text('Jegyzetchunk tartalmi szerkezete'),
+              subtitle: Text(
+                'Formázási/kinyerési segítség, nem külön chunktípus',
+              ),
+            ),
+            for (final option in _noteContentKinds)
+              ListTile(
+                key: ValueKey('manual-note-content-${option.wireName}'),
+                leading: Icon(_iconForKind(option)),
+                title: Text(_noteContentLabel(option)),
+                subtitle: Text(_selectionHelp(option)),
+                onTap: () => Navigator.of(context).pop(option),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _beginSelection(LocalChunkKind kind) {
@@ -265,17 +310,12 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
     final fullWidth = (page.width * renderScale).round().clamp(1, 4096);
     final fullHeight = (page.height * renderScale).round().clamp(1, 4096);
     final x = (rect.left * renderScale).round().clamp(0, fullWidth - 1);
-    final y = ((page.height - rect.top) * renderScale)
-        .round()
-        .clamp(0, fullHeight - 1);
-    final width = (rect.width * renderScale).round().clamp(
-      1,
-      fullWidth - x,
+    final y = ((page.height - rect.top) * renderScale).round().clamp(
+      0,
+      fullHeight - 1,
     );
-    final height = (rect.height * renderScale).round().clamp(
-      1,
-      fullHeight - y,
-    );
+    final width = (rect.width * renderScale).round().clamp(1, fullWidth - x);
+    final height = (rect.height * renderScale).round().clamp(1, fullHeight - y);
     final pdfImage = await page.render(
       x: x,
       y: y,
@@ -291,26 +331,21 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
     ui.Image? uiImage;
     try {
       uiImage = await pdfImage.createImage();
-      final byteData = await uiImage.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
+      final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) {
         throw StateError('PDF region PNG encoding failed: ${page.pageNumber}');
       }
       final cacheDir = await getTemporaryDirectory();
-      final safeName = path.basenameWithoutExtension(
-        widget.document.localPath,
-      ).replaceAll(RegExp(r'[^A-Za-z0-9_.-]+'), '_');
+      final safeName = path
+          .basenameWithoutExtension(widget.document.localPath)
+          .replaceAll(RegExp(r'[^A-Za-z0-9_.-]+'), '_');
       final output = File(
         path.join(
           cacheDir.path,
           'djinn-manual-crop-$safeName-p${page.pageNumber}.png',
         ),
       );
-      await output.writeAsBytes(
-        Uint8List.view(byteData.buffer),
-        flush: true,
-      );
+      await output.writeAsBytes(Uint8List.view(byteData.buffer), flush: true);
       return output.path;
     } finally {
       uiImage?.dispose();
@@ -389,12 +424,38 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       final sectionTitle = _emptyToNull(_titleController.text);
       var chunkText = content;
       String? structuredContentJson;
-      if (_kind == LocalChunkKind.text) {
-        final mixedBlock = mixedBlockFromPlainText(
+      final persistedKind = _kind == LocalChunkKind.flowchart
+          ? LocalChunkKind.flowchart
+          : LocalChunkKind.text;
+      if (_kind == LocalChunkKind.flowchart) {
+        final flowchartBlock = manualFlowchartBlockFromDraft(
           id: chunkId,
           title: sectionTitle,
           text: content,
         );
+        chunkText = flowchartBlock.plainText;
+        structuredContentJson = jsonEncode(flowchartBlock.toJson());
+      } else {
+        final mixedBlock = switch (_kind) {
+          LocalChunkKind.list => listBlockFromPlainText(
+            id: chunkId,
+            title: sectionTitle,
+            text: content,
+          ),
+          LocalChunkKind.table => tableBlockFromPlainText(
+            id: chunkId,
+            title: sectionTitle,
+            text: content,
+          ),
+          LocalChunkKind.text => mixedBlockFromPlainText(
+            id: chunkId,
+            title: sectionTitle,
+            text: content,
+          ),
+          LocalChunkKind.flowchart => throw StateError(
+            'Flowchart content must use the flowchart parser.',
+          ),
+        };
         chunkText = mixedBlock.plainText;
         structuredContentJson = jsonEncode(mixedBlock.toJson());
       }
@@ -405,7 +466,7 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
         pageNumber: page,
         sectionTitle: sectionTitle,
         pipeline: LocalExtractionPipeline.manual,
-        kind: _kind,
+        kind: persistedKind,
         auditState: LocalAuditState.edited,
         sourceRectJson: _sourceRectJson(page),
         structuredContentJson: structuredContentJson,
@@ -636,6 +697,15 @@ class _ManualChunkEditorScreenState extends State<ManualChunkEditorScreen> {
       LocalChunkKind.list => 'Felsorolás vagy több soron folytatódó lista',
       LocalChunkKind.table => 'Táblázatrészlet szövegből vagy képből',
       LocalChunkKind.flowchart => 'Folyamatábra részlet',
+    };
+  }
+
+  String _noteContentLabel(LocalChunkKind kind) {
+    return switch (kind) {
+      LocalChunkKind.text => 'Szabad szöveg',
+      LocalChunkKind.list => 'Lista',
+      LocalChunkKind.table => 'Táblázat',
+      LocalChunkKind.flowchart => 'Flowchart',
     };
   }
 
@@ -1090,8 +1160,12 @@ class _ExtractionBoxHeader extends StatelessWidget {
     final detail = switch (kind) {
       LocalChunkKind.table => '$tableRows x $tableColumns',
       LocalChunkKind.flowchart => 'draft',
-      _ => 'manual',
+      LocalChunkKind.list => 'lista',
+      LocalChunkKind.text => 'rich text',
     };
+    final canonicalLabel = kind == LocalChunkKind.flowchart
+        ? 'Flowchart chunk'
+        : 'Jegyzetchunk';
     return DecoratedBox(
       key: const Key('manual-extraction-box-header'),
       decoration: BoxDecoration(
@@ -1113,7 +1187,7 @@ class _ExtractionBoxHeader extends StatelessWidget {
             Icon(_staticIconForKind(kind), color: Colors.white, size: 16),
             const SizedBox(width: 6),
             Text(
-              '${kind.label} box',
+              '$canonicalLabel box',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
@@ -1224,26 +1298,47 @@ class _ManualChunkCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          DropdownButtonFormField<LocalChunkKind>(
+                          InputDecorator(
                             key: const Key('manual-chunk-kind-field'),
-                            initialValue: kind,
                             decoration: const InputDecoration(
                               labelText: 'Chunk típusa',
                               border: OutlineInputBorder(),
                             ),
-                            items: [
-                              for (final option in _manualChunkKinds)
-                                DropdownMenuItem(
-                                  value: option,
-                                  child: Text(option.label),
-                                ),
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                onKindChanged(value);
-                              }
-                            },
+                            child: Text(
+                              kind == LocalChunkKind.flowchart
+                                  ? 'Flowchart chunk'
+                                  : 'Jegyzetchunk',
+                            ),
                           ),
+                          if (kind != LocalChunkKind.flowchart) ...[
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<LocalChunkKind>(
+                              key: const Key('manual-note-content-kind-field'),
+                              initialValue: kind,
+                              decoration: const InputDecoration(
+                                labelText: 'Tartalmi szerkezet',
+                                helperText: 'Nem külön chunktípus',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                for (final option in _noteContentKinds)
+                                  DropdownMenuItem(
+                                    value: option,
+                                    child: Text(switch (option) {
+                                      LocalChunkKind.text => 'Szabad szöveg',
+                                      LocalChunkKind.list => 'Lista',
+                                      LocalChunkKind.table => 'Táblázat',
+                                      LocalChunkKind.flowchart => 'Flowchart',
+                                    }),
+                                  ),
+                              ],
+                              onChanged: (value) {
+                                if (value != null) {
+                                  onKindChanged(value);
+                                }
+                              },
+                            ),
+                          ],
                           const SizedBox(height: 12),
                           _KindSpecificControls(
                             kind: kind,

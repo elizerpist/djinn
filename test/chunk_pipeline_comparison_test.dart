@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:djinn/src/ai/ai_client.dart';
+import 'package:djinn/src/chunks/models/chunk.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
 import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/local_store/entities.dart';
@@ -143,23 +144,20 @@ void main() {
     },
   );
 
-  test(
-    'document chunk entity defaults old AI chunks to accepted AI text chunks',
-    () {
-      final entity = DocumentChunkEntity(
-        publicId: 'doc-1:chunk-1',
-        documentPublicId: 'doc-1',
-        text: 'Régi AI chunk',
-        pageNumber: 1,
-      );
+  test('document chunk entity defaults old AI rows to accepted NoteChunks', () {
+    final entity = DocumentChunkEntity(
+      publicId: 'doc-1:chunk-1',
+      documentPublicId: 'doc-1',
+      text: 'Régi AI chunk',
+      pageNumber: 1,
+    );
 
-      expect(entity.pipeline, LocalExtractionPipeline.ai.wireName);
-      expect(entity.chunkKind, LocalChunkKind.text.wireName);
-      expect(entity.auditState, LocalAuditState.accepted.wireName);
-    },
-  );
+    expect(entity.pipeline, LocalExtractionPipeline.ai.wireName);
+    expect(entity.chunkKind, ChunkKind.noteChunk.wireName);
+    expect(entity.auditState, LocalAuditState.accepted.wireName);
+  });
 
-  test('legacy chunk kind wire names normalize into four supported kinds', () {
+  test('legacy extraction kind wire names remain readable for migration', () {
     expect(LocalChunkKind.fromWireName('text'), LocalChunkKind.text);
     expect(LocalChunkKind.fromWireName('list'), LocalChunkKind.list);
     expect(LocalChunkKind.fromWireName('table'), LocalChunkKind.table);

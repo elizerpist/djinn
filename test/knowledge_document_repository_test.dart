@@ -1,13 +1,17 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:djinn/src/core/storage/json_file_store.dart';
 import 'package:djinn/src/ai/ai_client.dart';
+import 'package:djinn/src/chunks/models/chunk.dart';
+import 'package:djinn/src/core/storage/json_file_store.dart';
 import 'package:djinn/src/knowledge/data/knowledge_document_repository.dart';
+import 'package:djinn/src/knowledge/models/chunk_package.dart';
 import 'package:djinn/src/knowledge/models/knowledge_document.dart';
 import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/local_store/entities.dart';
+import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/openai/openai_client.dart';
 
 void main() {
@@ -261,7 +265,17 @@ void main() {
       expect(updated.status, KnowledgeDocumentStatus.ready);
       expect(
         (await repository.exportChunkPackage(document.id)).chunks.single.text,
-        'ABCDE protokoll',
+        'Ellátás\n\nABCDE protokoll',
+      );
+      expect(
+        'Ellátás'
+            .allMatches(
+              (await repository.exportChunkPackage(
+                document.id,
+              )).chunks.single.text,
+            )
+            .length,
+        1,
       );
     },
   );
@@ -297,6 +311,186 @@ void main() {
 
     expect((await repository.exportChunkPackage(document.id)).chunks, isEmpty);
   });
+
+  test(
+    'chunk package v2 exports local rich notes and flowcharts as two kinds',
+    () async {
+      final repository = KnowledgeDocumentRepository();
+      final document = await repository.addDocument(
+        filename: 'unified.pdf',
+        localPath: '/memory/unified.pdf',
+        sizeBytes: 4,
+        importedAt: DateTime.utc(2026, 7, 25),
+        sha256: 'unified-hash',
+      );
+      const richBlock = NoteBlock(
+        id: 'rich-1',
+        type: NoteBlockType.mixed,
+        tags: [
+          NoteKnowledgeTag(type: NoteKnowledgeTagTypes.topic, label: 'Téma'),
+        ],
+        mixedSections: [
+          NoteMixedSection(
+            id: 'table-1',
+            type: NoteMixedSectionType.table,
+            rows: [
+              ['A', 'B'],
+            ],
+            textFills: [
+              NoteTextFill(
+                id: 'fill-1',
+                start: 0,
+                end: 1,
+                colorValue: 0xFFFFE082,
+                targetKey: 'table:0:0',
+              ),
+            ],
+          ),
+        ],
+      );
+      await repository.saveLocalChunks(document.id, [
+        LocalChunk(
+          id: 'rich-1',
+          documentId: document.id,
+          text: richBlock.plainText,
+          pageNumber: 1,
+          pipeline: LocalExtractionPipeline.manual,
+          kind: LocalChunkKind.table,
+          auditState: LocalAuditState.edited,
+          structuredContentJson: jsonEncode(richBlock.toJson()),
+        ),
+      ], replaceExisting: false);
+      await repository.saveFlowchartCandidate(
+        documentPublicId: document.id,
+        flowchart: const AiFlowchartCandidate(
+          id: 'flow-1',
+          pageNumber: 2,
+          title: 'Folyamat',
+          nodes: [AiFlowchartNode(id: 'start', label: 'Start')],
+          edges: [],
+        ),
+      );
+
+      final exported = await repository.exportChunkPackage(document.id);
+
+      expect(exported.schemaVersion, 2);
+      expect(exported.chunks.map((chunk) => chunk.kind).toSet(), {
+        ChunkKind.noteChunk,
+        ChunkKind.flowchartChunk,
+      });
+      final note = exported.chunks.singleWhere(
+        (chunk) => chunk.kind == ChunkKind.noteChunk,
+      );
+      expect(note.content?.type, NoteBlockType.mixed);
+      expect(note.content?.knownTags.single.label, 'Téma');
+      expect(
+        note.content?.mixedSections.single.textFills.single.targetKey,
+        'table:0:0',
+      );
+      expect(note.creationMethod, ChunkCreationMethod.manualSelection);
+      final flowchart = exported.chunks.singleWhere(
+        (chunk) => chunk.kind == ChunkKind.flowchartChunk,
+      );
+      expect(flowchart.content?.nodes.single.label, 'Start');
+    },
+  );
+
+  test(
+    'chunk package round trip keeps scoped tags out of structured top-level tags',
+    () async {
+      const scopedTag = NoteKnowledgeTag(
+        id: 'tag-cell',
+        type: NoteKnowledgeTagTypes.topic,
+        label: 'Cell scope',
+      );
+      const topLevelTag = NoteKnowledgeTag(
+        id: 'tag-chunk',
+        type: NoteKnowledgeTagTypes.custom,
+        label: 'Chunk scope',
+      );
+      const content = NoteBlock(
+        id: 'scoped-note',
+        type: NoteBlockType.mixed,
+        mixedSections: [
+          NoteMixedSection(
+            id: 'table-1',
+            type: NoteMixedSectionType.table,
+            rows: [
+              ['Scoped value'],
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'scope-cell',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableCell,
+                  rowIndex: 0,
+                  columnIndex: 0,
+                ),
+                tags: [scopedTag],
+              ),
+            ],
+          ),
+        ],
+      );
+      final repository = KnowledgeDocumentRepository();
+      final document = await repository.addDocument(
+        filename: 'scoped-round-trip.pdf',
+        localPath: '/memory/scoped-round-trip.pdf',
+        sizeBytes: 4,
+        importedAt: DateTime.utc(2026, 7, 25),
+        sha256: 'scoped-round-trip-hash',
+      );
+      final package = ChunkPackage(
+        schemaVersion: 2,
+        documentHash: 'scoped-round-trip-hash',
+        filename: document.filename,
+        provider: '',
+        extractionModel: '',
+        embeddingModel: '',
+        embeddingDimension: 0,
+        chunks: const [
+          ChunkPackageItem(
+            id: 'scoped-note',
+            text: 'Scoped value',
+            pageNumber: 1,
+            sectionTitle: null,
+            embedding: [],
+            kind: ChunkKind.noteChunk,
+            source: ChunkSource(
+              sourceType: ChunkSourceType.pdf,
+              sourceId: 'source-document',
+              pageStart: 1,
+              originalText: 'Scoped value',
+            ),
+            content: content,
+          ),
+        ],
+      );
+
+      await repository.importChunkPackage(document.id, package);
+      await repository.updateExtractedKnowledgeTags(
+        document.id,
+        'scoped-note',
+        const [topLevelTag],
+      );
+      final exported = await repository.exportChunkPackage(document.id);
+      final exportedContent = exported.chunks.single.content!;
+
+      expect(exportedContent.tags.map((tag) => tag.metadataText), [
+        topLevelTag.metadataText,
+      ]);
+      expect(
+        exportedContent.mixedSections.single.scopedTags.single.tags.map(
+          (tag) => tag.metadataText,
+        ),
+        [scopedTag.metadataText],
+      );
+      expect(exportedContent.knownTags.map((tag) => tag.metadataText).toSet(), {
+        topLevelTag.metadataText,
+        scopedTag.metadataText,
+      });
+    },
+  );
 
   test('manual local chunks preserve structured mixed content json', () async {
     final repository = KnowledgeDocumentRepository();
@@ -368,14 +562,14 @@ void main() {
         EvidenceSourceType.tableChunk,
         EvidenceSourceType.scoreChunk,
       ]);
-      expect(items.first.typeLabel, 'Táblázat');
-      expect(items.last.typeLabel, 'Score');
+      expect(items.first.typeLabel, 'Jegyzetchunk');
+      expect(items.last.typeLabel, 'Jegyzetchunk');
       expect(items.first.text, contains('Arcbénulás'));
       expect(items.last.embeddingModel, 'gemini-embedding-001');
     },
   );
 
-  test('lists flowchart nodes and edges as separate extracted items', () async {
+  test('lists a flowchart as one structured canonical chunk', () async {
     final repository = KnowledgeDocumentRepository();
     final document = await repository.addDocument(
       filename: 'stroke.pdf',
@@ -420,21 +614,26 @@ void main() {
 
     final items = await repository.listExtractedKnowledgeItems(document.id);
 
-    expect(items.map((item) => item.sourceType), [
-      EvidenceSourceType.flowchartNode,
-      EvidenceSourceType.flowchartNode,
-      EvidenceSourceType.flowchartEdge,
-    ]);
+    expect(items, hasLength(1));
+    final item = items.single;
+    expect(item.id, 'flow-1');
+    expect(item.chunkKind, LocalChunkKind.flowchart);
+    expect(item.typeLabel, 'Flowchart');
+    expect(item.sectionTitle, 'Stroke döntési fa');
     expect(
-      items.last.text,
-      'ABCDE vizsgálat -> Légzési elégtelenség? [romlik]',
+      item.text,
+      contains('ABCDE vizsgálat -> Légzési elégtelenség? [romlik]'),
     );
-    expect(items.first.flowchartShape, AiFlowchartNodeShape.startEnd.wireName);
-    expect(items.first.flowchartOrder, 1);
-    expect(items.first.sourceRectJson, contains('"width":3'));
-    expect(items.last.flowchartFromId, 'n1');
-    expect(items.last.flowchartToId, 'n2');
-    expect(items.last.flowchartOrder, 3);
-    expect(items.last.sectionTitle, 'Stroke döntési fa kapcsolat');
+
+    final content = NoteBlock.fromJson(
+      Map<String, Object?>.from(jsonDecode(item.structuredContentJson!) as Map),
+    );
+    expect(content.type, NoteBlockType.flowchart);
+    expect(content.nodes.map((node) => node.id), ['n1', 'n2']);
+    expect(content.nodes.first.shape, AiFlowchartNodeShape.startEnd);
+    expect(content.edges, hasLength(1));
+    expect(content.edges.single.fromNodeId, 'n1');
+    expect(content.edges.single.toNodeId, 'n2');
+    expect(content.edges.single.label, 'romlik');
   });
 }

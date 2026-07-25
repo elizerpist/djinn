@@ -45,4 +45,43 @@ void main() {
     expect(mixed.mixedSections.single.type, NoteMixedSectionType.table);
     expect(mixed.mixedSections.single.rows.last, ['AED', '1']);
   });
+
+  test('forces every non-empty manual list line into one list section', () {
+    final block = listBlockFromPlainText(
+      id: 'manual-list',
+      title: 'Teendők',
+      text: '• Első elem\n  - Második elem\nHarmadik elem',
+    );
+
+    expect(block.type, NoteBlockType.mixed);
+    expect(block.mixedSections.single.type, NoteMixedSectionType.list);
+    expect(block.mixedSections.single.listItems.map((item) => item.text), [
+      'Első elem',
+      'Második elem',
+      'Harmadik elem',
+    ]);
+    expect(block.mixedSections.single.listItems.map((item) => item.level), [
+      0,
+      1,
+      0,
+    ]);
+  });
+
+  test('parses one canonical table section and drops markdown separator', () {
+    final block = tableBlockFromPlainText(
+      id: 'manual-table',
+      title: 'Mérések',
+      text:
+          '| Név | Érték |\n'
+          '| --- | :---: |\n'
+          '| Pulzus | 80 |',
+    );
+
+    expect(block.type, NoteBlockType.mixed);
+    expect(block.mixedSections.single.type, NoteMixedSectionType.table);
+    expect(block.mixedSections.single.rows, [
+      ['Név', 'Érték'],
+      ['Pulzus', '80'],
+    ]);
+  });
 }

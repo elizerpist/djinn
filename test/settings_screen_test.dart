@@ -109,7 +109,6 @@ void main() {
     expect(settings.chunkingMode, ChunkingModes.detailed);
   });
 
-
   testWidgets('local indexing mode dropdown autosaves selected option', (
     tester,
   ) async {
@@ -173,7 +172,10 @@ void main() {
     await tester.tap(find.text('Mixed / hybrid + MediaPipe').last);
     await tester.pumpAndSettle();
 
-    expect(settings.localIndexingMode, LocalIndexingModes.mixedMediapipeTextEmbedder);
+    expect(
+      settings.localIndexingMode,
+      LocalIndexingModes.mixedMediapipeTextEmbedder,
+    );
     expect(find.textContaining('exact kulcsszó'), findsOneWidget);
   });
 
@@ -371,7 +373,9 @@ void main() {
     },
   );
 
-  testWidgets('about section explains chunking vector search and graph', (tester) async {
+  testWidgets('about section explains chunking vector search and graph', (
+    tester,
+  ) async {
     final keyStore = MemoryApiKeyStore();
     var settings = AppSettings.defaults();
 
@@ -393,7 +397,7 @@ void main() {
     expect(find.text('Mi az a chunkolás?'), findsOneWidget);
     expect(find.text('Mi az a vektorsearch?'), findsOneWidget);
     expect(find.text('Mi az a graph / VectorGraph?'), findsOneWidget);
-    expect(find.text('Mi a kézi chunk?'), findsOneWidget);
+    expect(find.text('Mi a kézi létrehozás?'), findsOneWidget);
     expect(find.text('Offline jegyzetírási útmutató'), findsOneWidget);
     expect(find.textContaining('Adj keresési kontextust'), findsOneWidget);
   });

@@ -49,8 +49,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
   bool _railRoundedCard = false;
   bool _railTransparentBackground = false;
   bool _railBorderVisible = true;
-  NoteTaggedTextCountMarkerMode _countMarkerMode =
-      NoteTaggedTextCountMarkerMode.fixedCorner;
   bool _tagGeometryRefreshScheduled = false;
   double _textScrollOffset = 0;
   RenderEditable? _tagRenderEditable;
@@ -643,26 +641,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
     Navigator.of(context).maybePop();
   }
 
-  void _handleExtraMenuSelection(String value) {
-    switch (value) {
-      case 'count-marker-fixed':
-        setState(
-          () => _countMarkerMode = NoteTaggedTextCountMarkerMode.fixedCorner,
-        );
-        break;
-      case 'count-marker-adaptive':
-        setState(
-          () => _countMarkerMode = NoteTaggedTextCountMarkerMode.adaptiveClamp,
-        );
-        break;
-      case 'count-marker-count-only':
-        setState(
-          () => _countMarkerMode = NoteTaggedTextCountMarkerMode.countOnly,
-        );
-        break;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final title = _block.title?.trim().isNotEmpty == true
@@ -691,38 +669,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
         onDeleteChunk: _deleteChunk,
         canDeleteSelectedTag: _activeRangeTags.isNotEmpty,
         canDeleteChunk: widget.onDelete != null,
-        onExtraMenuSelected: _handleExtraMenuSelection,
-        extraMenuItems: [
-          const PopupMenuDivider(),
-          PopupMenuItem(
-            key: const ValueKey('note-text-menu-count-marker-fixed'),
-            value: 'count-marker-fixed',
-            child: _CountMarkerModeMenuItem(
-              selected:
-                  _countMarkerMode == NoteTaggedTextCountMarkerMode.fixedCorner,
-              label: 'Tag jel: sarok 4+',
-            ),
-          ),
-          PopupMenuItem(
-            key: const ValueKey('note-text-menu-count-marker-adaptive'),
-            value: 'count-marker-adaptive',
-            child: _CountMarkerModeMenuItem(
-              selected:
-                  _countMarkerMode ==
-                  NoteTaggedTextCountMarkerMode.adaptiveClamp,
-              label: 'Tag jel: adaptív +',
-            ),
-          ),
-          PopupMenuItem(
-            key: const ValueKey('note-text-menu-count-marker-count-only'),
-            value: 'count-marker-count-only',
-            child: _CountMarkerModeMenuItem(
-              selected:
-                  _countMarkerMode == NoteTaggedTextCountMarkerMode.countOnly,
-              label: 'Tag jel: csak szám',
-            ),
-          ),
-        ],
         trailingActions: [
           IconButton(
             key: const ValueKey('note-text-header-outdent'),
@@ -807,7 +753,8 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
                                           NoteTaggedTextCountMarkerPainter(
                                             text: _controller.text,
                                             runs: countMarkerRuns,
-                                            mode: _countMarkerMode,
+                                            mode: NoteTaggedTextCountMarkerMode
+                                                .fixedCorner,
                                             textStyle: editorTextStyle,
                                             textDirection: Directionality.of(
                                               context,
@@ -880,29 +827,6 @@ class _NoteTextChunkEditorScreenState extends State<NoteTextChunkEditorScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _CountMarkerModeMenuItem extends StatelessWidget {
-  const _CountMarkerModeMenuItem({required this.selected, required this.label});
-
-  final bool selected;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 24,
-          child: selected
-              ? const Icon(Icons.check, size: 18)
-              : const SizedBox.shrink(),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
-      ],
     );
   }
 }

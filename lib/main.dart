@@ -27,6 +27,7 @@ import 'src/knowledge/data/mlkit_ocr_engine.dart';
 import 'src/knowledge/data/pdfrx_local_page_extractor.dart';
 import 'src/knowledge/data/pdf_import_service.dart';
 import 'src/notes/data/note_repository.dart';
+import 'src/notes/data/objectbox_note_repository.dart';
 import 'src/notes/data/objectbox_tag_repository.dart';
 import 'src/notes/data/tag_repository.dart';
 import 'src/local_store/objectbox_store.dart';
@@ -181,8 +182,9 @@ class _DjinnAppState extends State<DjinnApp> {
       repository: knowledgeRepository,
       pageExtractor: PdfrxLocalPageExtractor(ocrEngine: localOcrEngine),
     );
-    final noteRepository = FileNoteRepository(
-      file: File('${directory.path}/notes/notes.json'),
+    final noteRepository = ObjectBoxNoteRepository(
+      store: store,
+      legacyFile: File('${directory.path}/notes/notes.json'),
     );
     await noteRepository.load();
     final tagRepository =

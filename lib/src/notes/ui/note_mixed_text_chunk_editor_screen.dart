@@ -7,6 +7,7 @@ import '../models/note_document.dart';
 import '../models/note_list_hierarchy_markers.dart';
 import 'note_chunk_editor_header.dart';
 import 'note_tag_pills.dart';
+import 'tagged_text_visual.dart';
 import 'tag_manager_sheet.dart';
 
 class NoteMixedTextChunkEditorScreen extends StatefulWidget {
@@ -41,7 +42,7 @@ class _NoteMixedTextChunkEditorScreenState
       widget.tagRepository ?? MemoryTagRepository();
   late NoteBlock _block;
   late List<NoteMixedSection> _sections;
-  final Map<String, TextEditingController> _textControllers = {};
+  final Map<String, NoteRichTextEditingController> _textControllers = {};
   _MixedSelectionTarget? _selection;
   String? _activeTextControllerKey;
   bool _railBottomExpanded = true;
@@ -49,6 +50,7 @@ class _NoteMixedTextChunkEditorScreenState
   bool _railTransparentBackground = false;
   bool _railBorderVisible = true;
   _MixedRailPanel? _railPanel;
+  int _idSequence = 0;
 
   @override
   void initState() {
@@ -95,10 +97,15 @@ class _NoteMixedTextChunkEditorScreenState
   }
 
   String _nextId(String prefix) {
-    return '$prefix-${DateTime.now().microsecondsSinceEpoch}';
+    final sequence = _idSequence++;
+    return '$prefix-${DateTime.now().microsecondsSinceEpoch}-$sequence';
   }
 
-  TextEditingController _controllerFor(String key, String text) {
+  NoteRichTextEditingController _controllerFor(
+    String key,
+    String text, {
+    List<NoteTextFill> fills = const [],
+  }) {
     final existing = _textControllers[key];
     if (existing != null) {
       if (existing.text != text && key != _activeTextControllerKey) {
@@ -107,9 +114,10 @@ class _NoteMixedTextChunkEditorScreenState
           selection: TextSelection.collapsed(offset: text.length),
         );
       }
+      existing.setFills(fills);
       return existing;
     }
-    final controller = TextEditingController(text: text);
+    final controller = NoteRichTextEditingController(text: text, fills: fills);
     _textControllers[key] = controller;
     return controller;
   }
@@ -214,7 +222,27 @@ class _NoteMixedTextChunkEditorScreenState
   }
 
   void _updateParagraph(NoteMixedSection section, String text) {
-    _replaceSection(section.copyWith(text: text));
+    _replaceSection(
+      section.copyWith(
+        text: text,
+        rangeTags: transformNoteTextRangeTagsForEdit(
+          section.rangeTags,
+          oldText: section.text,
+          newText: text,
+        ),
+        textFills: transformNoteTextFillsForEdit(
+          section.textFills,
+          oldText: section.text,
+          newText: text,
+          targetKey: 'paragraph',
+        ),
+        paragraphStyles: transformNoteTextParagraphStylesForEdit(
+          section.paragraphStyles,
+          oldText: section.text,
+          newText: text,
+        ),
+      ),
+    );
   }
 
   List<NoteListItem> _itemsFor(NoteMixedSection section) {
@@ -229,12 +257,26 @@ class _NoteMixedTextChunkEditorScreenState
     NoteListItem item, {
     bool select = true,
   }) {
+    final previousItems = _itemsFor(section);
+    final previousItem = previousItems.firstWhere(
+      (current) => current.id == item.id,
+      orElse: () => item,
+    );
     final items = [
-      for (final current in _itemsFor(section))
+      for (final current in previousItems)
         if (current.id == item.id) item else current,
     ];
+    final targetKey = 'list:${item.id}';
     _replaceSection(
-      section.copyWith(listItems: items),
+      section.copyWith(
+        listItems: items,
+        textFills: transformNoteTextFillsForEdit(
+          section.textFills,
+          oldText: previousItem.text,
+          newText: item.text,
+          targetKey: targetKey,
+        ),
+      ),
       selection: select
           ? _MixedSelectionTarget.listItem(section.id, item.id)
           : null,
@@ -258,15 +300,40 @@ class _NoteMixedTextChunkEditorScreenState
 
   void _deleteListItem(NoteMixedSection section, NoteListItem item) {
     final items = [..._itemsFor(section)];
+    final scopedTags = section.scopedTags
+        .where(
+          (assignment) =>
+              assignment.target.kind != NoteTagTargetKind.listItem ||
+              assignment.target.listItemId != item.id,
+        )
+        .toList(growable: false);
     if (items.length == 1) {
-      _replaceListItem(
-        section,
-        item.copyWith(text: '', level: 0, checked: false, tags: const []),
+      _replaceSection(
+        section.copyWith(
+          listItems: [
+            item.copyWith(text: '', level: 0, checked: false, tags: const []),
+          ],
+          textFills: section.textFills
+              .where((fill) => fill.targetKey != 'list:${item.id}')
+              .toList(growable: false),
+          scopedTags: scopedTags,
+        ),
+        selection: _MixedSelectionTarget.listItem(section.id, item.id),
       );
       return;
     }
     items.removeWhere((candidate) => candidate.id == item.id);
-    _replaceSection(section.copyWith(listItems: items), clearSelection: true);
+    final removedTargetKey = 'list:${item.id}';
+    _replaceSection(
+      section.copyWith(
+        listItems: items,
+        textFills: section.textFills
+            .where((fill) => fill.targetKey != removedTargetKey)
+            .toList(growable: false),
+        scopedTags: scopedTags,
+      ),
+      clearSelection: true,
+    );
   }
 
   void _changeListIndent(
@@ -322,6 +389,27 @@ class _NoteMixedTextChunkEditorScreenState
     return _defaultRowHeight;
   }
 
+  List<double> _normalizedTableRowHeights(NoteMixedSection section, int count) {
+    return [
+      for (var index = 0; index < count; index += 1)
+        index < section.tableRowHeights.length
+            ? section.tableRowHeights[index]
+            : _defaultRowHeight,
+    ];
+  }
+
+  List<double> _normalizedTableColumnWidths(
+    NoteMixedSection section,
+    int count,
+  ) {
+    return [
+      for (var index = 0; index < count; index += 1)
+        index < section.tableColumnWidths.length
+            ? section.tableColumnWidths[index]
+            : _defaultColumnWidth,
+    ];
+  }
+
   void _updateTableCell(
     NoteMixedSection section,
     int row,
@@ -335,18 +423,30 @@ class _NoteMixedTextChunkEditorScreenState
     while (rows[row].length <= column) {
       rows[row].add('');
     }
+    final previousValue = rows[row][column];
     rows[row][column] = value;
+    final targetKey = 'table:$row:$column';
     _replaceSection(
-      section.copyWith(rows: rows),
+      section.copyWith(
+        rows: rows,
+        textFills: transformNoteTextFillsForEdit(
+          section.textFills,
+          oldText: previousValue,
+          newText: value,
+          targetKey: targetKey,
+        ),
+      ),
       selection: _MixedSelectionTarget.tableCell(section.id, row, column),
     );
   }
 
   void _addTableRow(NoteMixedSection section) {
     final rows = _normalizedRows(section);
+    final rowHeights = _normalizedTableRowHeights(section, rows.length)
+      ..add(_defaultRowHeight);
     rows.add(List.filled(_columnCount(rows), ''));
     _replaceSection(
-      section.copyWith(rows: rows),
+      section.copyWith(rows: rows, tableRowHeights: rowHeights),
       selection: _MixedSelectionTarget.tableCell(
         section.id,
         rows.length - 1,
@@ -357,11 +457,15 @@ class _NoteMixedTextChunkEditorScreenState
 
   void _addTableColumn(NoteMixedSection section) {
     final rows = _normalizedRows(section);
+    final columnWidths = _normalizedTableColumnWidths(
+      section,
+      _columnCount(rows),
+    )..add(_defaultColumnWidth);
     for (final row in rows) {
       row.add('');
     }
     _replaceSection(
-      section.copyWith(rows: rows),
+      section.copyWith(rows: rows, tableColumnWidths: columnWidths),
       selection: _MixedSelectionTarget.tableCell(
         section.id,
         0,
@@ -375,8 +479,27 @@ class _NoteMixedTextChunkEditorScreenState
     if (rows.length <= 1 || rowIndex < 0 || rowIndex >= rows.length) {
       return;
     }
+    final rowHeights = _normalizedTableRowHeights(section, rows.length)
+      ..removeAt(rowIndex);
     rows.removeAt(rowIndex);
-    _replaceSection(section.copyWith(rows: rows), clearSelection: true);
+    _replaceSection(
+      section.copyWith(
+        rows: rows,
+        tableRowHeights: rowHeights,
+        textFills: _remapTableFillTargets(
+          section.textFills,
+          (row, column) => row == rowIndex
+              ? null
+              : (row: row > rowIndex ? row - 1 : row, column: column),
+        ),
+        scopedTags: _remapTableScopedTagTargets(
+          section.scopedTags,
+          rowRemap: (row) =>
+              row == rowIndex ? null : (row > rowIndex ? row - 1 : row),
+        ),
+      ),
+      clearSelection: true,
+    );
   }
 
   void _deleteTableColumn(NoteMixedSection section, int columnIndex) {
@@ -385,10 +508,30 @@ class _NoteMixedTextChunkEditorScreenState
     if (width <= 1 || columnIndex < 0 || columnIndex >= width) {
       return;
     }
+    final columnWidths = _normalizedTableColumnWidths(section, width)
+      ..removeAt(columnIndex);
     for (final row in rows) {
       row.removeAt(columnIndex);
     }
-    _replaceSection(section.copyWith(rows: rows), clearSelection: true);
+    _replaceSection(
+      section.copyWith(
+        rows: rows,
+        tableColumnWidths: columnWidths,
+        textFills: _remapTableFillTargets(
+          section.textFills,
+          (row, column) => column == columnIndex
+              ? null
+              : (row: row, column: column > columnIndex ? column - 1 : column),
+        ),
+        scopedTags: _remapTableScopedTagTargets(
+          section.scopedTags,
+          columnRemap: (column) => column == columnIndex
+              ? null
+              : (column > columnIndex ? column - 1 : column),
+        ),
+      ),
+      clearSelection: true,
+    );
   }
 
   void _moveTableRow(NoteMixedSection section, int rowIndex, int delta) {
@@ -397,10 +540,27 @@ class _NoteMixedTextChunkEditorScreenState
     if (target == rowIndex) {
       return;
     }
+    final rowHeights = _normalizedTableRowHeights(section, rows.length);
+    final movedHeight = rowHeights.removeAt(rowIndex);
+    rowHeights.insert(target, movedHeight);
     final moved = rows.removeAt(rowIndex);
     rows.insert(target, moved);
     _replaceSection(
-      section.copyWith(rows: rows),
+      section.copyWith(
+        rows: rows,
+        tableRowHeights: rowHeights,
+        textFills: _remapTableFillTargets(
+          section.textFills,
+          (row, column) => (
+            row: _movedTableIndex(row, from: rowIndex, to: target),
+            column: column,
+          ),
+        ),
+        scopedTags: _remapTableScopedTagTargets(
+          section.scopedTags,
+          rowRemap: (row) => _movedTableIndex(row, from: rowIndex, to: target),
+        ),
+      ),
       selection: _MixedSelectionTarget.tableCell(
         section.id,
         target,
@@ -416,18 +576,143 @@ class _NoteMixedTextChunkEditorScreenState
     if (target == columnIndex) {
       return;
     }
+    final columnWidths = _normalizedTableColumnWidths(section, width);
+    final movedWidth = columnWidths.removeAt(columnIndex);
+    columnWidths.insert(target, movedWidth);
     for (final row in rows) {
       final moved = row.removeAt(columnIndex);
       row.insert(target, moved);
     }
     _replaceSection(
-      section.copyWith(rows: rows),
+      section.copyWith(
+        rows: rows,
+        tableColumnWidths: columnWidths,
+        textFills: _remapTableFillTargets(
+          section.textFills,
+          (row, column) => (
+            row: row,
+            column: _movedTableIndex(column, from: columnIndex, to: target),
+          ),
+        ),
+        scopedTags: _remapTableScopedTagTargets(
+          section.scopedTags,
+          columnRemap: (column) =>
+              _movedTableIndex(column, from: columnIndex, to: target),
+        ),
+      ),
       selection: _MixedSelectionTarget.tableCell(
         section.id,
         _selection?.rowIndex ?? 0,
         target,
       ),
     );
+  }
+
+  int _movedTableIndex(int index, {required int from, required int to}) {
+    if (index == from) {
+      return to;
+    }
+    if (from < to && index > from && index <= to) {
+      return index - 1;
+    }
+    if (to < from && index >= to && index < from) {
+      return index + 1;
+    }
+    return index;
+  }
+
+  List<NoteTextFill> _remapTableFillTargets(
+    List<NoteTextFill> fills,
+    ({int row, int column})? Function(int row, int column) remap,
+  ) {
+    final remapped = <NoteTextFill>[];
+    for (final fill in fills) {
+      final coordinates = _tableFillCoordinates(fill.targetKey);
+      if (coordinates == null) {
+        if (fill.targetKey?.startsWith('table:') != true) {
+          remapped.add(fill);
+        }
+        continue;
+      }
+      final next = remap(coordinates.row, coordinates.column);
+      if (next != null) {
+        remapped.add(
+          fill.copyWith(targetKey: 'table:${next.row}:${next.column}'),
+        );
+      }
+    }
+    return remapped;
+  }
+
+  List<NoteScopedTagAssignment> _remapTableScopedTagTargets(
+    List<NoteScopedTagAssignment> assignments, {
+    int? Function(int row)? rowRemap,
+    int? Function(int column)? columnRemap,
+  }) {
+    final remapped = <NoteScopedTagAssignment>[];
+    for (final assignment in assignments) {
+      final target = assignment.target;
+      if (target.kind == NoteTagTargetKind.tableRow) {
+        final row = target.rowIndex;
+        if (row == null || row < 0) {
+          continue;
+        }
+        final nextRow = rowRemap == null ? row : rowRemap(row);
+        if (nextRow != null) {
+          remapped.add(
+            assignment.copyWith(target: target.copyWith(rowIndex: nextRow)),
+          );
+        }
+        continue;
+      }
+      if (target.kind == NoteTagTargetKind.tableColumn) {
+        final column = target.columnIndex;
+        if (column == null || column < 0) {
+          continue;
+        }
+        final nextColumn = columnRemap == null ? column : columnRemap(column);
+        if (nextColumn != null) {
+          remapped.add(
+            assignment.copyWith(
+              target: target.copyWith(columnIndex: nextColumn),
+            ),
+          );
+        }
+        continue;
+      }
+      if (target.kind != NoteTagTargetKind.tableCell) {
+        remapped.add(assignment);
+        continue;
+      }
+      final row = target.rowIndex;
+      final column = target.columnIndex;
+      if (row == null || row < 0 || column == null || column < 0) {
+        continue;
+      }
+      final nextRow = rowRemap == null ? row : rowRemap(row);
+      final nextColumn = columnRemap == null ? column : columnRemap(column);
+      if (nextRow != null && nextColumn != null) {
+        remapped.add(
+          assignment.copyWith(
+            target: target.copyWith(rowIndex: nextRow, columnIndex: nextColumn),
+          ),
+        );
+      }
+    }
+    return remapped;
+  }
+
+  ({int row, int column})? _tableFillCoordinates(String? targetKey) {
+    final parts = targetKey?.split(':');
+    if (parts == null || parts.length != 3 || parts.first != 'table') {
+      return null;
+    }
+    final row = int.tryParse(parts[1]);
+    final column = int.tryParse(parts[2]);
+    if (row == null || row < 0 || column == null || column < 0) {
+      return null;
+    }
+    return (row: row, column: column);
   }
 
   void _setSelectedParagraphRole(NoteMixedParagraphRole role) {
@@ -487,17 +772,86 @@ class _NoteMixedTextChunkEditorScreenState
       setState(() => _railPanel = null);
       return;
     }
+    if (panel == _MixedRailPanel.backgroundColor) {
+      _replaceSelectedFill(section, colorValue);
+      setState(() => _railPanel = null);
+      return;
+    }
     final nextSection = switch (panel) {
       _MixedRailPanel.textColor => section.copyWith(textColorValue: colorValue),
       _MixedRailPanel.underlineColor => section.copyWith(
         underlineColorValue: colorValue,
       ),
-      _MixedRailPanel.backgroundColor => section.copyWith(
-        backgroundColorValue: colorValue,
-      ),
+      _MixedRailPanel.backgroundColor => section,
       _MixedRailPanel.heading => section,
     };
     _replaceSection(nextSection, selection: selection);
+    setState(() => _railPanel = null);
+  }
+
+  String _fillTargetKey(_MixedSelectionTarget selection) {
+    return switch (selection.kind) {
+      _MixedSelectionKind.paragraph => 'paragraph',
+      _MixedSelectionKind.listItem => 'list:${selection.itemId}',
+      _MixedSelectionKind.tableCell =>
+        'table:${selection.rowIndex}:${selection.columnIndex}',
+    };
+  }
+
+  List<NoteTextFill> _fillsFor(NoteMixedSection section, String targetKey) {
+    return section.textFills
+        .where((fill) => fill.targetKey == targetKey)
+        .toList(growable: false);
+  }
+
+  void _replaceSelectedFill(NoteMixedSection section, int? colorValue) {
+    final selectionTarget = _selection;
+    final controllerKey = _activeTextControllerKey;
+    final controller = controllerKey == null
+        ? null
+        : _textControllers[controllerKey];
+    if (selectionTarget == null || controller == null) {
+      return;
+    }
+    final selection = controller.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Jelölj ki szöveget a kitöltéshez')),
+      );
+      return;
+    }
+    final start = selection.start.clamp(0, controller.text.length).toInt();
+    final end = selection.end.clamp(start, controller.text.length).toInt();
+    if (end <= start) {
+      return;
+    }
+    final targetKey = _fillTargetKey(selectionTarget);
+    _replaceSection(
+      section.copyWith(
+        textFills: replaceNoteTextFillRange(
+          section.textFills,
+          start: start,
+          end: end,
+          targetKey: targetKey,
+          colorValue: colorValue,
+          idFactory: () => _nextId('fill'),
+        ),
+      ),
+      selection: selectionTarget,
+    );
+  }
+
+  void _clearSelectedFill() {
+    final selection = _selection;
+    if (selection == null) {
+      return;
+    }
+    final section = _sectionById(selection.sectionId);
+    if (section == null) {
+      return;
+    }
+    _replaceSelectedFill(section, null);
     setState(() => _railPanel = null);
   }
 
@@ -510,23 +864,60 @@ class _NoteMixedTextChunkEditorScreenState
     if (section == null || section.type != NoteMixedSectionType.paragraph) {
       return;
     }
-    final lines = section.text
-        .split('\n')
-        .map(_cleanListInputLine)
-        .where((line) => line.isNotEmpty)
-        .toList(growable: false);
+    final lines = _paragraphListLines(section.text);
     final items = lines.isEmpty
         ? [NoteListItem(id: _nextId('item'), text: '')]
         : [
             for (final line in lines)
-              NoteListItem(id: _nextId('item'), text: line),
+              NoteListItem(
+                id: _nextId('item'),
+                text: line.text,
+                level: _listLevelForParagraphLine(section, line),
+                tags: _tagsForParagraphLine(section, line),
+              ),
           ];
+    final fills = <NoteTextFill>[];
+    for (var index = 0; index < lines.length; index += 1) {
+      final line = lines[index];
+      final targetKey = 'list:${items[index].id}';
+      for (final fill in section.textFills) {
+        if ((fill.targetKey != null && fill.targetKey != 'paragraph') ||
+            fill.end <= line.sourceStart ||
+            fill.start >= line.sourceEnd) {
+          continue;
+        }
+        final sourceStart = fill.start > line.sourceStart
+            ? fill.start
+            : line.sourceStart;
+        final sourceEnd = fill.end < line.sourceEnd ? fill.end : line.sourceEnd;
+        if (sourceEnd > sourceStart) {
+          fills.add(
+            fill.copyWith(
+              id: _nextId('fill'),
+              start: sourceStart - line.sourceStart,
+              end: sourceEnd - line.sourceStart,
+              targetKey: targetKey,
+            ),
+          );
+        }
+      }
+    }
     final next = section.copyWith(
       type: NoteMixedSectionType.list,
       text: '',
       paragraphRole: NoteMixedParagraphRole.paragraph,
+      paragraphIndentLevel: 0,
+      rangeTags: const [],
+      textFills: fills,
+      paragraphStyles: const [],
       listLayoutMode: mode,
       listItems: items,
+      scopedTags: section.scopedTags
+          .where(
+            (assignment) =>
+                assignment.target.kind != NoteTagTargetKind.textRange,
+          )
+          .toList(growable: false),
     );
     _replaceSection(
       next,
@@ -534,11 +925,85 @@ class _NoteMixedTextChunkEditorScreenState
     );
   }
 
-  String _cleanListInputLine(String value) {
-    return value
-        .trim()
-        .replaceFirst(RegExp(r'^([\-*•]|\d+[\.)])\s+'), '')
-        .trim();
+  List<({String text, int sourceStart, int sourceEnd})> _paragraphListLines(
+    String text,
+  ) {
+    final lines = <({String text, int sourceStart, int sourceEnd})>[];
+    var offset = 0;
+    for (final rawLine in text.split('\n')) {
+      var contentStart = 0;
+      while (contentStart < rawLine.length &&
+          rawLine.substring(contentStart, contentStart + 1).trim().isEmpty) {
+        contentStart += 1;
+      }
+      var contentEnd = rawLine.length;
+      while (contentEnd > contentStart &&
+          rawLine.substring(contentEnd - 1, contentEnd).trim().isEmpty) {
+        contentEnd -= 1;
+      }
+      if (contentStart < contentEnd) {
+        final marker = RegExp(
+          r'^([\-*•]|\d+[\.)])\s+',
+        ).firstMatch(rawLine.substring(contentStart, contentEnd));
+        if (marker != null) {
+          contentStart += marker.end;
+        }
+      }
+      if (contentStart < contentEnd) {
+        lines.add((
+          text: rawLine.substring(contentStart, contentEnd),
+          sourceStart: offset + contentStart,
+          sourceEnd: offset + contentEnd,
+        ));
+      }
+      offset += rawLine.length + 1;
+    }
+    return lines;
+  }
+
+  int _listLevelForParagraphLine(
+    NoteMixedSection section,
+    ({String text, int sourceStart, int sourceEnd}) line,
+  ) {
+    var level = section.paragraphIndentLevel;
+    for (final style in section.paragraphStyles) {
+      if (style.end > line.sourceStart &&
+          style.start < line.sourceEnd &&
+          style.level > level) {
+        level = style.level;
+      }
+    }
+    return level.clamp(0, 8).toInt();
+  }
+
+  List<NoteKnowledgeTag> _tagsForParagraphLine(
+    NoteMixedSection section,
+    ({String text, int sourceStart, int sourceEnd}) line,
+  ) {
+    final byMetadata = <String, NoteKnowledgeTag>{};
+    for (final range in section.rangeTags) {
+      if (range.end <= line.sourceStart || range.start >= line.sourceEnd) {
+        continue;
+      }
+      for (final tag in range.resolvedTags) {
+        if (tag.metadataText.isNotEmpty) {
+          byMetadata[tag.metadataText] = tag;
+        }
+      }
+      for (final assignment in section.scopedTags) {
+        if (assignment.target.kind == NoteTagTargetKind.textRange &&
+            assignment.target.rangeId == range.id) {
+          for (final tag in assignment.tags) {
+            if (tag.metadataText.isNotEmpty) {
+              byMetadata[tag.metadataText] = tag;
+            }
+          }
+        }
+      }
+    }
+    final tags = byMetadata.values.toList(growable: false);
+    tags.sort((left, right) => left.metadataText.compareTo(right.metadataText));
+    return tags;
   }
 
   void _toggleBoldInActiveText() {
@@ -654,7 +1119,23 @@ class _NoteMixedTextChunkEditorScreenState
     }
     switch (selection.kind) {
       case _MixedSelectionKind.paragraph:
-        return const [];
+        final section = _sectionById(selection.sectionId);
+        final range = _activeTextRange();
+        if (section == null || range == null) {
+          return const [];
+        }
+        final byMetadata = <String, NoteKnowledgeTag>{};
+        for (final rangeTag in section.rangeTags) {
+          if (rangeTag.end <= range.start || rangeTag.start >= range.end) {
+            continue;
+          }
+          for (final tag in rangeTag.resolvedTags) {
+            if (tag.metadataText.isNotEmpty) {
+              byMetadata[tag.metadataText] = tag;
+            }
+          }
+        }
+        return byMetadata.values.toList(growable: false);
       case _MixedSelectionKind.listItem:
         return _selectedListItem()?.tags ?? const [];
       case _MixedSelectionKind.tableCell:
@@ -669,6 +1150,21 @@ class _NoteMixedTextChunkEditorScreenState
         }
         return const [];
     }
+  }
+
+  TextRange? _activeTextRange() {
+    final key = _activeTextControllerKey;
+    final controller = key == null ? null : _textControllers[key];
+    if (controller == null) {
+      return null;
+    }
+    final selection = controller.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      return null;
+    }
+    final start = selection.start.clamp(0, controller.text.length).toInt();
+    final end = selection.end.clamp(start, controller.text.length).toInt();
+    return end <= start ? null : TextRange(start: start, end: end);
   }
 
   Future<void> _tagChunk() async {
@@ -721,6 +1217,26 @@ class _NoteMixedTextChunkEditorScreenState
     }
     switch (selection.kind) {
       case _MixedSelectionKind.paragraph:
+        final range = _activeTextRange();
+        if (range == null) {
+          return;
+        }
+        final replacement = replaceNoteTextRangeTagsAndRemapScopedTags(
+          section.rangeTags,
+          scopedTags: section.scopedTags,
+          start: range.start,
+          end: range.end,
+          tags: tags,
+          rangeIdFactory: () => _nextId('range-tag'),
+          scopedTagIdFactory: () => _nextId('tag'),
+        );
+        _replaceSection(
+          section.copyWith(
+            rangeTags: replacement.rangeTags,
+            scopedTags: replacement.scopedTags,
+          ),
+          selection: selection,
+        );
         return;
       case _MixedSelectionKind.listItem:
         final item = _selectedListItem();
@@ -978,6 +1494,7 @@ class _NoteMixedTextChunkEditorScreenState
                                 panel: _railPanel,
                                 onHeadingLevel: _setSelectedHeadingLevel,
                                 onColor: _applySelectedColor,
+                                onClearFill: _clearSelectedFill,
                               ),
                               _MixedKeyboardRail(
                                 tags: _selectedTags,
@@ -1094,7 +1611,11 @@ class _NoteMixedTextChunkEditorScreenState
 
   Widget _buildParagraphSection(NoteMixedSection section) {
     final key = 'paragraph:${section.id}';
-    final controller = _controllerFor(key, section.text);
+    final controller = _controllerFor(
+      key,
+      section.text,
+      fills: _fillsFor(section, 'paragraph'),
+    );
     return Padding(
       padding: EdgeInsets.only(left: section.paragraphIndentLevel * 22.0),
       child: TextField(
@@ -1147,9 +1668,6 @@ class _NoteMixedTextChunkEditorScreenState
       fontSize: fontSize,
       height: lineHeight,
       fontWeight: isHeading ? FontWeight.w800 : FontWeight.w400,
-      backgroundColor: section.backgroundColorValue == null
-          ? null
-          : Color(section.backgroundColorValue!).withValues(alpha: 0.35),
       decoration: section.underlineColorValue == null
           ? TextDecoration.none
           : TextDecoration.underline,
@@ -1174,6 +1692,7 @@ class _NoteMixedTextChunkEditorScreenState
             controller: _controllerFor(
               'list:${section.id}:${items[index].id}',
               items[index].text,
+              fills: _fillsFor(section, 'list:${items[index].id}'),
             ),
             item: items[index],
             selected:
@@ -1272,6 +1791,7 @@ class _NoteMixedTextChunkEditorScreenState
                         controller: _controllerFor(
                           'table:${section.id}:$row:$column',
                           rows[row][column],
+                          fills: _fillsFor(section, 'table:$row:$column'),
                         ),
                         minLines: 1,
                         maxLines: null,
@@ -1515,6 +2035,7 @@ class _MixedRailPopover extends StatelessWidget {
     required this.panel,
     required this.onHeadingLevel,
     required this.onColor,
+    required this.onClearFill,
   });
 
   static const List<int> _colors = [
@@ -1531,6 +2052,7 @@ class _MixedRailPopover extends StatelessWidget {
   final _MixedRailPanel? panel;
   final ValueChanged<int> onHeadingLevel;
   final ValueChanged<int> onColor;
+  final VoidCallback onClearFill;
 
   @override
   Widget build(BuildContext context) {
@@ -1588,6 +2110,13 @@ class _MixedRailPopover extends StatelessWidget {
                             ),
                           ),
                         ),
+                      ),
+                    if (panel == _MixedRailPanel.backgroundColor)
+                      IconButton(
+                        key: const ValueKey('note-mixed-fill-clear'),
+                        tooltip: 'Kitöltés eltávolítása',
+                        onPressed: onClearFill,
+                        icon: const Icon(Icons.format_color_reset),
                       ),
                   ],
                 ),
@@ -1762,8 +2291,8 @@ class _MixedKeyboardRail extends StatelessWidget {
           icon: const Icon(Icons.format_underlined, size: 18),
         ),
         IconButton(
-          key: const ValueKey('note-mixed-rail-background-color'),
-          tooltip: 'Szöveg háttérszín',
+          key: const ValueKey('note-mixed-rail-fill'),
+          tooltip: 'Kitöltés',
           onPressed: onBackgroundColor,
           constraints: constraints,
           padding: padding,

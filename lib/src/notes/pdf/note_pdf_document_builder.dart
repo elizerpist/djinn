@@ -161,16 +161,203 @@ bool notePdfBlockHasExportableContent(NoteBlock block) {
 }
 
 List<String> notePdfListMarkersForBlock(NoteBlock block) {
-  final hierarchyMarkers = block.listLayoutMode == NoteListLayoutMode.hierarchy
-      ? noteHierarchyMarkersForItems(block.listItems)
+  return _notePdfListMarkers(
+    items: block.listItems,
+    layoutMode: block.listLayoutMode,
+  );
+}
+
+List<String> _notePdfListMarkers({
+  required List<NoteListItem> items,
+  required NoteListLayoutMode layoutMode,
+}) {
+  final hierarchyMarkers = layoutMode == NoteListLayoutMode.hierarchy
+      ? noteHierarchyMarkersForItems(items)
       : const <String, String>{};
   return [
-    for (final item in block.listItems)
-      if (block.listLayoutMode == NoteListLayoutMode.hierarchy)
+    for (final item in items)
+      if (layoutMode == NoteListLayoutMode.hierarchy)
         hierarchyMarkers[item.id] ?? ''
       else
         item.checked ? '[x]' : '[ ]',
   ];
+}
+
+pw.TextSpan notePdfTextFillSpan({
+  required String text,
+  required List<NoteTextFill> fills,
+  pw.TextStyle? baseStyle,
+}) {
+  final validFills =
+      fills
+          .map((fill) => fill.clampToTextLength(text.length))
+          .where((fill) => fill.isValid)
+          .toList(growable: false)
+        ..sort((left, right) {
+          final start = left.start.compareTo(right.start);
+          return start == 0 ? left.end.compareTo(right.end) : start;
+        });
+  if (validFills.isEmpty) {
+    return pw.TextSpan(text: text, style: baseStyle);
+  }
+
+  final children = <pw.InlineSpan>[];
+  var cursor = 0;
+  for (final fill in validFills) {
+    if (fill.start < cursor) {
+      continue;
+    }
+    if (fill.start > cursor) {
+      children.add(pw.TextSpan(text: text.substring(cursor, fill.start)));
+    }
+    children.add(
+      pw.TextSpan(
+        text: text.substring(fill.start, fill.end),
+        style: pw.TextStyle(
+          background: pw.BoxDecoration(
+            color: PdfColor.fromInt(fill.colorValue),
+          ),
+        ),
+      ),
+    );
+    cursor = fill.end;
+  }
+  if (cursor < text.length) {
+    children.add(pw.TextSpan(text: text.substring(cursor)));
+  }
+  return pw.TextSpan(style: baseStyle, children: children);
+}
+
+List<NoteTextFill> _fillsForPdfTarget(
+  List<NoteTextFill> fills,
+  String? targetKey,
+) {
+  return fills
+      .where(
+        (fill) =>
+            fill.targetKey == targetKey ||
+            (targetKey == 'paragraph' && fill.targetKey == null),
+      )
+      .toList(growable: false);
+}
+
+pw.Widget _pdfFilledText({
+  required String sourceText,
+  required List<NoteTextFill> fills,
+  required pw.TextStyle style,
+  String? scope,
+  pw.TextAlign? textAlign,
+  int? maxLines,
+}) {
+  final text = sourceText.trim();
+  final renderedFills = transformNoteTextFillsForEdit(
+    fills,
+    oldText: sourceText,
+    newText: text,
+  );
+  if (scope != null && renderedFills.isNotEmpty) {
+    DebugConsole.log(
+      '[NotePdfExport] render fills scope=$scope '
+      'count=${renderedFills.length}',
+    );
+  }
+  return pw.RichText(
+    text: notePdfTextFillSpan(
+      text: text,
+      fills: renderedFills,
+      baseStyle: style,
+    ),
+    textAlign: textAlign,
+    maxLines: maxLines,
+  );
+}
+
+pw.TextStyle _pdfMixedSectionTextStyle(
+  NoteMixedSection section,
+  pw.TextStyle baseStyle,
+) {
+  return baseStyle.copyWith(
+    color: section.textColorValue == null
+        ? null
+        : PdfColor.fromInt(section.textColorValue!),
+    decoration: section.underlineColorValue == null
+        ? null
+        : pw.TextDecoration.underline,
+    decorationColor: section.underlineColorValue == null
+        ? null
+        : PdfColor.fromInt(section.underlineColorValue!),
+    background: section.backgroundColorValue == null
+        ? null
+        : pw.BoxDecoration(
+            color: PdfColor.fromInt(section.backgroundColorValue!),
+          ),
+  );
+}
+
+pw.Widget notePdfMixedParagraphVisual({
+  required NoteMixedSection section,
+  required pw.TextStyle bodyStyle,
+  required pw.TextStyle headingStyle,
+  String? fillScope,
+}) {
+  final isHeading = section.paragraphRole == NoteMixedParagraphRole.heading;
+  final headingLevel = section.headingLevel.clamp(1, 3).toInt();
+  final headingSize = math.max(
+    bodyStyle.fontSize ?? 11,
+    (headingStyle.fontSize ?? 16) - ((headingLevel - 1) * 2),
+  );
+  final textStyle = _pdfMixedSectionTextStyle(
+    section,
+    (isHeading ? headingStyle : bodyStyle).copyWith(
+      fontSize: isHeading ? headingSize : bodyStyle.fontSize,
+    ),
+  );
+  final text = _pdfFilledText(
+    sourceText: section.text,
+    fills: _fillsForPdfTarget(section.textFills, 'paragraph'),
+    style: textStyle,
+    scope: fillScope,
+  );
+  final leftIndent = section.paragraphIndentLevel.clamp(0, 8).toDouble() * 12;
+  if (leftIndent == 0) {
+    return text;
+  }
+  return pw.Padding(
+    padding: pw.EdgeInsets.only(left: leftIndent),
+    child: text,
+  );
+}
+
+pw.Widget notePdfMixedListVisual({
+  required NoteMixedSection section,
+  required pw.TextStyle bodyStyle,
+  String? fillScopePrefix,
+}) {
+  return _listVisual(
+    items: section.listItems,
+    fallbackText: section.text,
+    textFills: section.textFills,
+    layoutMode: section.listLayoutMode,
+    bodyStyle: _pdfMixedSectionTextStyle(section, bodyStyle),
+    markerStyle: bodyStyle,
+    fillScopePrefix: fillScopePrefix,
+  );
+}
+
+pw.Widget notePdfMixedTableVisual({
+  required NoteMixedSection section,
+  required pw.TextStyle bodyStyle,
+  String? fillScopePrefix,
+}) {
+  return _tableVisual(
+    sourceRows: section.rows,
+    fallbackText: section.text,
+    textFills: section.textFills,
+    columnWidths: section.tableColumnWidths,
+    rowHeights: section.tableRowHeights,
+    bodyStyle: _pdfMixedSectionTextStyle(section, bodyStyle),
+    fillScopePrefix: fillScopePrefix,
+  );
 }
 
 void _addOrdinaryPages(
@@ -337,9 +524,21 @@ pw.Widget _headingBlock(NoteBlock block, _PdfTextTheme textTheme) {
   );
 }
 
-pw.Widget _paragraphBlock(NoteBlock block, _PdfTextTheme textTheme) {
-  final text = block.text.trim();
-  return pw.Text(text.isEmpty ? block.plainText : text, style: textTheme.body);
+pw.Widget _paragraphBlock(
+  NoteBlock block,
+  _PdfTextTheme textTheme, {
+  String? fillScope,
+}) {
+  final sourceText = block.text.trim().isEmpty ? block.plainText : block.text;
+  return _pdfFilledText(
+    sourceText: sourceText,
+    fills: _fillsForPdfTarget(
+      block.textFills,
+      fillScope == null ? null : 'paragraph',
+    ),
+    style: textTheme.body,
+    scope: fillScope,
+  );
 }
 
 pw.Widget _mixedBlock(NoteBlock block, _PdfTextTheme textTheme) {
@@ -372,12 +571,22 @@ pw.Widget _mixedBlock(NoteBlock block, _PdfTextTheme textTheme) {
       );
     }
     children.add(switch (section.type) {
-      NoteMixedSectionType.paragraph => _paragraphBlock(
-        sectionBlock,
-        textTheme,
+      NoteMixedSectionType.paragraph => notePdfMixedParagraphVisual(
+        section: section,
+        bodyStyle: textTheme.body,
+        headingStyle: textTheme.heading,
+        fillScope: 'mixed:${block.id}:${section.id}:paragraph',
       ),
-      NoteMixedSectionType.list => _listBlock(sectionBlock, textTheme),
-      NoteMixedSectionType.table => _tableBlock(sectionBlock, textTheme),
+      NoteMixedSectionType.list => notePdfMixedListVisual(
+        section: section,
+        bodyStyle: textTheme.body,
+        fillScopePrefix: 'mixed:${block.id}:${section.id}',
+      ),
+      NoteMixedSectionType.table => notePdfMixedTableVisual(
+        section: section,
+        bodyStyle: textTheme.body,
+        fillScopePrefix: 'mixed:${block.id}:${section.id}',
+      ),
     });
   }
   if (children.isEmpty) {
@@ -389,12 +598,39 @@ pw.Widget _mixedBlock(NoteBlock block, _PdfTextTheme textTheme) {
   );
 }
 
-pw.Widget _listBlock(NoteBlock block, _PdfTextTheme textTheme) {
-  final items = block.listItems;
+pw.Widget _listBlock(
+  NoteBlock block,
+  _PdfTextTheme textTheme, {
+  String? fillScopePrefix,
+}) {
+  return _listVisual(
+    items: block.listItems,
+    fallbackText: block.text,
+    textFills: block.textFills,
+    layoutMode: block.listLayoutMode,
+    bodyStyle: textTheme.body,
+    markerStyle: textTheme.body,
+    fillScopePrefix: fillScopePrefix,
+  );
+}
+
+pw.Widget _listVisual({
+  required List<NoteListItem> items,
+  required String fallbackText,
+  required List<NoteTextFill> textFills,
+  required NoteListLayoutMode layoutMode,
+  required pw.TextStyle bodyStyle,
+  required pw.TextStyle markerStyle,
+  String? fillScopePrefix,
+}) {
   if (items.isEmpty) {
-    return pw.Text(block.text.trim(), style: textTheme.body);
+    return _pdfFilledText(
+      sourceText: fallbackText,
+      fills: _fillsForPdfTarget(textFills, null),
+      style: bodyStyle,
+    );
   }
-  final markers = notePdfListMarkersForBlock(block);
+  final markers = _notePdfListMarkers(items: items, layoutMode: layoutMode);
   return pw.Column(
     crossAxisAlignment: pw.CrossAxisAlignment.start,
     children: [
@@ -408,14 +644,19 @@ pw.Widget _listBlock(NoteBlock block, _PdfTextTheme textTheme) {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.SizedBox(
-                width: block.listLayoutMode == NoteListLayoutMode.hierarchy
-                    ? 18
-                    : 24,
-                child: pw.Text(markers[i], style: textTheme.body),
+                width: layoutMode == NoteListLayoutMode.hierarchy ? 18 : 24,
+                child: pw.Text(markers[i], style: markerStyle),
               ),
               pw.SizedBox(width: 4),
               pw.Expanded(
-                child: pw.Text(items[i].text.trim(), style: textTheme.body),
+                child: _pdfFilledText(
+                  sourceText: items[i].text,
+                  fills: _fillsForPdfTarget(textFills, 'list:${items[i].id}'),
+                  style: bodyStyle,
+                  scope: fillScopePrefix == null
+                      ? null
+                      : '$fillScopePrefix:list:${items[i].id}',
+                ),
               ),
             ],
           ),
@@ -424,24 +665,111 @@ pw.Widget _listBlock(NoteBlock block, _PdfTextTheme textTheme) {
   );
 }
 
-pw.Widget _tableBlock(NoteBlock block, _PdfTextTheme textTheme) {
-  final rows = block.rows
-      .where((row) => row.any((cell) => cell.trim().isNotEmpty))
-      .map((row) => row.map((cell) => cell.trim()).toList(growable: false))
-      .toList(growable: false);
+pw.Widget _tableBlock(
+  NoteBlock block,
+  _PdfTextTheme textTheme, {
+  String? fillScopePrefix,
+}) {
+  return _tableVisual(
+    sourceRows: block.rows,
+    fallbackText: block.text,
+    textFills: block.textFills,
+    columnWidths: block.tableColumnWidths,
+    rowHeights: block.tableRowHeights,
+    bodyStyle: textTheme.body,
+    fillScopePrefix: fillScopePrefix,
+  );
+}
+
+pw.Widget _tableVisual({
+  required List<List<String>> sourceRows,
+  required String fallbackText,
+  required List<NoteTextFill> textFills,
+  required List<double> columnWidths,
+  required List<double> rowHeights,
+  required pw.TextStyle bodyStyle,
+  String? fillScopePrefix,
+}) {
+  final rows = [
+    for (var rowIndex = 0; rowIndex < sourceRows.length; rowIndex += 1)
+      if (sourceRows[rowIndex].any((cell) => cell.trim().isNotEmpty))
+        (index: rowIndex, cells: sourceRows[rowIndex]),
+  ];
   if (rows.isEmpty) {
-    return pw.Text(block.text.trim(), style: textTheme.body);
+    return _pdfFilledText(
+      sourceText: fallbackText,
+      fills: _fillsForPdfTarget(textFills, null),
+      style: bodyStyle,
+    );
   }
-  return pw.TableHelper.fromTextArray(
-    data: rows.length == 1 ? rows : rows.skip(1).toList(growable: false),
-    headers: rows.length > 1 ? rows.first : null,
-    cellStyle: textTheme.body,
-    headerStyle: textTheme.body.copyWith(fontWeight: pw.FontWeight.bold),
-    cellAlignment: pw.Alignment.centerLeft,
-    headerAlignment: pw.Alignment.centerLeft,
-    cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-    headerDecoration: pw.BoxDecoration(color: PdfColor.fromHex('#E5E7EB')),
+
+  var columnCount = 0;
+  for (final row in rows) {
+    columnCount = math.max(columnCount, row.cells.length);
+  }
+
+  double? storedRowHeight(int rowIndex) {
+    if (rowIndex < 0 || rowIndex >= rowHeights.length) {
+      return null;
+    }
+    final height = rowHeights[rowIndex];
+    return height.isFinite && height > 0 ? height : null;
+  }
+
+  List<pw.Widget> pdfRow(
+    ({int index, List<String> cells}) row,
+    pw.TextStyle style,
+  ) {
+    final rowHeight = storedRowHeight(row.index);
+    return [
+      for (var column = 0; column < columnCount; column += 1)
+        pw.Container(
+          alignment: pw.Alignment.centerLeft,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          constraints: rowHeight == null
+              ? null
+              : pw.BoxConstraints(minHeight: rowHeight),
+          child: _pdfFilledText(
+            sourceText: column < row.cells.length ? row.cells[column] : '',
+            fills: _fillsForPdfTarget(textFills, 'table:${row.index}:$column'),
+            style: style,
+            scope: fillScopePrefix == null
+                ? null
+                : '$fillScopePrefix:table:${row.index}:$column',
+          ),
+        ),
+    ];
+  }
+
+  final storedColumnWidths = <int, pw.TableColumnWidth>{
+    for (
+      var column = 0;
+      column < columnCount && column < columnWidths.length;
+      column += 1
+    )
+      if (columnWidths[column].isFinite && columnWidths[column] > 0)
+        column: pw.FixedColumnWidth(columnWidths[column]),
+  };
+  final hasHeader = rows.length > 1;
+  return pw.Table(
+    children: [
+      for (var visibleRow = 0; visibleRow < rows.length; visibleRow += 1)
+        pw.TableRow(
+          repeat: hasHeader && visibleRow == 0,
+          decoration: hasHeader && visibleRow == 0
+              ? pw.BoxDecoration(color: PdfColor.fromHex('#E5E7EB'))
+              : null,
+          children: pdfRow(
+            rows[visibleRow],
+            hasHeader && visibleRow == 0
+                ? bodyStyle.copyWith(fontWeight: pw.FontWeight.bold)
+                : bodyStyle,
+          ),
+        ),
+    ],
+    columnWidths: storedColumnWidths.isEmpty ? null : storedColumnWidths,
     border: pw.TableBorder.all(color: _rule, width: 0.5),
+    defaultVerticalAlignment: pw.TableCellVerticalAlignment.full,
   );
 }
 
@@ -457,6 +785,7 @@ NoteBlock _blockFromMixedSection(NoteBlock block, NoteMixedSection section) {
     title: sectionTitle == null || sectionTitle.isEmpty ? null : sectionTitle,
     text: section.text,
     rangeTags: section.rangeTags,
+    textFills: section.textFills,
     paragraphStyles: section.paragraphStyles,
     listItems: section.listItems,
     listLayoutMode: section.listLayoutMode,
@@ -526,7 +855,7 @@ void _addFlowchartPages(
                 ],
                 _flowchartPageHeader(block, page, textTheme),
                 pw.SizedBox(height: 10),
-                _flowchartCanvas(layout, page, canvasSize, textTheme),
+                _flowchartCanvas(block.id, layout, page, canvasSize, textTheme),
                 pw.Spacer(),
                 _footer(context, textTheme),
               ],
@@ -579,6 +908,7 @@ pw.Widget _flowchartPageHeader(
 }
 
 pw.Widget _flowchartCanvas(
+  String blockId,
   NotePdfFlowchartLayout layout,
   NotePdfFlowchartPage page,
   Size canvasSize,
@@ -610,7 +940,13 @@ pw.Widget _flowchartCanvas(
         for (final edge in layout.edgeRoutes)
           if (edge.edge.label.trim().isNotEmpty &&
               page.sourceRect.contains(edge.labelAnchor))
-            _flowchartEdgeLabel(edge, transform, canvasSize, textTheme),
+            _flowchartEdgeLabel(
+              blockId,
+              edge,
+              transform,
+              canvasSize,
+              textTheme,
+            ),
         for (final node in layout.nodeBoxes)
           if (page.sourceRect.overlaps(node.rect))
             pw.Positioned(
@@ -621,15 +957,19 @@ pw.Widget _flowchartCanvas(
                 height: math.max(28, node.rect.height * transform.scale),
                 padding: const pw.EdgeInsets.all(6),
                 alignment: pw.Alignment.center,
-                child: pw.Text(
-                  node.node.label.trim().isEmpty
+                child: _pdfFilledText(
+                  sourceText: node.node.label.trim().isEmpty
                       ? node.node.id
-                      : node.node.label.trim(),
+                      : node.node.label,
+                  fills: node.node.label.trim().isEmpty
+                      ? const []
+                      : node.node.labelFills,
                   textAlign: pw.TextAlign.center,
                   maxLines: 3,
                   style: textTheme.node.copyWith(
                     fontSize: math.max(6.5, 9 * transform.scale),
                   ),
+                  scope: 'flowchart:$blockId:node:${node.node.id}',
                 ),
               ),
             ),
@@ -639,6 +979,7 @@ pw.Widget _flowchartCanvas(
 }
 
 pw.Widget _flowchartEdgeLabel(
+  String blockId,
   NotePdfFlowchartEdgeRoute edge,
   _FlowchartTransform transform,
   Size canvasSize,
@@ -663,14 +1004,16 @@ pw.Widget _flowchartEdgeLabel(
         border: pw.Border.all(color: _rule, width: 0.5),
         borderRadius: pw.BorderRadius.circular(5),
       ),
-      child: pw.Text(
-        text,
+      child: _pdfFilledText(
+        sourceText: edge.edge.label,
+        fills: edge.edge.labelFills,
         textAlign: pw.TextAlign.center,
         maxLines: 1,
         style: textTheme.small.copyWith(
           fontSize: math.max(6.0, 8.0 * transform.scale),
           color: _edgeStroke,
         ),
+        scope: 'flowchart:$blockId:edge:${edge.edge.id}',
       ),
     ),
   );

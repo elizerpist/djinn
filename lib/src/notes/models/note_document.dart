@@ -262,6 +262,459 @@ class NoteTextRangeTag {
       if (tags.isNotEmpty) 'tags': tags.map((tag) => tag.toJson()).toList(),
     };
   }
+
+  NoteTextRangeTag copyWith({
+    String? id,
+    int? start,
+    int? end,
+    NoteKnowledgeTag? tag,
+    List<NoteKnowledgeTag>? tags,
+  }) {
+    return NoteTextRangeTag(
+      id: id ?? this.id,
+      start: start ?? this.start,
+      end: end ?? this.end,
+      tag: tag ?? this.tag,
+      tags: tags ?? this.tags,
+    );
+  }
+}
+
+/// User-controlled rich-text background fill.
+///
+/// This is deliberately separate from [NoteTextRangeTag]: knowledge tags are
+/// metadata, while fills are editable presentation data. [targetKey] scopes a
+/// range inside a rich NoteChunk section (for example `list:item-1` or
+/// `table:0:1`). Flowchart labels keep the same range model directly on their
+/// node or edge.
+class NoteTextFill {
+  const NoteTextFill({
+    required this.id,
+    required this.start,
+    required this.end,
+    required this.colorValue,
+    this.targetKey,
+  });
+
+  final String id;
+  final int start;
+  final int end;
+  final int colorValue;
+  final String? targetKey;
+
+  bool get isValid =>
+      id.trim().isNotEmpty && start >= 0 && end > start && colorValue != 0;
+
+  factory NoteTextFill.fromJson(Object? value) {
+    if (value is! Map) {
+      return const NoteTextFill(id: '', start: 0, end: 0, colorValue: 0);
+    }
+    final json = Map<Object?, Object?>.from(value);
+    final target = json['targetKey']?.toString().trim();
+    return NoteTextFill(
+      id: json['id']?.toString() ?? '',
+      start: _tagIntFromJson(json['start']) ?? 0,
+      end: _tagIntFromJson(json['end']) ?? 0,
+      colorValue: _tagColorFromJson(json['colorValue']) ?? 0,
+      targetKey: target == null || target.isEmpty ? null : target,
+    );
+  }
+
+  NoteTextFill clampToTextLength(int length) {
+    final normalizedLength = length < 0 ? 0 : length;
+    final clampedStart = start.clamp(0, normalizedLength).toInt();
+    final clampedEnd = end.clamp(clampedStart, normalizedLength).toInt();
+    return copyWith(start: clampedStart, end: clampedEnd);
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'start': start,
+      'end': end,
+      'colorValue': colorValue,
+      if (targetKey != null && targetKey!.trim().isNotEmpty)
+        'targetKey': targetKey,
+    };
+  }
+
+  NoteTextFill copyWith({
+    String? id,
+    int? start,
+    int? end,
+    int? colorValue,
+    String? targetKey,
+    bool clearTargetKey = false,
+  }) {
+    return NoteTextFill(
+      id: id ?? this.id,
+      start: start ?? this.start,
+      end: end ?? this.end,
+      colorValue: colorValue ?? this.colorValue,
+      targetKey: clearTargetKey ? null : targetKey ?? this.targetKey,
+    );
+  }
+}
+
+List<NoteTextFill> transformNoteTextFillsForEdit(
+  List<NoteTextFill> fills, {
+  required String oldText,
+  required String newText,
+  String? targetKey,
+}) {
+  if (oldText == newText) {
+    return [
+      for (final fill in fills)
+        if (!_noteTextFillMatchesTarget(fill, targetKey))
+          fill
+        else
+          fill.clampToTextLength(newText.length),
+    ].where((fill) => fill.isValid).toList(growable: false);
+  }
+
+  var editStart = 0;
+  final sharedPrefixLimit = oldText.length < newText.length
+      ? oldText.length
+      : newText.length;
+  while (editStart < sharedPrefixLimit &&
+      oldText.codeUnitAt(editStart) == newText.codeUnitAt(editStart)) {
+    editStart += 1;
+  }
+
+  var sharedSuffixLength = 0;
+  final oldSuffixLimit = oldText.length - editStart;
+  final newSuffixLimit = newText.length - editStart;
+  final sharedSuffixLimit = oldSuffixLimit < newSuffixLimit
+      ? oldSuffixLimit
+      : newSuffixLimit;
+  while (sharedSuffixLength < sharedSuffixLimit &&
+      oldText.codeUnitAt(oldText.length - sharedSuffixLength - 1) ==
+          newText.codeUnitAt(newText.length - sharedSuffixLength - 1)) {
+    sharedSuffixLength += 1;
+  }
+
+  final oldEditEnd = oldText.length - sharedSuffixLength;
+  final insertedLength = newText.length - editStart - sharedSuffixLength;
+  final editDelta = insertedLength - (oldEditEnd - editStart);
+
+  int transformStart(int position) {
+    if (position < editStart) {
+      return position;
+    }
+    if (position >= oldEditEnd) {
+      return position + editDelta;
+    }
+    return editStart;
+  }
+
+  int transformEnd(int position) {
+    if (position <= editStart) {
+      return position;
+    }
+    if (position >= oldEditEnd) {
+      return position + editDelta;
+    }
+    return editStart + insertedLength;
+  }
+
+  return [
+    for (final fill in fills)
+      if (!_noteTextFillMatchesTarget(fill, targetKey))
+        fill
+      else
+        fill
+            .copyWith(
+              start: transformStart(fill.start),
+              end: transformEnd(fill.end),
+            )
+            .clampToTextLength(newText.length),
+  ].where((fill) => fill.isValid).toList(growable: false);
+}
+
+bool _noteTextFillMatchesTarget(NoteTextFill fill, String? targetKey) {
+  return targetKey == null ||
+      fill.targetKey == targetKey ||
+      (targetKey == 'paragraph' && fill.targetKey == null);
+}
+
+/// Replaces or clears a selected fill interval without deleting formatting
+/// outside the selection.
+List<NoteTextFill> replaceNoteTextFillRange(
+  List<NoteTextFill> fills, {
+  required int start,
+  required int end,
+  required String? targetKey,
+  required int? colorValue,
+  required String Function() idFactory,
+}) {
+  if (start < 0 || end <= start) {
+    return List.unmodifiable(fills);
+  }
+  final result = <NoteTextFill>[];
+  for (final fill in fills) {
+    if (!_noteTextFillMatchesTarget(fill, targetKey) ||
+        fill.end <= start ||
+        fill.start >= end) {
+      result.add(fill);
+      continue;
+    }
+    if (fill.start < start) {
+      result.add(fill.copyWith(id: idFactory(), end: start));
+    }
+    if (fill.end > end) {
+      result.add(fill.copyWith(id: idFactory(), start: end));
+    }
+  }
+  if (colorValue != null && colorValue != 0) {
+    result.add(
+      NoteTextFill(
+        id: idFactory(),
+        start: start,
+        end: end,
+        colorValue: colorValue,
+        targetKey: targetKey,
+      ),
+    );
+  }
+  result.removeWhere((fill) => !fill.isValid);
+  result.sort((left, right) {
+    final target = (left.targetKey ?? '').compareTo(right.targetKey ?? '');
+    if (target != 0) {
+      return target;
+    }
+    final position = left.start.compareTo(right.start);
+    return position != 0 ? position : left.end.compareTo(right.end);
+  });
+  return List.unmodifiable(result);
+}
+
+List<NoteTextRangeTag> transformNoteTextRangeTagsForEdit(
+  List<NoteTextRangeTag> ranges, {
+  required String oldText,
+  required String newText,
+}) {
+  return [
+    for (final range in ranges)
+      if (_transformNoteTextRangeForEdit(
+            start: range.start,
+            end: range.end,
+            oldText: oldText,
+            newText: newText,
+          )
+          case final transformed?)
+        range.copyWith(start: transformed.start, end: transformed.end),
+  ].where((range) => range.isValid).toList(growable: false);
+}
+
+List<NoteTextParagraphStyle> transformNoteTextParagraphStylesForEdit(
+  List<NoteTextParagraphStyle> styles, {
+  required String oldText,
+  required String newText,
+}) {
+  return [
+    for (final style in styles)
+      if (_transformNoteTextRangeForEdit(
+            start: style.start,
+            end: style.end,
+            oldText: oldText,
+            newText: newText,
+          )
+          case final transformed?)
+        style.copyWith(start: transformed.start, end: transformed.end),
+  ].where((style) => style.isValid).toList(growable: false);
+}
+
+List<NoteTextRangeTag> replaceNoteTextRangeTags(
+  List<NoteTextRangeTag> ranges, {
+  required int start,
+  required int end,
+  required List<NoteKnowledgeTag> tags,
+  required String Function() idFactory,
+}) {
+  return _replaceNoteTextRangeTagsWithLineage(
+    ranges,
+    start: start,
+    end: end,
+    tags: tags,
+    idFactory: idFactory,
+  ).rangeTags;
+}
+
+({List<NoteTextRangeTag> rangeTags, List<NoteScopedTagAssignment> scopedTags})
+replaceNoteTextRangeTagsAndRemapScopedTags(
+  List<NoteTextRangeTag> ranges, {
+  required List<NoteScopedTagAssignment> scopedTags,
+  required int start,
+  required int end,
+  required List<NoteKnowledgeTag> tags,
+  required String Function() rangeIdFactory,
+  required String Function() scopedTagIdFactory,
+}) {
+  final replacement = _replaceNoteTextRangeTagsWithLineage(
+    ranges,
+    start: start,
+    end: end,
+    tags: tags,
+    idFactory: rangeIdFactory,
+  );
+  if (!replacement.didReplace) {
+    return (
+      rangeTags: replacement.rangeTags,
+      scopedTags: List.unmodifiable(scopedTags),
+    );
+  }
+  final remappedScopedTags = <NoteScopedTagAssignment>[];
+  for (final assignment in scopedTags) {
+    if (assignment.target.kind != NoteTagTargetKind.textRange) {
+      remappedScopedTags.add(assignment);
+      continue;
+    }
+    final oldRangeId = assignment.target.rangeId;
+    final targetRangeIds = oldRangeId == null
+        ? null
+        : replacement.preservedRangeIdsByOriginalId[oldRangeId];
+    if (targetRangeIds == null || targetRangeIds.isEmpty) {
+      continue;
+    }
+    for (var index = 0; index < targetRangeIds.length; index += 1) {
+      remappedScopedTags.add(
+        assignment.copyWith(
+          id: index == 0 ? assignment.id : scopedTagIdFactory(),
+          target: assignment.target.copyWith(rangeId: targetRangeIds[index]),
+        ),
+      );
+    }
+  }
+  return (
+    rangeTags: replacement.rangeTags,
+    scopedTags: List.unmodifiable(remappedScopedTags),
+  );
+}
+
+({
+  List<NoteTextRangeTag> rangeTags,
+  Map<String, List<String>> preservedRangeIdsByOriginalId,
+  bool didReplace,
+})
+_replaceNoteTextRangeTagsWithLineage(
+  List<NoteTextRangeTag> ranges, {
+  required int start,
+  required int end,
+  required List<NoteKnowledgeTag> tags,
+  required String Function() idFactory,
+}) {
+  if (start < 0 || end <= start) {
+    return (
+      rangeTags: List.unmodifiable(ranges),
+      preservedRangeIdsByOriginalId: const <String, List<String>>{},
+      didReplace: false,
+    );
+  }
+  final result = <NoteTextRangeTag>[];
+  final preservedRangeIdsByOriginalId = <String, List<String>>{};
+  for (final range in ranges) {
+    if (range.end <= start || range.start >= end) {
+      result.add(range);
+      preservedRangeIdsByOriginalId[range.id] = [range.id];
+      continue;
+    }
+    final preservedIds = <String>[];
+    if (range.start < start) {
+      final left = range.copyWith(id: idFactory(), end: start);
+      result.add(left);
+      preservedIds.add(left.id);
+    }
+    if (range.end > end) {
+      final right = range.copyWith(id: idFactory(), start: end);
+      result.add(right);
+      preservedIds.add(right.id);
+    }
+    preservedRangeIdsByOriginalId[range.id] = List.unmodifiable(preservedIds);
+  }
+  if (tags.isNotEmpty) {
+    result.add(
+      NoteTextRangeTag(
+        id: idFactory(),
+        start: start,
+        end: end,
+        tag: tags.first,
+        tags: tags,
+      ),
+    );
+  }
+  result.removeWhere((range) => !range.isValid);
+  result.sort((left, right) {
+    final position = left.start.compareTo(right.start);
+    return position != 0 ? position : left.end.compareTo(right.end);
+  });
+  final validRangeIds = result.map((range) => range.id).toSet();
+  final validPreservedRangeIdsByOriginalId = {
+    for (final entry in preservedRangeIdsByOriginalId.entries)
+      entry.key: List<String>.unmodifiable(
+        entry.value.where(validRangeIds.contains),
+      ),
+  };
+  return (
+    rangeTags: List.unmodifiable(result),
+    preservedRangeIdsByOriginalId: Map.unmodifiable(
+      validPreservedRangeIdsByOriginalId,
+    ),
+    didReplace: true,
+  );
+}
+
+({int start, int end})? _transformNoteTextRangeForEdit({
+  required int start,
+  required int end,
+  required String oldText,
+  required String newText,
+}) {
+  if (start < 0 || end <= start) {
+    return null;
+  }
+  if (oldText == newText) {
+    final clampedStart = start.clamp(0, newText.length).toInt();
+    final clampedEnd = end.clamp(clampedStart, newText.length).toInt();
+    return clampedEnd > clampedStart
+        ? (start: clampedStart, end: clampedEnd)
+        : null;
+  }
+  var editStart = 0;
+  final sharedPrefixLimit = oldText.length < newText.length
+      ? oldText.length
+      : newText.length;
+  while (editStart < sharedPrefixLimit &&
+      oldText.codeUnitAt(editStart) == newText.codeUnitAt(editStart)) {
+    editStart += 1;
+  }
+  var sharedSuffixLength = 0;
+  final sharedSuffixLimit =
+      (oldText.length - editStart) < (newText.length - editStart)
+      ? oldText.length - editStart
+      : newText.length - editStart;
+  while (sharedSuffixLength < sharedSuffixLimit &&
+      oldText.codeUnitAt(oldText.length - sharedSuffixLength - 1) ==
+          newText.codeUnitAt(newText.length - sharedSuffixLength - 1)) {
+    sharedSuffixLength += 1;
+  }
+  final oldEditEnd = oldText.length - sharedSuffixLength;
+  final insertedLength = newText.length - editStart - sharedSuffixLength;
+  final editDelta = insertedLength - (oldEditEnd - editStart);
+  final transformedStart = start < editStart
+      ? start
+      : start >= oldEditEnd
+      ? start + editDelta
+      : editStart;
+  final transformedEnd = end <= editStart
+      ? end
+      : end >= oldEditEnd
+      ? end + editDelta
+      : editStart + insertedLength;
+  final clampedStart = transformedStart.clamp(0, newText.length).toInt();
+  final clampedEnd = transformedEnd.clamp(clampedStart, newText.length).toInt();
+  return clampedEnd > clampedStart
+      ? (start: clampedStart, end: clampedEnd)
+      : null;
 }
 
 class NoteTextParagraphStyle {
@@ -544,6 +997,16 @@ List<NoteTextParagraphStyle> _paragraphStylesFromJson(Object? value) {
   return value
       .map(NoteTextParagraphStyle.fromJson)
       .where((style) => style.isValid)
+      .toList(growable: false);
+}
+
+List<NoteTextFill> _textFillsFromJson(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+  return value
+      .map(NoteTextFill.fromJson)
+      .where((fill) => fill.isValid)
       .toList(growable: false);
 }
 
@@ -903,6 +1366,7 @@ class NoteMixedSection {
     this.underlineColorValue,
     this.backgroundColorValue,
     this.rangeTags = const [],
+    this.textFills = const [],
     this.paragraphStyles = const [],
     this.listItems = const [],
     this.listLayoutMode = NoteListLayoutMode.checkbox,
@@ -923,6 +1387,7 @@ class NoteMixedSection {
   final int? underlineColorValue;
   final int? backgroundColorValue;
   final List<NoteTextRangeTag> rangeTags;
+  final List<NoteTextFill> textFills;
   final List<NoteTextParagraphStyle> paragraphStyles;
   final List<NoteListItem> listItems;
   final NoteListLayoutMode listLayoutMode;
@@ -950,6 +1415,7 @@ class NoteMixedSection {
       underlineColorValue: _tagColorFromJson(json['underlineColorValue']),
       backgroundColorValue: _tagColorFromJson(json['backgroundColorValue']),
       rangeTags: _rangeTagsFromJson(json['rangeTags']),
+      textFills: _textFillsFromJson(json['textFills']),
       paragraphStyles: _paragraphStylesFromJson(json['paragraphStyles']),
       listItems: NoteBlock._listItemsFromJson(json['listItems']),
       listLayoutMode: NoteListLayoutMode.fromWireName(
@@ -980,6 +1446,8 @@ class NoteMixedSection {
         'backgroundColorValue': backgroundColorValue,
       if (rangeTags.isNotEmpty)
         'rangeTags': rangeTags.map((tag) => tag.toJson()).toList(),
+      if (textFills.isNotEmpty)
+        'textFills': textFills.map((fill) => fill.toJson()).toList(),
       if (paragraphStyles.isNotEmpty)
         'paragraphStyles': paragraphStyles
             .map((style) => style.toJson())
@@ -1080,6 +1548,7 @@ class NoteMixedSection {
     int? underlineColorValue,
     int? backgroundColorValue,
     List<NoteTextRangeTag>? rangeTags,
+    List<NoteTextFill>? textFills,
     List<NoteTextParagraphStyle>? paragraphStyles,
     List<NoteListItem>? listItems,
     NoteListLayoutMode? listLayoutMode,
@@ -1102,6 +1571,7 @@ class NoteMixedSection {
       underlineColorValue: underlineColorValue ?? this.underlineColorValue,
       backgroundColorValue: backgroundColorValue ?? this.backgroundColorValue,
       rangeTags: rangeTags ?? this.rangeTags,
+      textFills: textFills ?? this.textFills,
       paragraphStyles: paragraphStyles ?? this.paragraphStyles,
       listItems: listItems ?? this.listItems,
       listLayoutMode: listLayoutMode ?? this.listLayoutMode,
@@ -1124,6 +1594,7 @@ class NoteBlock {
     this.searchAliases = const [],
     this.tags = const [],
     this.rangeTags = const [],
+    this.textFills = const [],
     this.paragraphStyles = const [],
     this.scopedTags = const [],
     this.level = 0,
@@ -1148,6 +1619,7 @@ class NoteBlock {
   final List<String> searchAliases;
   final List<NoteKnowledgeTag> tags;
   final List<NoteTextRangeTag> rangeTags;
+  final List<NoteTextFill> textFills;
   final List<NoteTextParagraphStyle> paragraphStyles;
   final List<NoteScopedTagAssignment> scopedTags;
   final int level;
@@ -1173,6 +1645,7 @@ class NoteBlock {
       searchAliases: _stringsFromJson(json['searchAliases']),
       tags: _tagsFromJson(json['tags']),
       rangeTags: _rangeTagsFromJson(json['rangeTags']),
+      textFills: _textFillsFromJson(json['textFills']),
       paragraphStyles: _paragraphStylesFromJson(json['paragraphStyles']),
       scopedTags: _scopedTagsFromJson(json['scopedTags']),
       level: json['level'] is int ? json['level'] as int : 0,
@@ -1209,6 +1682,8 @@ class NoteBlock {
       if (tags.isNotEmpty) 'tags': tags.map((tag) => tag.toJson()).toList(),
       if (rangeTags.isNotEmpty)
         'rangeTags': rangeTags.map((tag) => tag.toJson()).toList(),
+      if (textFills.isNotEmpty)
+        'textFills': textFills.map((fill) => fill.toJson()).toList(),
       if (paragraphStyles.isNotEmpty)
         'paragraphStyles': paragraphStyles
             .map((style) => style.toJson())
@@ -1424,6 +1899,7 @@ class NoteBlock {
     List<String>? searchAliases,
     List<NoteKnowledgeTag>? tags,
     List<NoteTextRangeTag>? rangeTags,
+    List<NoteTextFill>? textFills,
     List<NoteTextParagraphStyle>? paragraphStyles,
     List<NoteScopedTagAssignment>? scopedTags,
     int? level,
@@ -1449,6 +1925,7 @@ class NoteBlock {
       searchAliases: searchAliases ?? this.searchAliases,
       tags: tags ?? this.tags,
       rangeTags: rangeTags ?? this.rangeTags,
+      textFills: textFills ?? this.textFills,
       paragraphStyles: paragraphStyles ?? this.paragraphStyles,
       scopedTags: scopedTags ?? this.scopedTags,
       level: level ?? this.level,
@@ -1750,6 +2227,7 @@ class NoteFlowchartNode {
     this.role = NoteFlowchartNodeRole.normal,
     this.visualShape = NoteFlowchartVisualShape.rectangle,
     this.ports = const [],
+    this.labelFills = const [],
     this.order = 0,
     this.x = 0,
     this.y = 0,
@@ -1762,6 +2240,7 @@ class NoteFlowchartNode {
   final NoteFlowchartNodeRole role;
   final NoteFlowchartVisualShape visualShape;
   final List<NoteFlowchartPort> ports;
+  final List<NoteTextFill> labelFills;
   final int order;
   final double x;
   final double y;
@@ -1791,6 +2270,7 @@ class NoteFlowchartNode {
       ports: ports.isEmpty
           ? _defaultPortsFor(kind: kind, role: role, shape: shape)
           : ports,
+      labelFills: _textFillsFromJson(json['labelFills']),
       order: json['order'] is int ? json['order'] as int : 0,
       x: _doubleFromAny(json['x']),
       y: _doubleFromAny(json['y']),
@@ -1808,6 +2288,8 @@ class NoteFlowchartNode {
         'visualShape': visualShape.wireName,
       if (ports.isNotEmpty)
         'ports': ports.map((port) => port.toJson()).toList(),
+      if (labelFills.isNotEmpty)
+        'labelFills': labelFills.map((fill) => fill.toJson()).toList(),
       'order': order,
       if (x != 0) 'x': x,
       if (y != 0) 'y': y,
@@ -1822,6 +2304,7 @@ class NoteFlowchartNode {
     NoteFlowchartNodeRole? role,
     NoteFlowchartVisualShape? visualShape,
     List<NoteFlowchartPort>? ports,
+    List<NoteTextFill>? labelFills,
     int? order,
     double? x,
     double? y,
@@ -1834,6 +2317,7 @@ class NoteFlowchartNode {
       role: role ?? this.role,
       visualShape: visualShape ?? this.visualShape,
       ports: ports ?? this.ports,
+      labelFills: labelFills ?? this.labelFills,
       order: order ?? this.order,
       x: x ?? this.x,
       y: y ?? this.y,
@@ -1973,6 +2457,7 @@ class NoteFlowchartEdge {
     this.toPortId,
     this.routingMode = NoteFlowchartRoutingMode.auto,
     this.manualWaypoints = const [],
+    this.labelFills = const [],
     this.order = 0,
   });
 
@@ -1984,6 +2469,7 @@ class NoteFlowchartEdge {
   final String? toPortId;
   final NoteFlowchartRoutingMode routingMode;
   final List<NoteFlowchartWaypoint> manualWaypoints;
+  final List<NoteTextFill> labelFills;
   final int order;
 
   factory NoteFlowchartEdge.fromJson(Map<String, Object?> json) {
@@ -1998,6 +2484,7 @@ class NoteFlowchartEdge {
         json['routingMode']?.toString(),
       ),
       manualWaypoints: _waypointsFromJson(json['manualWaypoints']),
+      labelFills: _textFillsFromJson(json['labelFills']),
       order: json['order'] is int ? json['order'] as int : 0,
     );
   }
@@ -2016,6 +2503,8 @@ class NoteFlowchartEdge {
         'manualWaypoints': manualWaypoints
             .map((point) => point.toJson())
             .toList(),
+      if (labelFills.isNotEmpty)
+        'labelFills': labelFills.map((fill) => fill.toJson()).toList(),
       'order': order,
     };
   }
@@ -2027,8 +2516,11 @@ class NoteFlowchartEdge {
     String? label,
     String? fromPortId,
     String? toPortId,
+    bool clearFromPortId = false,
+    bool clearToPortId = false,
     NoteFlowchartRoutingMode? routingMode,
     List<NoteFlowchartWaypoint>? manualWaypoints,
+    List<NoteTextFill>? labelFills,
     int? order,
   }) {
     return NoteFlowchartEdge(
@@ -2036,10 +2528,11 @@ class NoteFlowchartEdge {
       fromNodeId: fromNodeId ?? this.fromNodeId,
       toNodeId: toNodeId ?? this.toNodeId,
       label: label ?? this.label,
-      fromPortId: fromPortId ?? this.fromPortId,
-      toPortId: toPortId ?? this.toPortId,
+      fromPortId: clearFromPortId ? null : fromPortId ?? this.fromPortId,
+      toPortId: clearToPortId ? null : toPortId ?? this.toPortId,
       routingMode: routingMode ?? this.routingMode,
       manualWaypoints: manualWaypoints ?? this.manualWaypoints,
+      labelFills: labelFills ?? this.labelFills,
       order: order ?? this.order,
     );
   }

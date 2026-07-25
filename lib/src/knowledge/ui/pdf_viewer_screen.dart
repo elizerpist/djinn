@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../debug/debug_console.dart';
+import '../../notes/data/note_repository.dart';
+import '../../notes/data/tag_repository.dart';
 import '../data/knowledge_document_repository.dart';
 import '../models/extracted_knowledge_item.dart';
 import '../models/knowledge_document.dart';
@@ -17,12 +19,16 @@ class PdfViewerScreen extends StatefulWidget {
     required this.path,
     this.repository,
     this.document,
+    this.noteRepository,
+    this.tagRepository,
   });
 
   final String title;
   final String path;
   final KnowledgeDocumentRepository? repository;
   final KnowledgeDocument? document;
+  final NoteRepository? noteRepository;
+  final TagRepository? tagRepository;
 
   @override
   State<PdfViewerScreen> createState() => _PdfViewerScreenState();
@@ -77,7 +83,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
   }
 
-  void _handleBoxTap(String chunkId) {
+  Future<void> _handleBoxTap(String chunkId) async {
     final repository = widget.repository;
     final document = widget.document;
     if (document != null) {
@@ -88,11 +94,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (repository == null || document == null) {
       return;
     }
-    Navigator.of(context).push(
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ExtractedKnowledgeScreen(
           repository: repository,
           document: document,
+          noteRepository: widget.noteRepository,
+          tagRepository: widget.tagRepository,
         ),
       ),
     );

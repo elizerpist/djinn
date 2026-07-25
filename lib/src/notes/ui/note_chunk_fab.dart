@@ -3,18 +3,12 @@ import 'package:flutter/material.dart';
 class NoteChunkFab extends StatefulWidget {
   const NoteChunkFab({
     super.key,
-    required this.onAddText,
-    required this.onAddList,
-    required this.onAddTable,
+    required this.onAddNoteChunk,
     required this.onAddFlowchart,
-    required this.onAddMixed,
   });
 
-  final VoidCallback onAddText;
-  final VoidCallback onAddList;
-  final VoidCallback onAddTable;
+  final VoidCallback onAddNoteChunk;
   final VoidCallback onAddFlowchart;
-  final VoidCallback onAddMixed;
 
   @override
   State<NoteChunkFab> createState() => _NoteChunkFabState();
@@ -38,10 +32,10 @@ class _NoteChunkFabState extends State<NoteChunkFab> {
       children: [
         if (_expanded) ...[
           _MiniFab(
-            key: const ValueKey('note-editor-add-mixed'),
-            tooltip: 'Kevert chunk hozzáadása',
+            key: const ValueKey('note-editor-add-note-chunk'),
+            tooltip: 'Jegyzetchunk hozzáadása',
             icon: Icons.article_outlined,
-            onPressed: () => _run(widget.onAddMixed),
+            onPressed: () => _run(widget.onAddNoteChunk),
           ),
           const SizedBox(height: 10),
           _MiniFab(
@@ -49,27 +43,6 @@ class _NoteChunkFabState extends State<NoteChunkFab> {
             tooltip: 'Flowchart chunk hozzáadása',
             icon: Icons.account_tree_outlined,
             onPressed: () => _run(widget.onAddFlowchart),
-          ),
-          const SizedBox(height: 10),
-          _MiniFab(
-            key: const ValueKey('note-editor-add-table'),
-            tooltip: 'Táblázat chunk hozzáadása',
-            icon: Icons.table_chart_outlined,
-            onPressed: () => _run(widget.onAddTable),
-          ),
-          const SizedBox(height: 10),
-          _MiniFab(
-            key: const ValueKey('note-editor-add-list'),
-            tooltip: 'Lista chunk hozzáadása',
-            icon: Icons.format_list_bulleted,
-            onPressed: () => _run(widget.onAddList),
-          ),
-          const SizedBox(height: 10),
-          _MiniFab(
-            key: const ValueKey('note-editor-add-text'),
-            tooltip: 'Szöveg chunk hozzáadása',
-            icon: Icons.notes_outlined,
-            onPressed: () => _run(widget.onAddText),
           ),
           const SizedBox(height: 12),
         ],

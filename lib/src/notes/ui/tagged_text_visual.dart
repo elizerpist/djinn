@@ -28,27 +28,14 @@ class NoteTaggedTextCountMarkerRun {
 NoteTaggedTextVisualStyle noteTaggedTextVisualStyle(
   List<NoteKnowledgeTag> tags,
 ) {
-  if (tags.isEmpty) {
-    return const NoteTaggedTextVisualStyle(primaryBackground: null);
-  }
-  return NoteTaggedTextVisualStyle(
-    primaryBackground: Color(tags.first.resolvedColorValue),
-  );
+  return const NoteTaggedTextVisualStyle(primaryBackground: null);
 }
 
 TextStyle noteTaggedEditableTextStyle(
   List<NoteKnowledgeTag> tags, {
   double alpha = 0.22,
 }) {
-  final visualStyle = noteTaggedTextVisualStyle(tags);
-  final primary = visualStyle.primaryBackground;
-  if (primary == null) {
-    return const TextStyle();
-  }
-  return TextStyle(
-    backgroundColor: primary.withValues(alpha: alpha),
-    fontWeight: FontWeight.w600,
-  );
+  return const TextStyle();
 }
 
 TextSpan noteTaggedEditableTextSpan({
@@ -57,30 +44,50 @@ TextSpan noteTaggedEditableTextSpan({
   TextStyle? baseStyle,
   double alpha = 0.22,
 }) {
-  final validTags = _validRangeTags(text, rangeTags);
-  if (validTags.isEmpty) {
+  return TextSpan(style: baseStyle, text: text);
+}
+
+List<NoteTaggedTextCountMarkerRun> noteTaggedTextCountMarkerRuns({
+  required String text,
+  required List<NoteTextRangeTag> rangeTags,
+}) {
+  return const [];
+}
+
+TextSpan noteTextFillEditableTextSpan({
+  required String text,
+  required List<NoteTextFill> fills,
+  TextStyle? baseStyle,
+}) {
+  final validFills =
+      fills
+          .map((fill) => fill.clampToTextLength(text.length))
+          .where((fill) => fill.isValid)
+          .toList(growable: false)
+        ..sort((left, right) {
+          final start = left.start.compareTo(right.start);
+          return start == 0 ? left.end.compareTo(right.end) : start;
+        });
+  if (validFills.isEmpty) {
     return TextSpan(style: baseStyle, text: text);
   }
 
   final children = <InlineSpan>[];
   var cursor = 0;
-  for (final rangeTag in validTags) {
-    if (rangeTag.start < cursor) {
+  for (final fill in validFills) {
+    if (fill.start < cursor) {
       continue;
     }
-    if (rangeTag.start > cursor) {
-      children.add(TextSpan(text: text.substring(cursor, rangeTag.start)));
+    if (fill.start > cursor) {
+      children.add(TextSpan(text: text.substring(cursor, fill.start)));
     }
-    final tags = rangeTag.resolvedTags;
-    final visualStyle = noteTaggedTextVisualStyle(tags);
-    final primary = visualStyle.primaryBackground;
     children.add(
       TextSpan(
-        text: text.substring(rangeTag.start, rangeTag.end),
-        style: TextStyle(backgroundColor: primary?.withValues(alpha: alpha)),
+        text: text.substring(fill.start, fill.end),
+        style: TextStyle(backgroundColor: Color(fill.colorValue)),
       ),
     );
-    cursor = rangeTag.end;
+    cursor = fill.end;
   }
   if (cursor < text.length) {
     children.add(TextSpan(text: text.substring(cursor)));
@@ -88,26 +95,57 @@ TextSpan noteTaggedEditableTextSpan({
   return TextSpan(style: baseStyle, children: children);
 }
 
-List<NoteTaggedTextCountMarkerRun> noteTaggedTextCountMarkerRuns({
-  required String text,
-  required List<NoteTextRangeTag> rangeTags,
-}) {
-  final runs = <NoteTaggedTextCountMarkerRun>[];
-  for (final rangeTag in _validRangeTags(text, rangeTags)) {
-    final tagCount = rangeTag.resolvedTags.length;
-    if (tagCount <= 1) {
-      continue;
+class NoteRichTextEditingController extends TextEditingController {
+  NoteRichTextEditingController({
+    super.text,
+    List<NoteTextFill> fills = const [],
+  }) : _fills = fills;
+
+  List<NoteTextFill> _fills;
+
+  List<NoteTextFill> get fills => _fills;
+
+  void setFills(List<NoteTextFill> fills) {
+    if (_sameFills(_fills, fills)) {
+      return;
     }
-    runs.add(
-      NoteTaggedTextCountMarkerRun(
-        start: rangeTag.start,
-        end: rangeTag.end,
-        tagCount: tagCount,
-        colorValue: rangeTag.resolvedTags.first.resolvedColorValue,
-      ),
+    _fills = fills;
+    notifyListeners();
+  }
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    return noteTextFillEditableTextSpan(
+      text: text,
+      fills: _fills,
+      baseStyle: style,
     );
   }
-  return runs;
+}
+
+bool _sameFills(List<NoteTextFill> left, List<NoteTextFill> right) {
+  if (identical(left, right)) {
+    return true;
+  }
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index += 1) {
+    final a = left[index];
+    final b = right[index];
+    if (a.id != b.id ||
+        a.start != b.start ||
+        a.end != b.end ||
+        a.colorValue != b.colorValue ||
+        a.targetKey != b.targetKey) {
+      return false;
+    }
+  }
+  return true;
 }
 
 String noteTaggedTextCountMarkerLabel({
@@ -328,18 +366,4 @@ void _paintCountMarkerBoxes({
       rect.top + (rect.height - textPainter.height) / 2,
     ),
   );
-}
-
-List<NoteTextRangeTag> _validRangeTags(
-  String text,
-  List<NoteTextRangeTag> rangeTags,
-) {
-  return rangeTags
-      .map((tag) => tag.clampToTextLength(text.length))
-      .where((tag) => tag.isValid)
-      .toList()
-    ..sort((a, b) {
-      final startCompare = a.start.compareTo(b.start);
-      return startCompare == 0 ? a.end.compareTo(b.end) : startCompare;
-    });
 }

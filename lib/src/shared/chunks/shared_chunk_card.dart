@@ -22,6 +22,9 @@ class SharedChunkCard extends StatelessWidget {
     required this.onToggleExpanded,
     required this.expandedBody,
     this.onLongPress,
+    this.tagCount = 0,
+    this.tagBadgeColor,
+    this.selected = false,
     this.leading,
     this.actions = const [],
     this.expandedBodyKey,
@@ -38,6 +41,9 @@ class SharedChunkCard extends StatelessWidget {
   final VoidCallback onOpenEditor;
   final VoidCallback onToggleExpanded;
   final VoidCallback? onLongPress;
+  final int tagCount;
+  final Color? tagBadgeColor;
+  final bool selected;
   final Widget expandedBody;
   final Widget? leading;
   final List<Widget> actions;
@@ -52,9 +58,12 @@ class SharedChunkCard extends StatelessWidget {
     return DecoratedBox(
       key: ValueKey('$keyPrefix-$id'),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: selected ? const Color(0xFFEFF6FF) : Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(
+          color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+          width: selected ? 2 : 1,
+        ),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0A111827),
@@ -118,6 +127,12 @@ class SharedChunkCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (tagCount > 0)
+                      _TagCountBadge(
+                        key: ValueKey('$keyPrefix-tag-count-$id'),
+                        count: tagCount,
+                        color: tagBadgeColor ?? accent,
+                      ),
                     ...actions,
                     IconButton(
                       key: ValueKey(
@@ -155,20 +170,48 @@ class SharedChunkCard extends StatelessWidget {
 
   Color _accentFor(SharedChunkKind kind) {
     return switch (kind) {
-      SharedChunkKind.text => const Color(0xFF2563EB),
-      SharedChunkKind.list => const Color(0xFF059669),
-      SharedChunkKind.table => const Color(0xFFEA580C),
-      SharedChunkKind.flowchart => const Color(0xFF9333EA),
+      SharedChunkKind.noteChunk => const Color(0xFF2563EB),
+      SharedChunkKind.flowchartChunk => const Color(0xFF9333EA),
     };
   }
 
   IconData _iconFor(SharedChunkKind kind) {
     return switch (kind) {
-      SharedChunkKind.text => Icons.notes_outlined,
-      SharedChunkKind.list => Icons.checklist_outlined,
-      SharedChunkKind.table => Icons.table_chart_outlined,
-      SharedChunkKind.flowchart => Icons.account_tree_outlined,
+      SharedChunkKind.noteChunk => Icons.article_outlined,
+      SharedChunkKind.flowchartChunk => Icons.account_tree_outlined,
     };
+  }
+}
+
+class _TagCountBadge extends StatelessWidget {
+  const _TagCountBadge({super.key, required this.count, required this.color});
+
+  final int count;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$count tag',
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 28, minHeight: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        margin: const EdgeInsets.only(left: 6),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          '$count',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
   }
 }
 

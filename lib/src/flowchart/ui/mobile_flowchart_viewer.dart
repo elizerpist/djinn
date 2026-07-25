@@ -22,6 +22,7 @@ class MobileFlowchartNode {
   const MobileFlowchartNode({
     required this.id,
     required this.label,
+    this.labelFills = const [],
     this.shape = 'process',
     this.kind = '',
     this.role = '',
@@ -34,6 +35,7 @@ class MobileFlowchartNode {
 
   final String id;
   final String label;
+  final List<MobileFlowchartTextFill> labelFills;
   final String shape;
   final String kind;
   final String role;
@@ -73,6 +75,7 @@ class MobileFlowchartEdge {
     required this.fromNodeId,
     required this.toNodeId,
     required this.label,
+    this.labelFills = const [],
     this.fromPortId,
     this.toPortId,
     this.routingMode = 'auto',
@@ -84,11 +87,24 @@ class MobileFlowchartEdge {
   final String fromNodeId;
   final String toNodeId;
   final String label;
+  final List<MobileFlowchartTextFill> labelFills;
   final String? fromPortId;
   final String? toPortId;
   final String routingMode;
   final List<MobileFlowchartWaypoint> manualWaypoints;
   final int order;
+}
+
+class MobileFlowchartTextFill {
+  const MobileFlowchartTextFill({
+    required this.start,
+    required this.end,
+    required this.colorValue,
+  });
+
+  final int start;
+  final int end;
+  final int colorValue;
 }
 
 enum MobileFlowchartViewMode { list, canvas, guide }
@@ -560,6 +576,8 @@ class _FlowchartListView extends StatelessWidget {
           key: ValueKey(branchKey),
           node: node,
           answer: branch.label,
+          answerId: branch.edge?.id,
+          answerFills: _fillsForBranchLabel(branch),
           pathLabel: _pathLabel(nextPath),
           closed: closed,
           onTap: () => onToggleBranch(branchId),
@@ -589,6 +607,7 @@ class _FlowchartListView extends StatelessWidget {
               ),
             ),
             label: branch.label,
+            fills: _fillsForBranchLabel(branch),
           ),
         );
         continue;
@@ -680,6 +699,8 @@ class _BranchCard extends StatelessWidget {
     super.key,
     required this.node,
     required this.answer,
+    required this.answerId,
+    required this.answerFills,
     required this.pathLabel,
     required this.closed,
     required this.onTap,
@@ -687,6 +708,8 @@ class _BranchCard extends StatelessWidget {
 
   final MobileFlowchartNode node;
   final String answer;
+  final String? answerId;
+  final List<MobileFlowchartTextFill> answerFills;
   final String pathLabel;
   final bool closed;
   final VoidCallback onTap;
@@ -732,10 +755,14 @@ class _BranchCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SelectableText(
-                          node.label.trim().isEmpty
+                        _flowchartLabel(
+                          key: ValueKey(
+                            'mobile-flowchart-node-label-${node.id}',
+                          ),
+                          text: node.label.trim().isEmpty
                               ? 'Döntés'
-                              : node.label.trim(),
+                              : node.label,
+                          fills: node.labelFills,
                           style: const TextStyle(
                             fontWeight: FontWeight.w900,
                             color: Color(0xFF21313F),
@@ -745,7 +772,7 @@ class _BranchCard extends StatelessWidget {
                         if (!_isYes(answer) && !_isNo(answer)) ...[
                           const SizedBox(height: 3),
                           Text(
-                            '${node.label.trim().isEmpty ? 'Döntés' : node.label.trim()} $answer',
+                            '${node.label.trim().isEmpty ? 'Döntés' : node.label} $answer',
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w900,
@@ -759,7 +786,16 @@ class _BranchCard extends StatelessWidget {
                           runSpacing: 4,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            _AnswerChip(label: answer, color: color),
+                            _AnswerChip(
+                              key: answerId == null
+                                  ? null
+                                  : ValueKey(
+                                      'mobile-flowchart-edge-label-$answerId',
+                                    ),
+                              label: answer,
+                              color: color,
+                              fills: answerFills,
+                            ),
                             if (pathLabel.isNotEmpty)
                               Text(
                                 pathLabel,
@@ -801,10 +837,16 @@ class _BranchCard extends StatelessWidget {
 }
 
 class _AnswerChip extends StatelessWidget {
-  const _AnswerChip({required this.label, required this.color});
+  const _AnswerChip({
+    super.key,
+    required this.label,
+    required this.color,
+    this.fills = const [],
+  });
 
   final String label;
   final Color color;
+  final List<MobileFlowchartTextFill> fills;
 
   @override
   Widget build(BuildContext context) {
@@ -815,8 +857,10 @@ class _AnswerChip extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        child: Text(
-          label,
+        child: _flowchartLabel(
+          text: label,
+          fills: fills,
+          selectable: false,
           style: TextStyle(
             fontSize: 12,
             height: 1,
@@ -865,10 +909,12 @@ class _ProcessCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 3),
-                    SelectableText(
-                      node.label.trim().isEmpty
+                    _flowchartLabel(
+                      key: ValueKey('mobile-flowchart-node-label-${node.id}'),
+                      text: node.label.trim().isEmpty
                           ? 'Névtelen lépés'
-                          : node.label.trim(),
+                          : node.label,
+                      fills: node.labelFills,
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         height: 1.28,
@@ -898,9 +944,10 @@ class _ProcessCard extends StatelessWidget {
 }
 
 class _LeafCard extends StatelessWidget {
-  const _LeafCard({super.key, required this.label});
+  const _LeafCard({super.key, required this.label, this.fills = const []});
 
   final String label;
+  final List<MobileFlowchartTextFill> fills;
 
   @override
   Widget build(BuildContext context) {
@@ -926,8 +973,9 @@ class _LeafCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 3),
-              SelectableText(
-                label,
+              _flowchartLabel(
+                text: label,
+                fills: fills,
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF6B7280),
@@ -1230,8 +1278,11 @@ class _CanvasNodePreview extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Center(
-                child: Text(
-                  node.label.trim().isEmpty ? 'Névtelen' : node.label.trim(),
+                child: _flowchartLabel(
+                  key: ValueKey('mobile-flowchart-node-label-${node.id}'),
+                  text: node.label.trim().isEmpty ? 'Névtelen' : node.label,
+                  fills: node.labelFills,
+                  selectable: false,
                   textAlign: TextAlign.center,
                   maxLines: 5,
                   overflow: TextOverflow.fade,
@@ -1578,8 +1629,11 @@ class _CanvasEdgeLabel extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          child: Text(
-            label,
+          child: _flowchartLabel(
+            key: ValueKey('mobile-flowchart-edge-label-${edge.id}'),
+            text: label,
+            fills: _fillsForEdgeDisplay(edge, label),
+            selectable: false,
             style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -1627,10 +1681,14 @@ class _FlowchartGuideView extends StatelessWidget {
           if (canGoBack) _GuideBackButton(onBack: onBack),
           _GuideCard(
             kicker: pathLabel,
-            child: SelectableText(
-              node?.label.trim().isNotEmpty == true
-                  ? node!.label.trim()
+            child: _flowchartLabel(
+              key: ValueKey(
+                'mobile-flowchart-node-label-${node?.id ?? current.nodeId}',
+              ),
+              text: node?.label.trim().isNotEmpty == true
+                  ? node!.label
                   : 'Döntés',
+              fills: node?.labelFills ?? const [],
               style: const TextStyle(
                 fontWeight: FontWeight.w900,
                 fontSize: 16,
@@ -1646,6 +1704,7 @@ class _FlowchartGuideView extends StatelessWidget {
                 _GuideDisabledChoice(
                   key: ValueKey('mobile-flowchart-guide-disabled-${item.key}'),
                   label: item.label,
+                  fills: _fillsForBranchLabel(item),
                 )
               else
                 _GuideChoice(
@@ -1663,10 +1722,14 @@ class _FlowchartGuideView extends StatelessWidget {
         if (canGoBack) _GuideBackButton(onBack: onBack),
         _GuideCard(
           kicker: pathLabel,
-          child: SelectableText(
-            target?.label.trim().isNotEmpty == true
-                ? target!.label.trim()
+          child: _flowchartLabel(
+            key: ValueKey(
+              'mobile-flowchart-node-label-${target?.id ?? current.nodeId}',
+            ),
+            text: target?.label.trim().isNotEmpty == true
+                ? target!.label
                 : 'Ág vége',
+            fills: target?.labelFills ?? const [],
             style: const TextStyle(
               fontWeight: FontWeight.w800,
               fontSize: 15,
@@ -1682,6 +1745,7 @@ class _FlowchartGuideView extends StatelessWidget {
               _GuideDisabledChoice(
                 key: ValueKey('mobile-flowchart-guide-disabled-${item.key}'),
                 label: item.label,
+                fills: _fillsForBranchLabel(item),
               )
             else
               _GuideChoice(
@@ -1795,7 +1859,7 @@ class _GuideChoice extends StatelessWidget {
         : const Color(0xFF374151);
     final targetLabel =
         showTargetLabel && branch.target?.label.trim().isNotEmpty == true
-        ? branch.target!.label.trim()
+        ? branch.target!.label
         : 'Választás';
     return Material(
       color: Colors.white,
@@ -1812,11 +1876,25 @@ class _GuideChoice extends StatelessWidget {
             padding: const EdgeInsets.all(10),
             child: Row(
               children: [
-                _AnswerChip(label: branch.label, color: color),
+                _AnswerChip(
+                  key: branch.edge == null
+                      ? null
+                      : ValueKey(
+                          'mobile-flowchart-edge-label-${branch.edge!.id}',
+                        ),
+                  label: branch.label,
+                  color: color,
+                  fills: _fillsForBranchLabel(branch),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    targetLabel,
+                  child: _flowchartLabel(
+                    key: ValueKey(
+                      'mobile-flowchart-node-label-${branch.target?.id ?? branch.key}',
+                    ),
+                    text: targetLabel,
+                    fills: branch.target?.labelFills ?? const [],
+                    selectable: false,
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
@@ -1830,9 +1908,14 @@ class _GuideChoice extends StatelessWidget {
 }
 
 class _GuideDisabledChoice extends StatelessWidget {
-  const _GuideDisabledChoice({super.key, required this.label});
+  const _GuideDisabledChoice({
+    super.key,
+    required this.label,
+    this.fills = const [],
+  });
 
   final String label;
+  final List<MobileFlowchartTextFill> fills;
 
   @override
   Widget build(BuildContext context) {
@@ -1844,8 +1927,10 @@ class _GuideDisabledChoice extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(10),
-        child: Text(
-          label,
+        child: _flowchartLabel(
+          text: label,
+          fills: fills,
+          selectable: false,
           style: const TextStyle(
             fontWeight: FontWeight.w800,
             color: Color(0xFF6B7280),
@@ -1867,6 +1952,84 @@ class _GuideStep {
   final _ResolvedBranch? branch;
 }
 
+Widget _flowchartLabel({
+  Key? key,
+  required String text,
+  required List<MobileFlowchartTextFill> fills,
+  required TextStyle style,
+  bool selectable = true,
+  TextAlign? textAlign,
+  int? maxLines,
+  TextOverflow? overflow,
+}) {
+  final span = _flowchartFillSpan(text: text, fills: fills, style: style);
+  if (selectable) {
+    return SelectableText.rich(
+      span,
+      key: key,
+      textAlign: textAlign ?? TextAlign.start,
+      maxLines: maxLines,
+    );
+  }
+  return Text.rich(
+    span,
+    key: key,
+    textAlign: textAlign,
+    maxLines: maxLines,
+    overflow: overflow,
+  );
+}
+
+TextSpan _flowchartFillSpan({
+  required String text,
+  required List<MobileFlowchartTextFill> fills,
+  required TextStyle style,
+}) {
+  if (text.isEmpty || fills.isEmpty) {
+    return TextSpan(text: text, style: style);
+  }
+  final normalized = [
+    for (final fill in fills)
+      if (fill.start.clamp(0, text.length) < fill.end.clamp(0, text.length))
+        (
+          start: fill.start.clamp(0, text.length).toInt(),
+          end: fill.end.clamp(0, text.length).toInt(),
+          colorValue: fill.colorValue,
+        ),
+  ];
+  if (normalized.isEmpty) {
+    return TextSpan(text: text, style: style);
+  }
+  final boundaries = <int>{0, text.length};
+  for (final fill in normalized) {
+    boundaries
+      ..add(fill.start)
+      ..add(fill.end);
+  }
+  final ordered = boundaries.toList()..sort();
+  final children = <InlineSpan>[];
+  for (var index = 0; index < ordered.length - 1; index += 1) {
+    final start = ordered[index];
+    final end = ordered[index + 1];
+    if (start >= end) {
+      continue;
+    }
+    final covering = normalized.where(
+      (fill) => fill.start <= start && fill.end >= end,
+    );
+    final fill = covering.isEmpty ? null : covering.last;
+    children.add(
+      TextSpan(
+        text: text.substring(start, end),
+        style: fill == null
+            ? null
+            : TextStyle(backgroundColor: Color(fill.colorValue)),
+      ),
+    );
+  }
+  return TextSpan(style: style, children: children);
+}
+
 class _ResolvedBranch {
   const _ResolvedBranch({
     required this.source,
@@ -1885,6 +2048,20 @@ class _ResolvedBranch {
   final String label;
   final String key;
   final int order;
+}
+
+List<MobileFlowchartTextFill> _fillsForBranchLabel(_ResolvedBranch branch) {
+  final edge = branch.edge;
+  return edge == null ? const [] : _fillsForEdgeDisplay(edge, branch.label);
+}
+
+List<MobileFlowchartTextFill> _fillsForEdgeDisplay(
+  MobileFlowchartEdge edge,
+  String displayedLabel,
+) {
+  return edge.label.trim().toLowerCase() == displayedLabel.trim().toLowerCase()
+      ? edge.labelFills
+      : const [];
 }
 
 String _routeSummary(MobileFlowchartData data) {
@@ -2046,8 +2223,8 @@ String _branchLabel(
     final label = port.label.trim();
     if (label.isNotEmpty) return label;
   }
-  final edgeLabel = edge?.label.trim();
-  if (edgeLabel != null && edgeLabel.isNotEmpty) return edgeLabel;
+  final edgeLabel = edge?.label;
+  if (edgeLabel != null && edgeLabel.trim().isNotEmpty) return edgeLabel;
   return 'Ág $fallback';
 }
 

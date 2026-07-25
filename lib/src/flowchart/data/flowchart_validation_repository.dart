@@ -1,6 +1,7 @@
 import '../../../objectbox.g.dart';
 import '../../debug/debug_console.dart';
 import '../../local_store/entities.dart';
+import 'objectbox_flowchart_projection.dart';
 
 enum FlowchartZeroReason {
   noProcessedDocuments('no_processed_documents'),
@@ -49,15 +50,19 @@ abstract class FlowchartValidationRepository {
 class ObjectBoxFlowchartValidationRepository
     implements FlowchartValidationRepository, DebugFlowchartSeedRepository {
   ObjectBoxFlowchartValidationRepository({required Store store})
-    : _flowchartBox = store.box<FlowchartEntity>(),
+    : _store = store,
+      _flowchartBox = store.box<FlowchartEntity>(),
       _documentBox = store.box<KnowledgeDocumentEntity>(),
       _nodeBox = store.box<FlowchartNodeEntity>(),
-      _edgeBox = store.box<FlowchartEdgeEntity>();
+      _edgeBox = store.box<FlowchartEdgeEntity>(),
+      _projection = ObjectBoxFlowchartProjection(store: store);
 
+  final Store _store;
   final Box<FlowchartEntity> _flowchartBox;
   final Box<KnowledgeDocumentEntity> _documentBox;
   final Box<FlowchartNodeEntity> _nodeBox;
   final Box<FlowchartEdgeEntity> _edgeBox;
+  final ObjectBoxFlowchartProjection _projection;
 
   @override
   Future<FlowchartReviewList> listFlowchartReviewState() async {
@@ -112,9 +117,12 @@ class ObjectBoxFlowchartValidationRepository
     if (node == null) {
       throw StateError('flowchart node not found: $nodePublicId');
     }
-    node.validationState = state.wireName;
-    node.rejectionReason = rejectionReason;
-    _nodeBox.put(node);
+    _store.runInTransaction(TxMode.write, () {
+      node.validationState = state.wireName;
+      node.rejectionReason = rejectionReason;
+      _nodeBox.put(node);
+      _projection.synchronizeCanonicalValidation(node.flowchartPublicId);
+    });
     DebugConsole.log(
       '[Flowchart] node validation node=$nodePublicId state=${state.wireName}',
     );
@@ -130,9 +138,12 @@ class ObjectBoxFlowchartValidationRepository
     if (edge == null) {
       throw StateError('flowchart edge not found: $edgePublicId');
     }
-    edge.validationState = state.wireName;
-    edge.rejectionReason = rejectionReason;
-    _edgeBox.put(edge);
+    _store.runInTransaction(TxMode.write, () {
+      edge.validationState = state.wireName;
+      edge.rejectionReason = rejectionReason;
+      _edgeBox.put(edge);
+      _projection.synchronizeCanonicalValidation(edge.flowchartPublicId);
+    });
     DebugConsole.log(
       '[Flowchart] edge validation edge=$edgePublicId state=${state.wireName}',
     );

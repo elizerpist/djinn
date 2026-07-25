@@ -2,6 +2,12 @@
 
 FastAPI backend for the strict, source-bounded Djinn RAG workflow.
 
+> **Opcionális, külön futtatási útvonal.** A Djinn kanonikus termék-,
+> navigációs és Chunk-modelljét a repó gyökér `README.md` fájlja határozza meg.
+> Ez a fájl kizárólag a történeti/szerveres prototípus üzemeltetési leírása,
+> és nem írhatja felül a két kanonikus chunktípust vagy a local-first Android
+> architektúrát.
+
 ## Safety Contract
 
 - The model receives only retrieved application document chunks and no tools.

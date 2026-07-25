@@ -5,7 +5,12 @@ import 'package:uuid/uuid.dart';
 
 import '../../../objectbox.g.dart';
 import '../../ai/ai_client.dart';
+import '../../chunks/data/chunk_entity_codec.dart';
+import '../../chunks/data/objectbox_chunk_derived_data.dart';
+import '../../chunks/models/chunk.dart';
+import '../../flowchart/data/objectbox_flowchart_projection.dart';
 import '../../local_store/entities.dart';
+import '../../notes/models/mixed_chunk_parser.dart';
 import '../../notes/models/note_document.dart';
 import '../../openai/openai_client.dart';
 import '../../flowchart/models/editable_flowchart.dart';
@@ -14,6 +19,13 @@ import '../models/extracted_knowledge_item.dart';
 import '../models/local_extraction.dart';
 import 'chunk_package_service.dart';
 import 'document_processing_service.dart';
+
+void synchronizeFlowchartParentDocumentRelation({
+  required DocumentChunkEntity parent,
+  required FlowchartEntity flowchart,
+}) {
+  parent.documentPublicId = flowchart.documentPublicId;
+}
 
 abstract class KnowledgeRepository {
   Future<KnowledgeDocumentEntity> addImportedDocument({
@@ -69,23 +81,35 @@ abstract class KnowledgeRepository {
 
 class ObjectBoxKnowledgeRepository
     implements KnowledgeRepository, ProcessingRepository {
-  ObjectBoxKnowledgeRepository({required Store store, Uuid? uuid})
-    : _store = store,
-      _documentBox = store.box<KnowledgeDocumentEntity>(),
-      _folderBox = store.box<KnowledgeFolderEntity>(),
-      _chunkBox = store.box<DocumentChunkEntity>(),
-      _embeddingBox = store.box<ChunkEmbeddingEntity>(),
-      _flowchartBox = store.box<FlowchartEntity>(),
-      _flowchartNodeBox = store.box<FlowchartNodeEntity>(),
-      _flowchartEdgeBox = store.box<FlowchartEdgeEntity>(),
-      _documentPageBox = store.box<DocumentPageEntity>(),
-      _auditItemBox = store.box<ExtractionAuditItemEntity>(),
-      _knowledgeNodeBox = store.box<KnowledgeNodeEntity>(),
-      _knowledgeEdgeBox = store.box<KnowledgeEdgeEntity>(),
-      _knowledgeEvidenceBox = store.box<KnowledgeEvidenceEntity>(),
-      _visualObjectBox = store.box<VisualObjectEntity>(),
-      _visualAttributeBox = store.box<VisualAttributeEntity>(),
-      _uuid = uuid ?? const Uuid();
+  ObjectBoxKnowledgeRepository({
+    required Store store,
+    Uuid? uuid,
+    ChunkEntityCodec chunkCodec = const ChunkEntityCodec(),
+  }) : _store = store,
+       _documentBox = store.box<KnowledgeDocumentEntity>(),
+       _folderBox = store.box<KnowledgeFolderEntity>(),
+       _chunkBox = store.box<DocumentChunkEntity>(),
+       _chunkNoteLinkBox = store.box<ChunkNoteLinkEntity>(),
+       _embeddingBox = store.box<ChunkEmbeddingEntity>(),
+       _flowchartBox = store.box<FlowchartEntity>(),
+       _flowchartNodeBox = store.box<FlowchartNodeEntity>(),
+       _flowchartEdgeBox = store.box<FlowchartEdgeEntity>(),
+       _documentPageBox = store.box<DocumentPageEntity>(),
+       _auditItemBox = store.box<ExtractionAuditItemEntity>(),
+       _knowledgeNodeBox = store.box<KnowledgeNodeEntity>(),
+       _knowledgeEdgeBox = store.box<KnowledgeEdgeEntity>(),
+       _knowledgeEvidenceBox = store.box<KnowledgeEvidenceEntity>(),
+       _visualObjectBox = store.box<VisualObjectEntity>(),
+       _visualAttributeBox = store.box<VisualAttributeEntity>(),
+       _uuid = uuid ?? const Uuid(),
+       _chunkCodec = chunkCodec,
+       _flowchartProjection = ObjectBoxFlowchartProjection(
+         store: store,
+         codec: chunkCodec,
+       ),
+       _chunkDerivedData = ObjectBoxChunkDerivedData(store: store) {
+    _migrateUnifiedChunkRows();
+  }
 
   static const _vectorEmbeddingDimension = 3072;
   static const _generatedEmbeddingSourceTypes = {
@@ -98,6 +122,7 @@ class ObjectBoxKnowledgeRepository
   final Box<KnowledgeDocumentEntity> _documentBox;
   final Box<KnowledgeFolderEntity> _folderBox;
   final Box<DocumentChunkEntity> _chunkBox;
+  final Box<ChunkNoteLinkEntity> _chunkNoteLinkBox;
   final Box<ChunkEmbeddingEntity> _embeddingBox;
   final Box<FlowchartEntity> _flowchartBox;
   final Box<FlowchartNodeEntity> _flowchartNodeBox;
@@ -110,6 +135,72 @@ class ObjectBoxKnowledgeRepository
   final Box<VisualObjectEntity> _visualObjectBox;
   final Box<VisualAttributeEntity> _visualAttributeBox;
   final Uuid _uuid;
+  final ChunkEntityCodec _chunkCodec;
+  final ObjectBoxFlowchartProjection _flowchartProjection;
+  final ObjectBoxChunkDerivedData _chunkDerivedData;
+
+  void _migrateUnifiedChunkRows() {
+    final now = DateTime.now();
+    _store.runInTransaction(TxMode.write, () {
+      final changed = <DocumentChunkEntity>[];
+      final canonicalKindBySource = <String, String>{};
+      for (final chunk in _chunkBox.getAll()) {
+        if (_chunkCodec.canonicalize(chunk, now: now)) {
+          changed.add(chunk);
+        }
+        canonicalKindBySource[chunk.publicId] = chunk.chunkKind;
+      }
+      if (changed.isNotEmpty) {
+        _chunkBox.putMany(changed);
+      }
+      final changedAuditItems = <ExtractionAuditItemEntity>[];
+      for (final auditItem in _auditItemBox.getAll()) {
+        final canonicalKind = canonicalKindBySource[auditItem.sourceId];
+        if (canonicalKind != null && auditItem.itemKind != canonicalKind) {
+          auditItem.itemKind = canonicalKind;
+          auditItem.updatedAtMillis = now.millisecondsSinceEpoch;
+          changedAuditItems.add(auditItem);
+        }
+      }
+      if (changedAuditItems.isNotEmpty) {
+        _auditItemBox.putMany(changedAuditItems);
+      }
+      final changedKnowledgeNodes = <KnowledgeNodeEntity>[];
+      for (final node in _knowledgeNodeBox.getAll()) {
+        final sourceId = node.sourceId;
+        final canonicalKind = sourceId == null
+            ? null
+            : canonicalKindBySource[sourceId];
+        if (canonicalKind != null &&
+            node.publicId == '$sourceId:node' &&
+            node.nodeType != canonicalKind) {
+          node.nodeType = canonicalKind;
+          changedKnowledgeNodes.add(node);
+        }
+      }
+      if (changedKnowledgeNodes.isNotEmpty) {
+        _knowledgeNodeBox.putMany(changedKnowledgeNodes);
+      }
+      for (final flowchart in _flowchartBox.getAll()) {
+        final parent = _findChunk(flowchart.publicId);
+        if (parent == null ||
+            ChunkKind.fromWireName(parent.chunkKind) !=
+                ChunkKind.flowchartChunk) {
+          _upsertFlowchartParentChunk(
+            flowchart,
+            now: now,
+            fallbackCreationMethod: ChunkCreationMethod.aiGenerated,
+          );
+        }
+      }
+      for (final chunk in _chunkBox.getAll()) {
+        if (ChunkKind.fromWireName(chunk.chunkKind) ==
+            ChunkKind.flowchartChunk) {
+          _flowchartProjection.projectCanonicalChunk(chunk);
+        }
+      }
+    });
+  }
 
   @override
   Future<KnowledgeDocumentEntity> addImportedDocument({
@@ -412,6 +503,14 @@ class ObjectBoxKnowledgeRepository
           ),
         );
       }
+      final stored = _findFlowchart(flowchartPublicId);
+      if (stored != null) {
+        _upsertFlowchartParentChunk(
+          stored,
+          now: DateTime.now(),
+          fallbackCreationMethod: ChunkCreationMethod.aiGenerated,
+        );
+      }
     });
   }
 
@@ -506,6 +605,14 @@ class ObjectBoxKnowledgeRepository
           ),
         );
       }
+      final stored = _findFlowchart(flowchart.id);
+      if (stored != null) {
+        _upsertFlowchartParentChunk(
+          stored,
+          now: DateTime.now(),
+          fallbackCreationMethod: ChunkCreationMethod.manualSelection,
+        );
+      }
     });
   }
 
@@ -514,8 +621,17 @@ class ObjectBoxKnowledgeRepository
     DocumentChunkEntity chunk,
     ChunkEmbeddingEntity embedding,
   ) async {
-    _chunkBox.put(chunk);
-    _embeddingBox.put(embedding);
+    _chunkCodec.canonicalize(chunk, now: DateTime.now());
+    _store.runInTransaction(TxMode.write, () {
+      final existing = _findChunk(chunk.publicId);
+      if (existing != null) {
+        chunk.id = existing.id;
+      }
+      _removeEmbeddingsForSource(chunk.publicId);
+      _chunkBox.put(chunk);
+      _flowchartProjection.projectCanonicalChunk(chunk);
+      _embeddingBox.put(embedding);
+    });
   }
 
   Future<List<ExtractedKnowledgeItem>> listExtractedKnowledgeItems(
@@ -531,11 +647,18 @@ class ObjectBoxKnowledgeRepository
         if (_generatedEmbeddingSourceTypes.contains(embedding.sourceType))
           embedding.sourceId: embedding,
     };
+    final chunks = _chunksForDocument(documentPublicId);
+    final canonicalFlowchartIds = {
+      for (final chunk in chunks)
+        if (ChunkKind.fromWireName(chunk.chunkKind) == ChunkKind.flowchartChunk)
+          chunk.publicId,
+    };
     final items = <ExtractedKnowledgeItem>[
-      for (final chunk in _chunksForDocument(documentPublicId))
+      for (final chunk in chunks)
         _itemFromChunk(documentPublicId, chunk, embeddings[chunk.publicId]),
       for (final flowchart in _flowchartsForDocument(documentPublicId))
-        ..._flowchartItems(documentPublicId, flowchart, allEmbeddings),
+        if (!canonicalFlowchartIds.contains(flowchart.publicId))
+          _flowchartItem(documentPublicId, flowchart, allEmbeddings),
     ];
     final filtered = pipeline == null
         ? items
@@ -558,31 +681,42 @@ class ObjectBoxKnowledgeRepository
       String? previousNodeId;
       for (final chunk in chunks) {
         final sourceId = '$documentPublicId:${chunk.id}';
+        // A replacement with the same stable source ID must never retain an
+        // embedding for the previous text.
+        _removeEmbeddingsForSource(sourceId);
         final nodeId = '$sourceId:node';
-        _chunkBox.put(
-          DocumentChunkEntity(
-            publicId: sourceId,
-            documentPublicId: documentPublicId,
-            text: chunk.text,
-            pageNumber: chunk.pageNumber,
-            sectionTitle: chunk.sectionTitle,
-            sourceRectJson: chunk.sourceRectJson,
-            pipeline: chunk.pipeline.wireName,
-            chunkKind: chunk.kind.wireName,
-            auditState: chunk.auditState.wireName,
-            endPageNumber: chunk.endPageNumber,
-            confidence: chunk.confidence,
-            sourcePageImagePath: chunk.sourcePageImagePath,
-            tagsJson: _tagsToJson(chunk.tags),
-            structuredContentJson: chunk.structuredContentJson,
-          ),
+        final chunkEntity = DocumentChunkEntity(
+          id: _findChunk(sourceId)?.id ?? 0,
+          publicId: sourceId,
+          documentPublicId: documentPublicId,
+          text: chunk.text,
+          pageNumber: chunk.pageNumber,
+          sectionTitle: chunk.sectionTitle,
+          sourceRectJson: chunk.sourceRectJson,
+          pipeline: chunk.pipeline.wireName,
+          chunkKind: chunk.kind.wireName,
+          auditState: chunk.auditState.wireName,
+          endPageNumber: chunk.endPageNumber,
+          confidence: chunk.confidence,
+          sourcePageImagePath: chunk.sourcePageImagePath,
+          tagsJson: _tagsToJson(chunk.tags),
+          structuredContentJson: chunk.structuredContentJson,
         );
+        _chunkCodec.canonicalize(
+          chunkEntity,
+          now: DateTime.fromMillisecondsSinceEpoch(now),
+        );
+        _chunkBox.put(chunkEntity);
+        _flowchartProjection.projectCanonicalChunk(chunkEntity);
+        final canonicalKind = ChunkKind.fromWireName(
+          chunkEntity.chunkKind,
+        ).wireName;
         _auditItemBox.put(
           ExtractionAuditItemEntity(
             publicId: '$sourceId:audit',
             documentPublicId: documentPublicId,
             sourceId: sourceId,
-            itemKind: chunk.kind.wireName,
+            itemKind: canonicalKind,
             auditState: chunk.auditState.wireName,
             pageNumber: chunk.pageNumber,
             title: chunk.sectionTitle,
@@ -596,7 +730,7 @@ class ObjectBoxKnowledgeRepository
             publicId: nodeId,
             documentPublicId: documentPublicId,
             label: chunk.sectionTitle ?? _shortNodeLabel(chunk.text),
-            nodeType: chunk.kind.wireName,
+            nodeType: canonicalKind,
             pageNumber: chunk.pageNumber,
             sourceId: sourceId,
           ),
@@ -688,35 +822,25 @@ class ObjectBoxKnowledgeRepository
     final sourceId = itemId.startsWith('$documentPublicId:')
         ? itemId
         : '$documentPublicId:$itemId';
-    _store.runInTransaction(TxMode.write, () {
-      final chunk = _findChunk(sourceId);
-      if (chunk != null) {
-        chunk.auditState = auditState.wireName;
-        if (text != null) {
-          chunk.text = text;
-        }
-        _chunkBox.put(chunk);
-        if (text != null) {
-          _updateChunkDerivedRows(
-            documentPublicId: documentPublicId,
-            sourceId: sourceId,
-            chunk: chunk,
-            textChanged: true,
-            sectionTitleChanged: false,
-            chunkKindChanged: false,
-          );
-        }
+    if (_findChunk(sourceId) != null) {
+      await updateExtractedKnowledgeItem(
+        documentPublicId,
+        itemId,
+        text: text,
+        auditState: auditState,
+      );
+      _store.runInTransaction(TxMode.write, () {
         for (final auditItem in _auditItemBox.getAll()) {
           if (auditItem.sourceId == sourceId) {
-            auditItem.auditState = auditState.wireName;
-            auditItem.previewText = text ?? auditItem.previewText;
             auditItem.reason = reason;
             auditItem.updatedAtMillis = DateTime.now().millisecondsSinceEpoch;
             _auditItemBox.put(auditItem);
           }
         }
-        return;
-      }
+      });
+      return;
+    }
+    _store.runInTransaction(TxMode.write, () {
       final validationState = _validationStateForAuditState(auditState);
       final node = _findNode(sourceId);
       if (node != null) {
@@ -726,6 +850,7 @@ class ObjectBoxKnowledgeRepository
         }
         node.rejectionReason = reason;
         _flowchartNodeBox.put(node);
+        _synchronizeFlowchartParent(node.flowchartPublicId);
         return;
       }
       final edge = _findEdge(sourceId);
@@ -733,6 +858,7 @@ class ObjectBoxKnowledgeRepository
         edge.validationState = validationState.wireName;
         edge.rejectionReason = reason;
         _flowchartEdgeBox.put(edge);
+        _synchronizeFlowchartParent(edge.flowchartPublicId);
       }
     });
   }
@@ -756,51 +882,70 @@ class ObjectBoxKnowledgeRepository
       if (chunk == null) {
         return;
       }
-      if (text != null) {
-        chunk.text = text;
-      }
-      if (sectionTitle != null) {
-        chunk.sectionTitle = sectionTitle;
-      }
-      if (chunkKind != null) {
-        chunk.chunkKind = chunkKind.wireName;
-      }
-      if (auditState != null) {
-        chunk.auditState = auditState.wireName;
-      }
-      if (tags != null) {
-        chunk.tagsJson = _tagsToJson(tags);
-      }
-      if (structuredContentJson != null || clearStructuredContent) {
-        chunk.structuredContentJson = structuredContentJson;
-      }
-      _chunkBox.put(chunk);
-      _updateChunkDerivedRows(
-        documentPublicId: documentPublicId,
+      final decoded = _chunkCodec.decode(chunk);
+      var content = _contentForCanonicalUpdate(
         sourceId: sourceId,
-        chunk: chunk,
-        textChanged: text != null,
-        sectionTitleChanged: sectionTitle != null,
-        chunkKindChanged: chunkKind != null,
+        decoded: decoded,
+        text: text,
+        sectionTitle: sectionTitle,
+        tags: tags,
+        structuredContentJson: structuredContentJson,
+        clearStructuredContent: clearStructuredContent,
+        requestedKind: chunkKind,
       );
-      for (final auditItem in _auditItemBox.getAll()) {
-        if (auditItem.sourceId == sourceId) {
-          if (auditState != null) {
-            auditItem.auditState = auditState.wireName;
-          }
-          if (text != null) {
-            auditItem.previewText = text;
-          }
-          if (sectionTitle != null) {
-            auditItem.title = sectionTitle;
-          }
-          if (chunkKind != null) {
-            auditItem.itemKind = chunkKind.wireName;
-          }
-          auditItem.updatedAtMillis = DateTime.now().millisecondsSinceEpoch;
-          _auditItemBox.put(auditItem);
-        }
+      final targetKind = chunkKind == null
+          ? (content.type == NoteBlockType.flowchart
+                ? ChunkKind.flowchartChunk
+                : decoded.kind)
+          : ChunkKind.fromWireName(chunkKind.wireName);
+      if (targetKind == ChunkKind.noteChunk &&
+          content.type == NoteBlockType.flowchart) {
+        content = mixedBlockFromPlainText(
+          id: sourceId,
+          title: content.title,
+          text: content.plainText,
+          tags: content.tags,
+        );
+      } else if (targetKind == ChunkKind.flowchartChunk &&
+          content.type != NoteBlockType.flowchart) {
+        content = NoteBlock(
+          id: sourceId,
+          type: NoteBlockType.flowchart,
+          title: content.title,
+          text: content.plainText,
+          tags: content.tags,
+        );
       }
+      final now = DateTime.now();
+      final updated = targetKind == ChunkKind.flowchartChunk
+          ? FlowchartChunk(
+              id: decoded.id,
+              creationMethod: decoded.creationMethod,
+              validationState: auditState ?? decoded.validationState,
+              source: decoded.source,
+              createdAt: decoded.createdAt,
+              updatedAt: now,
+              content: content.copyWith(id: sourceId, clearIndex: true),
+            )
+          : NoteChunk(
+              id: decoded.id,
+              creationMethod: decoded.creationMethod,
+              validationState: auditState ?? decoded.validationState,
+              source: decoded.source,
+              createdAt: decoded.createdAt,
+              updatedAt: now,
+              content: normalizeLegacyNoteBlock(
+                content.copyWith(id: sourceId, clearIndex: true),
+              ),
+            );
+      _chunkCodec.write(chunk, updated, now: now);
+      _chunkBox.put(chunk);
+      _chunkDerivedData.synchronizeMutation(
+        before: decoded,
+        after: updated,
+        entity: chunk,
+      );
+      _flowchartProjection.projectCanonicalChunk(chunk);
     });
   }
 
@@ -817,7 +962,28 @@ class ObjectBoxKnowledgeRepository
       if (chunk == null) {
         return;
       }
-      chunk.tagsJson = _tagsToJson(tags);
+      final decoded = _chunkCodec.decode(chunk);
+      final content = decoded.content.copyWith(tags: tags, clearIndex: true);
+      final updated = decoded.kind == ChunkKind.flowchartChunk
+          ? FlowchartChunk(
+              id: decoded.id,
+              creationMethod: decoded.creationMethod,
+              validationState: decoded.validationState,
+              source: decoded.source,
+              createdAt: decoded.createdAt,
+              updatedAt: DateTime.now(),
+              content: content,
+            )
+          : NoteChunk(
+              id: decoded.id,
+              creationMethod: decoded.creationMethod,
+              validationState: decoded.validationState,
+              source: decoded.source,
+              createdAt: decoded.createdAt,
+              updatedAt: DateTime.now(),
+              content: normalizeLegacyNoteBlock(content),
+            );
+      _chunkCodec.write(chunk, updated, now: DateTime.now());
       _chunkBox.put(chunk);
     });
   }
@@ -843,35 +1009,59 @@ class ObjectBoxKnowledgeRepository
     if (document == null) {
       throw StateError('knowledge document not found: $documentPublicId');
     }
-    final chunks = _aiChunksForDocument(documentPublicId);
-    final embeddings = {
-      for (final embedding in _embeddingBox.getAll())
-        if (_generatedEmbeddingSourceTypes.contains(embedding.sourceType))
-          embedding.sourceId: embedding,
-    };
+    final chunks = _chunksForDocument(documentPublicId);
+    final embeddings = _embeddingBox.getAll();
     final items = <ChunkPackageItem>[];
-    String? embeddingModel;
-    for (final chunk in chunks) {
-      final embedding = embeddings[chunk.publicId];
-      embeddingModel ??= embedding?.model;
+    final embeddingModels = <String>{};
+    for (final entity in chunks) {
+      final chunk = _chunkCodec.decode(entity);
+      final packageChunkId = _packageChunkId(documentPublicId, chunk.id);
+      final chunkEmbeddings = embeddings
+          .where(
+            (embedding) =>
+                embedding.sourceId == entity.publicId ||
+                embedding.sourceId.startsWith('${entity.publicId}:'),
+          )
+          .where((embedding) => embedding.vector?.isNotEmpty == true)
+          .toList(growable: false);
+      embeddingModels.addAll(chunkEmbeddings.map((item) => item.model));
+      final parentEmbedding = chunkEmbeddings
+          .where((embedding) => embedding.sourceId == entity.publicId)
+          .firstOrNull;
       items.add(
         ChunkPackageItem(
-          id: _packageChunkId(documentPublicId, chunk.publicId),
-          text: chunk.text,
-          pageNumber: chunk.pageNumber,
-          sectionTitle: chunk.sectionTitle,
-          embedding: embedding?.vector ?? const [],
+          id: packageChunkId,
+          text: chunk.plainText,
+          pageNumber: chunk.source.pageStart ?? entity.pageNumber,
+          sectionTitle: chunk.content.title ?? entity.sectionTitle,
+          embedding: parentEmbedding?.vector ?? const [],
+          kind: chunk.kind,
+          creationMethod: chunk.creationMethod,
+          validationState: chunk.validationState,
+          source: chunk.source,
+          content: chunk.content,
+          embeddingRecords: [
+            for (final embedding in chunkEmbeddings)
+              ChunkPackageEmbedding(
+                sourceId: embedding.sourceId == entity.publicId
+                    ? packageChunkId
+                    : embedding.sourceId,
+                sourceType: embedding.sourceType,
+                vector: embedding.vector!,
+                model: embedding.model,
+              ),
+          ],
         ),
       );
     }
     final embeddingDimension = _firstEmbeddingDimension(items);
     return ChunkPackage(
-      schemaVersion: 1,
+      schemaVersion: 2,
       documentHash: document.sha256 ?? '',
       filename: document.filename,
       provider: document.activeProvider ?? '',
       extractionModel: document.activeModel ?? '',
-      embeddingModel: embeddingModel ?? '',
+      embeddingModel: embeddingModels.length == 1 ? embeddingModels.single : '',
       embeddingDimension: embeddingDimension,
       chunks: items,
     );
@@ -893,31 +1083,108 @@ class ObjectBoxKnowledgeRepository
       expectedDimension: _vectorEmbeddingDimension,
     );
     _store.runInTransaction(TxMode.write, () {
-      _clearGeneratedKnowledgeForDocument(documentPublicId);
-      final now = DateTime.now().millisecondsSinceEpoch;
+      _clearGeneratedKnowledgeForDocument(documentPublicId, includeLocal: true);
+      final importedAt = DateTime.now();
+      final now = importedAt.millisecondsSinceEpoch;
       for (final item in package.chunks) {
         final sourceId = '$documentPublicId:${item.id}';
-        _chunkBox.put(
-          DocumentChunkEntity(
-            publicId: sourceId,
+        // The clear step deliberately preserves linked chunks and their search
+        // vectors. Importing a replacement for that ID must replace, rather
+        // than accidentally reuse, the old vector.
+        _removeEmbeddingsForSource(sourceId);
+        final source = ChunkSource(
+          sourceType: ChunkSourceType.pdf,
+          sourceId: documentPublicId,
+          pageStart: item.source.pageStart ?? item.pageNumber,
+          pageEnd: item.source.pageEnd,
+          sourceRectJson: item.source.sourceRectJson,
+          originalText: item.source.originalText ?? item.text,
+        );
+        final portableContent = item.canonicalContent;
+        final flowchartImport = item.kind == ChunkKind.flowchartChunk
+            ? _remapImportedFlowchartContent(portableContent, sourceId)
+            : null;
+        final content =
+            flowchartImport?.content ??
+            normalizeLegacyNoteBlock(portableContent.copyWith(id: sourceId));
+        final canonical = item.kind == ChunkKind.flowchartChunk
+            ? FlowchartChunk(
+                id: sourceId,
+                creationMethod: item.creationMethod,
+                validationState: item.validationState,
+                source: source,
+                createdAt: importedAt,
+                updatedAt: importedAt,
+                content: content,
+              )
+            : NoteChunk(
+                id: sourceId,
+                creationMethod: item.creationMethod,
+                validationState: item.validationState,
+                source: source,
+                createdAt: importedAt,
+                updatedAt: importedAt,
+                content: content,
+              );
+        final chunkEntity = DocumentChunkEntity(
+          id: _findChunk(sourceId)?.id ?? 0,
+          publicId: sourceId,
+          documentPublicId: documentPublicId,
+          text: canonical.plainText,
+          pageNumber: source.pageStart ?? 0,
+          sectionTitle: canonical.content.title ?? item.sectionTitle,
+          sourceRectJson: source.sourceRectJson,
+          pipeline: _pipelineForCreationMethod(item.creationMethod).wireName,
+          chunkKind: canonical.kind.wireName,
+          auditState: canonical.validationState.wireName,
+        );
+        _chunkCodec.write(
+          chunkEntity,
+          canonical,
+          now: importedAt,
+          keepExistingOriginalText: false,
+          keepExistingCreatedAt: false,
+        );
+        _chunkBox.put(chunkEntity);
+        if (canonical.kind == ChunkKind.flowchartChunk) {
+          _writeImportedFlowchartRows(
             documentPublicId: documentPublicId,
-            text: item.text,
-            pageNumber: item.pageNumber,
-            sectionTitle: item.sectionTitle,
-            pipeline: LocalExtractionPipeline.ai.wireName,
-            chunkKind: LocalChunkKind.text.wireName,
-            auditState: LocalAuditState.accepted.wireName,
-          ),
-        );
-        _embeddingBox.put(
-          ChunkEmbeddingEntity(
-            sourceId: sourceId,
-            sourceType: EvidenceSourceType.textChunk.wireName,
-            vector: item.embedding,
-            model: package.embeddingModel,
-            createdAtMillis: now,
-          ),
-        );
+            flowchartPublicId: sourceId,
+            pageNumber: source.pageStart ?? 0,
+            sourceRectJson: source.sourceRectJson,
+            auditState: canonical.validationState,
+            content: content,
+          );
+        }
+        final embeddingRecords = item.embeddingRecords.isNotEmpty
+            ? item.embeddingRecords
+            : item.embedding.isNotEmpty
+            ? [
+                ChunkPackageEmbedding(
+                  sourceId: item.id,
+                  sourceType: canonical.kind == ChunkKind.flowchartChunk
+                      ? EvidenceSourceType.flowchartNode.wireName
+                      : EvidenceSourceType.textChunk.wireName,
+                  vector: item.embedding,
+                  model: package.embeddingModel,
+                ),
+              ]
+            : const <ChunkPackageEmbedding>[];
+        for (final embedding in embeddingRecords) {
+          final importedSourceId = embedding.sourceId == item.id
+              ? sourceId
+              : flowchartImport?.elementIds[embedding.sourceId] ??
+                    _importedEmbeddingSourceId(sourceId, embedding.sourceId);
+          _embeddingBox.put(
+            ChunkEmbeddingEntity(
+              sourceId: importedSourceId,
+              sourceType: embedding.sourceType,
+              vector: embedding.vector,
+              model: embedding.model,
+              createdAtMillis: now,
+            ),
+          );
+        }
       }
       document.processingState = ProcessingState.ready.wireName;
       document.errorMessage = null;
@@ -931,6 +1198,172 @@ class ObjectBoxKnowledgeRepository
       document.retryable = false;
       _documentBox.put(document);
     });
+  }
+
+  ({NoteBlock content, Map<String, String> elementIds})
+  _remapImportedFlowchartContent(NoteBlock content, String flowchartPublicId) {
+    final nodeIds = <String, String>{};
+    final portIdsByNode = <String, Map<String, String>>{};
+    final usedNodeIds = <String>{};
+    final usedPortIds = <String>{};
+    final nodes = <NoteFlowchartNode>[];
+    for (var index = 0; index < content.nodes.length; index += 1) {
+      final node = content.nodes[index];
+      final mappedId = _importedFlowchartElementId(
+        flowchartPublicId: flowchartPublicId,
+        originalId: node.id,
+        fallback: 'node-${index + 1}',
+        usedIds: usedNodeIds,
+      );
+      nodeIds[node.id] = mappedId;
+      final portIds = <String, String>{};
+      final ports = <NoteFlowchartPort>[];
+      for (var portIndex = 0; portIndex < node.ports.length; portIndex += 1) {
+        final port = node.ports[portIndex];
+        final mappedPortId = _importedFlowchartElementId(
+          flowchartPublicId: mappedId,
+          originalId: port.id,
+          fallback: 'port-${portIndex + 1}',
+          usedIds: usedPortIds,
+        );
+        portIds[port.id] = mappedPortId;
+        ports.add(port.copyWith(id: mappedPortId));
+      }
+      portIdsByNode[node.id] = portIds;
+      nodes.add(node.copyWith(id: mappedId, ports: ports));
+    }
+    final edgeIds = <String, String>{};
+    final usedEdgeIds = <String>{};
+    final edges = <NoteFlowchartEdge>[];
+    for (var index = 0; index < content.edges.length; index += 1) {
+      final edge = content.edges[index];
+      final mappedId = _importedFlowchartElementId(
+        flowchartPublicId: flowchartPublicId,
+        originalId: edge.id,
+        fallback: 'edge-${index + 1}',
+        usedIds: usedEdgeIds,
+      );
+      edgeIds[edge.id] = mappedId;
+      edges.add(
+        edge.copyWith(
+          id: mappedId,
+          fromNodeId: nodeIds[edge.fromNodeId] ?? edge.fromNodeId,
+          toNodeId: nodeIds[edge.toNodeId] ?? edge.toNodeId,
+          fromPortId: edge.fromPortId == null
+              ? null
+              : portIdsByNode[edge.fromNodeId]?[edge.fromPortId] ??
+                    edge.fromPortId,
+          toPortId: edge.toPortId == null
+              ? null
+              : portIdsByNode[edge.toNodeId]?[edge.toPortId] ?? edge.toPortId,
+        ),
+      );
+    }
+    final scopedTags = [
+      for (final assignment in content.scopedTags)
+        assignment.copyWith(
+          target: switch (assignment.target.kind) {
+            NoteTagTargetKind.flowchartNode => assignment.target.copyWith(
+              elementId:
+                  nodeIds[assignment.target.elementId] ??
+                  assignment.target.elementId,
+            ),
+            NoteTagTargetKind.flowchartEdge => assignment.target.copyWith(
+              elementId:
+                  edgeIds[assignment.target.elementId] ??
+                  assignment.target.elementId,
+            ),
+            _ => assignment.target,
+          },
+        ),
+    ];
+    return (
+      content: content.copyWith(
+        id: flowchartPublicId,
+        nodes: nodes,
+        edges: edges,
+        scopedTags: scopedTags,
+      ),
+      elementIds: {...nodeIds, ...edgeIds},
+    );
+  }
+
+  String _importedEmbeddingSourceId(
+    String chunkPublicId,
+    String portableSourceId,
+  ) {
+    final trimmed = portableSourceId.trim();
+    final separator = trimmed.lastIndexOf(':');
+    final localId =
+        (separator >= 0 ? trimmed.substring(separator + 1) : trimmed).trim();
+    return localId.isEmpty ? chunkPublicId : '$chunkPublicId:$localId';
+  }
+
+  String _importedFlowchartElementId({
+    required String flowchartPublicId,
+    required String originalId,
+    required String fallback,
+    required Set<String> usedIds,
+  }) {
+    final trimmed = originalId.trim();
+    final separator = trimmed.lastIndexOf(':');
+    final localId =
+        (separator >= 0 ? trimmed.substring(separator + 1) : trimmed).trim();
+    final base = localId.isEmpty ? fallback : localId;
+    var candidate = '$flowchartPublicId:$base';
+    var suffix = 2;
+    while (!usedIds.add(candidate)) {
+      candidate = '$flowchartPublicId:$base-$suffix';
+      suffix += 1;
+    }
+    return candidate;
+  }
+
+  void _writeImportedFlowchartRows({
+    required String documentPublicId,
+    required String flowchartPublicId,
+    required int pageNumber,
+    required String? sourceRectJson,
+    required LocalAuditState auditState,
+    required NoteBlock content,
+  }) {
+    final validation = _validationStateForAuditState(auditState).wireName;
+    _flowchartBox.put(
+      FlowchartEntity(
+        publicId: flowchartPublicId,
+        documentPublicId: documentPublicId,
+        pageNumber: pageNumber,
+        validationState: validation,
+        sourceRectJson: sourceRectJson,
+      ),
+    );
+    for (final node in content.nodes) {
+      _flowchartNodeBox.put(
+        FlowchartNodeEntity(
+          publicId: node.id,
+          flowchartPublicId: flowchartPublicId,
+          label: node.label,
+          validationState: validation,
+          positionX: node.x,
+          positionY: node.y,
+          shape: node.shape.wireName,
+          sortOrder: node.order,
+        ),
+      );
+    }
+    for (final edge in content.edges) {
+      _flowchartEdgeBox.put(
+        FlowchartEdgeEntity(
+          publicId: edge.id,
+          flowchartPublicId: flowchartPublicId,
+          fromNodePublicId: edge.fromNodeId,
+          toNodePublicId: edge.toNodeId,
+          label: edge.label,
+          validationState: validation,
+          sortOrder: edge.order,
+        ),
+      );
+    }
   }
 
   @override
@@ -963,6 +1396,17 @@ class ObjectBoxKnowledgeRepository
   DocumentChunkEntity? _findChunk(String publicId) {
     final query = _chunkBox
         .query(DocumentChunkEntity_.publicId.equals(publicId))
+        .build();
+    try {
+      return query.findFirst();
+    } finally {
+      query.close();
+    }
+  }
+
+  FlowchartEntity? _findFlowchart(String publicId) {
+    final query = _flowchartBox
+        .query(FlowchartEntity_.publicId.equals(publicId))
         .build();
     try {
       return query.findFirst();
@@ -1012,120 +1456,69 @@ class ObjectBoxKnowledgeRepository
     _knowledgeNodeBox.put(node);
   }
 
-  KnowledgeEdgeEntity? _findKnowledgeEdge(String publicId) {
-    final query = _knowledgeEdgeBox
-        .query(KnowledgeEdgeEntity_.publicId.equals(publicId))
-        .build();
-    try {
-      return query.findFirst();
-    } finally {
-      query.close();
-    }
-  }
-
-  void _putKnowledgeEdge(KnowledgeEdgeEntity edge) {
-    final existing = _findKnowledgeEdge(edge.publicId);
-    if (existing != null) {
-      edge.id = existing.id;
-    }
-    _knowledgeEdgeBox.put(edge);
-  }
-
-  void _updateChunkDerivedRows({
-    required String documentPublicId,
+  NoteBlock _contentForCanonicalUpdate({
     required String sourceId,
-    required DocumentChunkEntity chunk,
-    required bool textChanged,
-    required bool sectionTitleChanged,
-    required bool chunkKindChanged,
-  }) {
-    final nodeId = '$sourceId:node';
-    final knowledgeNode = _findKnowledgeNode(nodeId);
-    if (knowledgeNode != null) {
-      if (textChanged || sectionTitleChanged) {
-        knowledgeNode.label = chunk.sectionTitle?.trim().isNotEmpty == true
-            ? chunk.sectionTitle!.trim()
-            : _shortNodeLabel(chunk.text);
-      }
-      if (chunkKindChanged) {
-        knowledgeNode.nodeType = chunk.chunkKind;
-      }
-      _knowledgeNodeBox.put(knowledgeNode);
-    }
-    if (textChanged) {
-      for (final evidence in _knowledgeEvidenceBox.getAll()) {
-        if (evidence.sourceId == sourceId) {
-          evidence.quote = chunk.text;
-          _knowledgeEvidenceBox.put(evidence);
-        }
-      }
-    }
-    if (sectionTitleChanged) {
-      _rewireSectionEdge(
-        documentPublicId: documentPublicId,
-        sourceId: sourceId,
-        nodeId: nodeId,
-        sectionTitle: chunk.sectionTitle,
-        pageNumber: chunk.pageNumber,
-      );
-    }
-    if (textChanged || chunkKindChanged) {
-      _removeEmbeddingsForSource(sourceId);
-    }
-  }
-
-  void _rewireSectionEdge({
-    required String documentPublicId,
-    required String sourceId,
-    required String nodeId,
+    required Chunk decoded,
+    required String? text,
     required String? sectionTitle,
-    required int? pageNumber,
+    required List<NoteKnowledgeTag>? tags,
+    required String? structuredContentJson,
+    required bool clearStructuredContent,
+    required LocalChunkKind? requestedKind,
   }) {
-    final partOfEdgeIds = _knowledgeEdgeBox
-        .getAll()
-        .where(
-          (edge) =>
-              edge.documentPublicId == documentPublicId &&
-              edge.fromNodePublicId == nodeId &&
-              edge.relationType == 'part_of',
-        )
-        .map((edge) => edge.id)
-        .toList(growable: false);
-    if (partOfEdgeIds.isNotEmpty) {
-      _knowledgeEdgeBox.removeMany(partOfEdgeIds);
+    NoteBlock? suppliedContent;
+    final raw = structuredContentJson?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      final json = jsonDecode(raw);
+      if (json is! Map) {
+        throw const FormatException(
+          'Structured chunk content must be a JSON object.',
+        );
+      }
+      final map = Map<String, Object?>.from(json);
+      suppliedContent = map.containsKey('kind') && map['content'] is Map
+          ? Chunk.fromJson(map).content
+          : NoteBlock.fromJson(map);
     }
-    final title = sectionTitle?.trim();
-    if (title == null || title.isEmpty) {
-      return;
+    var content = suppliedContent ?? decoded.content;
+    final wantsFlowchart =
+        requestedKind == LocalChunkKind.flowchart ||
+        (requestedKind == null && decoded.kind == ChunkKind.flowchartChunk);
+    if (suppliedContent == null && (text != null || clearStructuredContent)) {
+      final projectionText = text ?? decoded.plainText;
+      content = wantsFlowchart
+          ? NoteBlock(
+              id: sourceId,
+              type: NoteBlockType.flowchart,
+              title: sectionTitle ?? decoded.content.title,
+              text: projectionText,
+              tags: tags ?? decoded.content.tags,
+            )
+          : mixedBlockFromPlainText(
+              id: sourceId,
+              title: sectionTitle ?? decoded.content.title,
+              text: projectionText,
+              tags: tags ?? decoded.content.tags,
+            );
+    } else {
+      if (sectionTitle != null) {
+        content = content.copyWith(title: sectionTitle);
+      }
+      if (tags != null) {
+        content = content.copyWith(tags: tags);
+      }
     }
-    final sectionKey = _graphKey(title);
-    final sectionNodeId = '$documentPublicId:section:$sectionKey';
-    _putKnowledgeNode(
-      KnowledgeNodeEntity(
-        publicId: sectionNodeId,
-        documentPublicId: documentPublicId,
-        label: title,
-        nodeType: 'section',
-        pageNumber: pageNumber,
-      ),
-    );
-    _putKnowledgeEdge(
-      KnowledgeEdgeEntity(
-        publicId: '$nodeId:part_of:$sectionNodeId',
-        documentPublicId: documentPublicId,
-        fromNodePublicId: nodeId,
-        toNodePublicId: sectionNodeId,
-        relationType: 'part_of',
-        sourceId: sourceId,
-        weight: 1,
-      ),
-    );
+    return content.copyWith(id: sourceId);
   }
 
   void _removeEmbeddingsForSource(String sourceId) {
     final embeddingIds = _embeddingBox
         .getAll()
-        .where((embedding) => embedding.sourceId == sourceId)
+        .where(
+          (embedding) =>
+              embedding.sourceId == sourceId ||
+              embedding.sourceId.startsWith('$sourceId:'),
+        )
         .map((embedding) => embedding.id)
         .toList(growable: false);
     if (embeddingIds.isNotEmpty) {
@@ -1155,16 +1548,24 @@ class ObjectBoxKnowledgeRepository
         .where((chunk) => _isGeneratedLocalPipelineName(chunk.pipeline))
         .toList(growable: false);
     final sourceIds = localChunks.map((chunk) => chunk.publicId).toSet();
+    final linkedSourceIds = _linkedSourceIds(sourceIds);
+    final deletedSourceIds = sourceIds.difference(linkedSourceIds);
     final embeddingIds = _embeddingBox
         .getAll()
-        .where((embedding) => sourceIds.contains(embedding.sourceId))
+        .where((embedding) => deletedSourceIds.contains(embedding.sourceId))
         .map((embedding) => embedding.id)
         .toList(growable: false);
     if (embeddingIds.isNotEmpty) {
       _embeddingBox.removeMany(embeddingIds);
     }
-    if (localChunks.isNotEmpty) {
-      _chunkBox.removeMany(localChunks.map((chunk) => chunk.id).toList());
+    _deleteOrDetachChunks(localChunks, linkedSourceIds: linkedSourceIds);
+    for (final chunk in localChunks) {
+      if (ChunkKind.fromWireName(chunk.chunkKind) == ChunkKind.flowchartChunk) {
+        _removeFlowchart(
+          chunk.publicId,
+          preserveCanonicalEmbedding: linkedSourceIds.contains(chunk.publicId),
+        );
+      }
     }
     _removeLocalGraphRowsForSources(documentPublicId, sourceIds);
     final visualObjectIds = _visualObjectBox
@@ -1195,21 +1596,21 @@ class ObjectBoxKnowledgeRepository
         ? _chunksForDocument(documentPublicId)
         : _aiChunksForDocument(documentPublicId);
     final sourceIds = chunks.map((chunk) => chunk.publicId).toSet();
+    final linkedSourceIds = _linkedSourceIds(sourceIds);
+    final deletedSourceIds = sourceIds.difference(linkedSourceIds);
     final embeddingIds = _embeddingBox
         .getAll()
         .where(
           (embedding) =>
               _generatedEmbeddingSourceTypes.contains(embedding.sourceType) &&
-              sourceIds.contains(embedding.sourceId),
+              deletedSourceIds.contains(embedding.sourceId),
         )
         .map((embedding) => embedding.id)
         .toList(growable: false);
     if (embeddingIds.isNotEmpty) {
       _embeddingBox.removeMany(embeddingIds);
     }
-    if (chunks.isNotEmpty) {
-      _chunkBox.removeMany(chunks.map((chunk) => chunk.id).toList());
-    }
+    _deleteOrDetachChunks(chunks, linkedSourceIds: linkedSourceIds);
     if (includeLocal) {
       final visualObjectIds = _visualObjectBox
           .getAll()
@@ -1235,9 +1636,45 @@ class ObjectBoxKnowledgeRepository
       _removeDocumentRows(_visualObjectBox, documentPublicId);
     }
 
-    final flowcharts = _flowchartsForDocument(documentPublicId);
-    for (final flowchart in flowcharts) {
-      _removeFlowchart(flowchart.publicId);
+    for (final chunk in chunks) {
+      if (ChunkKind.fromWireName(chunk.chunkKind) == ChunkKind.flowchartChunk) {
+        _removeFlowchart(
+          chunk.publicId,
+          preserveCanonicalEmbedding: linkedSourceIds.contains(chunk.publicId),
+        );
+      }
+    }
+  }
+
+  Set<String> _linkedSourceIds(Set<String> sourceIds) {
+    if (sourceIds.isEmpty) {
+      return const {};
+    }
+    return {
+      for (final link in _chunkNoteLinkBox.getAll())
+        if (sourceIds.contains(link.chunkPublicId)) link.chunkPublicId,
+    };
+  }
+
+  void _deleteOrDetachChunks(
+    List<DocumentChunkEntity> chunks, {
+    required Set<String> linkedSourceIds,
+  }) {
+    final removableIds = <int>[];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final chunk in chunks) {
+      if (!linkedSourceIds.contains(chunk.publicId)) {
+        removableIds.add(chunk.id);
+        continue;
+      }
+      chunk.sourceType ??= ChunkSourceType.pdf.wireName;
+      chunk.sourcePublicId ??= chunk.documentPublicId;
+      chunk.documentPublicId = '';
+      chunk.updatedAtMillis = now;
+      _chunkBox.put(chunk);
+    }
+    if (removableIds.isNotEmpty) {
+      _chunkBox.removeMany(removableIds);
     }
   }
 
@@ -1252,7 +1689,10 @@ class ObjectBoxKnowledgeRepository
     }
   }
 
-  void _removeFlowchart(String flowchartPublicId) {
+  void _removeFlowchart(
+    String flowchartPublicId, {
+    bool preserveCanonicalEmbedding = false,
+  }) {
     final nodes = _flowchartNodeBox
         .getAll()
         .where((node) => node.flowchartPublicId == flowchartPublicId)
@@ -1265,9 +1705,17 @@ class ObjectBoxKnowledgeRepository
         .getAll()
         .where((flowchart) => flowchart.publicId == flowchartPublicId)
         .toList(growable: false);
+    if (preserveCanonicalEmbedding) {
+      for (final flowchart in flowcharts) {
+        flowchart.documentPublicId = '';
+        _flowchartBox.put(flowchart);
+      }
+      return;
+    }
     final flowchartSourceIds = {
       ...nodes.map((node) => node.publicId),
       ...edges.map((edge) => edge.publicId),
+      flowchartPublicId,
     };
     final embeddingIds = _embeddingBox
         .getAll()
@@ -1328,7 +1776,10 @@ class ObjectBoxKnowledgeRepository
     ChunkEmbeddingEntity? embedding,
   ) {
     final pipeline = LocalExtractionPipeline.fromWireName(chunk.pipeline);
-    final chunkKind = LocalChunkKind.fromWireName(chunk.chunkKind);
+    final canonicalKind = ChunkKind.fromWireName(chunk.chunkKind);
+    final chunkKind = canonicalKind == ChunkKind.flowchartChunk
+        ? LocalChunkKind.flowchart
+        : LocalChunkKind.text;
     final embeddedSourceType = embedding == null
         ? null
         : evidenceSourceTypeFromWireName(embedding.sourceType);
@@ -1575,64 +2026,157 @@ class ObjectBoxKnowledgeRepository
         pipeline != LocalExtractionPipeline.manual.wireName;
   }
 
-  List<ExtractedKnowledgeItem> _flowchartItems(
+  ExtractedKnowledgeItem _flowchartItem(
     String documentPublicId,
     FlowchartEntity flowchart,
     Map<String, ChunkEmbeddingEntity> embeddings,
   ) {
+    final parent = _findChunk(flowchart.publicId);
+    final decodedParent = parent == null ? null : _chunkCodec.decode(parent);
+    final content = decodedParent?.kind == ChunkKind.flowchartChunk
+        ? decodedParent!.content
+        : _flowchartBlock(flowchart);
+    final pipeline = LocalExtractionPipeline.fromWireName(parent?.pipeline);
+    String? embeddingModel;
+    for (final embedding in embeddings.values) {
+      if (embedding.sourceId.startsWith('${flowchart.publicId}:')) {
+        embeddingModel = embedding.model;
+        break;
+      }
+    }
+    return ExtractedKnowledgeItem(
+      id: _packageChunkId(documentPublicId, flowchart.publicId),
+      documentId: documentPublicId,
+      sourceType: EvidenceSourceType.flowchartNode,
+      text: content.plainText,
+      pageNumber: flowchart.pageNumber,
+      sectionTitle: content.title ?? 'Flowchart',
+      embeddingModel: embeddingModel,
+      flowchartId: flowchart.publicId,
+      sourceRectJson: flowchart.sourceRectJson,
+      pipeline: pipeline,
+      chunkKind: LocalChunkKind.flowchart,
+      auditState: parent == null
+          ? _auditStateForValidationState(flowchart.validationState)
+          : LocalAuditState.fromWireName(parent.auditState),
+      confidence: flowchart.extractionConfidence,
+      tags: parent == null ? const [] : _tagsFromJson(parent.tagsJson),
+      sortOrder: parent?.sortOrder ?? 0,
+      structuredContentJson: jsonEncode(content.toJson()),
+    );
+  }
+
+  void _upsertFlowchartParentChunk(
+    FlowchartEntity flowchart, {
+    required DateTime now,
+    required ChunkCreationMethod fallbackCreationMethod,
+  }) {
+    final existing = _findChunk(flowchart.publicId);
+    final previous = existing == null ? null : _chunkCodec.decode(existing);
+    final content = _flowchartBlock(flowchart, previous: previous?.content);
+    final creationMethod = previous?.creationMethod ?? fallbackCreationMethod;
+    final chunk = FlowchartChunk(
+      id: flowchart.publicId,
+      creationMethod: creationMethod,
+      validationState: _auditStateForValidationState(flowchart.validationState),
+      source: ChunkSource(
+        sourceType: ChunkSourceType.pdf,
+        sourceId: flowchart.documentPublicId,
+        pageStart: flowchart.pageNumber,
+        sourceRectJson: flowchart.sourceRectJson,
+        originalText: previous?.source.originalText,
+      ),
+      createdAt: previous?.createdAt ?? now,
+      updatedAt: now,
+      content: content,
+    );
+    final entity =
+        existing ??
+        DocumentChunkEntity(
+          publicId: flowchart.publicId,
+          documentPublicId: flowchart.documentPublicId,
+          text: chunk.plainText,
+          pageNumber: flowchart.pageNumber,
+          pipeline: fallbackCreationMethod == ChunkCreationMethod.aiGenerated
+              ? LocalExtractionPipeline.ai.wireName
+              : LocalExtractionPipeline.manual.wireName,
+          chunkKind: ChunkKind.flowchartChunk.wireName,
+          auditState: chunk.validationState.wireName,
+        );
+    synchronizeFlowchartParentDocumentRelation(
+      parent: entity,
+      flowchart: flowchart,
+    );
+    _chunkCodec.write(entity, chunk, now: now);
+    _chunkBox.put(entity);
+  }
+
+  void _synchronizeFlowchartParent(String flowchartPublicId) {
+    _flowchartProjection.synchronizeCanonicalValidation(flowchartPublicId);
+  }
+
+  NoteBlock _flowchartBlock(FlowchartEntity flowchart, {NoteBlock? previous}) {
     final nodes =
         _flowchartNodeBox
             .getAll()
             .where((node) => node.flowchartPublicId == flowchart.publicId)
             .toList(growable: false)
-          ..sort((a, b) => a.publicId.compareTo(b.publicId));
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     final edges =
         _flowchartEdgeBox
             .getAll()
             .where((edge) => edge.flowchartPublicId == flowchart.publicId)
             .toList(growable: false)
-          ..sort((a, b) => a.publicId.compareTo(b.publicId));
-    final nodeLabels = {for (final node in nodes) node.publicId: node.label};
-    return [
-      for (final node in nodes)
-        ExtractedKnowledgeItem(
-          id: _packageChunkId(documentPublicId, node.publicId),
-          documentId: documentPublicId,
-          sourceType: EvidenceSourceType.flowchartNode,
-          text: node.label,
-          pageNumber: flowchart.pageNumber,
-          sectionTitle: 'Flowchart lépés',
-          embeddingModel: embeddings[node.publicId]?.model,
-          flowchartId: flowchart.publicId,
-          flowchartElementId: node.publicId,
-          flowchartShape: node.shape,
-          flowchartOrder: node.sortOrder,
-          sourceRectJson: node.sourceRectJson,
-          pipeline: LocalExtractionPipeline.ai,
-          chunkKind: LocalChunkKind.flowchart,
-          auditState: _auditStateForValidationState(node.validationState),
-        ),
-      for (final edge in edges)
-        ExtractedKnowledgeItem(
-          id: _packageChunkId(documentPublicId, edge.publicId),
-          documentId: documentPublicId,
-          sourceType: EvidenceSourceType.flowchartEdge,
-          text: _edgeRelation(edge, nodeLabels),
-          pageNumber: flowchart.pageNumber,
-          sectionTitle: 'Flowchart kapcsolat',
-          embeddingModel: embeddings[edge.publicId]?.model,
-          flowchartId: flowchart.publicId,
-          flowchartElementId: edge.publicId,
-          flowchartFromId: edge.fromNodePublicId,
-          flowchartToId: edge.toNodePublicId,
-          flowchartEdgeLabel: edge.label,
-          flowchartOrder: edge.sortOrder,
-          sourceRectJson: edge.sourceRectJson,
-          pipeline: LocalExtractionPipeline.ai,
-          chunkKind: LocalChunkKind.flowchart,
-          auditState: _auditStateForValidationState(edge.validationState),
-        ),
-    ];
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final previousContent = previous?.type == NoteBlockType.flowchart
+        ? previous
+        : null;
+    final previousNodes = {
+      for (final node in previousContent?.nodes ?? const <NoteFlowchartNode>[])
+        node.id: node,
+    };
+    final previousEdges = {
+      for (final edge in previousContent?.edges ?? const <NoteFlowchartEdge>[])
+        edge.id: edge,
+    };
+    return NoteBlock(
+      id: flowchart.publicId,
+      type: NoteBlockType.flowchart,
+      title: previousContent?.title ?? 'Flowchart',
+      searchContext: previousContent?.searchContext,
+      searchRole: previousContent?.searchRole ?? NoteSearchRoles.none,
+      searchAliases: previousContent?.searchAliases ?? const [],
+      tags: previousContent?.tags ?? const [],
+      scopedTags: previousContent?.scopedTags ?? const [],
+      nodes: [
+        for (final node in nodes)
+          (previousNodes[node.publicId] ??
+                  NoteFlowchartNode(id: node.publicId, label: node.label))
+              .copyWith(
+                label: node.label,
+                shape: AiFlowchartNodeShape.fromWireName(node.shape),
+                order: node.sortOrder,
+                x: node.positionX,
+                y: node.positionY,
+              ),
+      ],
+      edges: [
+        for (final edge in edges)
+          (previousEdges[edge.publicId] ??
+                  NoteFlowchartEdge(
+                    id: edge.publicId,
+                    fromNodeId: edge.fromNodePublicId,
+                    toNodeId: edge.toNodePublicId,
+                    label: edge.label,
+                  ))
+              .copyWith(
+                fromNodeId: edge.fromNodePublicId,
+                toNodeId: edge.toNodePublicId,
+                label: edge.label,
+                order: edge.sortOrder,
+              ),
+      ],
+    );
   }
 
   String? _sourceRectJson(Map<String, Object?>? sourceRect) {
@@ -1667,16 +2211,6 @@ class ObjectBoxKnowledgeRepository
     }
   }
 
-  String _edgeRelation(
-    FlowchartEdgeEntity edge,
-    Map<String, String> nodeLabels,
-  ) {
-    final from = nodeLabels[edge.fromNodePublicId] ?? edge.fromNodePublicId;
-    final to = nodeLabels[edge.toNodePublicId] ?? edge.toNodePublicId;
-    final label = edge.label.trim();
-    return label.isEmpty ? '$from -> $to' : '$from -> $to [$label]';
-  }
-
   bool _isFlowchartSourceType(String sourceType) {
     return sourceType == EvidenceSourceType.flowchartNode.wireName ||
         sourceType == EvidenceSourceType.flowchartEdge.wireName;
@@ -1696,6 +2230,18 @@ class ObjectBoxKnowledgeRepository
       LocalAuditState.edited => ValidationState.validated,
       LocalAuditState.rejected => ValidationState.rejected,
       LocalAuditState.unreviewed => ValidationState.unreviewed,
+    };
+  }
+
+  LocalExtractionPipeline _pipelineForCreationMethod(
+    ChunkCreationMethod method,
+  ) {
+    return switch (method) {
+      ChunkCreationMethod.manualSelection => LocalExtractionPipeline.manual,
+      ChunkCreationMethod.assistedSelection =>
+        LocalExtractionPipeline.localPdfText,
+      ChunkCreationMethod.aiGenerated ||
+      ChunkCreationMethod.imported => LocalExtractionPipeline.ai,
     };
   }
 
@@ -1720,12 +2266,18 @@ class ObjectBoxKnowledgeRepository
   }
 
   int _firstEmbeddingDimension(List<ChunkPackageItem> items) {
+    final dimensions = <int>{};
     for (final item in items) {
       if (item.embedding.isNotEmpty) {
-        return item.embedding.length;
+        dimensions.add(item.embedding.length);
+      }
+      for (final embedding in item.embeddingRecords) {
+        if (embedding.vector.isNotEmpty) {
+          dimensions.add(embedding.vector.length);
+        }
       }
     }
-    return 0;
+    return dimensions.length == 1 ? dimensions.single : 0;
   }
 
   KnowledgeFolderEntity? _findFolder(String publicId) {

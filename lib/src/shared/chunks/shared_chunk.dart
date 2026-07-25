@@ -1,11 +1,10 @@
+import '../../chunks/models/chunk.dart';
 import '../../knowledge/models/local_extraction.dart';
 import '../../notes/models/note_document.dart';
 
-enum SharedChunkKind { text, list, table, flowchart }
+enum SharedChunkKind { noteChunk, flowchartChunk }
 
 enum SharedChunkOrigin { note, pdf, image }
-
-enum SharedChunkMode { ai, manual }
 
 class SharedChunkViewModel {
   const SharedChunkViewModel({
@@ -16,7 +15,7 @@ class SharedChunkViewModel {
     required this.preview,
     required this.content,
     required this.tags,
-    this.mode,
+    this.creationMethod,
     this.pageLabel,
     this.sourceRectJson,
     this.auditState,
@@ -31,7 +30,7 @@ class SharedChunkViewModel {
   final String preview;
   final String content;
   final List<NoteKnowledgeTag> tags;
-  final SharedChunkMode? mode;
+  final ChunkCreationMethod? creationMethod;
   final String? pageLabel;
   final String? sourceRectJson;
   final LocalAuditState? auditState;
@@ -44,20 +43,20 @@ class SharedChunkViewModel {
 
 SharedChunkKind sharedKindFromLocalChunkKind(LocalChunkKind kind) {
   return switch (kind) {
-    LocalChunkKind.text => SharedChunkKind.text,
-    LocalChunkKind.list => SharedChunkKind.list,
-    LocalChunkKind.table => SharedChunkKind.table,
-    LocalChunkKind.flowchart => SharedChunkKind.flowchart,
+    LocalChunkKind.flowchart => SharedChunkKind.flowchartChunk,
+    LocalChunkKind.text ||
+    LocalChunkKind.list ||
+    LocalChunkKind.table => SharedChunkKind.noteChunk,
   };
 }
 
 SharedChunkKind sharedKindFromNoteBlockType(NoteBlockType type) {
   return switch (type) {
-    NoteBlockType.listItem => SharedChunkKind.list,
-    NoteBlockType.table => SharedChunkKind.table,
-    NoteBlockType.flowchart => SharedChunkKind.flowchart,
+    NoteBlockType.flowchart => SharedChunkKind.flowchartChunk,
     NoteBlockType.heading ||
     NoteBlockType.paragraph ||
-    NoteBlockType.mixed => SharedChunkKind.text,
+    NoteBlockType.listItem ||
+    NoteBlockType.table ||
+    NoteBlockType.mixed => SharedChunkKind.noteChunk,
   };
 }

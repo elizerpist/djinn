@@ -332,6 +332,8 @@ class _MainScreenState extends State<MainScreen> {
       AppDestinationId.knowledge => KnowledgeBaseScreen(
         repository: widget.knowledgeRepository,
         importService: widget.pdfImportService,
+        noteRepository: widget.noteRepository,
+        tagRepository: _tagRepository,
         processingService: widget.processingService,
         localProcessingService: widget.localProcessingService,
         controller: _knowledgeController,
@@ -370,6 +372,8 @@ class _MainScreenState extends State<MainScreen> {
         builder: (_) => ExtractedKnowledgeScreen(
           repository: widget.knowledgeRepository,
           document: document,
+          noteRepository: widget.noteRepository,
+          tagRepository: _tagRepository,
         ),
       ),
     );

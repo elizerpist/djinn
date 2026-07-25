@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:djinn/src/chunks/models/chunk.dart';
 import 'package:djinn/src/knowledge/models/extracted_knowledge_item.dart';
 import 'package:djinn/src/knowledge/models/local_extraction.dart';
 import 'package:djinn/src/knowledge/ui/pdf_shared_chunk_adapter.dart';
@@ -36,10 +37,10 @@ void main() {
     );
 
     expect(text.origin, SharedChunkOrigin.note);
-    expect(text.kind, SharedChunkKind.text);
-    expect(text.title, 'Szöveg chunk');
+    expect(text.kind, SharedChunkKind.noteChunk);
+    expect(text.title, 'Jegyzetchunk');
     expect(text.preview, contains('Legzesi'));
-    expect(table.kind, SharedChunkKind.table);
+    expect(table.kind, SharedChunkKind.noteChunk);
     expect(table.preview, contains('Sulyos'));
   });
 
@@ -64,28 +65,28 @@ void main() {
     );
 
     expect(shared.origin, SharedChunkOrigin.pdf);
-    expect(shared.mode, SharedChunkMode.manual);
-    expect(shared.kind, SharedChunkKind.table);
-    expect(shared.pageLabel, 'Táblázat - 3. oldal');
+    expect(shared.creationMethod, ChunkCreationMethod.manualSelection);
+    expect(shared.kind, SharedChunkKind.noteChunk);
+    expect(shared.pageLabel, 'Jegyzetchunk - 3. oldal');
     expect(shared.hasSourceRect, isTrue);
   });
 
-  test('legacy pdf chunk kinds map into the four shared kinds', () {
+  test('all legacy pdf chunk kinds map into exactly two shared kinds', () {
     expect(
       sharedKindFromLocalChunkKind(LocalChunkKind.text),
-      SharedChunkKind.text,
+      SharedChunkKind.noteChunk,
     );
     expect(
       sharedKindFromLocalChunkKind(LocalChunkKind.list),
-      SharedChunkKind.list,
+      SharedChunkKind.noteChunk,
     );
     expect(
       sharedKindFromLocalChunkKind(LocalChunkKind.table),
-      SharedChunkKind.table,
+      SharedChunkKind.noteChunk,
     );
     expect(
       sharedKindFromLocalChunkKind(LocalChunkKind.flowchart),
-      SharedChunkKind.flowchart,
+      SharedChunkKind.flowchartChunk,
     );
     expect(LocalChunkKind.fromWireName('score'), LocalChunkKind.table);
     expect(LocalChunkKind.fromWireName('image_region'), LocalChunkKind.text);

@@ -92,51 +92,10 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
     });
   }
 
-  void _addTextBlock() {
+  void _addNoteChunk() {
     setState(() {
       _blocks.add(NoteBlock(id: _nextBlockId(), type: NoteBlockType.paragraph));
     });
-  }
-
-  void _addListBlock() {
-    setState(() {
-      _blocks.add(NoteBlock(id: _nextBlockId(), type: NoteBlockType.listItem));
-    });
-  }
-
-  void _addMixedBlock() {
-    setState(() {
-      _blocks.add(
-        NoteBlock(
-          id: _nextBlockId(),
-          type: NoteBlockType.mixed,
-          mixedSections: const [
-            NoteMixedSection(
-              id: 'section-1',
-              type: NoteMixedSectionType.paragraph,
-              text: '',
-            ),
-          ],
-        ),
-      );
-    });
-  }
-
-  Future<void> _addTableBlock() async {
-    final block = NoteBlock(
-      id: _nextBlockId(),
-      type: NoteBlockType.table,
-      rows: const [
-        ['', ''],
-      ],
-    );
-    final edited = await Navigator.of(context).push<NoteBlock>(
-      MaterialPageRoute(builder: (_) => NoteTableEditorScreen(block: block)),
-    );
-    if (edited == null || !mounted) {
-      return;
-    }
-    setState(() => _blocks.add(edited));
   }
 
   Future<void> _addFlowchartBlock() async {
@@ -282,24 +241,10 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
             child: Row(
               children: [
                 OutlinedButton.icon(
-                  key: const ValueKey('note-document-add-text'),
-                  onPressed: _addTextBlock,
+                  key: const ValueKey('note-document-add-note-chunk'),
+                  onPressed: _addNoteChunk,
                   icon: const Icon(Icons.subject),
-                  label: const Text('Szöveg'),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  key: const ValueKey('note-document-add-list'),
-                  onPressed: _addListBlock,
-                  icon: const Icon(Icons.format_list_bulleted),
-                  label: const Text('Lista'),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  key: const ValueKey('note-document-add-table'),
-                  onPressed: _addTableBlock,
-                  icon: const Icon(Icons.table_chart_outlined),
-                  label: const Text('Táblázat'),
+                  label: const Text('Jegyzetchunk'),
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
@@ -307,13 +252,6 @@ class _NoteDocumentEditorScreenState extends State<NoteDocumentEditorScreen> {
                   onPressed: _addFlowchartBlock,
                   icon: const Icon(Icons.account_tree_outlined),
                   label: const Text('Flowchart'),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  key: const ValueKey('note-document-add-mixed'),
-                  onPressed: _addMixedBlock,
-                  icon: const Icon(Icons.article_outlined),
-                  label: const Text('Kevert'),
                 ),
               ],
             ),

@@ -1,3 +1,4 @@
+import '../../chunks/models/chunk.dart';
 import '../../local_store/entities.dart';
 import '../../notes/models/note_document.dart';
 import 'local_extraction.dart';
@@ -20,6 +21,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
     this.flowchartOrder = 0,
     this.sourceRectJson,
     this.pipeline = LocalExtractionPipeline.ai,
+    this.creationMethod,
     this.chunkKind = LocalChunkKind.text,
     this.auditState = LocalAuditState.accepted,
     this.endPageNumber,
@@ -50,6 +52,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
   final int flowchartOrder;
   final String? sourceRectJson;
   final LocalExtractionPipeline pipeline;
+  final ChunkCreationMethod? creationMethod;
   final LocalChunkKind chunkKind;
   @override
   final LocalAuditState auditState;
@@ -66,6 +69,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
     String? sectionTitle,
     EvidenceSourceType? sourceType,
     LocalChunkKind? chunkKind,
+    ChunkCreationMethod? creationMethod,
     List<NoteKnowledgeTag>? tags,
     int? sortOrder,
     String? structuredContentJson,
@@ -88,6 +92,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
       flowchartOrder: flowchartOrder,
       sourceRectJson: sourceRectJson,
       pipeline: pipeline,
+      creationMethod: creationMethod ?? this.creationMethod,
       chunkKind: chunkKind ?? this.chunkKind,
       auditState: auditState ?? this.auditState,
       endPageNumber: endPageNumber,
@@ -105,13 +110,7 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
 
   @override
   String get typeLabel {
-    return switch (sourceType) {
-      EvidenceSourceType.textChunk => 'Szöveg',
-      EvidenceSourceType.tableChunk => 'Táblázat',
-      EvidenceSourceType.scoreChunk => 'Score',
-      EvidenceSourceType.flowchartNode ||
-      EvidenceSourceType.flowchartEdge => 'Flowchart',
-    };
+    return chunkKind == LocalChunkKind.flowchart ? 'Flowchart' : 'Jegyzetchunk';
   }
 
   String get pageLabel {
@@ -128,14 +127,23 @@ class ExtractedKnowledgeItem implements ChunkComparisonItem {
 
   @override
   String get pipelineLabel {
+    final canonicalMethod = creationMethod;
+    if (canonicalMethod != null) {
+      return switch (canonicalMethod) {
+        ChunkCreationMethod.manualSelection => 'Kézi',
+        ChunkCreationMethod.assistedSelection => 'Asszisztált',
+        ChunkCreationMethod.aiGenerated => 'AI-javaslat',
+        ChunkCreationMethod.imported => 'Importált',
+      };
+    }
     return switch (pipeline) {
-      LocalExtractionPipeline.ai => 'AI chunk',
+      LocalExtractionPipeline.ai => 'AI-javaslat',
+      LocalExtractionPipeline.manual => 'Kézi',
       LocalExtractionPipeline.localPdfText ||
       LocalExtractionPipeline.localOcr ||
       LocalExtractionPipeline.localTable ||
       LocalExtractionPipeline.localFlowchart ||
-      LocalExtractionPipeline.localVisual ||
-      LocalExtractionPipeline.manual => 'Manuális OCR chunk',
+      LocalExtractionPipeline.localVisual => 'Asszisztált',
     };
   }
 }

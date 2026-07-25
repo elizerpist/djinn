@@ -287,6 +287,19 @@ class ObjectBoxKnowledgeDocumentRepository extends KnowledgeDocumentRepository
   }
 
   @override
+  Future<void> updateExtractedKnowledgeTags(
+    String documentPublicId,
+    String itemId,
+    List<NoteKnowledgeTag> tags,
+  ) {
+    return _repository.updateExtractedKnowledgeTags(
+      documentPublicId,
+      itemId,
+      tags,
+    );
+  }
+
+  @override
   Future<ChunkComparison> compareExtractedChunks(String documentPublicId) {
     return _repository.compareExtractedChunks(documentPublicId);
   }

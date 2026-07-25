@@ -613,7 +613,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _AboutBlock(
           title: 'Mi az a chunkolás?',
           body:
-              'A chunkolás a PDF vagy kép tartalmát kisebb, önállóan kereshető tudáselemekre bontja. Egy chunk lehet bekezdés, felsorolás, táblázatsor, score elem, képi tény vagy flowchart lépés. A cél az, hogy a kérdésre ne az egész dokumentumot kelljen átnézni, hanem csak a releváns részleteket.',
+              'A chunkolás a PDF vagy kép tartalmát kisebb, önállóan kereshető tudáselemekre bontja. Két végleges típus van: a szöveget, bekezdést, listát és táblázatot szabadon keverő Jegyzetchunk, valamint a teljes folyamatábrát tároló Flowchart chunk. A cél az, hogy a kérdéshez ne az egész dokumentumot kelljen átnézni, hanem csak a releváns részleteket.',
         ),
         _AboutBlock(
           title: 'Mi történik OCR közben?',
@@ -646,9 +646,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Az audit arra való, hogy a user vagy egy későbbi AI ellenőrizze a kinyert tartalmat. Az auditált és indexelt chunk erősebb forrás lehet, mint egy nyers, bizonytalan OCR vagy AI kinyerés.',
         ),
         _AboutBlock(
-          title: 'Mi a kézi chunk?',
+          title: 'Mi a kézi létrehozás?',
           body:
-              'A kézi chunk akkor kell, ha az automatikus kinyerés kihagyott vagy rosszul tagolt valamit. A kézzel mentett elem ugyanúgy bekerül a tudástárba, külön pipeline-ként látszik, exportálható, auditálható és később indexelhető.',
+              'A kézi létrehozás akkor kell, ha az automatikus kinyerés kihagyott vagy rosszul tagolt valamit. A kézzel mentett elem ugyanabba a közös Chunk-tárba kerül, mint az asszisztált vagy AI-javaslatból származó elem. A létrehozási mód csak eredetmetaadat; a chunk ugyanúgy szerkeszthető, exportálható, auditálható és indexelhető.',
         ),
         _AboutBlock(
           title: 'Mi a B mód?',

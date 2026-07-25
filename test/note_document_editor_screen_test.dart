@@ -5,7 +5,7 @@ import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/ui/note_document_editor_screen.dart';
 
 void main() {
-  testWidgets('full-screen note editor saves free text and list blocks', (
+  testWidgets('full-screen note editor saves canonical note chunks', (
     tester,
   ) async {
     NoteDocumentEditorResult? result;
@@ -14,14 +14,15 @@ void main() {
         home: Builder(
           builder: (context) => FilledButton(
             onPressed: () async {
-              result = await Navigator.of(context).push<NoteDocumentEditorResult>(
-                MaterialPageRoute(
-                  builder: (_) => NoteDocumentEditorScreen(
-                    title: 'Mentési jegyzet',
-                    document: NoteDocument.empty(),
-                  ),
-                ),
-              );
+              result = await Navigator.of(context)
+                  .push<NoteDocumentEditorResult>(
+                    MaterialPageRoute(
+                      builder: (_) => NoteDocumentEditorScreen(
+                        title: 'Mentési jegyzet',
+                        document: NoteDocument.empty(),
+                      ),
+                    ),
+                  );
             },
             child: const Text('Open'),
           ),
@@ -35,7 +36,9 @@ void main() {
       find.byKey(const ValueKey('note-document-block-block-1')),
       'Szabad szöveg.',
     );
-    await tester.tap(find.byKey(const ValueKey('note-document-add-list')));
+    await tester.tap(
+      find.byKey(const ValueKey('note-document-add-note-chunk')),
+    );
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView), const Offset(0, -700));
     await tester.pumpAndSettle();
@@ -49,33 +52,68 @@ void main() {
     expect(result, isNotNull);
     expect(result!.document.blocks.map((block) => block.type), [
       NoteBlockType.paragraph,
-      NoteBlockType.listItem,
+      NoteBlockType.paragraph,
     ]);
     expect(result!.document.plainText, contains('Szabad szöveg.'));
     expect(result!.document.plainText, contains('Első vázlatpont'));
   });
 
-  testWidgets('list indentation is saved in the document editor', (tester) async {
+  testWidgets('creation rail exposes exactly the two canonical chunk kinds', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: const NoteDocumentEditorScreen(
+          title: 'Kanonikus létrehozás',
+          document: NoteDocument(
+            blocks: [NoteBlock(id: 'block-1', type: NoteBlockType.paragraph)],
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('note-document-add-note-chunk')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('note-document-add-flowchart')),
+      findsOneWidget,
+    );
+    expect(find.text('Jegyzetchunk'), findsOneWidget);
+    expect(find.text('Flowchart'), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-document-add-text')), findsNothing);
+    expect(find.byKey(const ValueKey('note-document-add-list')), findsNothing);
+    expect(find.byKey(const ValueKey('note-document-add-table')), findsNothing);
+    expect(find.byKey(const ValueKey('note-document-add-mixed')), findsNothing);
+  });
+
+  testWidgets('list indentation is saved in the document editor', (
+    tester,
+  ) async {
     NoteDocumentEditorResult? result;
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
           builder: (context) => FilledButton(
             onPressed: () async {
-              result = await Navigator.of(context).push<NoteDocumentEditorResult>(
-                MaterialPageRoute(
-                  builder: (_) => NoteDocumentEditorScreen(
-                    title: 'Lista',
-                    document: const NoteDocument(blocks: [
-                      NoteBlock(
-                        id: 'list-1',
-                        type: NoteBlockType.listItem,
-                        text: 'Alpont',
+              result = await Navigator.of(context)
+                  .push<NoteDocumentEditorResult>(
+                    MaterialPageRoute(
+                      builder: (_) => NoteDocumentEditorScreen(
+                        title: 'Lista',
+                        document: const NoteDocument(
+                          blocks: [
+                            NoteBlock(
+                              id: 'list-1',
+                              type: NoteBlockType.listItem,
+                              text: 'Alpont',
+                            ),
+                          ],
+                        ),
                       ),
-                    ]),
-                  ),
-                ),
-              );
+                    ),
+                  );
             },
             child: const Text('Open'),
           ),
@@ -102,14 +140,15 @@ void main() {
         home: Builder(
           builder: (context) => FilledButton(
             onPressed: () async {
-              result = await Navigator.of(context).push<NoteDocumentEditorResult>(
-                MaterialPageRoute(
-                  builder: (_) => NoteDocumentEditorScreen(
-                    title: 'Meta',
-                    document: NoteDocument.empty(),
-                  ),
-                ),
-              );
+              result = await Navigator.of(context)
+                  .push<NoteDocumentEditorResult>(
+                    MaterialPageRoute(
+                      builder: (_) => NoteDocumentEditorScreen(
+                        title: 'Meta',
+                        document: NoteDocument.empty(),
+                      ),
+                    ),
+                  );
             },
             child: const Text('Open'),
           ),
@@ -127,7 +166,9 @@ void main() {
       find.byKey(const ValueKey('note-block-search-context-block-1')),
       'légzési elégtelenség',
     );
-    await tester.tap(find.byKey(const ValueKey('note-block-search-role-block-1')));
+    await tester.tap(
+      find.byKey(const ValueKey('note-block-search-role-block-1')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Definíció').last);
     await tester.pumpAndSettle();
@@ -188,76 +229,92 @@ void main() {
     expect(find.text('Tag: VO2'), findsOneWidget);
   });
 
-  testWidgets('typed direct and inherited block tags are visible and editable', (
-    tester,
-  ) async {
-    NoteDocumentEditorResult? result;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) => FilledButton(
-            onPressed: () async {
-              result = await Navigator.of(context).push<NoteDocumentEditorResult>(
-                MaterialPageRoute(
-                  builder: (_) => const NoteDocumentEditorScreen(
-                    title: 'Tagelt jegyzet',
-                    document: NoteDocument(
-                      tags: [
-                        NoteKnowledgeTag(
-                          type: NoteKnowledgeTagTypes.topic,
-                          label: 'légzési elégtelenség',
+  testWidgets(
+    'typed direct and inherited block tags are visible and editable',
+    (tester) async {
+      NoteDocumentEditorResult? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () async {
+                result = await Navigator.of(context)
+                    .push<NoteDocumentEditorResult>(
+                      MaterialPageRoute(
+                        builder: (_) => const NoteDocumentEditorScreen(
+                          title: 'Tagelt jegyzet',
+                          document: NoteDocument(
+                            tags: [
+                              NoteKnowledgeTag(
+                                type: NoteKnowledgeTagTypes.topic,
+                                label: 'légzési elégtelenség',
+                              ),
+                            ],
+                            blocks: [
+                              NoteBlock(
+                                id: 'block-1',
+                                type: NoteBlockType.paragraph,
+                                text: 'Súlyos esetben high flow oxygen.',
+                                tags: [
+                                  NoteKnowledgeTag(
+                                    type: NoteKnowledgeTagTypes.state,
+                                    label: 'súlyos',
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
-                      blocks: [
-                        NoteBlock(
-                          id: 'block-1',
-                          type: NoteBlockType.paragraph,
-                          text: 'Súlyos esetben high flow oxygen.',
-                          tags: [
-                            NoteKnowledgeTag(
-                              type: NoteKnowledgeTagTypes.state,
-                              label: 'súlyos',
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-            child: const Text('Open'),
+                      ),
+                    );
+              },
+              child: const Text('Open'),
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('note-block-tag-type-block-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('note-block-tag-label-block-1')), findsOneWidget);
-    expect(find.text('Tag: state súlyos'), findsOneWidget);
-    expect(find.text('Örökölt tag: topic légzési elégtelenség'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('note-block-tag-type-block-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('note-block-tag-label-block-1')),
+        findsOneWidget,
+      );
+      expect(find.text('Tag: state súlyos'), findsOneWidget);
+      expect(
+        find.text('Örökölt tag: topic légzési elégtelenség'),
+        findsOneWidget,
+      );
 
-    await tester.tap(find.byKey(const ValueKey('note-block-tag-type-block-1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('branch').last);
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('note-block-tag-label-block-1')),
-      'oxygén',
-    );
-    await tester.tap(find.byKey(const ValueKey('note-block-tag-add-block-1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('note-document-save')));
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('note-block-tag-type-block-1')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('branch').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('note-block-tag-label-block-1')),
+        'oxygén',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('note-block-tag-add-block-1')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('note-document-save')));
+      await tester.pumpAndSettle();
 
-    expect(result, isNotNull);
-    expect(
-      result!.document.blocks.single.tags.map((tag) => '${tag.type}:${tag.label}'),
-      contains('branch:oxygén'),
-    );
-  });
-
+      expect(result, isNotNull);
+      expect(
+        result!.document.blocks.single.tags.map(
+          (tag) => '${tag.type}:${tag.label}',
+        ),
+        contains('branch:oxygén'),
+      );
+    },
+  );
 }

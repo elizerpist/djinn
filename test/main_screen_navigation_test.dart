@@ -220,7 +220,7 @@ void main() {
     await tester.tap(find.text('chunks.pdf'));
     await tester.pumpAndSettle();
 
-    expect(find.text('AI chunkok'), findsOneWidget);
+    expect(find.text('PDF chunkok'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.text('Tudástár'), findsWidgets);
     expect(
@@ -228,15 +228,12 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byKey(const Key('pdf-chunk-mode-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Manuális chunkok').last);
-    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('pdf-chunk-mode-menu')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('chunk-card-manual-chunk-1')));
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('note-text-chunk-editor')),
+      find.byKey(const ValueKey('note-mixed-text-editor')),
       findsOneWidget,
     );
     expect(find.byType(NavigationBar), findsNothing);
@@ -244,13 +241,13 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
-    expect(find.text('Manuális chunkok'), findsOneWidget);
+    expect(find.text('PDF chunkok'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
 
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
-    expect(find.text('AI chunkok'), findsNothing);
+    expect(find.text('PDF chunkok'), findsNothing);
     expect(find.text('chunks.pdf'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(
@@ -353,17 +350,17 @@ void main() {
       await _expectChunkEditorFullscreen(
         tester,
         chunkKey: const ValueKey('note-chunk-card-text'),
-        editorKey: const ValueKey('note-text-chunk-editor'),
+        editorKey: const ValueKey('note-mixed-text-editor'),
       );
       await _expectChunkEditorFullscreen(
         tester,
         chunkKey: const ValueKey('note-chunk-card-list'),
-        editorKey: const ValueKey('note-list-chunk-editor'),
+        editorKey: const ValueKey('note-mixed-text-editor'),
       );
       await _expectChunkEditorFullscreen(
         tester,
         chunkKey: const ValueKey('note-chunk-card-table'),
-        editorKey: const ValueKey('note-table-zoomable-content'),
+        editorKey: const ValueKey('note-mixed-text-editor'),
       );
       await _expectChunkEditorFullscreen(
         tester,

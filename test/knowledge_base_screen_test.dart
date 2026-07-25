@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,9 @@ import 'package:djinn/src/knowledge/ui/knowledge_base_screen.dart';
 import 'package:djinn/src/knowledge/ui/knowledge_document_row.dart';
 import 'package:djinn/src/local_store/entities.dart';
 import 'package:djinn/src/openai/openai_client.dart';
+import 'package:djinn/src/notes/data/note_repository.dart';
+import 'package:djinn/src/notes/data/tag_repository.dart';
+import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/settings/models/app_settings.dart';
 
 void main() {
@@ -631,9 +635,8 @@ void main() {
     await tester.tap(find.text('Kinyert chunkok'));
     await tester.pumpAndSettle();
 
-    expect(find.text('AI chunkok'), findsOneWidget);
-    expect(find.textContaining('Táblázat'), findsWidgets);
-    expect(find.textContaining('Score'), findsWidgets);
+    expect(find.text('PDF chunkok'), findsOneWidget);
+    expect(find.text('Jegyzetchunk'), findsNWidgets(2));
     expect(find.textContaining('Arcbénulás'), findsOneWidget);
     expect(find.textContaining('nagyér-okklúziót'), findsOneWidget);
   });
@@ -1252,8 +1255,7 @@ void main() {
     expect(find.text('Kézi chunkolás'), findsOneWidget);
     await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Szöveg').last);
-    await tester.pumpAndSettle();
+    await _tapManualSelectionKind(tester, 'Szöveg');
     await _pumpUntilFound(
       tester,
       find.text('Húzz kijelölő téglalapot a PDF-en vagy képen.'),
@@ -1340,8 +1342,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Szöveg').last);
-    await tester.pumpAndSettle();
+    await _tapManualSelectionKind(tester, 'Szöveg');
     await tester.drag(
       find.byKey(const Key('manual-chunk-selection-layer')),
       const Offset(260, 160),
@@ -1370,8 +1371,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Szöveg').last);
-    await tester.pumpAndSettle();
+    await _tapManualSelectionKind(tester, 'Szöveg');
     await tester.drag(
       find.byKey(const Key('manual-chunk-selection-layer')),
       const Offset(260, 160),
@@ -1406,8 +1406,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Szöveg').last);
-    await tester.pumpAndSettle();
+    await _tapManualSelectionKind(tester, 'Szöveg');
     await tester.drag(
       find.byKey(const Key('manual-chunk-selection-layer')),
       const Offset(260, 160),
@@ -1459,8 +1458,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Szöveg').last);
-    await tester.pumpAndSettle();
+    await _tapManualSelectionKind(tester, 'Szöveg');
     await tester.drag(
       find.byKey(const Key('manual-chunk-selection-layer')),
       const Offset(260, 160),
@@ -1492,6 +1490,141 @@ void main() {
   });
 
   testWidgets(
+    'manual extraction starts from exactly two canonical chunk kinds',
+    (tester) async {
+      final repository = KnowledgeDocumentRepository();
+      await _openManualChunkEditor(
+        tester,
+        repository,
+        filename: 'manual-two-kinds.pdf',
+      );
+
+      await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('manual-chunk-type-note_chunk')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('manual-chunk-type-flowchart_chunk')),
+        findsOneWidget,
+      );
+      expect(find.text('Jegyzetchunk'), findsOneWidget);
+      expect(find.text('Flowchart chunk'), findsOneWidget);
+      expect(find.text('Szabad szöveg'), findsNothing);
+      expect(find.text('Lista'), findsNothing);
+      expect(find.text('Táblázat'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('manual-chunk-type-note_chunk')));
+      await tester.pumpAndSettle();
+      expect(find.text('Jegyzetchunk tartalmi szerkezete'), findsOneWidget);
+      expect(find.text('Szabad szöveg'), findsOneWidget);
+      expect(find.text('Lista'), findsOneWidget);
+      expect(find.text('Táblázat'), findsOneWidget);
+    },
+  );
+
+  testWidgets('manual list selection saves one canonical list section', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final document = await _openManualChunkEditor(
+      tester,
+      repository,
+      filename: 'manual-list-structure.pdf',
+    );
+
+    await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
+    await tester.pumpAndSettle();
+    await _tapManualSelectionKind(tester, 'Lista');
+    await tester.drag(
+      find.byKey(const Key('manual-chunk-selection-layer')),
+      const Offset(260, 160),
+    );
+    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const Key('manual-chunk-content-field')),
+    );
+    await tester.enterText(
+      find.byKey(const Key('manual-chunk-content-field')),
+      'Első elem\nMásodik elem',
+    );
+    await tester.ensureVisible(find.byKey(const Key('manual-chunk-save')));
+    await tester.tap(find.byKey(const Key('manual-chunk-save')));
+    await tester.pumpAndSettle();
+
+    final item = (await repository.listExtractedKnowledgeItems(
+      document.id,
+      pipeline: LocalExtractionPipeline.manual,
+    )).single;
+    final block = NoteBlock.fromJson(
+      Map<String, Object?>.from(jsonDecode(item.structuredContentJson!) as Map),
+    );
+
+    expect(item.chunkKind, LocalChunkKind.text);
+    expect(block.type, NoteBlockType.mixed);
+    expect(block.mixedSections.single.type, NoteMixedSectionType.list);
+    expect(block.mixedSections.single.listItems.map((item) => item.text), [
+      'Első elem',
+      'Második elem',
+    ]);
+  });
+
+  testWidgets(
+    'manual table selection saves one canonical table section without markdown separator',
+    (tester) async {
+      final repository = KnowledgeDocumentRepository();
+      final document = await _openManualChunkEditor(
+        tester,
+        repository,
+        filename: 'manual-table-structure.pdf',
+      );
+
+      await tester.tap(find.byKey(const Key('manual-chunk-new-selection')));
+      await tester.pumpAndSettle();
+      await _tapManualSelectionKind(tester, 'Táblázat');
+      await tester.drag(
+        find.byKey(const Key('manual-chunk-selection-layer')),
+        const Offset(260, 160),
+      );
+      await tester.pumpAndSettle();
+      await _pumpUntilFound(
+        tester,
+        find.byKey(const Key('manual-chunk-content-field')),
+      );
+      await tester.enterText(
+        find.byKey(const Key('manual-chunk-content-field')),
+        '| Név | Érték |\n'
+        '| --- | :---: |\n'
+        '| Pulzus | 80 |',
+      );
+      await tester.ensureVisible(find.byKey(const Key('manual-chunk-save')));
+      await tester.tap(find.byKey(const Key('manual-chunk-save')));
+      await tester.pumpAndSettle();
+
+      final item = (await repository.listExtractedKnowledgeItems(
+        document.id,
+        pipeline: LocalExtractionPipeline.manual,
+      )).single;
+      final block = NoteBlock.fromJson(
+        Map<String, Object?>.from(
+          jsonDecode(item.structuredContentJson!) as Map,
+        ),
+      );
+
+      expect(item.chunkKind, LocalChunkKind.text);
+      expect(block.type, NoteBlockType.mixed);
+      expect(block.mixedSections.single.type, NoteMixedSectionType.table);
+      expect(block.mixedSections.single.rows, [
+        ['Név', 'Érték'],
+        ['Pulzus', '80'],
+      ]);
+    },
+  );
+
+  testWidgets(
     'manual table selection exposes box controls and logs operations',
     (tester) async {
       DebugConsole.clear();
@@ -1515,7 +1648,7 @@ void main() {
         find.byKey(const Key('manual-extraction-box-header')),
       );
 
-      expect(find.text('Táblázat box'), findsOneWidget);
+      expect(find.text('Jegyzetchunk box'), findsOneWidget);
       await tester.ensureVisible(find.byKey(const Key('manual-table-toolbar')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('manual-table-toolbar')), findsOneWidget);
@@ -1570,7 +1703,7 @@ void main() {
         find.byKey(const Key('manual-extraction-box-header')),
       );
 
-      expect(find.text('Flowchart box'), findsOneWidget);
+      expect(find.text('Flowchart chunk box'), findsOneWidget);
       await tester.ensureVisible(
         find.byKey(const Key('manual-flowchart-toolbar')),
       );
@@ -1726,6 +1859,89 @@ void main() {
       expect(openedSource, 1);
     },
   );
+
+  testWidgets('source preview keeps the injected note and tag repositories', (
+    tester,
+  ) async {
+    final repository = KnowledgeDocumentRepository();
+    final noteRepository = MemoryNoteRepository();
+    final note = await noteRepository.createDocumentNote(
+      title: 'Preview céljegyzet',
+      document: NoteDocument.empty(),
+    );
+    final tagRepository = MemoryTagRepository();
+    await tagRepository.upsertTag(
+      label: 'Preview registry tag',
+      colorSlotId: 2,
+    );
+    final imageFile = _writeKnowledgeRoutePng();
+    final document = await repository.addDocument(
+      filename: 'preview-route.png',
+      localPath: imageFile.path,
+      sizeBytes: imageFile.lengthSync(),
+      importedAt: DateTime.utc(2026, 7, 25),
+      sha256: 'preview-route-hash',
+    );
+    await repository.saveLocalChunks(document.id, const [
+      LocalChunk(
+        id: 'preview-route-chunk',
+        documentId: 'ignored',
+        text: 'A route-on átadott chunk',
+        pageNumber: 1,
+        pipeline: LocalExtractionPipeline.manual,
+        sourceRectJson:
+            '{"page":1,"viewport_rect":{"left":24,"top":120,"right":280,"bottom":220}}',
+      ),
+    ], replaceExisting: false);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: KnowledgeBaseScreen(
+          repository: repository,
+          importService: _FakePdfImportService(),
+          noteRepository: noteRepository,
+          tagRepository: tagRepository,
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('preview-route.png'));
+
+    await tester.tap(
+      find.byKey(ValueKey('knowledge-document-source-${document.id}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('source-box-mode-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manuális dobozok').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('source-chunk-box-preview-route-chunk')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('PDF chunkok'), findsOneWidget);
+    await tester.longPress(
+      find.byKey(const ValueKey('chunk-card-preview-route-chunk')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pdf-chunk-selection-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Jegyzetbe küldés'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(ValueKey('send-chunks-to-note-${note.id}')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Mégse'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pdf-chunk-selection-close')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('pdf-chunk-tags-preview-route-chunk')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Preview registry tag'), findsOneWidget);
+  });
 
   testWidgets('processing row shows compact progress strip', (tester) async {
     final document = KnowledgeDocument(
@@ -2011,7 +2227,17 @@ Future<KnowledgeDocument> _openManualChunkEditor(
 }
 
 Future<void> _tapManualSelectionKind(WidgetTester tester, String label) async {
-  final option = find.text(label);
+  if (label == 'Flowchart') {
+    await tester.tap(
+      find.byKey(const Key('manual-chunk-type-flowchart_chunk')),
+    );
+    await tester.pumpAndSettle();
+    return;
+  }
+  await tester.tap(find.byKey(const Key('manual-chunk-type-note_chunk')));
+  await tester.pumpAndSettle();
+  final contentLabel = label == 'Szöveg' ? 'Szabad szöveg' : label;
+  final option = find.text(contentLabel);
   for (var attempt = 0; attempt < 8; attempt += 1) {
     if (option.evaluate().isNotEmpty) {
       await tester.tap(option.last);
@@ -2022,6 +2248,88 @@ Future<void> _tapManualSelectionKind(WidgetTester tester, String label) async {
     await tester.pumpAndSettle();
   }
   expect(option, findsOneWidget);
+}
+
+File _writeKnowledgeRoutePng() {
+  final directory = Directory.systemTemp.createTempSync(
+    'djinn-knowledge-route-',
+  );
+  addTearDown(() {
+    if (directory.existsSync()) {
+      directory.deleteSync(recursive: true);
+    }
+  });
+  final file = File('${directory.path}/preview-route.png');
+  file.writeAsBytesSync(const [
+    0x89,
+    0x50,
+    0x4E,
+    0x47,
+    0x0D,
+    0x0A,
+    0x1A,
+    0x0A,
+    0x00,
+    0x00,
+    0x00,
+    0x0D,
+    0x49,
+    0x48,
+    0x44,
+    0x52,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x08,
+    0x06,
+    0x00,
+    0x00,
+    0x00,
+    0x1F,
+    0x15,
+    0xC4,
+    0x89,
+    0x00,
+    0x00,
+    0x00,
+    0x0A,
+    0x49,
+    0x44,
+    0x41,
+    0x54,
+    0x78,
+    0x9C,
+    0x63,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x05,
+    0x00,
+    0x01,
+    0x0D,
+    0x0A,
+    0x2D,
+    0xB4,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x49,
+    0x45,
+    0x4E,
+    0x44,
+    0xAE,
+    0x42,
+    0x60,
+    0x82,
+  ]);
+  return file;
 }
 
 List<String> _disabledPopupLabels(WidgetTester tester) {

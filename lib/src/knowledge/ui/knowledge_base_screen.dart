@@ -6,6 +6,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../debug/debug_console.dart';
+import '../../notes/data/note_repository.dart';
+import '../../notes/data/tag_repository.dart';
 import '../data/document_processing_service.dart';
 import '../data/knowledge_document_repository.dart';
 import '../data/local_document_processing_service.dart';
@@ -93,6 +95,8 @@ class KnowledgeBaseScreen extends StatefulWidget {
     this.controller,
     this.showFloatingActionButton = true,
     this.onOpenExtractedKnowledge,
+    this.noteRepository,
+    this.tagRepository,
   });
 
   final KnowledgeDocumentRepository repository;
@@ -111,6 +115,8 @@ class KnowledgeBaseScreen extends StatefulWidget {
   final KnowledgeBaseScreenController? controller;
   final bool showFloatingActionButton;
   final KnowledgeExtractedChunkOpener? onOpenExtractedKnowledge;
+  final NoteRepository? noteRepository;
+  final TagRepository? tagRepository;
 
   @override
   State<KnowledgeBaseScreen> createState() => _KnowledgeBaseScreenState();
@@ -399,6 +405,8 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
           path: document.localPath,
           repository: widget.repository,
           document: document,
+          noteRepository: widget.noteRepository,
+          tagRepository: widget.tagRepository,
         ),
       ),
     );
@@ -644,6 +652,8 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen> {
         builder: (_) => ExtractedKnowledgeScreen(
           repository: widget.repository,
           document: document,
+          noteRepository: widget.noteRepository,
+          tagRepository: widget.tagRepository,
         ),
       ),
     );

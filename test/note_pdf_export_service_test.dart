@@ -2,6 +2,8 @@ import 'dart:typed_data';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/knowledge/models/local_extraction.dart';
@@ -12,6 +14,147 @@ import 'package:djinn/src/notes/pdf/note_pdf_export_models.dart';
 import 'package:djinn/src/notes/pdf/note_pdf_export_service.dart';
 
 void main() {
+  test('PDF text fill span renders stored ranges as background spans', () {
+    final span = notePdfTextFillSpan(
+      text: 'Alpha Beta',
+      fills: const [
+        NoteTextFill(id: 'fill-1', start: 6, end: 10, colorValue: 0xFFFFF59D),
+      ],
+      baseStyle: pw.TextStyle.defaultStyle(),
+    );
+
+    expect(span.toPlainText(), 'Alpha Beta');
+    expect(span.children, hasLength(2));
+    final filled = span.children![1] as pw.TextSpan;
+    expect(filled.text, 'Beta');
+    expect(filled.style?.background?.color, const PdfColor.fromInt(0xFFFFF59D));
+  });
+
+  test('mixed paragraph visual preserves rich section formatting', () {
+    final visual = notePdfMixedParagraphVisual(
+      section: const NoteMixedSection(
+        id: 'heading-2',
+        type: NoteMixedSectionType.paragraph,
+        text: 'Formázott címsor',
+        paragraphRole: NoteMixedParagraphRole.heading,
+        headingLevel: 2,
+        paragraphIndentLevel: 3,
+        textColorValue: 0xFF1E40AF,
+        underlineColorValue: 0xFFDC2626,
+        backgroundColorValue: 0xFFFFF59D,
+      ),
+      bodyStyle: pw.TextStyle.defaultStyle().copyWith(fontSize: 11),
+      headingStyle: pw.TextStyle.defaultStyle().copyWith(
+        fontSize: 16,
+        fontWeight: pw.FontWeight.bold,
+      ),
+    );
+
+    expect(visual, isA<pw.Padding>());
+    final padding = visual as pw.Padding;
+    expect((padding.padding as pw.EdgeInsets).left, 36);
+
+    final richText = padding.child! as pw.RichText;
+    final span = richText.text as pw.TextSpan;
+    expect(span.toPlainText(), 'Formázott címsor');
+    expect(span.style?.fontWeight, pw.FontWeight.bold);
+    expect(span.style?.fontSize, 14);
+    expect(span.style?.color, const PdfColor.fromInt(0xFF1E40AF));
+    expect(span.style?.decoration, pw.TextDecoration.underline);
+    expect(span.style?.decorationColor, const PdfColor.fromInt(0xFFDC2626));
+    expect(span.style?.background?.color, const PdfColor.fromInt(0xFFFFF59D));
+  });
+
+  test('mixed list visual preserves section rich style and item fill', () {
+    final visual = notePdfMixedListVisual(
+      section: const NoteMixedSection(
+        id: 'list-1',
+        type: NoteMixedSectionType.list,
+        textColorValue: 0xFF1E40AF,
+        underlineColorValue: 0xFFDC2626,
+        backgroundColorValue: 0xFFE0E7FF,
+        listItems: [NoteListItem(id: 'item-1', text: 'Styled item')],
+        textFills: [
+          NoteTextFill(
+            id: 'fill-1',
+            start: 0,
+            end: 6,
+            colorValue: 0xFFFFF59D,
+            targetKey: 'list:item-1',
+          ),
+        ],
+      ),
+      bodyStyle: pw.TextStyle.defaultStyle().copyWith(fontSize: 11),
+    );
+
+    final column = visual as pw.Column;
+    final itemPadding = column.children.single as pw.Padding;
+    final row = itemPadding.child! as pw.Row;
+    final expanded = row.children.last as pw.Expanded;
+    final richText = expanded.child as pw.RichText;
+    final span = richText.text as pw.TextSpan;
+    expect(span.toPlainText(), 'Styled item');
+    expect(span.style?.color, const PdfColor.fromInt(0xFF1E40AF));
+    expect(span.style?.decoration, pw.TextDecoration.underline);
+    expect(span.style?.decorationColor, const PdfColor.fromInt(0xFFDC2626));
+    expect(span.style?.background?.color, const PdfColor.fromInt(0xFFE0E7FF));
+    final filled = span.children!.first as pw.TextSpan;
+    expect(filled.text, 'Styled');
+    expect(filled.style?.background?.color, const PdfColor.fromInt(0xFFFFF59D));
+  });
+
+  test('mixed table visual preserves rich style fills and stored geometry', () {
+    final visual = notePdfMixedTableVisual(
+      section: const NoteMixedSection(
+        id: 'table-1',
+        type: NoteMixedSectionType.table,
+        textColorValue: 0xFF1E40AF,
+        underlineColorValue: 0xFFDC2626,
+        backgroundColorValue: 0xFFE0E7FF,
+        rows: [
+          ['Header', 'Other'],
+          ['', ''],
+          ['Value', 'Styled cell'],
+        ],
+        tableColumnWidths: [180, 96],
+        tableRowHeights: [31, 47, 63],
+        textFills: [
+          NoteTextFill(
+            id: 'fill-1',
+            start: 0,
+            end: 6,
+            colorValue: 0xFFFFF59D,
+            targetKey: 'table:2:1',
+          ),
+        ],
+      ),
+      bodyStyle: pw.TextStyle.defaultStyle().copyWith(fontSize: 11),
+    );
+
+    final table = visual as pw.Table;
+    final firstWidth = table.columnWidths![0] as pw.FixedColumnWidth;
+    final secondWidth = table.columnWidths![1] as pw.FixedColumnWidth;
+    expect(firstWidth.width, 180);
+    expect(secondWidth.width, 96);
+    expect(table.children, hasLength(2));
+
+    final headerCell = table.children.first.children.first as pw.Container;
+    expect(headerCell.constraints?.minHeight, 31);
+
+    final dataCell = table.children.last.children.last as pw.Container;
+    expect(dataCell.constraints?.minHeight, 63);
+    final richText = dataCell.child as pw.RichText;
+    final span = richText.text as pw.TextSpan;
+    expect(span.toPlainText(), 'Styled cell');
+    expect(span.style?.color, const PdfColor.fromInt(0xFF1E40AF));
+    expect(span.style?.decoration, pw.TextDecoration.underline);
+    expect(span.style?.decorationColor, const PdfColor.fromInt(0xFFDC2626));
+    expect(span.style?.background?.color, const PdfColor.fromInt(0xFFE0E7FF));
+    final filled = span.children!.first as pw.TextSpan;
+    expect(filled.text, 'Styled');
+    expect(filled.style?.background?.color, const PdfColor.fromInt(0xFFFFF59D));
+  });
+
   test('safeNotePdfFilename normalizes empty and unsafe note titles', () {
     expect(
       safeNotePdfFilename('Légzési elégtelenség / terápia'),
@@ -201,6 +344,138 @@ void main() {
       expect(
         logs,
         contains('render mixed section block=mixed-1 section=t1 type=table'),
+      );
+    },
+  );
+
+  test(
+    'document builder renders mixed and flowchart fill scopes into PDF spans',
+    () async {
+      DebugConsole.clear();
+      const document = NoteDocument(
+        blocks: [
+          NoteBlock(
+            id: 'mixed-1',
+            type: NoteBlockType.mixed,
+            mixedSections: [
+              NoteMixedSection(
+                id: 'p1',
+                type: NoteMixedSectionType.paragraph,
+                text: 'Paragraph',
+                textFills: [
+                  NoteTextFill(
+                    id: 'paragraph-fill',
+                    start: 0,
+                    end: 4,
+                    colorValue: 0xFFFFF59D,
+                  ),
+                ],
+              ),
+              NoteMixedSection(
+                id: 'l1',
+                type: NoteMixedSectionType.list,
+                listItems: [NoteListItem(id: 'item-1', text: 'List item')],
+                textFills: [
+                  NoteTextFill(
+                    id: 'list-fill',
+                    start: 0,
+                    end: 4,
+                    colorValue: 0xFFC8E6C9,
+                    targetKey: 'list:item-1',
+                  ),
+                ],
+              ),
+              NoteMixedSection(
+                id: 't1',
+                type: NoteMixedSectionType.table,
+                rows: [
+                  ['Cell'],
+                ],
+                textFills: [
+                  NoteTextFill(
+                    id: 'table-fill',
+                    start: 0,
+                    end: 4,
+                    colorValue: 0xFFBBDEFB,
+                    targetKey: 'table:0:0',
+                  ),
+                ],
+              ),
+            ],
+          ),
+          NoteBlock(
+            id: 'flow-1',
+            type: NoteBlockType.flowchart,
+            nodes: [
+              NoteFlowchartNode(
+                id: 'node-a',
+                label: 'Node A',
+                labelFills: [
+                  NoteTextFill(
+                    id: 'node-fill',
+                    start: 0,
+                    end: 4,
+                    colorValue: 0xFFFFF59D,
+                  ),
+                ],
+                x: 0,
+                y: 0,
+              ),
+              NoteFlowchartNode(id: 'node-b', label: 'Node B', x: 220, y: 120),
+            ],
+            edges: [
+              NoteFlowchartEdge(
+                id: 'edge-1',
+                fromNodeId: 'node-a',
+                toNodeId: 'node-b',
+                label: 'Edge',
+                labelFills: [
+                  NoteTextFill(
+                    id: 'edge-fill',
+                    start: 0,
+                    end: 4,
+                    colorValue: 0xFFC8E6C9,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+      final note = NoteItem(
+        id: 'fill-export',
+        type: NoteItemType.document,
+        title: 'Fill export',
+        plainText: document.plainText,
+        payloadJson: document.toPayloadJson(),
+        auditState: LocalAuditState.edited,
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      );
+
+      final result = await const NotePdfExportService().generate(note);
+
+      expect(String.fromCharCodes(result.bytes.take(4)), '%PDF');
+      final logs = DebugConsole.allText;
+      expect(
+        logs,
+        contains('render fills scope=mixed:mixed-1:p1:paragraph count=1'),
+      );
+      expect(
+        logs,
+        contains('render fills scope=mixed:mixed-1:l1:list:item-1 count=1'),
+      );
+      expect(
+        logs,
+        contains('render fills scope=mixed:mixed-1:t1:table:0:0 count=1'),
+      );
+      expect(
+        logs,
+        contains('render fills scope=flowchart:flow-1:node:node-a count=1'),
+      );
+      expect(
+        logs,
+        contains('render fills scope=flowchart:flow-1:edge:edge-1 count=1'),
       );
     },
   );

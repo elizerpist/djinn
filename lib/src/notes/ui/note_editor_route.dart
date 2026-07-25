@@ -1,9 +1,15 @@
 import 'dart:async' show FutureOr;
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../ai/ai_client.dart';
+import '../../chunks/models/chunk.dart';
 import '../../debug/debug_console.dart';
+import '../../knowledge/models/chunk_package.dart';
+import '../../shared/chunks/chunk_export_sheet.dart';
 import '../../shared/chunks/shared_chunk_drag_handle.dart';
 import '../data/note_repository.dart';
 import '../data/tag_repository.dart';
@@ -14,11 +20,8 @@ import '../pdf/note_pdf_export_service.dart';
 import 'note_chunk_card.dart';
 import 'note_chunk_fab.dart';
 import 'note_flowchart_editor_screen.dart';
-import 'note_list_chunk_editor_screen.dart';
 import 'note_mixed_text_chunk_editor_screen.dart';
 import 'note_pdf_preview_screen.dart';
-import 'note_table_editor_screen.dart';
-import 'note_text_chunk_editor_screen.dart';
 import 'tag_manager_sheet.dart';
 
 typedef NoteEditorPdfPreviewOpener =
@@ -28,6 +31,8 @@ typedef NoteEditorPdfPreviewOpener =
       NotePdfExportService service,
       WidgetBuilder? viewerBuilder,
     );
+typedef NoteEditorChunkExportSaver =
+    FutureOr<String?> Function(ChunkPackage package);
 
 class NoteEditorRoute extends StatefulWidget {
   const NoteEditorRoute({
@@ -38,6 +43,7 @@ class NoteEditorRoute extends StatefulWidget {
     this.pdfExportService,
     this.pdfPreviewViewerBuilder,
     this.pdfPreviewOpener,
+    this.chunkExportSaver,
     this.useRootNavigatorForChunkEditors = false,
   });
 
@@ -47,6 +53,7 @@ class NoteEditorRoute extends StatefulWidget {
   final NotePdfExportService? pdfExportService;
   final WidgetBuilder? pdfPreviewViewerBuilder;
   final NoteEditorPdfPreviewOpener? pdfPreviewOpener;
+  final NoteEditorChunkExportSaver? chunkExportSaver;
   final bool useRootNavigatorForChunkEditors;
 
   @override
@@ -66,6 +73,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
   bool _editingTitle = false;
   bool _persisting = false;
   bool _persistAgain = false;
+  int _documentRevision = 0;
 
   @override
   void initState() {
@@ -92,15 +100,34 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     try {
       do {
         _persistAgain = false;
+        final submittedDocument = _document;
+        final submittedRevision = _documentRevision;
         final updated = await widget.repository.updateNoteDocument(
           _note.id,
           title: _normalizedTitle,
-          document: _document,
+          document: submittedDocument,
         );
         if (!mounted) {
           return;
         }
-        setState(() => _note = updated);
+        final canonicalIds = _canonicalBlockIdMap(
+          submittedDocument,
+          updated.document,
+        );
+        setState(() {
+          _note = updated;
+          _document = submittedRevision == _documentRevision
+              ? updated.document
+              : _remapBlockIds(_document, canonicalIds);
+          if (canonicalIds.isNotEmpty) {
+            final remappedExpandedIds = {
+              for (final id in _expandedBlockIds) canonicalIds[id] ?? id,
+            };
+            _expandedBlockIds
+              ..clear()
+              ..addAll(remappedExpandedIds);
+          }
+        });
       } while (_persistAgain);
     } finally {
       _persisting = false;
@@ -113,8 +140,40 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
   }
 
   void _setDocument(NoteDocument document) {
-    setState(() => _document = document);
+    setState(() {
+      _document = document;
+      _documentRevision += 1;
+    });
     unawaited(_persist());
+  }
+
+  Map<String, String> _canonicalBlockIdMap(
+    NoteDocument submitted,
+    NoteDocument canonical,
+  ) {
+    final count = submitted.blocks.length < canonical.blocks.length
+        ? submitted.blocks.length
+        : canonical.blocks.length;
+    return {
+      for (var index = 0; index < count; index += 1)
+        if (submitted.blocks[index].id != canonical.blocks[index].id)
+          submitted.blocks[index].id: canonical.blocks[index].id,
+    };
+  }
+
+  NoteDocument _remapBlockIds(
+    NoteDocument document,
+    Map<String, String> canonicalIds,
+  ) {
+    if (canonicalIds.isEmpty) {
+      return document;
+    }
+    return document.copyWith(
+      blocks: [
+        for (final block in document.blocks)
+          block.copyWith(id: canonicalIds[block.id] ?? block.id),
+      ],
+    );
   }
 
   void _replaceBlock(NoteBlock block) {
@@ -128,54 +187,52 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
     );
   }
 
-  void _addBlock(NoteBlockType type) {
-    final block = _newBlock(type);
+  void _addNoteChunk() {
+    final block = _newNoteChunk();
     _setDocument(_document.copyWith(blocks: [..._document.blocks, block]));
     setState(() => _expandedBlockIds.add(block.id));
   }
 
-  NoteBlock _newBlock(NoteBlockType type) {
-    final id = 'block-${DateTime.now().microsecondsSinceEpoch}';
-    return switch (type) {
-      NoteBlockType.heading => NoteBlock(id: id, type: type, text: ''),
-      NoteBlockType.paragraph => NoteBlock(id: id, type: type, text: ''),
-      NoteBlockType.mixed => NoteBlock(
-        id: id,
-        type: type,
-        mixedSections: const [
-          NoteMixedSection(
-            id: 'section-1',
-            type: NoteMixedSectionType.paragraph,
-            text: '',
-          ),
-        ],
-      ),
-      NoteBlockType.listItem => NoteBlock(
-        id: id,
-        type: type,
-        listItems: const [NoteListItem(id: 'item-1', text: '')],
-      ),
-      NoteBlockType.table => NoteBlock(
-        id: id,
-        type: type,
-        rows: const [
-          ['', ''],
-        ],
-      ),
-      NoteBlockType.flowchart => NoteBlock(
-        id: id,
-        type: type,
-        title: 'Flowchart',
-        nodes: const [
-          NoteFlowchartNode(
-            id: 'node-1',
-            label: 'Kezdés',
-            shape: AiFlowchartNodeShape.startEnd,
-            order: 1,
-          ),
-        ],
-      ),
-    };
+  void _addFlowchartChunk() {
+    final block = _newFlowchartChunk();
+    _setDocument(_document.copyWith(blocks: [..._document.blocks, block]));
+    setState(() => _expandedBlockIds.add(block.id));
+  }
+
+  NoteBlock _newNoteChunk() {
+    final id = _newCanonicalChunkId();
+    return NoteBlock(
+      id: id,
+      type: NoteBlockType.mixed,
+      mixedSections: const [
+        NoteMixedSection(
+          id: 'section-1',
+          type: NoteMixedSectionType.paragraph,
+          text: '',
+        ),
+      ],
+    );
+  }
+
+  NoteBlock _newFlowchartChunk() {
+    final id = _newCanonicalChunkId();
+    return NoteBlock(
+      id: id,
+      type: NoteBlockType.flowchart,
+      title: 'Flowchart',
+      nodes: const [
+        NoteFlowchartNode(
+          id: 'node-1',
+          label: 'Kezdés',
+          shape: AiFlowchartNodeShape.startEnd,
+          order: 1,
+        ),
+      ],
+    );
+  }
+
+  String _newCanonicalChunkId() {
+    return '${_note.id}:chunk:${DateTime.now().microsecondsSinceEpoch}';
   }
 
   void _deleteBlock(NoteBlock block) {
@@ -258,6 +315,10 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
       await _exportCurrentNoteAsPdf();
       return;
     }
+    if (value == 'export-chunks') {
+      await _exportCurrentNoteChunks();
+      return;
+    }
     if (value == 'delete') {
       await widget.repository.deleteNotes([_note.id]);
       if (mounted) {
@@ -312,6 +373,108 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         context,
       ).showSnackBar(SnackBar(content: Text('PDF export sikertelen: $error')));
     }
+  }
+
+  Future<void> _exportCurrentNoteChunks() async {
+    final canonicalKinds = [
+      for (final block in _document.blocks)
+        block.type == NoteBlockType.flowchart
+            ? ChunkKind.flowchartChunk
+            : ChunkKind.noteChunk,
+    ];
+    final selection = await showChunkExportSheet(
+      context,
+      chunks: canonicalKinds,
+      scopes: const [ChunkExportScope.currentNote],
+      initialScope: ChunkExportScope.currentNote,
+    );
+    if (selection == null || !mounted) {
+      return;
+    }
+    final storedPackage = await widget.repository.exportChunkPackageForNote(
+      _note.id,
+      includeSourceMetadata: selection.includeSourceMetadata,
+    );
+    final storedById = {for (final item in storedPackage.chunks) item.id: item};
+    final package = ChunkPackage(
+      schemaVersion: 2,
+      documentHash: storedPackage.documentHash,
+      filename: _normalizedTitle,
+      provider: storedPackage.provider,
+      extractionModel: storedPackage.extractionModel,
+      embeddingModel: storedPackage.embeddingModel,
+      embeddingDimension: storedPackage.embeddingDimension,
+      chunks: [
+        for (final block in _document.blocks)
+          _packageItemFromNoteBlock(
+            block,
+            includeSourceMetadata: selection.includeSourceMetadata,
+            stored: storedById[block.id],
+          ),
+      ],
+    );
+    final saver = widget.chunkExportSaver;
+    final path = saver != null
+        ? await saver(package)
+        : await FilePicker.saveFile(
+            dialogTitle: 'Chunk export',
+            fileName: '${_safeChunkExportBaseName(_normalizedTitle)}.json',
+            type: FileType.custom,
+            allowedExtensions: const ['json'],
+            bytes: Uint8List.fromList(
+              utf8.encode(
+                const JsonEncoder.withIndent('  ').convert(package.toJson()),
+              ),
+            ),
+          );
+    if (!mounted || path == null) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${package.chunks.length} chunk exportálva')),
+    );
+  }
+
+  ChunkPackageItem _packageItemFromNoteBlock(
+    NoteBlock block, {
+    required bool includeSourceMetadata,
+    ChunkPackageItem? stored,
+  }) {
+    final kind = block.type == NoteBlockType.flowchart
+        ? ChunkKind.flowchartChunk
+        : ChunkKind.noteChunk;
+    final content = kind == ChunkKind.flowchartChunk
+        ? block
+        : normalizeLegacyNoteBlock(block);
+    return ChunkPackageItem(
+      id: block.id,
+      text: content.plainText,
+      pageNumber: includeSourceMetadata ? stored?.pageNumber ?? 0 : 0,
+      sectionTitle: content.title,
+      embedding: stored?.embedding ?? const [],
+      kind: kind,
+      creationMethod:
+          stored?.creationMethod ?? ChunkCreationMethod.manualSelection,
+      validationState: stored?.validationState ?? _note.auditState,
+      source: includeSourceMetadata
+          ? stored?.source ??
+                ChunkSource(
+                  sourceType: ChunkSourceType.note,
+                  sourceId: _note.id,
+                  originalText: block.plainText,
+                )
+          : const ChunkSource(),
+      content: content,
+      embeddingRecords: stored?.embeddingRecords ?? const [],
+    );
+  }
+
+  String _safeChunkExportBaseName(String value) {
+    final safe = value
+        .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    return safe.isEmpty ? 'djinn-note-chunks' : '$safe-chunks';
   }
 
   Future<void> _openPdfPreview(
@@ -392,50 +555,31 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
   }
 
   Future<void> _openBlockEditor(NoteBlock block) async {
+    final editorBlock = block.type == NoteBlockType.flowchart
+        ? block
+        : normalizeLegacyNoteBlock(block);
     final availableTags = _document.knownTags;
     DebugConsole.log(
       '[NoteEditor] open chunk type=${block.type.wireName} '
       'blocks=${_document.blocks.length} knownTags=${availableTags.length}',
     );
     Widget editorFor(NoteBlock current) {
-      return switch (current.type) {
-        NoteBlockType.heading ||
-        NoteBlockType.paragraph => NoteTextChunkEditorScreen(
+      if (current.type != NoteBlockType.flowchart) {
+        return NoteMixedTextChunkEditorScreen(
           block: current,
           availableTags: availableTags,
           tagRepository: _tagRepository,
           onChanged: _replaceBlock,
           onDelete: () => _deleteBlock(current),
-        ),
-        NoteBlockType.mixed => NoteMixedTextChunkEditorScreen(
-          block: current,
-          availableTags: availableTags,
-          tagRepository: _tagRepository,
-          onChanged: _replaceBlock,
-          onDelete: () => _deleteBlock(current),
-        ),
-        NoteBlockType.listItem => NoteListChunkEditorScreen(
-          block: current,
-          availableTags: availableTags,
-          tagRepository: _tagRepository,
-          onChanged: _replaceBlock,
-          onDelete: () => _deleteBlock(current),
-        ),
-        NoteBlockType.table => NoteTableEditorScreen(
-          block: current,
-          availableTags: availableTags,
-          tagRepository: _tagRepository,
-          onChanged: _replaceBlock,
-          onDelete: () => _deleteBlock(current),
-        ),
-        NoteBlockType.flowchart => NoteFlowchartEditorScreen(
-          block: current,
-          availableTags: availableTags,
-          tagRepository: _tagRepository,
-          onChanged: _replaceBlock,
-          onDelete: () => _deleteBlock(current),
-        ),
-      };
+        );
+      }
+      return NoteFlowchartEditorScreen(
+        block: current,
+        availableTags: availableTags,
+        tagRepository: _tagRepository,
+        onChanged: _replaceBlock,
+        onDelete: () => _deleteBlock(current),
+      );
     }
 
     final result =
@@ -445,7 +589,7 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         ).push<NoteBlock>(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) =>
-                editorFor(block),
+                editorFor(editorBlock),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
                   return SlideTransition(
@@ -504,6 +648,10 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
               ),
               PopupMenuItem(value: 'tags', child: Text('Tagek')),
               PopupMenuItem(value: 'chunks', child: Text('Chunkok kinyitása')),
+              PopupMenuItem(
+                value: 'export-chunks',
+                child: Text('Chunk export (JSON)'),
+              ),
               PopupMenuItem(value: 'export-pdf', child: Text('Export as PDF')),
               PopupMenuItem(value: 'delete', child: Text('Törlés')),
             ],
@@ -549,11 +697,8 @@ class _NoteEditorRouteState extends State<NoteEditorRoute> {
         ],
       ),
       floatingActionButton: NoteChunkFab(
-        onAddText: () => _addBlock(NoteBlockType.paragraph),
-        onAddList: () => _addBlock(NoteBlockType.listItem),
-        onAddTable: () => _addBlock(NoteBlockType.table),
-        onAddFlowchart: () => _addBlock(NoteBlockType.flowchart),
-        onAddMixed: () => _addBlock(NoteBlockType.mixed),
+        onAddNoteChunk: _addNoteChunk,
+        onAddFlowchart: _addFlowchartChunk,
       ),
     );
   }

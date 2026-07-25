@@ -176,7 +176,7 @@ class DocumentChunkEntity {
     this.sectionTitle,
     this.sourceRectJson,
     this.pipeline = 'ai',
-    this.chunkKind = 'text',
+    this.chunkKind = 'note_chunk',
     this.auditState = 'accepted',
     this.endPageNumber,
     this.confidence,
@@ -184,6 +184,12 @@ class DocumentChunkEntity {
     this.tagsJson,
     this.sortOrder = 0,
     this.structuredContentJson,
+    this.creationMethod,
+    this.sourceType,
+    this.sourcePublicId,
+    this.originalText,
+    this.createdAtMillis,
+    this.updatedAtMillis,
   });
 
   @Id()
@@ -208,6 +214,22 @@ class DocumentChunkEntity {
   String? tagsJson;
   int sortOrder;
   String? structuredContentJson;
+
+  /// Canonical provenance metadata. Null only means this legacy row has not
+  /// gone through the idempotent unified-chunk migration yet.
+  String? creationMethod;
+
+  /// Canonical source kind and stable source identity. These fields make
+  /// provenance round-trippable for note, image and imported-file chunks too;
+  /// `documentPublicId` remains the indexed PDF compatibility projection.
+  String? sourceType;
+  String? sourcePublicId;
+
+  /// Immutable extraction/import projection where it is available.
+  String? originalText;
+
+  int? createdAtMillis;
+  int? updatedAtMillis;
 }
 
 @Entity()
@@ -765,6 +787,118 @@ class NoteTagFolderEntity {
 
   int createdAtMillis;
   int updatedAtMillis;
+}
+
+/// A user-created collector (called Jegyzet, and historically also Topic).
+///
+/// Content is never embedded here. Membership rows reference the global chunk
+/// store, allowing the same chunk to appear under several notes without copy.
+@Entity()
+class NoteEntity {
+  NoteEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.title,
+    required this.auditState,
+    required this.createdAtMillis,
+    required this.updatedAtMillis,
+    this.folderPublicId,
+    this.reason,
+    this.tagsJson,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String? folderPublicId;
+
+  String title;
+
+  @Index()
+  String auditState;
+
+  String? reason;
+  String? tagsJson;
+  int createdAtMillis;
+  int updatedAtMillis;
+}
+
+@Entity()
+class NoteFolderEntity {
+  NoteFolderEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.title,
+    required this.createdAtMillis,
+    required this.updatedAtMillis,
+    this.sortOrder = 0,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  @Index()
+  String title;
+
+  int createdAtMillis;
+  int updatedAtMillis;
+  int sortOrder;
+}
+
+/// Explicit M:N membership with ordering metadata.
+@Entity()
+class ChunkNoteLinkEntity {
+  ChunkNoteLinkEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.notePublicId,
+    required this.chunkPublicId,
+    required this.addedAtMillis,
+    this.sortOrder = 0,
+  });
+
+  @Id()
+  int id;
+
+  /// Deterministic `notePublicId + chunkPublicId` key makes linking idempotent.
+  @Unique()
+  String publicId;
+
+  @Index()
+  String notePublicId;
+
+  @Index()
+  String chunkPublicId;
+
+  int sortOrder;
+  int addedAtMillis;
+}
+
+/// Durable marker written only after a data migration was verified.
+@Entity()
+class DataMigrationEntity {
+  DataMigrationEntity({
+    this.id = 0,
+    required this.publicId,
+    required this.completedAtMillis,
+    this.details,
+  });
+
+  @Id()
+  int id;
+
+  @Unique()
+  String publicId;
+
+  int completedAtMillis;
+  String? details;
 }
 
 @Entity()

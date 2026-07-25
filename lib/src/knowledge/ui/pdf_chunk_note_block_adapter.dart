@@ -62,15 +62,11 @@ NoteBlock? _structuredNoteBlockFromPdfChunk(ExtractedKnowledgeItem item) {
       return null;
     }
     final block = NoteBlock.fromJson(Map<String, Object?>.from(decoded));
-    if (block.type != NoteBlockType.mixed) {
-      return null;
-    }
     final title = block.title?.trim();
     final fallbackTitle = item.sectionTitle?.trim();
     return block.copyWith(
       id: block.id.trim().isEmpty ? item.id : block.id,
       title: title?.isNotEmpty == true ? block.title : fallbackTitle,
-      tags: block.tags.isEmpty ? item.tags : block.tags,
     );
   } catch (_) {
     return null;

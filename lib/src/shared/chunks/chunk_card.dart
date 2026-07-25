@@ -136,19 +136,15 @@ class ChunkCard extends StatelessWidget {
 
   static IconData _iconFor(ChunkCardKind kind) {
     return switch (kind) {
-      SharedChunkKind.text => Icons.subject,
-      SharedChunkKind.list => Icons.format_list_bulleted,
-      SharedChunkKind.table => Icons.table_chart_outlined,
-      SharedChunkKind.flowchart => Icons.account_tree_outlined,
+      SharedChunkKind.noteChunk => Icons.article_outlined,
+      SharedChunkKind.flowchartChunk => Icons.account_tree_outlined,
     };
   }
 
   static Color _colorFor(ChunkCardKind kind) {
     return switch (kind) {
-      SharedChunkKind.text => const Color(0xFF2563EB),
-      SharedChunkKind.list => const Color(0xFF059669),
-      SharedChunkKind.table => const Color(0xFFEA580C),
-      SharedChunkKind.flowchart => const Color(0xFF9333EA),
+      SharedChunkKind.noteChunk => const Color(0xFF2563EB),
+      SharedChunkKind.flowchartChunk => const Color(0xFF9333EA),
     };
   }
 }

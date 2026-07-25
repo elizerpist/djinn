@@ -429,7 +429,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(6, 9012920818068651330),
     name: 'DocumentChunkEntity',
-    lastPropertyId: const obx_int.IdUid(16, 7328401746589023419),
+    lastPropertyId: const obx_int.IdUid(22, 1302216278248488104),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -527,6 +527,42 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(16, 7328401746589023419),
         name: 'structuredContentJson',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(17, 5923634776370695212),
+        name: 'creationMethod',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(18, 1928496795208308964),
+        name: 'originalText',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(19, 1703910601790536168),
+        name: 'createdAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(20, 3588808527216894686),
+        name: 'updatedAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(21, 6825131392133591984),
+        name: 'sourceType',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(22, 1302216278248488104),
+        name: 'sourcePublicId',
         type: 9,
         flags: 0,
       ),
@@ -1636,6 +1672,205 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(25, 3291941559458483459),
+    name: 'ChunkNoteLinkEntity',
+    lastPropertyId: const obx_int.IdUid(6, 5720752627458571962),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 2000722406353378798),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 5659891773677784074),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(63, 256131073849129249),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 2630583083110830079),
+        name: 'notePublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(64, 8486792208062318491),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 1967724697638552673),
+        name: 'chunkPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(65, 3138233099479350148),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 8054340984739591953),
+        name: 'sortOrder',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 5720752627458571962),
+        name: 'addedAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(26, 1277724839995310646),
+    name: 'DataMigrationEntity',
+    lastPropertyId: const obx_int.IdUid(4, 9023971933678003879),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 6954144471745475139),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 2564546926924505208),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(66, 1184535289327159726),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 4769184821847685056),
+        name: 'completedAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 9023971933678003879),
+        name: 'details',
+        type: 9,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(27, 743829878104344455),
+    name: 'NoteEntity',
+    lastPropertyId: const obx_int.IdUid(9, 5548760857632514034),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 4995905828920135239),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 5367131446829033086),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(67, 7489670510597706325),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 3020403738156328701),
+        name: 'folderPublicId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(68, 3117764615489803354),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 6229244203831296379),
+        name: 'title',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 1567174698707868442),
+        name: 'auditState',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(69, 5908115005146530772),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 1821478895348574606),
+        name: 'reason',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 3508647265949882417),
+        name: 'tagsJson',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 8589265464209587321),
+        name: 'createdAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 5548760857632514034),
+        name: 'updatedAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(28, 904397632894683063),
+    name: 'NoteFolderEntity',
+    lastPropertyId: const obx_int.IdUid(6, 7425802457912852705),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 2494332481354775974),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 1519321910288817912),
+        name: 'publicId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(70, 4208581008074043407),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 8611532184617278727),
+        name: 'title',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(71, 4406292023637988264),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 3268124487733568138),
+        name: 'createdAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 811954006159036024),
+        name: 'updatedAtMillis',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 7425802457912852705),
+        name: 'sortOrder',
+        type: 6,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -1681,8 +1916,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(24, 7376934422974102123),
-    lastIndexId: const obx_int.IdUid(62, 1537118345979258299),
+    lastEntityId: const obx_int.IdUid(28, 904397632894683063),
+    lastIndexId: const obx_int.IdUid(71, 4406292023637988264),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -2247,11 +2482,22 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final tagsJsonOffset = object.tagsJson == null
             ? null
             : fbb.writeString(object.tagsJson!);
-        final structuredContentJsonOffset =
-            object.structuredContentJson == null
+        final structuredContentJsonOffset = object.structuredContentJson == null
             ? null
             : fbb.writeString(object.structuredContentJson!);
-        fbb.startTable(16);
+        final creationMethodOffset = object.creationMethod == null
+            ? null
+            : fbb.writeString(object.creationMethod!);
+        final originalTextOffset = object.originalText == null
+            ? null
+            : fbb.writeString(object.originalText!);
+        final sourceTypeOffset = object.sourceType == null
+            ? null
+            : fbb.writeString(object.sourceType!);
+        final sourcePublicIdOffset = object.sourcePublicId == null
+            ? null
+            : fbb.writeString(object.sourcePublicId!);
+        fbb.startTable(23);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, publicIdOffset);
         fbb.addOffset(2, documentPublicIdOffset);
@@ -2268,6 +2514,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(13, tagsJsonOffset);
         fbb.addInt64(14, object.sortOrder);
         fbb.addOffset(15, structuredContentJsonOffset);
+        fbb.addOffset(16, creationMethodOffset);
+        fbb.addOffset(17, originalTextOffset);
+        fbb.addInt64(18, object.createdAtMillis);
+        fbb.addInt64(19, object.updatedAtMillis);
+        fbb.addOffset(20, sourceTypeOffset);
+        fbb.addOffset(21, sourcePublicIdOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -2335,6 +2587,28 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final structuredContentJsonParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 34);
+        final creationMethodParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 36);
+        final sourceTypeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 44);
+        final sourcePublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 46);
+        final originalTextParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 38);
+        final createdAtMillisParam = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          40,
+        );
+        final updatedAtMillisParam = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          42,
+        );
         final object = DocumentChunkEntity(
           id: idParam,
           publicId: publicIdParam,
@@ -2352,6 +2626,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
           tagsJson: tagsJsonParam,
           sortOrder: sortOrderParam,
           structuredContentJson: structuredContentJsonParam,
+          creationMethod: creationMethodParam,
+          sourceType: sourceTypeParam,
+          sourcePublicId: sourcePublicIdParam,
+          originalText: originalTextParam,
+          createdAtMillis: createdAtMillisParam,
+          updatedAtMillis: updatedAtMillisParam,
         );
 
         return object;
@@ -3771,6 +4051,276 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    ChunkNoteLinkEntity: obx_int.EntityDefinition<ChunkNoteLinkEntity>(
+      model: _entities[24],
+      toOneRelations: (ChunkNoteLinkEntity object) => [],
+      toManyRelations: (ChunkNoteLinkEntity object) => {},
+      getId: (ChunkNoteLinkEntity object) => object.id,
+      setId: (ChunkNoteLinkEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (ChunkNoteLinkEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final notePublicIdOffset = fbb.writeString(object.notePublicId);
+        final chunkPublicIdOffset = fbb.writeString(object.chunkPublicId);
+        fbb.startTable(7);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, notePublicIdOffset);
+        fbb.addOffset(3, chunkPublicIdOffset);
+        fbb.addInt64(4, object.sortOrder);
+        fbb.addInt64(5, object.addedAtMillis);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final notePublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final chunkPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final addedAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          14,
+          0,
+        );
+        final sortOrderParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          12,
+          0,
+        );
+        final object = ChunkNoteLinkEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          notePublicId: notePublicIdParam,
+          chunkPublicId: chunkPublicIdParam,
+          addedAtMillis: addedAtMillisParam,
+          sortOrder: sortOrderParam,
+        );
+
+        return object;
+      },
+    ),
+    DataMigrationEntity: obx_int.EntityDefinition<DataMigrationEntity>(
+      model: _entities[25],
+      toOneRelations: (DataMigrationEntity object) => [],
+      toManyRelations: (DataMigrationEntity object) => {},
+      getId: (DataMigrationEntity object) => object.id,
+      setId: (DataMigrationEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (DataMigrationEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final detailsOffset = object.details == null
+            ? null
+            : fbb.writeString(object.details!);
+        fbb.startTable(5);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addInt64(2, object.completedAtMillis);
+        fbb.addOffset(3, detailsOffset);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final completedAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          8,
+          0,
+        );
+        final detailsParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 10);
+        final object = DataMigrationEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          completedAtMillis: completedAtMillisParam,
+          details: detailsParam,
+        );
+
+        return object;
+      },
+    ),
+    NoteEntity: obx_int.EntityDefinition<NoteEntity>(
+      model: _entities[26],
+      toOneRelations: (NoteEntity object) => [],
+      toManyRelations: (NoteEntity object) => {},
+      getId: (NoteEntity object) => object.id,
+      setId: (NoteEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (NoteEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final folderPublicIdOffset = object.folderPublicId == null
+            ? null
+            : fbb.writeString(object.folderPublicId!);
+        final titleOffset = fbb.writeString(object.title);
+        final auditStateOffset = fbb.writeString(object.auditState);
+        final reasonOffset = object.reason == null
+            ? null
+            : fbb.writeString(object.reason!);
+        final tagsJsonOffset = object.tagsJson == null
+            ? null
+            : fbb.writeString(object.tagsJson!);
+        fbb.startTable(10);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, folderPublicIdOffset);
+        fbb.addOffset(3, titleOffset);
+        fbb.addOffset(4, auditStateOffset);
+        fbb.addOffset(5, reasonOffset);
+        fbb.addOffset(6, tagsJsonOffset);
+        fbb.addInt64(7, object.createdAtMillis);
+        fbb.addInt64(8, object.updatedAtMillis);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final titleParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final auditStateParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final createdAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          18,
+          0,
+        );
+        final updatedAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          20,
+          0,
+        );
+        final folderPublicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 8);
+        final reasonParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 14);
+        final tagsJsonParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 16);
+        final object = NoteEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          title: titleParam,
+          auditState: auditStateParam,
+          createdAtMillis: createdAtMillisParam,
+          updatedAtMillis: updatedAtMillisParam,
+          folderPublicId: folderPublicIdParam,
+          reason: reasonParam,
+          tagsJson: tagsJsonParam,
+        );
+
+        return object;
+      },
+    ),
+    NoteFolderEntity: obx_int.EntityDefinition<NoteFolderEntity>(
+      model: _entities[27],
+      toOneRelations: (NoteFolderEntity object) => [],
+      toManyRelations: (NoteFolderEntity object) => {},
+      getId: (NoteFolderEntity object) => object.id,
+      setId: (NoteFolderEntity object, int id) {
+        object.id = id;
+      },
+      objectToFB: (NoteFolderEntity object, fb.Builder fbb) {
+        final publicIdOffset = fbb.writeString(object.publicId);
+        final titleOffset = fbb.writeString(object.title);
+        fbb.startTable(7);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, publicIdOffset);
+        fbb.addOffset(2, titleOffset);
+        fbb.addInt64(3, object.createdAtMillis);
+        fbb.addInt64(4, object.updatedAtMillis);
+        fbb.addInt64(5, object.sortOrder);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final publicIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final titleParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final createdAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          10,
+          0,
+        );
+        final updatedAtMillisParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          12,
+          0,
+        );
+        final sortOrderParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          14,
+          0,
+        );
+        final object = NoteFolderEntity(
+          id: idParam,
+          publicId: publicIdParam,
+          title: titleParam,
+          createdAtMillis: createdAtMillisParam,
+          updatedAtMillis: updatedAtMillisParam,
+          sortOrder: sortOrderParam,
+        );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -4150,6 +4700,36 @@ class DocumentChunkEntity_ {
   /// See [DocumentChunkEntity.structuredContentJson].
   static final structuredContentJson =
       obx.QueryStringProperty<DocumentChunkEntity>(_entities[5].properties[15]);
+
+  /// See [DocumentChunkEntity.creationMethod].
+  static final creationMethod = obx.QueryStringProperty<DocumentChunkEntity>(
+    _entities[5].properties[16],
+  );
+
+  /// See [DocumentChunkEntity.originalText].
+  static final originalText = obx.QueryStringProperty<DocumentChunkEntity>(
+    _entities[5].properties[17],
+  );
+
+  /// See [DocumentChunkEntity.createdAtMillis].
+  static final createdAtMillis = obx.QueryIntegerProperty<DocumentChunkEntity>(
+    _entities[5].properties[18],
+  );
+
+  /// See [DocumentChunkEntity.updatedAtMillis].
+  static final updatedAtMillis = obx.QueryIntegerProperty<DocumentChunkEntity>(
+    _entities[5].properties[19],
+  );
+
+  /// See [DocumentChunkEntity.sourceType].
+  static final sourceType = obx.QueryStringProperty<DocumentChunkEntity>(
+    _entities[5].properties[20],
+  );
+
+  /// See [DocumentChunkEntity.sourcePublicId].
+  static final sourcePublicId = obx.QueryStringProperty<DocumentChunkEntity>(
+    _entities[5].properties[21],
+  );
 }
 
 /// [FlowchartEdgeEntity] entity fields to define ObjectBox queries.
@@ -4940,5 +5520,143 @@ class NoteTagFolderEntity_ {
   /// See [NoteTagFolderEntity.updatedAtMillis].
   static final updatedAtMillis = obx.QueryIntegerProperty<NoteTagFolderEntity>(
     _entities[23].properties[5],
+  );
+}
+
+/// [ChunkNoteLinkEntity] entity fields to define ObjectBox queries.
+class ChunkNoteLinkEntity_ {
+  /// See [ChunkNoteLinkEntity.id].
+  static final id = obx.QueryIntegerProperty<ChunkNoteLinkEntity>(
+    _entities[24].properties[0],
+  );
+
+  /// See [ChunkNoteLinkEntity.publicId].
+  static final publicId = obx.QueryStringProperty<ChunkNoteLinkEntity>(
+    _entities[24].properties[1],
+  );
+
+  /// See [ChunkNoteLinkEntity.notePublicId].
+  static final notePublicId = obx.QueryStringProperty<ChunkNoteLinkEntity>(
+    _entities[24].properties[2],
+  );
+
+  /// See [ChunkNoteLinkEntity.chunkPublicId].
+  static final chunkPublicId = obx.QueryStringProperty<ChunkNoteLinkEntity>(
+    _entities[24].properties[3],
+  );
+
+  /// See [ChunkNoteLinkEntity.sortOrder].
+  static final sortOrder = obx.QueryIntegerProperty<ChunkNoteLinkEntity>(
+    _entities[24].properties[4],
+  );
+
+  /// See [ChunkNoteLinkEntity.addedAtMillis].
+  static final addedAtMillis = obx.QueryIntegerProperty<ChunkNoteLinkEntity>(
+    _entities[24].properties[5],
+  );
+}
+
+/// [DataMigrationEntity] entity fields to define ObjectBox queries.
+class DataMigrationEntity_ {
+  /// See [DataMigrationEntity.id].
+  static final id = obx.QueryIntegerProperty<DataMigrationEntity>(
+    _entities[25].properties[0],
+  );
+
+  /// See [DataMigrationEntity.publicId].
+  static final publicId = obx.QueryStringProperty<DataMigrationEntity>(
+    _entities[25].properties[1],
+  );
+
+  /// See [DataMigrationEntity.completedAtMillis].
+  static final completedAtMillis =
+      obx.QueryIntegerProperty<DataMigrationEntity>(
+        _entities[25].properties[2],
+      );
+
+  /// See [DataMigrationEntity.details].
+  static final details = obx.QueryStringProperty<DataMigrationEntity>(
+    _entities[25].properties[3],
+  );
+}
+
+/// [NoteEntity] entity fields to define ObjectBox queries.
+class NoteEntity_ {
+  /// See [NoteEntity.id].
+  static final id = obx.QueryIntegerProperty<NoteEntity>(
+    _entities[26].properties[0],
+  );
+
+  /// See [NoteEntity.publicId].
+  static final publicId = obx.QueryStringProperty<NoteEntity>(
+    _entities[26].properties[1],
+  );
+
+  /// See [NoteEntity.folderPublicId].
+  static final folderPublicId = obx.QueryStringProperty<NoteEntity>(
+    _entities[26].properties[2],
+  );
+
+  /// See [NoteEntity.title].
+  static final title = obx.QueryStringProperty<NoteEntity>(
+    _entities[26].properties[3],
+  );
+
+  /// See [NoteEntity.auditState].
+  static final auditState = obx.QueryStringProperty<NoteEntity>(
+    _entities[26].properties[4],
+  );
+
+  /// See [NoteEntity.reason].
+  static final reason = obx.QueryStringProperty<NoteEntity>(
+    _entities[26].properties[5],
+  );
+
+  /// See [NoteEntity.tagsJson].
+  static final tagsJson = obx.QueryStringProperty<NoteEntity>(
+    _entities[26].properties[6],
+  );
+
+  /// See [NoteEntity.createdAtMillis].
+  static final createdAtMillis = obx.QueryIntegerProperty<NoteEntity>(
+    _entities[26].properties[7],
+  );
+
+  /// See [NoteEntity.updatedAtMillis].
+  static final updatedAtMillis = obx.QueryIntegerProperty<NoteEntity>(
+    _entities[26].properties[8],
+  );
+}
+
+/// [NoteFolderEntity] entity fields to define ObjectBox queries.
+class NoteFolderEntity_ {
+  /// See [NoteFolderEntity.id].
+  static final id = obx.QueryIntegerProperty<NoteFolderEntity>(
+    _entities[27].properties[0],
+  );
+
+  /// See [NoteFolderEntity.publicId].
+  static final publicId = obx.QueryStringProperty<NoteFolderEntity>(
+    _entities[27].properties[1],
+  );
+
+  /// See [NoteFolderEntity.title].
+  static final title = obx.QueryStringProperty<NoteFolderEntity>(
+    _entities[27].properties[2],
+  );
+
+  /// See [NoteFolderEntity.createdAtMillis].
+  static final createdAtMillis = obx.QueryIntegerProperty<NoteFolderEntity>(
+    _entities[27].properties[3],
+  );
+
+  /// See [NoteFolderEntity.updatedAtMillis].
+  static final updatedAtMillis = obx.QueryIntegerProperty<NoteFolderEntity>(
+    _entities[27].properties[4],
+  );
+
+  /// See [NoteFolderEntity.sortOrder].
+  static final sortOrder = obx.QueryIntegerProperty<NoteFolderEntity>(
+    _entities[27].properties[5],
   );
 }

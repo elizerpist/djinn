@@ -23,10 +23,10 @@ void main() {
     ),
   ];
 
-  test('computes primary background from first tag only', () {
+  test('knowledge tags never compute a content background', () {
     final style = noteTaggedTextVisualStyle(tags);
 
-    expect(style.primaryBackground, const Color(0xFFDC2626));
+    expect(style.primaryBackground, isNull);
   });
 
   test('builds editable range spans without changing plain text', () {
@@ -52,15 +52,8 @@ void main() {
     );
 
     expect(span.toPlainText(), text);
-    expect(span.children, hasLength(3));
-    final taggedSpan = span.children![1] as TextSpan;
-    expect(taggedSpan.text, 'Beta');
-    expect(
-      taggedSpan.style?.backgroundColor,
-      const Color(0xFFDC2626).withValues(alpha: 0.22),
-    );
-    expect(taggedSpan.style?.decoration, isNull);
-    expect(taggedSpan.style?.height, isNull);
+    expect(span.children, isNull);
+    expect(span.style?.backgroundColor, isNull);
   });
 
   test('count marker label keeps fixed mode full and clamps adaptive mode', () {
@@ -106,7 +99,7 @@ void main() {
     );
   });
 
-  test('count marker runs carry the first tag color for softer badges', () {
+  test('range tags do not create inline count or color markers', () {
     const text = 'Alpha Beta Gamma';
     const rangeTags = [
       NoteTextRangeTag(
@@ -127,11 +120,6 @@ void main() {
       rangeTags: rangeTags,
     );
 
-    expect(runs, hasLength(1));
-    expect(runs.single.colorValue, 0xFFDC2626);
-    expect(
-      noteTaggedTextCountMarkerFillColor(runs.single),
-      const Color(0xFFDC2626).withValues(alpha: 0.72),
-    );
+    expect(runs, isEmpty);
   });
 }

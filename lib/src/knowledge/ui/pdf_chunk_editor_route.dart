@@ -2,13 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../chunks/models/chunk.dart';
 import '../../notes/data/tag_repository.dart';
 import '../../notes/models/note_document.dart';
 import '../../notes/ui/note_flowchart_editor_screen.dart';
-import '../../notes/ui/note_list_chunk_editor_screen.dart';
 import '../../notes/ui/note_mixed_text_chunk_editor_screen.dart';
-import '../../notes/ui/note_table_editor_screen.dart';
-import '../../notes/ui/note_text_chunk_editor_screen.dart';
 import '../data/knowledge_document_repository.dart';
 import '../models/extracted_knowledge_item.dart';
 import '../models/local_extraction.dart';
@@ -20,19 +18,29 @@ class PdfChunkEditorRoute extends StatefulWidget {
     required this.repository,
     required this.documentId,
     required this.item,
+    this.tagRepository,
   });
 
   final KnowledgeDocumentRepository repository;
   final String documentId;
   final ExtractedKnowledgeItem item;
+  final TagRepository? tagRepository;
 
   @override
   State<PdfChunkEditorRoute> createState() => _PdfChunkEditorRouteState();
 }
 
 class _PdfChunkEditorRouteState extends State<PdfChunkEditorRoute> {
-  late NoteBlock _block = noteBlockFromPdfChunk(widget.item);
-  final TagRepository _tagRepository = MemoryTagRepository();
+  late NoteBlock _block = _normalizedBlock(widget.item);
+  late final TagRepository _tagRepository =
+      widget.tagRepository ?? MemoryTagRepository();
+
+  NoteBlock _normalizedBlock(ExtractedKnowledgeItem item) {
+    final block = noteBlockFromPdfChunk(item);
+    return block.type == NoteBlockType.flowchart
+        ? block
+        : normalizeLegacyNoteBlock(block);
+  }
 
   Future<void> _handleChanged(NoteBlock block) async {
     setState(() => _block = block);
@@ -44,43 +52,24 @@ class _PdfChunkEditorRouteState extends State<PdfChunkEditorRoute> {
       chunkKind: localChunkKindFromNoteBlock(block),
       auditState: LocalAuditState.edited,
       tags: block.tags,
-      structuredContentJson: block.type == NoteBlockType.mixed
-          ? jsonEncode(block.toJson())
-          : null,
-      clearStructuredContent: block.type != NoteBlockType.mixed,
+      structuredContentJson: jsonEncode(block.toJson()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return switch (_block.type) {
-      NoteBlockType.listItem => NoteListChunkEditorScreen(
+    if (_block.type == NoteBlockType.flowchart) {
+      return NoteFlowchartEditorScreen(
         block: _block,
         tagRepository: _tagRepository,
         onChanged: (block) => unawaited(_handleChanged(block)),
-      ),
-      NoteBlockType.table => NoteTableEditorScreen(
-        block: _block,
-        tagRepository: _tagRepository,
-        onChanged: (block) => unawaited(_handleChanged(block)),
-      ),
-      NoteBlockType.flowchart => NoteFlowchartEditorScreen(
-        block: _block,
-        tagRepository: _tagRepository,
-        onChanged: (block) => unawaited(_handleChanged(block)),
-      ),
-      NoteBlockType.heading ||
-      NoteBlockType.paragraph => NoteTextChunkEditorScreen(
-        block: _block,
-        tagRepository: _tagRepository,
-        onChanged: (block) => unawaited(_handleChanged(block)),
-      ),
-      NoteBlockType.mixed => NoteMixedTextChunkEditorScreen(
-        block: _block,
-        tagRepository: _tagRepository,
-        onChanged: (block) => unawaited(_handleChanged(block)),
-      ),
-    };
+      );
+    }
+    return NoteMixedTextChunkEditorScreen(
+      block: _block,
+      tagRepository: _tagRepository,
+      onChanged: (block) => unawaited(_handleChanged(block)),
+    );
   }
 }
 

@@ -61,7 +61,7 @@ void main() {
     expect(latest!.plainText, startsWith('Felszerelés lista'));
   });
 
-  testWidgets('list editor tags the selected item through the shared menu', (
+  testWidgets('list editor tags an item without coloring its content', (
     tester,
   ) async {
     NoteBlock? latest;
@@ -121,10 +121,7 @@ void main() {
         matching: find.byType(EditableText),
       ),
     );
-    expect(
-      highlightedField.style.backgroundColor,
-      const Color(0xFF2563EB).withValues(alpha: 0.22),
-    );
+    expect(highlightedField.style.backgroundColor, isNull);
     expect(
       find.byKey(const ValueKey('note-list-item-tag-pill-item-1-súlyos')),
       findsNothing,
@@ -235,7 +232,7 @@ void main() {
     },
   );
 
-  testWidgets('list item secondary tags do not render underline styling', (
+  testWidgets('list item tags render neither background nor underline', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -275,10 +272,7 @@ void main() {
       ),
     );
 
-    expect(
-      field.style.backgroundColor,
-      const Color(0xFFDC2626).withValues(alpha: 0.22),
-    );
+    expect(field.style.backgroundColor, isNull);
     expect(field.style.decoration, TextDecoration.none);
     expect(
       find.byKey(const ValueKey('note-list-item-item-1-secondary-underline-1')),

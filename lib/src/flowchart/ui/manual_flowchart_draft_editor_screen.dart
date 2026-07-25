@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../ai/ai_client.dart';
 import '../../debug/debug_console.dart';
+import '../../knowledge/models/manual_flowchart_draft.dart';
 import '../models/editable_flowchart.dart';
 import 'flowchart_editor_canvas.dart';
 
@@ -42,40 +43,35 @@ class _ManualFlowchartDraftEditorScreenState
   }
 
   EditableFlowchart _fromText(String text) {
-    final labels = text
-        .split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList(growable: false);
-    final nodeLabels = labels.isEmpty ? ['Kezdés'] : labels;
-    final nodes = [
-      for (var i = 0; i < nodeLabels.length; i += 1)
-        EditableFlowchartNode(
-          id: 'draft-node-${i + 1}',
-          label: nodeLabels[i],
-          shape: i == 0
-              ? AiFlowchartNodeShape.startEnd
-              : AiFlowchartNodeShape.process,
-          order: i + 1,
-        ),
-    ];
-    final edges = [
-      for (var i = 0; i < nodes.length - 1; i += 1)
-        EditableFlowchartEdge(
-          id: 'draft-edge-${i + 1}',
-          fromNodeId: nodes[i].id,
-          toNodeId: nodes[i + 1].id,
-          label: '',
-          order: i + 1,
-        ),
-    ];
-    return EditableFlowchart(
+    final block = manualFlowchartBlockFromDraft(
       id: 'manual-flowchart-draft',
+      title: 'Kézi flowchart',
+      text: text.trim().isEmpty ? 'Kezdés' : text,
+    );
+    return EditableFlowchart(
+      id: block.id,
       documentId: widget.documentId,
       pageNumber: widget.pageNumber,
-      title: 'Kézi flowchart',
-      nodes: nodes,
-      edges: edges,
+      title: block.title,
+      nodes: [
+        for (final node in block.nodes)
+          EditableFlowchartNode(
+            id: node.id,
+            label: node.label,
+            shape: node.shape,
+            order: node.order,
+          ),
+      ],
+      edges: [
+        for (final edge in block.edges)
+          EditableFlowchartEdge(
+            id: edge.id,
+            fromNodeId: edge.fromNodeId,
+            toNodeId: edge.toNodeId,
+            label: edge.label,
+            order: edge.order,
+          ),
+      ],
     );
   }
 

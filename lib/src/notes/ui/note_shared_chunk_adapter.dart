@@ -25,11 +25,11 @@ SharedChunkViewModel sharedChunkFromNoteBlock({
 
 String _titleFor(NoteBlockType type) {
   return switch (type) {
-    NoteBlockType.heading => 'Címsor chunk',
-    NoteBlockType.paragraph => 'Szöveg chunk',
-    NoteBlockType.mixed => 'Szöveg chunk',
-    NoteBlockType.listItem => 'Lista chunk',
-    NoteBlockType.table => 'Táblázat chunk',
+    NoteBlockType.heading ||
+    NoteBlockType.paragraph ||
+    NoteBlockType.mixed ||
+    NoteBlockType.listItem ||
+    NoteBlockType.table => 'Jegyzetchunk',
     NoteBlockType.flowchart => 'Flowchart chunk',
   };
 }

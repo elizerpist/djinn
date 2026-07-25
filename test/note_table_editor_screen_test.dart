@@ -353,83 +353,79 @@ void main() {
     },
   );
 
-  testWidgets(
-    'table cell tag color wins over row and column highlight colors',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: NoteTableEditorScreen(
-            block: const NoteBlock(
-              id: 'table-1',
-              type: NoteBlockType.table,
-              rows: [
-                ['Állapot', 'Teendő'],
-                ['Súlyos', 'High flow'],
-              ],
-              scopedTags: [
-                NoteScopedTagAssignment(
-                  id: 'row-tag',
-                  target: NoteTagTarget(
-                    kind: NoteTagTargetKind.tableRow,
-                    rowIndex: 1,
-                  ),
-                  tags: [
-                    NoteKnowledgeTag(
-                      type: NoteKnowledgeTagTypes.state,
-                      label: 'sor',
-                      colorValue: 0xFFDC2626,
-                    ),
-                  ],
+  testWidgets('table cell tags do not color the editable content', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteTableEditorScreen(
+          block: const NoteBlock(
+            id: 'table-1',
+            type: NoteBlockType.table,
+            rows: [
+              ['Állapot', 'Teendő'],
+              ['Súlyos', 'High flow'],
+            ],
+            scopedTags: [
+              NoteScopedTagAssignment(
+                id: 'row-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableRow,
+                  rowIndex: 1,
                 ),
-                NoteScopedTagAssignment(
-                  id: 'column-tag',
-                  target: NoteTagTarget(
-                    kind: NoteTagTargetKind.tableColumn,
-                    columnIndex: 1,
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.state,
+                    label: 'sor',
+                    colorValue: 0xFFDC2626,
                   ),
-                  tags: [
-                    NoteKnowledgeTag(
-                      type: NoteKnowledgeTagTypes.topic,
-                      label: 'oszlop',
-                      colorValue: 0xFF2563EB,
-                    ),
-                  ],
+                ],
+              ),
+              NoteScopedTagAssignment(
+                id: 'column-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableColumn,
+                  columnIndex: 1,
                 ),
-                NoteScopedTagAssignment(
-                  id: 'cell-tag',
-                  target: NoteTagTarget(
-                    kind: NoteTagTargetKind.tableCell,
-                    rowIndex: 1,
-                    columnIndex: 1,
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.topic,
+                    label: 'oszlop',
+                    colorValue: 0xFF2563EB,
                   ),
-                  tags: [
-                    NoteKnowledgeTag(
-                      type: NoteKnowledgeTagTypes.custom,
-                      label: 'cella',
-                      colorValue: 0xFF16A34A,
-                    ),
-                  ],
+                ],
+              ),
+              NoteScopedTagAssignment(
+                id: 'cell-tag',
+                target: NoteTagTarget(
+                  kind: NoteTagTargetKind.tableCell,
+                  rowIndex: 1,
+                  columnIndex: 1,
                 ),
-              ],
-            ),
-            onChanged: _ignoreBlockChange,
+                tags: [
+                  NoteKnowledgeTag(
+                    type: NoteKnowledgeTagTypes.custom,
+                    label: 'cella',
+                    colorValue: 0xFF16A34A,
+                  ),
+                ],
+              ),
+            ],
           ),
+          onChanged: _ignoreBlockChange,
         ),
-      );
+      ),
+    );
 
-      final highlightedField = tester.widget<TextField>(
-        find.descendant(
-          of: find.byKey(const ValueKey('note-table-cell-highlight-1-1')),
-          matching: find.byType(TextField),
-        ),
-      );
+    final highlightedField = tester.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const ValueKey('note-table-cell-highlight-1-1')),
+        matching: find.byType(TextField),
+      ),
+    );
 
-      expect(
-        highlightedField.style!.backgroundColor,
-        const Color(0xFF16A34A).withValues(alpha: 0.16),
-      );
-    },
-  );
+    expect(highlightedField.style!.backgroundColor, isNull);
+  });
 
   testWidgets(
     'table editor remaps scoped cell tags when inserting columns before them',
@@ -1230,7 +1226,7 @@ void main() {
     },
   );
 
-  testWidgets('table secondary cell tags do not render underline styling', (
+  testWidgets('table cell tags render neither background nor underline', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -1278,10 +1274,7 @@ void main() {
       ),
     );
 
-    expect(
-      field.style.backgroundColor,
-      const Color(0xFFDC2626).withValues(alpha: 0.16),
-    );
+    expect(field.style.backgroundColor, isNull);
     expect(field.style.decoration, TextDecoration.none);
     expect(
       find.byKey(const ValueKey('note-table-cell-1-0-secondary-underline-1')),

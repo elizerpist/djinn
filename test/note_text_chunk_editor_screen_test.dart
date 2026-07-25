@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:djinn/src/debug/debug_console.dart';
 import 'package:djinn/src/notes/models/note_document.dart';
 import 'package:djinn/src/notes/ui/note_text_chunk_editor_screen.dart';
-import 'package:djinn/src/notes/ui/tagged_text_visual.dart';
 
 void main() {
   setUp(DebugConsole.clear);
@@ -269,79 +268,72 @@ void main() {
     );
   });
 
-  testWidgets(
-    'range tags paint first tag background and no secondary underlines',
-    (tester) async {
-      await _pumpTextChunkEditor(
-        tester,
-        const NoteBlock(
-          id: 'text-1',
-          type: NoteBlockType.paragraph,
-          text: 'Alpha Beta Gamma',
-          rangeTags: [
-            NoteTextRangeTag(
-              id: 'range-1',
-              start: 6,
-              end: 10,
-              tag: NoteKnowledgeTag(
+  testWidgets('range tags remain metadata and do not paint editable content', (
+    tester,
+  ) async {
+    await _pumpTextChunkEditor(
+      tester,
+      const NoteBlock(
+        id: 'text-1',
+        type: NoteBlockType.paragraph,
+        text: 'Alpha Beta Gamma',
+        rangeTags: [
+          NoteTextRangeTag(
+            id: 'range-1',
+            start: 6,
+            end: 10,
+            tag: NoteKnowledgeTag(
+              type: NoteKnowledgeTagTypes.state,
+              label: 'sulyos',
+              colorValue: 0xFFDC2626,
+            ),
+            tags: [
+              NoteKnowledgeTag(
                 type: NoteKnowledgeTagTypes.state,
                 label: 'sulyos',
                 colorValue: 0xFFDC2626,
               ),
-              tags: [
-                NoteKnowledgeTag(
-                  type: NoteKnowledgeTagTypes.state,
-                  label: 'sulyos',
-                  colorValue: 0xFFDC2626,
-                ),
-                NoteKnowledgeTag(
-                  type: NoteKnowledgeTagTypes.topic,
-                  label: 'legzes',
-                  colorValue: 0xFF2563EB,
-                ),
-                NoteKnowledgeTag(
-                  type: NoteKnowledgeTagTypes.symbol,
-                  label: 'DO2',
-                  colorValue: 0xFF0D9488,
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.topic,
+                label: 'legzes',
+                colorValue: 0xFF2563EB,
+              ),
+              NoteKnowledgeTag(
+                type: NoteKnowledgeTagTypes.symbol,
+                label: 'DO2',
+                colorValue: 0xFF0D9488,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
 
-      final field = tester.widget<TextField>(
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('note-text-plain-field')),
+    );
+    expect(field.controller?.text, 'Alpha Beta Gamma');
+    expect(field.strutStyle?.height, isNull);
+    final span = field.controller!.buildTextSpan(
+      context: tester.element(
         find.byKey(const ValueKey('note-text-plain-field')),
-      );
-      expect(field.controller?.text, 'Alpha Beta Gamma');
-      expect(field.strutStyle?.height, isNull);
-      final span = field.controller!.buildTextSpan(
-        context: tester.element(
-          find.byKey(const ValueKey('note-text-plain-field')),
-        ),
-        style: const TextStyle(fontSize: 16),
-        withComposing: false,
-      );
-      expect(span.toPlainText(), 'Alpha Beta Gamma');
-      final taggedSpan = span.children![1] as TextSpan;
-      expect(taggedSpan.text, 'Beta');
-      expect(
-        taggedSpan.style?.backgroundColor,
-        const Color(0xFFDC2626).withValues(alpha: 0.22),
-      );
-      expect(taggedSpan.style?.decoration, isNull);
-      expect(taggedSpan.style?.height, isNull);
-      expect(
-        find.byKey(const ValueKey('note-text-range-underline-layer')),
-        findsNothing,
-      );
-      expect(DebugConsole.allText, contains('[TextChunkVisual]'));
-      expect(DebugConsole.allText, contains('countMarkers=[6-10/x3]'));
-      expect(DebugConsole.allText, isNot(contains('runs=[6-10/u2]')));
-    },
-  );
+      ),
+      style: const TextStyle(fontSize: 16),
+      withComposing: false,
+    );
+    expect(span.toPlainText(), 'Alpha Beta Gamma');
+    expect(span.children, isNull);
+    expect(span.style?.backgroundColor, isNull);
+    expect(
+      find.byKey(const ValueKey('note-text-range-underline-layer')),
+      findsNothing,
+    );
+    expect(DebugConsole.allText, contains('[TextChunkVisual]'));
+    expect(DebugConsole.allText, contains('countMarkers=[]'));
+    expect(DebugConsole.allText, isNot(contains('runs=[6-10/u2]')));
+  });
 
-  testWidgets('overflow menu switches tag count corner marker modes', (
+  testWidgets('overflow menu has no inline tag marker display modes', (
     tester,
   ) async {
     const text = 'Alpha Beta Gamma Delta';
@@ -388,71 +380,21 @@ void main() {
       ),
     );
 
-    final field = tester.widget<TextField>(
-      find.byKey(const ValueKey('note-text-plain-field')),
-    );
-    expect(field.controller?.text, text);
-
-    NoteTaggedTextCountMarkerPainter markerPainter() {
-      final markerPaint = tester.widget<CustomPaint>(
-        find.byKey(const ValueKey('note-text-range-count-marker-layer')),
-      );
-      expect(
-        markerPaint.foregroundPainter,
-        isA<NoteTaggedTextCountMarkerPainter>(),
-      );
-      return markerPaint.foregroundPainter! as NoteTaggedTextCountMarkerPainter;
-    }
-
-    expect(markerPainter().mode, NoteTaggedTextCountMarkerMode.fixedCorner);
-    expect(markerPainter().runs.single.tagCount, 4);
-
     await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('note-text-menu-count-marker-fixed')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('note-text-menu-count-marker-adaptive')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('note-text-menu-count-marker-count-only')),
-      findsOneWidget,
+      findsNothing,
     );
-
-    await tester.tap(
-      find.byKey(const ValueKey('note-text-menu-count-marker-adaptive')),
-    );
-    await tester.pumpAndSettle();
-    expect(markerPainter().mode, NoteTaggedTextCountMarkerMode.adaptiveClamp);
-    expect(field.controller?.text, text);
-
-    await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('note-text-menu-count-marker-count-only')),
-    );
-    await tester.pumpAndSettle();
-    expect(markerPainter().mode, NoteTaggedTextCountMarkerMode.countOnly);
-    expect(
-      noteTaggedTextCountMarkerLabel(
-        mode: markerPainter().mode,
-        tagCount: markerPainter().runs.single.tagCount,
-        rangeWidth: 8,
-      ),
-      '4',
-    );
-
-    await tester.tap(find.byKey(const ValueKey('note-chunk-overflow-menu')));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('note-text-menu-count-marker-fixed')),
-    );
-    await tester.pumpAndSettle();
-    expect(markerPainter().mode, NoteTaggedTextCountMarkerMode.fixedCorner);
-    expect(field.controller?.text, text);
+    expect(find.text('Kijelölt rész tagelése'), findsOneWidget);
   });
 
   testWidgets('header global tag action saves chunk tags', (tester) async {
