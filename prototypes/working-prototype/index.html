@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Djinn · Working prototype</title>
+    <link rel="stylesheet" href="assets/styles.css?rev=65" />
+  <!-- AntV G6 v5.1.1, helyben tárolva: a tudástérkép offline is működik. -->
+  <script defer src="assets/vendor/g6.min.js?rev=65"></script>
+  <!-- Globe.GL v2.46.1, helyben tárolva: WebGL-es Arc Links nézet offline használathoz. -->
+  <script defer src="assets/vendor/globe.gl.min.js?rev=65"></script>
+  <!-- 3d-force-graph v1.80.0, helyben tárolva: a natív ThreeJS/WebGL force nézethez. -->
+  <script defer src="assets/vendor/3d-force-graph.min.js?rev=65"></script>
+  <!-- Cytoscape.js v3.34.0, helyben tárolva: interaktív gráfelrendezésekhez. -->
+  <script defer src="assets/vendor/cytoscape.min.js?rev=65"></script>
+  <script type="module" src="assets/app.js?rev=65"></script>
+  </head>
+  <body>
+    <p class="prototype-label">Djinn · working prototype · 390 × 844</p>
+
+    <main class="phone" aria-label="Djinn alkalmazásprototípus">
+      <div class="status-bar" aria-hidden="true"><span>9:41</span><span>◒ ◔ ▰</span></div>
+      <div class="app-shell">
+        <main id="screen-root" class="screen-root" aria-live="polite"></main>
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+        <nav class="bottom-nav" aria-label="Elsődleges navigáció">
+          <button class="nav-item" data-route="home"><span class="nav-icon">⌂</span><span>Home</span></button>
+          <button class="nav-item" data-route="explore"><span class="nav-icon">◎</span><span>Explore</span></button>
+          <button class="nav-item nav-djinn" data-route="djinn"><span class="genie-button">✦</span><small>Djinn</small></button>
+          <button class="nav-item" data-route="query"><span class="nav-icon">⌕</span><span>Query</span></button>
+          <button class="nav-item" data-route="workspace-topics" data-nav="workspace"><span class="nav-icon">▤</span><span>Workspace</span></button>
+          <button class="nav-item" data-route="profile"><span class="nav-icon">◯</span><span>Én</span></button>
+        </nav>
+      </div>
+    </main>
+  </body>
+</html>
