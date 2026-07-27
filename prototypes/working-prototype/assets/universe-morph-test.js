@@ -8,6 +8,7 @@ import {
   focusCameraTarget,
   galaxyNodeRadius,
   fibonacciSpherePoint,
+  projectPointToScreen,
   surfaceArcPoints,
 } from './universe-morph-model.js?rev=1';
 
@@ -59,8 +60,10 @@ function waitForForceGraph(onReady, onError) {
 export function initUniverseMorphTest(root, helpers = {}) {
   const stage = root.querySelector('[data-universe-stage]');
   const galaxyMount = root.querySelector('[data-universe-galaxy]');
+  const mapMount = root.querySelector('[data-universe-map]');
+  const proxy = root.querySelector('[data-universe-proxy]');
   const debug = root.querySelector('[data-universe-debug]');
-  if (!stage || !galaxyMount) return () => {};
+  if (!stage || !galaxyMount || !mapMount || !proxy) return () => {};
 
   window.THREE = THREE;
 
@@ -86,12 +89,14 @@ export function initUniverseMorphTest(root, helpers = {}) {
   });
   let graph;
   let resizeObserver;
+  let mapResizeObserver;
   let removeWaiter = () => {};
   let transitionFrame = 0;
   let pointerStart;
   let destroyed = false;
   let sceneLights = [];
   let detailGlobe;
+  let mapGraph;
   let planetContentGroup;
   const planetNodeViews = new Map();
   const planetLinkViews = [];
@@ -283,6 +288,93 @@ export function initUniverseMorphTest(root, helpers = {}) {
     graph.height(Math.max(1, galaxyMount.clientHeight));
   }
 
+  function mapPosition(index, width, height) {
+    if (index === 0) return { x: width / 2, y: height / 2 };
+    const angle = (index - 1) * Math.PI * (3 - Math.sqrt(5));
+    const radius = 78 + Math.sqrt(index) * 34;
+    return {
+      x: width / 2 + Math.cos(angle) * radius,
+      y: height / 2 + Math.sin(angle) * radius * .74,
+    };
+  }
+
+  function toMapG6Data(focusId) {
+    const replacementId = new Map([[mock.map.nodes[0].id, focusId]]);
+    const width = Math.max(stage.clientWidth, 320);
+    const height = Math.max(stage.clientHeight, 420);
+    const nodes = mock.map.nodes.map((node, index) => {
+      const id = replacementId.get(node.id) || node.id;
+      const position = mapPosition(index, width, height);
+      const focused = index === 0;
+      return {
+        id,
+        type: 'rect',
+        style: {
+          x: position.x,
+          y: position.y,
+          size: focused ? [148, 56] : [96, 40],
+          radius: focused ? 16 : 12,
+          fill: focused ? '#8b65fa' : '#302153',
+          stroke: focused ? '#d9ccff' : '#8068a7',
+          lineWidth: focused ? 1.8 : 1,
+          shadowColor: focused ? '#7c4dff' : '#150d2b',
+          shadowBlur: focused ? 18 : 8,
+          shadowOffsetY: focused ? 6 : 3,
+          labelText: focused ? 'Fókuszpont' : node.label,
+          labelPlacement: 'center',
+          labelFill: '#f1ecff',
+          labelFontSize: focused ? 11 : 8.5,
+          labelFontWeight: focused ? 760 : 640,
+        },
+      };
+    });
+    const replaceEndpoint = (id) => replacementId.get(id) || id;
+    return {
+      nodes,
+      edges: mock.map.links.map((link, index) => ({
+        id: `map-edge-${index}`,
+        type: 'quadratic',
+        source: replaceEndpoint(link.source),
+        target: replaceEndpoint(link.target),
+        style: { stroke: '#c9c4ff', lineWidth: 1.25, opacity: .48 },
+      })),
+    };
+  }
+
+  async function ensureMapGraph(focusId) {
+    if (!window.G6?.Graph) throw new Error('A G6 térképmotor nem tölthető be.');
+    mapMount.hidden = false;
+    const data = toMapG6Data(focusId);
+    if (!mapGraph) {
+      mapGraph = new window.G6.Graph({
+        container: mapMount,
+        width: Math.max(stage.clientWidth, 320),
+        height: Math.max(stage.clientHeight, 420),
+        data,
+        animation: { duration: 0 },
+        behaviors: [{ type: 'drag-canvas' }, { type: 'zoom-canvas', enableOptimize: true }],
+      });
+      mapResizeObserver = new ResizeObserver(() => {
+        if (!mapGraph || state.level !== UNIVERSE_LEVEL.MAP) return;
+        mapGraph.resize?.(Math.max(stage.clientWidth, 320), Math.max(stage.clientHeight, 420));
+      });
+      mapResizeObserver.observe(stage);
+    } else {
+      mapGraph.setData(data);
+    }
+    await Promise.resolve(mapGraph.render());
+  }
+
+  function setProxyFrame({ x, y, width, height, radius, opacity, background }) {
+    proxy.style.left = `${x}px`;
+    proxy.style.top = `${y}px`;
+    proxy.style.width = `${width}px`;
+    proxy.style.height = `${height}px`;
+    proxy.style.borderRadius = radius;
+    proxy.style.opacity = String(opacity);
+    proxy.style.background = background;
+  }
+
   function selectedPlanetAt(event) {
     if (!graph || !planetViews.size) return null;
     const rect = galaxyMount.getBoundingClientRect();
@@ -408,9 +500,16 @@ export function initUniverseMorphTest(root, helpers = {}) {
     return object?.userData?.planetNodeId || null;
   }
 
-  function requestMapEntry(nodeId) {
+  async function requestMapEntry(nodeId) {
     if (state.interactionLocked || state.level !== UNIVERSE_LEVEL.PLANET || !planetNodeViews.has(nodeId)) return;
+    const selectedView = planetNodeViews.get(nodeId);
+    const camera = graph.camera();
+    const controls = graph.controls();
+    const selectedPlanetView = planetViews.get(state.selectedGalaxyNodeId);
+    state.level = UNIVERSE_LEVEL.PLANET_TO_MAP;
+    state.interactionLocked = true;
     state.selectedPlanetNodeId = nodeId;
+    state.savedPlanetCamera = { position: camera.position.clone(), target: controls.target.clone(), globeQuaternion: detailGlobe.quaternion.clone() };
     planetNodeViews.forEach((view, id) => {
       view.visibleSphere.material.opacity = id === nodeId ? 1 : .28;
       view.glow.material.opacity = id === nodeId ? .48 : .04;
@@ -419,7 +518,90 @@ export function initUniverseMorphTest(root, helpers = {}) {
       edge.material.opacity = edge.source === nodeId || edge.target === nodeId ? .8 : .06;
     });
     updateDebug();
-    helpers.showToast?.('Sárga node kijelölve – a térképmorph a következő lépésben érkezik.');
+    controls.enabled = false;
+    graph.scene().updateMatrixWorld(true);
+    const planetCenter = selectedPlanetView.root.getWorldPosition(new THREE.Vector3());
+    const cameraDirection = camera.position.clone().sub(planetCenter).normalize();
+    const startQuaternion = detailGlobe.quaternion.clone();
+    const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(selectedView.normal, cameraDirection);
+    const cameraStart = camera.position.clone();
+    const targetStart = controls.target.clone();
+    const selectedWorldPosition = selectedView.root.getWorldPosition(new THREE.Vector3());
+    const cameraTarget = focusCameraTarget(selectedWorldPosition, camera.position, controls.target, selectedPlanetView.radius * 2.35);
+    const cameraEnd = new THREE.Vector3(cameraTarget.x, cameraTarget.y, cameraTarget.z);
+    const focused = await tween(420, (eased, raw) => {
+      state.transitionProgress = raw * .42;
+      detailGlobe.quaternion.slerpQuaternions(startQuaternion, targetQuaternion, eased);
+      camera.position.lerpVectors(cameraStart, cameraEnd, eased);
+      controls.target.lerpVectors(targetStart, selectedWorldPosition, eased);
+      controls.update();
+      updateDebug();
+    });
+    if (!focused || destroyed) return;
+
+    graph.scene().updateMatrixWorld(true);
+    const screen = projectPointToScreen(selectedView.root.getWorldPosition(new THREE.Vector3()), camera, stage.clientWidth, stage.clientHeight);
+    const startDiameter = 52;
+    proxy.hidden = false;
+    setProxyFrame({
+      x: screen.x,
+      y: screen.y,
+      width: startDiameter,
+      height: startDiameter,
+      radius: '50%',
+      opacity: 0,
+      background: 'radial-gradient(circle at 32% 28%, #fff4a8, #e2b93a 68%, #a66e12)',
+    });
+
+    try {
+      await ensureMapGraph(nodeId);
+      const mapTarget = { x: stage.clientWidth / 2, y: stage.clientHeight / 2 };
+      const morphed = await tween(560, (eased, raw) => {
+        state.transitionProgress = .42 + raw * .58;
+        selectedView.visibleSphere.material.opacity = 1 - Math.min(1, eased * 1.35);
+        selectedView.glow.material.opacity = .48 * (1 - eased);
+        const width = startDiameter + (148 - startDiameter) * eased;
+        const height = startDiameter + (56 - startDiameter) * eased;
+        const x = screen.x + (mapTarget.x - screen.x) * eased;
+        const y = screen.y + (mapTarget.y - screen.y) * eased;
+        setProxyFrame({
+          x,
+          y,
+          width,
+          height,
+          radius: `${Math.round(startDiameter / 2 * (1 - eased) + 16 * eased)}px`,
+          opacity: Math.min(1, eased * 3) * (1 - Math.max(0, (eased - .88) / .12)),
+          background: eased < .52
+            ? 'radial-gradient(circle at 32% 28%, #fff4a8, #e2b93a 68%, #a66e12)'
+            : 'linear-gradient(135deg, #8b65fa, #5b31cc)',
+        });
+        mapMount.style.opacity = String(Math.max(0, (eased - .28) / .72));
+        galaxyMount.style.opacity = String(1 - Math.max(0, (eased - .18) / .82));
+        updateDebug();
+      });
+      if (!morphed || destroyed) return;
+      proxy.hidden = true;
+      proxy.style.opacity = '0';
+      galaxyMount.style.opacity = '0';
+      galaxyMount.style.pointerEvents = 'none';
+      mapMount.style.opacity = '1';
+      mapMount.classList.add('is-map-active');
+      state.level = UNIVERSE_LEVEL.MAP;
+      state.transitionProgress = 1;
+      state.interactionLocked = false;
+      updateDebug();
+    } catch (error) {
+      proxy.hidden = true;
+      mapMount.hidden = true;
+      mapMount.style.opacity = '0';
+      galaxyMount.style.opacity = '1';
+      controls.enabled = true;
+      state.level = UNIVERSE_LEVEL.PLANET;
+      state.transitionProgress = 1;
+      state.interactionLocked = false;
+      helpers.showToast?.(error.message || 'A térképnavigáció nem tölthető be.');
+      updateDebug();
+    }
   }
 
   function startGraph() {
@@ -459,6 +641,7 @@ export function initUniverseMorphTest(root, helpers = {}) {
     removeWaiter();
     window.cancelAnimationFrame(transitionFrame);
     resizeObserver?.disconnect();
+    mapResizeObserver?.disconnect();
     galaxyMount.removeEventListener('pointerdown', onPointerDown);
     galaxyMount.removeEventListener('pointerup', onPointerUp);
     sceneLights.forEach((light) => light.removeFromParent());
@@ -466,6 +649,8 @@ export function initUniverseMorphTest(root, helpers = {}) {
     planetContentGroup?.traverse((object) => object.geometry?.dispose?.());
     nodeViews.forEach((view) => view.root.traverse((object) => object.geometry?.dispose?.()));
     ownedMaterials.forEach((material) => material.dispose());
+    try { mapGraph?.destroy?.(); } catch { /* G6 cleanup must not block routing. */ }
+    mapMount.replaceChildren();
     selectedRingMaterial.dispose();
     invisibleHitMaterial.dispose();
     sharedSphereGeometry.dispose();

@@ -158,6 +158,15 @@ export function surfaceArcPoints(start, end, baseRadius, segments, lift) {
   });
 }
 
+export function projectPointToScreen(point, camera, width, height) {
+  const projected = point.clone().project(camera);
+  return {
+    x: (projected.x * .5 + .5) * width,
+    y: (-projected.y * .5 + .5) * height,
+    ndcZ: projected.z,
+  };
+}
+
 export function classifyPointerTap(start, end, endedAt = end.endedAt) {
   const duration = endedAt - start.startedAt;
   return Math.hypot(end.x - start.x, end.y - start.y) <= TAP_MOVE_THRESHOLD_PX

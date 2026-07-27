@@ -598,7 +598,7 @@ git commit -m "feat: add tappable planet surface graph"
 
 **Produces:** screen-stable yellow-circle → purple map-node morph and a gradually visible mock G6 map layer.
 
-- [ ] **Step 1: Add failing screen-projection tests**
+- [x] **Step 1: Add failing screen-projection tests**
 
 Test the projection helper with a minimal clone/project fake:
 
@@ -609,7 +609,7 @@ const fakePoint = { clone: () => ({ project: () => ({ x: 0, y: 0, z: .2 }) }) };
 assert.deepEqual(projectPointToScreen(fakePoint, {}, 390, 560), { x: 195, y: 280, ndcZ: .2 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -619,7 +619,7 @@ node prototypes/working-prototype/tests/universe-morph-model.test.mjs
 
 Expected: missing `projectPointToScreen` export error.
 
-- [ ] **Step 3: Implement the second camera focus and proxy transition**
+- [x] **Step 3: Implement the second camera focus and proxy transition**
 
 `requestMapEntry(id)` must only run from `PLANET`, snapshot the planet camera, set `state.level = PLANET_TO_MAP`, and lock controls. Rotate the selected `detailGlobe` parent/root via quaternion tween so the selected node's normal aligns with the current camera-facing direction. Then move the camera closer over 420 ms while retaining the selected node within a small center tolerance.
 
@@ -680,7 +680,7 @@ git diff --check
 
 Manual: select a yellow node after entering Planet. Confirm camera focus, a yellow proxy originates at the selected screen position, transforms into the map’s purple central node, and the map appears in progressive layers without white/black flash.
 
-- [ ] **Step 5: Commit the Planet → Map transition**
+- [x] **Step 5: Commit the Planet → Map transition**
 
 ```sh
 git add prototypes/working-prototype/assets/universe-morph-model.js \

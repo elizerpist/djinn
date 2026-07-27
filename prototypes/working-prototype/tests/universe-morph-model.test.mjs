@@ -10,6 +10,7 @@ import {
   fibonacciSpherePoint,
   focusCameraTarget,
   galaxyNodeRadius,
+  projectPointToScreen,
   surfaceArcPoints,
 } from '../assets/universe-morph-model.js';
 
@@ -56,6 +57,9 @@ const arc = surfaceArcPoints({ x: 100, y: 0, z: 0 }, { x: 0, y: 100, z: 0 }, 100
 assert.equal(arc.length, 9);
 assert.ok(arc.every((point) => Math.hypot(point.x, point.y, point.z) >= 104.5));
 assert.ok(Math.hypot(arc[4].x, arc[4].y, arc[4].z) > 104.5, 'the middle of a long surface arc must rise above its endpoints');
+
+const fakePoint = { clone: () => ({ project: () => ({ x: 0, y: 0, z: .2 }) }) };
+assert.deepEqual(projectPointToScreen(fakePoint, {}, 390, 560), { x: 195, y: 280, ndcZ: .2 });
 
 const appSource = await readFile(new URL('../assets/app.js', import.meta.url), 'utf8');
 assert.match(appSource, /'universe-morph-test': 'screens\/universe-morph-test\.html'/);
