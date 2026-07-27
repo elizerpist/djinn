@@ -10,6 +10,7 @@ import {
   fibonacciSpherePoint,
   focusCameraTarget,
   galaxyNodeRadius,
+  surfaceArcPoints,
 } from '../assets/universe-morph-model.js';
 
 const first = createUniverseMockData(TEST_SEED);
@@ -50,6 +51,11 @@ assert.deepEqual(
   focusCameraTarget({ x: 4, y: 5, z: 6 }, { x: 0, y: 0, z: 20 }, { x: 0, y: 0, z: 0 }, 12),
   { x: 4, y: 5, z: 18 },
 );
+
+const arc = surfaceArcPoints({ x: 100, y: 0, z: 0 }, { x: 0, y: 100, z: 0 }, 100, 8, .045);
+assert.equal(arc.length, 9);
+assert.ok(arc.every((point) => Math.hypot(point.x, point.y, point.z) >= 104.5));
+assert.ok(Math.hypot(arc[4].x, arc[4].y, arc[4].z) > 104.5, 'the middle of a long surface arc must rise above its endpoints');
 
 const appSource = await readFile(new URL('../assets/app.js', import.meta.url), 'utf8');
 assert.match(appSource, /'universe-morph-test': 'screens\/universe-morph-test\.html'/);

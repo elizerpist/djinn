@@ -7,6 +7,8 @@ import {
   easeInOutCubic,
   focusCameraTarget,
   galaxyNodeRadius,
+  fibonacciSpherePoint,
+  surfaceArcPoints,
 } from './universe-morph-model.js?rev=1';
 
 const PLANET_COLORS = [0x6b3ef6, 0x8a63e8, 0x7c4dff, 0x9b7bff];
@@ -90,6 +92,9 @@ export function initUniverseMorphTest(root, helpers = {}) {
   let destroyed = false;
   let sceneLights = [];
   let detailGlobe;
+  let planetContentGroup;
+  const planetNodeViews = new Map();
+  const planetLinkViews = [];
   const state = {
     level: UNIVERSE_LEVEL.GALAXY,
     selectedGalaxyNodeId: null,
@@ -202,7 +207,74 @@ export function initUniverseMorphTest(root, helpers = {}) {
     detailGlobe.scale.setScalar(scale * .92);
     detailGlobe.visible = true;
     setObjectOpacity(detailGlobe, 0);
+    configurePlanetContent();
     return scale;
+  }
+
+  function configurePlanetContent() {
+    if (!detailGlobe || planetContentGroup) return;
+    const detailRadius = detailGlobe.getGlobeRadius?.() || 100;
+    const visibleGeometry = new THREE.SphereGeometry(1, 12, 10);
+    const hitGeometry = new THREE.SphereGeometry(1, 10, 8);
+    const glowGeometry = new THREE.SphereGeometry(1, 12, 10);
+    const hitMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+    const edgeMaterial = new THREE.LineBasicMaterial({ color: 0xddd1ff, transparent: true, opacity: 0 });
+    ownedMaterials.add(hitMaterial);
+    ownedMaterials.add(edgeMaterial);
+    planetContentGroup = new THREE.Group();
+    planetContentGroup.name = 'planet-content';
+    planetContentGroup.visible = false;
+    const pointById = new Map();
+
+    mock.planet.nodes.forEach((node, index) => {
+      const point = fibonacciSpherePoint(index, mock.planet.nodes.length, detailRadius, .025);
+      const rootGroup = new THREE.Group();
+      const visibleMaterial = new THREE.MeshStandardMaterial({ color: 0xf6d76b, roughness: .5, metalness: .06, transparent: true, opacity: 0 });
+      const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xffe786, transparent: true, opacity: 0, depthWrite: false, side: THREE.BackSide });
+      ownedMaterials.add(visibleMaterial);
+      ownedMaterials.add(glowMaterial);
+      const visibleSphere = new THREE.Mesh(visibleGeometry, visibleMaterial);
+      const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+      const hitSphere = new THREE.Mesh(hitGeometry, hitMaterial);
+      const baseScale = 2.5 + node.importance * 2.6;
+      visibleSphere.scale.setScalar(baseScale);
+      glow.scale.setScalar(baseScale * 1.52);
+      hitSphere.scale.setScalar(baseScale * 2.1);
+      rootGroup.position.set(point.x, point.y, point.z);
+      rootGroup.userData = { planetNodeId: node.id };
+      rootGroup.add(visibleSphere, glow, hitSphere);
+      const normal = new THREE.Vector3(point.x, point.y, point.z).normalize();
+      planetContentGroup.add(rootGroup);
+      planetNodeViews.set(node.id, { id: node.id, root: rootGroup, visibleSphere, glow, hitSphere, normal, baseScale });
+      pointById.set(node.id, point);
+    });
+
+    mock.planet.links.forEach((link) => {
+      const source = pointById.get(link.source);
+      const target = pointById.get(link.target);
+      if (!source || !target) return;
+      const angularDot = new THREE.Vector3(source.x, source.y, source.z).normalize().dot(new THREE.Vector3(target.x, target.y, target.z).normalize());
+      const lift = angularDot < .2 ? .08 : .035;
+      const points = surfaceArcPoints(source, target, detailRadius, 8, lift).map((point) => new THREE.Vector3(point.x, point.y, point.z));
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = edgeMaterial.clone();
+      ownedMaterials.add(material);
+      const line = new THREE.Line(geometry, material);
+      planetContentGroup.add(line);
+      planetLinkViews.push({ source: link.source, target: link.target, line, material });
+    });
+
+    detailGlobe.add(planetContentGroup);
+  }
+
+  function setPlanetContentOpacity(opacity) {
+    if (!planetContentGroup) return;
+    planetContentGroup.visible = opacity > 0;
+    planetNodeViews.forEach((view) => {
+      view.visibleSphere.material.opacity = opacity;
+      view.glow.material.opacity = opacity * .17;
+    });
+    planetLinkViews.forEach((edge) => { edge.material.opacity = opacity * .24; });
   }
 
   function resize() {
@@ -272,6 +344,7 @@ export function initUniverseMorphTest(root, helpers = {}) {
         view.proxySphere.material.opacity = 1 - eased;
         detailGlobe.scale.setScalar(detailScale * (.92 + eased * .08));
         setObjectOpacity(detailGlobe, eased);
+        setPlanetContentOpacity(Math.max(0, (eased - .32) / .68));
         nodeViews.forEach((candidate, id) => {
           if (id !== nodeId) candidate.proxySphere.material.opacity = .16 - eased * .06;
         });
@@ -305,8 +378,48 @@ export function initUniverseMorphTest(root, helpers = {}) {
     const validTap = classifyPointerTap(pointerStart, { x: event.clientX, y: event.clientY, endedAt: performance.now() });
     pointerStart = undefined;
     if (!validTap) return;
-    const nodeId = selectedPlanetAt(event);
-    if (nodeId) requestPlanetEntry(nodeId);
+    if (state.level === UNIVERSE_LEVEL.GALAXY) {
+      const nodeId = selectedPlanetAt(event);
+      if (nodeId) requestPlanetEntry(nodeId);
+      return;
+    }
+    if (state.level === UNIVERSE_LEVEL.PLANET) {
+      const nodeId = selectedPlanetSurfaceNodeAt(event);
+      if (nodeId) requestMapEntry(nodeId);
+    }
+  }
+
+  function selectedPlanetSurfaceNodeAt(event) {
+    if (!graph || !planetNodeViews.size) return null;
+    const rect = galaxyMount.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    graph.scene().updateMatrixWorld(true);
+    const pointer = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(pointer, graph.camera());
+    const hits = raycaster.intersectObjects([...planetNodeViews.values()].map((view) => view.hitSphere), false);
+    const hit = hits[0];
+    if (!hit) return null;
+    let object = hit.object;
+    while (object && !object.userData?.planetNodeId) object = object.parent;
+    return object?.userData?.planetNodeId || null;
+  }
+
+  function requestMapEntry(nodeId) {
+    if (state.interactionLocked || state.level !== UNIVERSE_LEVEL.PLANET || !planetNodeViews.has(nodeId)) return;
+    state.selectedPlanetNodeId = nodeId;
+    planetNodeViews.forEach((view, id) => {
+      view.visibleSphere.material.opacity = id === nodeId ? 1 : .28;
+      view.glow.material.opacity = id === nodeId ? .48 : .04;
+    });
+    planetLinkViews.forEach((edge) => {
+      edge.material.opacity = edge.source === nodeId || edge.target === nodeId ? .8 : .06;
+    });
+    updateDebug();
+    helpers.showToast?.('Sárga node kijelölve – a térképmorph a következő lépésben érkezik.');
   }
 
   function startGraph() {
@@ -350,6 +463,7 @@ export function initUniverseMorphTest(root, helpers = {}) {
     galaxyMount.removeEventListener('pointerup', onPointerUp);
     sceneLights.forEach((light) => light.removeFromParent());
     detailGlobe?.removeFromParent?.();
+    planetContentGroup?.traverse((object) => object.geometry?.dispose?.());
     nodeViews.forEach((view) => view.root.traverse((object) => object.geometry?.dispose?.()));
     ownedMaterials.forEach((material) => material.dispose());
     selectedRingMaterial.dispose();

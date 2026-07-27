@@ -130,6 +130,34 @@ export function focusCameraTarget(node, camera, previousTarget, distance) {
   };
 }
 
+export function surfaceArcPoints(start, end, baseRadius, segments, lift) {
+  const startLength = Math.hypot(start.x, start.y, start.z) || 1;
+  const endLength = Math.hypot(end.x, end.y, end.z) || 1;
+  const a = { x: start.x / startLength, y: start.y / startLength, z: start.z / startLength };
+  const b = { x: end.x / endLength, y: end.y / endLength, z: end.z / endLength };
+  const dot = Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y + a.z * b.z));
+  const angle = Math.acos(dot);
+  const sine = Math.sin(angle);
+
+  return Array.from({ length: segments + 1 }, (_, index) => {
+    const t = index / segments;
+    const firstWeight = sine < 1e-7 ? 1 - t : Math.sin((1 - t) * angle) / sine;
+    const secondWeight = sine < 1e-7 ? t : Math.sin(t * angle) / sine;
+    const directionLength = Math.hypot(
+      a.x * firstWeight + b.x * secondWeight,
+      a.y * firstWeight + b.y * secondWeight,
+      a.z * firstWeight + b.z * secondWeight,
+    ) || 1;
+    const direction = {
+      x: (a.x * firstWeight + b.x * secondWeight) / directionLength,
+      y: (a.y * firstWeight + b.y * secondWeight) / directionLength,
+      z: (a.z * firstWeight + b.z * secondWeight) / directionLength,
+    };
+    const radius = baseRadius * (1 + lift + lift * .55 * Math.sin(Math.PI * t));
+    return { x: direction.x * radius, y: direction.y * radius, z: direction.z * radius };
+  });
+}
+
 export function classifyPointerTap(start, end, endedAt = end.endedAt) {
   const duration = endedAt - start.startedAt;
   return Math.hypot(end.x - start.x, end.y - start.y) <= TAP_MOVE_THRESHOLD_PX

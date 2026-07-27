@@ -520,7 +520,7 @@ git commit -m "feat: morph selected galaxy planet inline"
 
 **Produces:** 140 hit-testable yellow surface spheres, 210 low-altitude spherical surface links, and `requestMapEntry(planetNodeId)`.
 
-- [ ] **Step 1: Add failing sphere-link tests**
+- [x] **Step 1: Add failing sphere-link tests**
 
 Export `surfaceArcPoints` and test that every sampled point remains above the planet surface:
 
@@ -533,7 +533,7 @@ assert.ok(arc.every((point) => Math.hypot(point.x, point.y, point.z) >= 104.5));
 assert.ok(Math.hypot(arc[4].x, arc[4].y, arc[4].z) > 104.5, 'the middle of a long surface arc must rise above its endpoints');
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -543,7 +543,7 @@ node prototypes/working-prototype/tests/universe-morph-model.test.mjs
 
 Expected: missing `surfaceArcPoints` export error.
 
-- [ ] **Step 3: Implement planet content inside the detail globe root**
+- [x] **Step 3: Implement planet content inside the detail globe root**
 
 Implement `surfaceArcPoints(start, end, baseRadius, segments, lift)` with spherical linear interpolation of normalized start/end directions and a midpoint altitude raised by `lift`. It must return `segments + 1` Cartesian points and never run through the planet interior.
 
@@ -577,7 +577,7 @@ node --check prototypes/working-prototype/assets/universe-morph-test.js
 
 Manual: after Galaxy→Planet, rotate and pinch the purple planet. Confirm that yellow objects rotate with it, the selected node is tapable, links remain outside the sphere and a drag does not select a yellow node.
 
-- [ ] **Step 5: Commit the detailed planet layer**
+- [x] **Step 5: Commit the detailed planet layer**
 
 ```sh
 git add prototypes/working-prototype/assets/universe-morph-model.js \
