@@ -28,7 +28,7 @@ A korábban csak hash URL-en elérhető Universe Morph tesztképernyő kapjon l�
 
 | ID | Követelmény | Kódterület | Ellenőrzés | Állapot |
 | --- | --- | --- | --- | --- |
-| UNAV-01 | `Universe` menüpont a Workspace és Én között jelenik meg | `index.html` bottom nav | markup + mobil screenshot | NOT DONE |
-| UNAV-02 | a menüpont a `#universe-morph-test` képernyőt nyitja | közös `data-route` delegálás | route teszt | NOT DONE |
-| UNAV-03 | a kiválasztott állapot csak Universe route-on aktív | `app.js` active-nav | route teszt + screenshot | NOT DONE |
-| UNAV-04 | a meglévő hat menüpont viselkedése nem változik | nav markup + app route logika | diff review + manuális | NOT DONE |
+| UNAV-01 | `Universe` menüpont a Workspace és Én között jelenik meg | `index.html` bottom nav | static teszt + 412px headless screenshot sikeres; Android screenshot még szükséges | PARTIAL |
+| UNAV-02 | a menüpont a `#universe-morph-test` képernyőt nyitja | közös `data-route` delegálás | static `data-route` teszt sikeres; eszközös tap teszt még szükséges | PARTIAL |
+| UNAV-03 | a kiválasztott állapot csak Universe route-on aktív | `app.js` active-nav | fallback active-nav logika tesztelt; tényleges route screenshot még szükséges | PARTIAL |
+| UNAV-04 | a meglévő hat menüpont viselkedése nem változik | nav markup + app route logika | scoped diff review kész; eszközös tap teszt még szükséges | PARTIAL |

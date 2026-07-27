@@ -145,7 +145,8 @@ async function render(route) {
     }
     root.querySelector('.screen-content')?.scrollTo(0, 0);
     document.querySelectorAll('.bottom-nav [data-route]').forEach((button) => {
-      button.classList.toggle('is-active', button.dataset.nav === activeNav(normalized));
+      const navKey = button.dataset.nav || button.dataset.route;
+      button.classList.toggle('is-active', navKey === activeNav(normalized));
     });
     galaxyOrb?.setRoute(normalized);
   } catch (error) {
