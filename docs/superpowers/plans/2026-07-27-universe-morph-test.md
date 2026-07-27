@@ -80,7 +80,7 @@ export function initUniverseMorphTest(root, helpers = {});
 
 **Produces:** deterministic three-level mock data and testable geometry/gesture/state helpers consumed by every renderer task.
 
-- [ ] **Step 1: Write the failing model test**
+- [x] **Step 1: Write the failing model test**
 
 Create `tests/universe-morph-model.test.mjs` with these exact behavioural checks:
 
@@ -123,7 +123,7 @@ assert.equal(canTransition(UNIVERSE_LEVEL.PLANET, UNIVERSE_LEVEL.PLANET_TO_MAP),
 assert.equal(canTransition(UNIVERSE_LEVEL.MAP, UNIVERSE_LEVEL.PLANET_TO_MAP), false);
 ```
 
-- [ ] **Step 2: Run the test to verify it fails because the module is absent**
+- [x] **Step 2: Run the test to verify it fails because the module is absent**
 
 Run:
 
@@ -133,7 +133,7 @@ node prototypes/working-prototype/tests/universe-morph-model.test.mjs
 
 Expected: `ERR_MODULE_NOT_FOUND` for `assets/universe-morph-model.js`.
 
-- [ ] **Step 3: Implement the deterministic model module**
+- [x] **Step 3: Implement the deterministic model module**
 
 Create `assets/universe-morph-model.js` with a seeded Mulberry32 PRNG, fixed sequential IDs, no `Math.random()`, and these exact data invariants:
 
@@ -179,7 +179,7 @@ export function canTransition(level, targetLevel) {
 
 Use the PRNG to produce connected, duplicate-free link pairs; reserve `galaxy-000` through `galaxy-007` as planet IDs. Give every node the deterministic labels specified in the approved spec (`Bolygó 1`, `Fogalom 1`, `Kapcsolat 1`, and so on).
 
-- [ ] **Step 4: Run the model test and the existing focused-map regression test**
+- [x] **Step 4: Run the model test and the existing focused-map regression test**
 
 Run:
 
@@ -190,7 +190,7 @@ node prototypes/working-prototype/tests/focused-g6-map.test.mjs
 
 Expected: the new test prints a success marker; the existing test remains successful.
 
-- [ ] **Step 5: Commit the model layer**
+- [x] **Step 5: Commit the model layer**
 
 ```sh
 git add prototypes/working-prototype/assets/universe-morph-model.js \
