@@ -189,19 +189,19 @@ Easing minden fő átmenetnél: `cubic-bezier(0.2, 0, 0, 1)` vagy azzal egyenér
 
 | ID | Forrás | Kódterület | Elfogadási feltétel | Verifikáció | Állapot |
 | --- | --- | --- | --- | --- | --- |
-| UM-01 | Felhasználói prompt: külön tesztképernyő | új test route/screen | `#universe-morph-test` izoláltan megnyílik, production nézetek változatlanok | manuális hash-route teszt, diff review | NOT DONE |
-| UM-02 | 1. szint | `GalaxyForceLayer` | 180 node, 260 edge, legalább 8 nagy tapelhető bolygó | determinisztikus mock-data teszt + manuális | NOT DONE |
+| UM-01 | Felhasználói prompt: külön tesztképernyő | új test route/screen | `#universe-morph-test` izoláltan megnyílik, production nézetek változatlanok | HTTP/hash-route és diff review sikeres; Android/WebGL manuális teszt még szükséges | PARTIAL |
+| UM-02 | 1. szint | `GalaxyForceLayer` | 180 node, 260 edge, legalább 8 nagy tapelhető bolygó | determinisztikus mock-data teszt sikeres; vizuális/tap teszt még szükséges | PARTIAL |
 | UM-03 | galaxis tap átmenet | kamera controller | tap → kiválasztás → sima fókusz + zoom, node nem teleportál | manuális képernyőfelvétel/screenshot | NOT DONE |
-| UM-04 | galaxis → bolygó inline morph | force scene + `ThreeGlobe` | ugyanazon világpozíción lila részletes bolygó jelenik meg, nincs route/canvas villanás | scene/code inspect + manuális | NOT DONE |
-| UM-05 | egy univerzum | render ownership | galaxishoz és bolygóhoz egy scene, kamera, renderer, controls, egy reusable `ThreeGlobe` tartozik | code inspect + WebGL context sanity check | NOT DONE |
-| UM-06 | 2. szint | `PlanetThreeGlobeLayer` | 140 sárga, raycast-tapelhető felszíni node és 210 gömbkövető edge látszik | mock count teszt + manuális | NOT DONE |
+| UM-04 | galaxis → bolygó inline morph | force scene + `ThreeGlobe` | ugyanazon világpozíción lila részletes bolygó jelenik meg, nincs route/canvas villanás | scene-code inspect kész; Android/WebGL vizuális teszt még szükséges | PARTIAL |
+| UM-05 | egy univerzum | render ownership | galaxishoz és bolygóhoz egy scene, kamera, renderer, controls, egy reusable `ThreeGlobe` tartozik | code inspect kész; valódi WebGL-context sanity check még szükséges | PARTIAL |
+| UM-06 | 2. szint | `PlanetThreeGlobeLayer` | 140 sárga, raycast-tapelhető felszíni node és 210 gömbkövető edge látszik | determinisztikus mock-data teszt sikeres; vizuális/raycast teszt még szükséges | PARTIAL |
 | UM-07 | bolygó tap átmenet | planet controller | a kiválasztott sárga node szembefordul, zoomol, majd stable screen-positionről morfol | manuális | NOT DONE |
-| UM-08 | 3. szint | `MorphProxyLayer`, `FlatMapGraphLayer` | sárga gömbből lila, sík map központi node lesz; a 28/42 mock gráf fokozatosan felfedődik | manuális + mock count teszt | NOT DONE |
-| UM-09 | visszafelé működés | morph controller | Map→Planet→Galaxy animált, kamera snapshotok visszaállnak | manuális | NOT DONE |
-| UM-10 | no route/screen switch | layer visibility | szintek között nincs navigáció, modal, fehér/fekete flash vagy app remount | manuális + code review | NOT DONE |
-| UM-11 | interakció | tap/drag gate | drag és pinch nem indít node-tapot; transition alatt nincs második transition | célzott UI/manual teszt | NOT DONE |
-| UM-12 | teljesítmény | all layers | nincs frame-enkénti React state update; rejtett layer nem kap pointer eseményt; force layout stabil a morph alatt | performance/code inspection | NOT DONE |
-| UM-13 | scope guard | existing production components | Explore bottom nav, Workspace nav, dropdown, breadcrumb, kereső és production grafok érintetlenek | diff review | NOT DONE |
+| UM-08 | 3. szint | `MorphProxyLayer`, `FlatMapGraphLayer` | sárga gömbből lila, sík map központi node lesz; a 28/42 mock gráf fokozatosan felfedődik | modellteszt és kódinspect kész; manuális morph teszt még szükséges | PARTIAL |
+| UM-09 | visszafelé működés | morph controller | Map→Planet→Galaxy animált, kamera snapshotok visszaállnak | reverse target modellteszt és implementáció kész; manuális kamerateszt még szükséges | PARTIAL |
+| UM-10 | no route/screen switch | layer visibility | szintek között nincs navigáció, modal, fehér/fekete flash vagy app remount | route-hívás nélküli layer-kód ellenőrzött; vizuális flash-teszt még szükséges | PARTIAL |
+| UM-11 | interakció | tap/drag gate | drag és pinch nem indít node-tapot; transition alatt nincs második transition | a pointer-küszöb modelltesztelt; Android drag/pinch teszt még szükséges | PARTIAL |
+| UM-12 | teljesítmény | all layers | nincs frame-enkénti React state update; rejtett layer nem kap pointer eseményt; force layout stabil a morph alatt | kódinspect kész; eszközön FPS/performance teszt még szükséges | PARTIAL |
+| UM-13 | scope guard | existing production components | Explore bottom nav, Workspace nav, dropdown, breadcrumb, kereső és production grafok érintetlenek | `origin/prototype..HEAD` diff review: kizárólag új tesztképernyő és minimális hash-route belépési pont | DONE |
 
 ## 10. Verifikációs terv
 
