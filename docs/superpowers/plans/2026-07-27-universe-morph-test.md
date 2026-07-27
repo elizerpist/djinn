@@ -415,7 +415,7 @@ git commit -m "feat: render tappable universe morph galaxy"
 
 **Produces:** `requestPlanetEntry(planetId)` and a reusable, single scene-attached purple `ThreeGlobe` detailed planet.
 
-- [ ] **Step 1: Add failing state/camera helper tests**
+- [x] **Step 1: Add failing state/camera helper tests**
 
 Add and test these pure utilities:
 
@@ -431,7 +431,7 @@ assert.deepEqual(
 );
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -441,7 +441,7 @@ node prototypes/working-prototype/tests/universe-morph-model.test.mjs
 
 Expected: missing helper export assertion failure.
 
-- [ ] **Step 3: Implement camera tween and reusable detail planet**
+- [x] **Step 3: Implement camera tween and reusable detail planet**
 
 Implement the helpers exactly as pure Vector-like object operations. `focusCameraTarget(node, camera, previousTarget, distance)` must normalize `(camera - previousTarget)` and add `distance` along that direction to the node.
 
@@ -500,7 +500,7 @@ node --check prototypes/working-prototype/assets/universe-morph-test.js
 
 Manual: open `#universe-morph-test`, tap one large planet, wait for the camera focus and verify that the same force-graph canvas contains the lila ThreeGlobe object without a blank frame.
 
-- [ ] **Step 5: Commit the inline first morph**
+- [x] **Step 5: Commit the inline first morph**
 
 ```sh
 git add prototypes/working-prototype/assets/universe-morph-model.js \

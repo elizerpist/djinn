@@ -112,6 +112,24 @@ export function galaxyNodeRadius(degree, minDegree, maxDegree) {
   return 1.5 + Math.sqrt(normalized) * 4.7;
 }
 
+export function easeInOutCubic(progress) {
+  return progress < .5
+    ? 4 * progress * progress * progress
+    : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+}
+
+export function focusCameraTarget(node, camera, previousTarget, distance) {
+  const dx = camera.x - previousTarget.x;
+  const dy = camera.y - previousTarget.y;
+  const dz = camera.z - previousTarget.z;
+  const length = Math.hypot(dx, dy, dz) || 1;
+  return {
+    x: node.x + dx / length * distance,
+    y: node.y + dy / length * distance,
+    z: node.z + dz / length * distance,
+  };
+}
+
 export function classifyPointerTap(start, end, endedAt = end.endedAt) {
   const duration = endedAt - start.startedAt;
   return Math.hypot(end.x - start.x, end.y - start.y) <= TAP_MOVE_THRESHOLD_PX

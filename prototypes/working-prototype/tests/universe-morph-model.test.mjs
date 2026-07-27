@@ -6,7 +6,9 @@ import {
   canTransition,
   classifyPointerTap,
   createUniverseMockData,
+  easeInOutCubic,
   fibonacciSpherePoint,
+  focusCameraTarget,
   galaxyNodeRadius,
 } from '../assets/universe-morph-model.js';
 
@@ -40,6 +42,14 @@ assert.equal(canTransition(UNIVERSE_LEVEL.MAP, UNIVERSE_LEVEL.PLANET_TO_MAP), fa
 assert.ok(galaxyNodeRadius(0, 0, 12) < galaxyNodeRadius(4, 0, 12));
 assert.ok(galaxyNodeRadius(4, 0, 12) < galaxyNodeRadius(12, 0, 12));
 assert.ok(galaxyNodeRadius(12, 0, 12) <= 6.4);
+
+assert.equal(easeInOutCubic(0), 0);
+assert.equal(easeInOutCubic(1), 1);
+assert.ok(easeInOutCubic(.5) > .49 && easeInOutCubic(.5) < .51);
+assert.deepEqual(
+  focusCameraTarget({ x: 4, y: 5, z: 6 }, { x: 0, y: 0, z: 20 }, { x: 0, y: 0, z: 0 }, 12),
+  { x: 4, y: 5, z: 18 },
+);
 
 const appSource = await readFile(new URL('../assets/app.js', import.meta.url), 'utf8');
 assert.match(appSource, /'universe-morph-test': 'screens\/universe-morph-test\.html'/);
