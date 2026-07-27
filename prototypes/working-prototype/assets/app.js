@@ -1,4 +1,6 @@
-import { initKnowledgeMap } from './knowledge-map.js?rev=65';
+import { initKnowledgeMap } from './knowledge-map.js?rev=137';
+import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=140';
+import { initUniverseMorphTest } from './universe-morph-test.js?rev=1';
 
 const routes = {
   home: 'screens/home.html',
@@ -17,6 +19,7 @@ const routes = {
   'workspace-note-editor': 'screens/workspace-note-editor.html',
   'workspace-library': 'screens/workspace-library.html',
   'workspace-source-detail': 'screens/workspace-source-detail.html',
+  'universe-morph-test': 'screens/universe-morph-test.html',
   profile: 'screens/profile.html',
 };
 
@@ -25,6 +28,10 @@ const toast = document.querySelector('#toast');
 const state = { route: 'home', question: '' };
 let toastTimer;
 let destroyScreen = () => {};
+const galaxyOrb = initExpandableGalaxyOrb({
+  root: document.querySelector('#explore-galaxy-orb-root'),
+  nav: document.querySelector('.bottom-nav')
+});
 
 function activeNav(route) {
   return route.startsWith('workspace-') ? 'workspace' : route;
@@ -133,10 +140,14 @@ async function render(route) {
     if (normalized === 'workspace-topic-connections') {
       destroyScreen = initKnowledgeMap(root, { showToast, navigate });
     }
+    if (normalized === 'universe-morph-test') {
+      destroyScreen = initUniverseMorphTest(root, { showToast, navigate });
+    }
     root.querySelector('.screen-content')?.scrollTo(0, 0);
     document.querySelectorAll('.bottom-nav [data-route]').forEach((button) => {
       button.classList.toggle('is-active', button.dataset.nav === activeNav(normalized));
     });
+    galaxyOrb?.setRoute(normalized);
   } catch (error) {
     root.innerHTML = `<section class="screen"><header class="top-bar"><div><span class="eyebrow">HIBA</span><h1>Nem tölthető be a képernyő</h1></div></header><p class="empty">${error.message}</p></section>`;
   } finally {

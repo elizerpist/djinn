@@ -4,16 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Djinn · Working prototype</title>
-    <link rel="stylesheet" href="assets/styles.css?rev=65" />
+    <link rel="stylesheet" href="assets/styles.css?rev=133" />
+    <link rel="stylesheet" href="assets/universe-morph-test.css?rev=1" />
   <!-- AntV G6 v5.1.1, helyben tárolva: a tudástérkép offline is működik. -->
-  <script defer src="assets/vendor/g6.min.js?rev=65"></script>
+  <script defer src="assets/vendor/g6.min.js?rev=92"></script>
   <!-- Globe.GL v2.46.1, helyben tárolva: WebGL-es Arc Links nézet offline használathoz. -->
-  <script defer src="assets/vendor/globe.gl.min.js?rev=65"></script>
+  <script defer src="assets/vendor/globe.gl.min.js?rev=92"></script>
   <!-- 3d-force-graph v1.80.0, helyben tárolva: a natív ThreeJS/WebGL force nézethez. -->
-  <script defer src="assets/vendor/3d-force-graph.min.js?rev=65"></script>
+  <script defer src="assets/vendor/3d-force-graph.min.js?rev=92"></script>
+  <!-- A ThreeGlobe UMD buildet a knowledge-map modul tölti be a modulból importált Three példánnyal. -->
   <!-- Cytoscape.js v3.34.0, helyben tárolva: interaktív gráfelrendezésekhez. -->
-  <script defer src="assets/vendor/cytoscape.min.js?rev=65"></script>
-  <script type="module" src="assets/app.js?rev=65"></script>
+  <script defer src="assets/vendor/cytoscape.min.js?rev=92"></script>
+  <script type="module" src="assets/app.js?rev=137"></script>
   </head>
   <body>
     <p class="prototype-label">Djinn · working prototype · 390 × 844</p>
@@ -22,6 +24,7 @@
       <div class="status-bar" aria-hidden="true"><span>9:41</span><span>◒ ◔ ▰</span></div>
       <div class="app-shell">
         <main id="screen-root" class="screen-root" aria-live="polite"></main>
+        <div id="explore-galaxy-orb-root" aria-label="Explore galaxisablak"></div>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
         <nav class="bottom-nav" aria-label="Elsődleges navigáció">

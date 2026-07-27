@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
   TEST_SEED,
   UNIVERSE_LEVEL,
@@ -34,5 +35,14 @@ assert.equal(classifyPointerTap({ x: 12, y: 12, startedAt: 100 }, { x: 12, y: 12
 assert.equal(canTransition(UNIVERSE_LEVEL.GALAXY, UNIVERSE_LEVEL.GALAXY_TO_PLANET), true);
 assert.equal(canTransition(UNIVERSE_LEVEL.PLANET, UNIVERSE_LEVEL.PLANET_TO_MAP), true);
 assert.equal(canTransition(UNIVERSE_LEVEL.MAP, UNIVERSE_LEVEL.PLANET_TO_MAP), false);
+
+const appSource = await readFile(new URL('../assets/app.js', import.meta.url), 'utf8');
+assert.match(appSource, /'universe-morph-test': 'screens\/universe-morph-test\.html'/);
+assert.match(appSource, /initUniverseMorphTest\(root, \{ showToast, navigate \}\)/);
+
+const screenSource = await readFile(new URL('../screens/universe-morph-test.html', import.meta.url), 'utf8');
+assert.match(screenSource, /data-universe-morph-test/);
+assert.match(screenSource, /data-universe-galaxy/);
+assert.match(screenSource, /data-universe-map/);
 
 console.log('universe morph model OK');

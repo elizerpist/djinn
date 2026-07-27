@@ -211,7 +211,7 @@ git commit -m "feat: add deterministic universe morph mock data"
 
 **Produces:** an independently addressable `#universe-morph-test` route with an empty but styled test harness; no existing navigation or display mode is changed.
 
-- [ ] **Step 1: Write the failing route/source-contract checks**
+- [x] **Step 1: Write the failing route/source-contract checks**
 
 Append these source checks to `tests/universe-morph-model.test.mjs`:
 
@@ -227,7 +227,7 @@ assert.match(screenSource, /data-universe-galaxy/);
 assert.match(screenSource, /data-universe-map/);
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -237,7 +237,7 @@ node prototypes/working-prototype/tests/universe-morph-model.test.mjs
 
 Expected: assertion failure because the route and screen do not exist.
 
-- [ ] **Step 3: Add the markup, isolated CSS and minimal route wiring**
+- [x] **Step 3: Add the markup, isolated CSS and minimal route wiring**
 
 Create `screens/universe-morph-test.html` with a normal `.screen` and `.top-bar` so existing `createFixedScreenLayout()` works. The complete renderer shell must be:
 
@@ -280,7 +280,7 @@ export function initUniverseMorphTest(root) {
 }
 ```
 
-- [ ] **Step 4: Run source contracts and syntax checks**
+- [x] **Step 4: Run source contracts and syntax checks**
 
 Run:
 
@@ -292,7 +292,7 @@ git diff --check
 
 Expected: all commands exit zero; the test still has no renderer dependency.
 
-- [ ] **Step 5: Commit the isolated shell**
+- [x] **Step 5: Commit the isolated shell**
 
 ```sh
 git add prototypes/working-prototype/screens/universe-morph-test.html \

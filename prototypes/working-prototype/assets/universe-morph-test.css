@@ -1,0 +1,11 @@
+.universe-morph-screen .screen-content { padding: 0; overflow: hidden; }
+.universe-morph-test { min-height: 100%; padding: 12px; background: #f7f6fa; }
+.universe-morph-stage { min-height: 520px; position: relative; overflow: hidden; border-radius: 26px; background: radial-gradient(circle at 58% 35%, #24144d 0%, #100a22 46%, #080710 100%); touch-action: none; box-shadow: inset 0 0 0 1px rgba(201, 196, 255, .13), 0 14px 28px rgba(44, 28, 81, .2); }
+.universe-morph-galaxy, .universe-morph-map { position: absolute; inset: 0; overflow: hidden; }
+.universe-morph-galaxy canvas, .universe-morph-map canvas, .universe-morph-map svg { display: block; }
+.universe-morph-map { z-index: 2; opacity: 0; pointer-events: none; transition: opacity .18s ease; }
+.universe-morph-map.is-map-active { pointer-events: auto; }
+.universe-morph-proxy { z-index: 4; position: absolute; width: 36px; height: 36px; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0; }
+.universe-morph-proxy[hidden] { display: none; }
+.universe-morph-debug { z-index: 5; position: absolute; top: 10px; right: 10px; max-width: 142px; padding: 8px; border: 1px solid rgba(216, 204, 255, .24); border-radius: 12px; color: #eeeaff; font: 700 8px/1.45 system-ui, sans-serif; background: rgba(9, 6, 23, .7); backdrop-filter: blur(8px); pointer-events: auto; }
+@media (max-height: 730px) { .universe-morph-stage { min-height: 430px; } }
