@@ -315,7 +315,7 @@ git commit -m "feat: add universe morph test screen shell"
 
 **Produces:** `initUniverseMorphTest(root, helpers)` that creates the galaxy render and returns an idempotent cleanup callback.
 
-- [ ] **Step 1: Add failing pure-selection tests**
+- [x] **Step 1: Add failing pure-selection tests**
 
 Export and test a pure degree/radius helper:
 
@@ -327,7 +327,7 @@ assert.ok(galaxyNodeRadius(4, 0, 12) < galaxyNodeRadius(12, 0, 12));
 assert.ok(galaxyNodeRadius(12, 0, 12) <= 6.4);
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -337,7 +337,7 @@ node prototypes/working-prototype/tests/universe-morph-model.test.mjs
 
 Expected: missing `galaxyNodeRadius` export error.
 
-- [ ] **Step 3: Implement the galaxy render with one node root group per node**
+- [x] **Step 3: Implement the galaxy render with one node root group per node**
 
 In `universe-morph-model.js`, implement a square-root bounded radius function:
 
@@ -383,7 +383,7 @@ Install pointerdown/pointerup on the force container; use `classifyPointerTap`. 
 
 Implement cleanup that removes pointer and controls listeners, cancels requestAnimationFrame, calls `graph._destructor?.()`, clears the mount, and disposes materials owned by this screen.
 
-- [ ] **Step 4: Run tests and syntax checks**
+- [x] **Step 4: Run tests and syntax checks**
 
 Run:
 
@@ -395,7 +395,7 @@ git diff --check
 
 Expected: pure tests pass and the module parses without starting WebGL.
 
-- [ ] **Step 5: Commit the galaxy layer**
+- [x] **Step 5: Commit the galaxy layer**
 
 ```sh
 git add prototypes/working-prototype/assets/universe-morph-model.js \

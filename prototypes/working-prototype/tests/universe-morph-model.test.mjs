@@ -7,6 +7,7 @@ import {
   classifyPointerTap,
   createUniverseMockData,
   fibonacciSpherePoint,
+  galaxyNodeRadius,
 } from '../assets/universe-morph-model.js';
 
 const first = createUniverseMockData(TEST_SEED);
@@ -35,6 +36,10 @@ assert.equal(classifyPointerTap({ x: 12, y: 12, startedAt: 100 }, { x: 12, y: 12
 assert.equal(canTransition(UNIVERSE_LEVEL.GALAXY, UNIVERSE_LEVEL.GALAXY_TO_PLANET), true);
 assert.equal(canTransition(UNIVERSE_LEVEL.PLANET, UNIVERSE_LEVEL.PLANET_TO_MAP), true);
 assert.equal(canTransition(UNIVERSE_LEVEL.MAP, UNIVERSE_LEVEL.PLANET_TO_MAP), false);
+
+assert.ok(galaxyNodeRadius(0, 0, 12) < galaxyNodeRadius(4, 0, 12));
+assert.ok(galaxyNodeRadius(4, 0, 12) < galaxyNodeRadius(12, 0, 12));
+assert.ok(galaxyNodeRadius(12, 0, 12) <= 6.4);
 
 const appSource = await readFile(new URL('../assets/app.js', import.meta.url), 'utf8');
 assert.match(appSource, /'universe-morph-test': 'screens\/universe-morph-test\.html'/);

@@ -106,6 +106,12 @@ export function fibonacciSpherePoint(index, count, radius, altitude = 0) {
   };
 }
 
+export function galaxyNodeRadius(degree, minDegree, maxDegree) {
+  if (maxDegree <= minDegree) return 1.5;
+  const normalized = Math.max(0, Math.min(1, (degree - minDegree) / (maxDegree - minDegree)));
+  return 1.5 + Math.sqrt(normalized) * 4.7;
+}
+
 export function classifyPointerTap(start, end, endedAt = end.endedAt) {
   const duration = endedAt - start.startedAt;
   return Math.hypot(end.x - start.x, end.y - start.y) <= TAP_MOVE_THRESHOLD_PX
