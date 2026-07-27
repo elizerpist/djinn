@@ -185,3 +185,9 @@ export function canTransition(level, targetLevel) {
     `${UNIVERSE_LEVEL.PLANET_TO_GALAXY}:${UNIVERSE_LEVEL.GALAXY}`,
   ]).has(`${level}:${targetLevel}`);
 }
+
+export function reverseTransition(level) {
+  if (level === UNIVERSE_LEVEL.MAP) return UNIVERSE_LEVEL.MAP_TO_PLANET;
+  if (level === UNIVERSE_LEVEL.PLANET) return UNIVERSE_LEVEL.PLANET_TO_GALAXY;
+  return null;
+}

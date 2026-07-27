@@ -9,8 +9,9 @@ import {
   galaxyNodeRadius,
   fibonacciSpherePoint,
   projectPointToScreen,
+  reverseTransition,
   surfaceArcPoints,
-} from './universe-morph-model.js?rev=1';
+} from './universe-morph-model.js?rev=2';
 
 const PLANET_COLORS = [0x6b3ef6, 0x8a63e8, 0x7c4dff, 0x9b7bff];
 let threeGlobePromise;
@@ -92,6 +93,11 @@ export function initUniverseMorphTest(root, helpers = {}) {
   let mapResizeObserver;
   let removeWaiter = () => {};
   let transitionFrame = 0;
+  let hudFrame = 0;
+  let lastHudUpdate = 0;
+  let fpsStartedAt = performance.now();
+  let fpsFrameCount = 0;
+  let fps = 0;
   let pointerStart;
   let destroyed = false;
   let sceneLights = [];
@@ -112,7 +118,42 @@ export function initUniverseMorphTest(root, helpers = {}) {
 
   function updateDebug() {
     if (!debug) return;
-    debug.innerHTML = `<strong>Universe test</strong><br>Level: ${state.level}<br>Planet: ${state.selectedGalaxyNodeId || '—'}<br>Progress: ${state.transitionProgress.toFixed(2)}`;
+    const now = performance.now();
+    if (now - lastHudUpdate < 100) return;
+    lastHudUpdate = now;
+    const camera = graph?.camera?.();
+    const distance = camera && graph?.controls?.()
+      ? camera.position.distanceTo(graph.controls().target).toFixed(1)
+      : '—';
+    debug.innerHTML = `
+      <strong>Universe test</strong>
+      <output data-universe-level>Level: ${state.level}</output>
+      <output data-universe-progress>Progress: ${state.transitionProgress.toFixed(2)}</output>
+      <output data-universe-selection>Galaxy: ${state.selectedGalaxyNodeId || '—'} · Planet: ${state.selectedPlanetNodeId || '—'}</output>
+      <output data-universe-camera>Camera: ${distance}</output>
+      <output data-universe-fps>FPS: ${fps}</output>
+      <div class="universe-morph-debug-actions">
+        <button type="button" data-universe-action="galaxy">Galaxy</button>
+        <button type="button" data-universe-action="planet">Planet</button>
+        <button type="button" data-universe-action="map">Map</button>
+        <button type="button" data-universe-action="reverse">Reverse</button>
+        <button type="button" data-universe-action="replay">Replay</button>
+      </div>`;
+  }
+
+  function startHudLoop() {
+    const loop = (now) => {
+      if (destroyed) return;
+      fpsFrameCount += 1;
+      if (now - fpsStartedAt >= 1000) {
+        fps = Math.round(fpsFrameCount * 1000 / (now - fpsStartedAt));
+        fpsFrameCount = 0;
+        fpsStartedAt = now;
+      }
+      updateDebug();
+      hudFrame = window.requestAnimationFrame(loop);
+    };
+    hudFrame = window.requestAnimationFrame(loop);
   }
 
   function createPlanetMaterial(node) {
@@ -604,6 +645,153 @@ export function initUniverseMorphTest(root, helpers = {}) {
     }
   }
 
+  async function requestPlanetReturn() {
+    if (state.interactionLocked || state.level !== UNIVERSE_LEVEL.MAP || !state.selectedPlanetNodeId || !state.savedPlanetCamera) return;
+    const selectedView = planetNodeViews.get(state.selectedPlanetNodeId);
+    if (!selectedView) return;
+    const camera = graph.camera();
+    const controls = graph.controls();
+    state.level = UNIVERSE_LEVEL.MAP_TO_PLANET;
+    state.interactionLocked = true;
+    mapMount.classList.remove('is-map-active');
+    const mapStartScreen = { x: stage.clientWidth / 2, y: stage.clientHeight / 2 };
+    const cameraStart = camera.position.clone();
+    const targetStart = controls.target.clone();
+    const globeStart = detailGlobe.quaternion.clone();
+    const saved = state.savedPlanetCamera;
+    proxy.hidden = false;
+    setProxyFrame({
+      x: mapStartScreen.x,
+      y: mapStartScreen.y,
+      width: 148,
+      height: 56,
+      radius: '16px',
+      opacity: 1,
+      background: 'linear-gradient(135deg, #8b65fa, #5b31cc)',
+    });
+    galaxyMount.style.pointerEvents = '';
+    const returned = await tween(560, (eased, raw) => {
+      state.transitionProgress = 1 - raw;
+      camera.position.lerpVectors(cameraStart, saved.position, eased);
+      controls.target.lerpVectors(targetStart, saved.target, eased);
+      detailGlobe.quaternion.slerpQuaternions(globeStart, saved.globeQuaternion, eased);
+      controls.update();
+      graph.scene().updateMatrixWorld(true);
+      const endScreen = projectPointToScreen(selectedView.root.getWorldPosition(new THREE.Vector3()), camera, stage.clientWidth, stage.clientHeight);
+      setProxyFrame({
+        x: mapStartScreen.x + (endScreen.x - mapStartScreen.x) * eased,
+        y: mapStartScreen.y + (endScreen.y - mapStartScreen.y) * eased,
+        width: 148 + (52 - 148) * eased,
+        height: 56 + (52 - 56) * eased,
+        radius: `${Math.round(16 * (1 - eased) + 26 * eased)}px`,
+        opacity: 1 - Math.max(0, (eased - .86) / .14),
+        background: eased < .52
+          ? 'linear-gradient(135deg, #8b65fa, #5b31cc)'
+          : 'radial-gradient(circle at 32% 28%, #fff4a8, #e2b93a 68%, #a66e12)',
+      });
+      mapMount.style.opacity = String(1 - eased);
+      galaxyMount.style.opacity = String(eased);
+      selectedView.visibleSphere.material.opacity = eased;
+      selectedView.glow.material.opacity = eased * .45;
+      updateDebug();
+    });
+    if (!returned || destroyed) return;
+    proxy.hidden = true;
+    mapMount.hidden = true;
+    mapMount.style.opacity = '0';
+    galaxyMount.style.opacity = '1';
+    galaxyMount.style.pointerEvents = '';
+    setPlanetContentOpacity(1);
+    state.level = UNIVERSE_LEVEL.PLANET;
+    state.transitionProgress = 1;
+    state.interactionLocked = false;
+    controls.enabled = true;
+    updateDebug();
+  }
+
+  async function requestGalaxyReturn() {
+    if (state.interactionLocked || state.level !== UNIVERSE_LEVEL.PLANET || !state.selectedGalaxyNodeId || !state.savedGalaxyCamera) return;
+    const activeView = planetViews.get(state.selectedGalaxyNodeId);
+    if (!activeView) return;
+    const camera = graph.camera();
+    const controls = graph.controls();
+    state.level = UNIVERSE_LEVEL.PLANET_TO_GALAXY;
+    state.interactionLocked = true;
+    controls.enabled = false;
+    const cameraStart = camera.position.clone();
+    const targetStart = controls.target.clone();
+    const globeScale = activeView.radius / (detailGlobe.getGlobeRadius?.() || 100);
+    const returned = await tween(520, (eased, raw) => {
+      state.transitionProgress = 1 - raw;
+      camera.position.lerpVectors(cameraStart, state.savedGalaxyCamera.position, eased);
+      controls.target.lerpVectors(targetStart, state.savedGalaxyCamera.target, eased);
+      detailGlobe.scale.setScalar(globeScale * (1 - eased * .08));
+      setObjectOpacity(detailGlobe, 1 - eased);
+      setPlanetContentOpacity(1 - eased);
+      activeView.proxySphere.material.opacity = eased;
+      nodeViews.forEach((view, id) => {
+        if (id !== state.selectedGalaxyNodeId) view.proxySphere.material.opacity = .1 + eased * .9;
+        view.ring.visible = false;
+        view.glow.material.opacity = view.root.userData.isPlanet ? (.08 + eased * .08) : .045;
+      });
+      graph.linkOpacity(.03 + eased * .31);
+      controls.update();
+      updateDebug();
+    });
+    if (!returned || destroyed) return;
+    detailGlobe.visible = false;
+    detailGlobe.removeFromParent?.();
+    setPlanetContentOpacity(0);
+    state.level = UNIVERSE_LEVEL.GALAXY;
+    state.selectedPlanetNodeId = null;
+    state.transitionProgress = 0;
+    state.interactionLocked = false;
+    controls.enabled = true;
+    updateDebug();
+  }
+
+  async function reverse() {
+    const target = reverseTransition(state.level);
+    if (target === UNIVERSE_LEVEL.MAP_TO_PLANET) await requestPlanetReturn();
+    if (target === UNIVERSE_LEVEL.PLANET_TO_GALAXY) await requestGalaxyReturn();
+  }
+
+  async function handleDebugAction(action) {
+    if (state.interactionLocked) return;
+    const defaultPlanetId = mock.galaxy.planetIds[0];
+    const defaultPlanetNodeId = mock.planet.nodes[0].id;
+    if (action === 'reverse') {
+      await reverse();
+      return;
+    }
+    if (action === 'galaxy') {
+      if (state.level === UNIVERSE_LEVEL.MAP) await requestPlanetReturn();
+      if (state.level === UNIVERSE_LEVEL.PLANET) await requestGalaxyReturn();
+      return;
+    }
+    if (action === 'planet') {
+      if (state.level === UNIVERSE_LEVEL.MAP) await requestPlanetReturn();
+      if (state.level === UNIVERSE_LEVEL.GALAXY) await requestPlanetEntry(defaultPlanetId);
+      return;
+    }
+    if (action === 'map') {
+      if (state.level === UNIVERSE_LEVEL.GALAXY) await requestPlanetEntry(defaultPlanetId);
+      if (state.level === UNIVERSE_LEVEL.PLANET) await requestMapEntry(defaultPlanetNodeId);
+      return;
+    }
+    if (action === 'replay') {
+      if (state.level === UNIVERSE_LEVEL.MAP) await requestPlanetReturn();
+      if (state.level === UNIVERSE_LEVEL.PLANET) await requestGalaxyReturn();
+      if (state.level === UNIVERSE_LEVEL.GALAXY) await requestPlanetEntry(defaultPlanetId);
+      if (state.level === UNIVERSE_LEVEL.PLANET) await requestMapEntry(defaultPlanetNodeId);
+    }
+  }
+
+  function onDebugClick(event) {
+    const action = event.target.closest('[data-universe-action]')?.dataset.universeAction;
+    if (action) void handleDebugAction(action);
+  }
+
   function startGraph() {
     if (destroyed) return;
     graph = new window.ForceGraph3D(galaxyMount, { controlType: 'orbit' })
@@ -628,6 +816,8 @@ export function initUniverseMorphTest(root, helpers = {}) {
     resizeObserver.observe(galaxyMount);
     galaxyMount.addEventListener('pointerdown', onPointerDown);
     galaxyMount.addEventListener('pointerup', onPointerUp);
+    debug?.addEventListener('click', onDebugClick);
+    startHudLoop();
     updateDebug();
   }
 
@@ -640,10 +830,12 @@ export function initUniverseMorphTest(root, helpers = {}) {
     destroyed = true;
     removeWaiter();
     window.cancelAnimationFrame(transitionFrame);
+    window.cancelAnimationFrame(hudFrame);
     resizeObserver?.disconnect();
     mapResizeObserver?.disconnect();
     galaxyMount.removeEventListener('pointerdown', onPointerDown);
     galaxyMount.removeEventListener('pointerup', onPointerUp);
+    debug?.removeEventListener('click', onDebugClick);
     sceneLights.forEach((light) => light.removeFromParent());
     detailGlobe?.removeFromParent?.();
     planetContentGroup?.traverse((object) => object.geometry?.dispose?.());

@@ -11,6 +11,7 @@ import {
   focusCameraTarget,
   galaxyNodeRadius,
   projectPointToScreen,
+  reverseTransition,
   surfaceArcPoints,
 } from '../assets/universe-morph-model.js';
 
@@ -40,6 +41,9 @@ assert.equal(classifyPointerTap({ x: 12, y: 12, startedAt: 100 }, { x: 12, y: 12
 assert.equal(canTransition(UNIVERSE_LEVEL.GALAXY, UNIVERSE_LEVEL.GALAXY_TO_PLANET), true);
 assert.equal(canTransition(UNIVERSE_LEVEL.PLANET, UNIVERSE_LEVEL.PLANET_TO_MAP), true);
 assert.equal(canTransition(UNIVERSE_LEVEL.MAP, UNIVERSE_LEVEL.PLANET_TO_MAP), false);
+assert.equal(reverseTransition(UNIVERSE_LEVEL.MAP), UNIVERSE_LEVEL.MAP_TO_PLANET);
+assert.equal(reverseTransition(UNIVERSE_LEVEL.PLANET), UNIVERSE_LEVEL.PLANET_TO_GALAXY);
+assert.equal(reverseTransition(UNIVERSE_LEVEL.GALAXY), null);
 
 assert.ok(galaxyNodeRadius(0, 0, 12) < galaxyNodeRadius(4, 0, 12));
 assert.ok(galaxyNodeRadius(4, 0, 12) < galaxyNodeRadius(12, 0, 12));

@@ -702,18 +702,17 @@ git commit -m "feat: morph planet node into flat map"
 
 **Produces:** reverse/replay controls, telemetry HUD, full cleanup, and honest verification statuses in the approved checklist.
 
-- [ ] **Step 1: Add failing reverse-transition tests**
+- [x] **Step 1: Add failing reverse-transition tests**
 
-Extend the state utility test with all reverse edges:
+Add the missing reverse-target decision helper to the state utility test:
 
 ```js
-assert.equal(canTransition(UNIVERSE_LEVEL.MAP, UNIVERSE_LEVEL.MAP_TO_PLANET), true);
-assert.equal(canTransition(UNIVERSE_LEVEL.MAP_TO_PLANET, UNIVERSE_LEVEL.PLANET), true);
-assert.equal(canTransition(UNIVERSE_LEVEL.PLANET, UNIVERSE_LEVEL.PLANET_TO_GALAXY), true);
-assert.equal(canTransition(UNIVERSE_LEVEL.PLANET_TO_GALAXY, UNIVERSE_LEVEL.GALAXY), true);
+assert.equal(reverseTransition(UNIVERSE_LEVEL.MAP), UNIVERSE_LEVEL.MAP_TO_PLANET);
+assert.equal(reverseTransition(UNIVERSE_LEVEL.PLANET), UNIVERSE_LEVEL.PLANET_TO_GALAXY);
+assert.equal(reverseTransition(UNIVERSE_LEVEL.GALAXY), null);
 ```
 
-- [ ] **Step 2: Run the test to verify the transition utility or test is incomplete**
+- [x] **Step 2: Run the test to verify the transition utility or test is incomplete**
 
 Run:
 
@@ -721,9 +720,9 @@ Run:
 node prototypes/working-prototype/tests/universe-morph-model.test.mjs
 ```
 
-Expected: if any transition has not been included, the corresponding assertion fails; otherwise the test confirms the state table is already complete and this is a no-regression gate.
+Expected: missing `reverseTransition` export error.
 
-- [ ] **Step 3: Implement the reverse controls and HUD**
+- [x] **Step 3: Implement the reverse controls and HUD**
 
 Populate `[data-universe-debug]` with exactly these controls and live fields:
 
@@ -748,7 +747,7 @@ Populate `[data-universe-debug]` with exactly these controls and live fields:
 
 FPS uses a single frame counter sampled once per second. HUD update is throttled to 10 Hz; transition rAF only mutates Three.js/CSS properties. On cleanup: cancel all rAF/timers, remove all DOM and controls listeners, dispose G6, dispose screen-owned Three geometries/materials/textures, remove `detailGlobe` from its parent, call the force graph destructor, and clear the stage.
 
-- [ ] **Step 4: Run the full automated suite**
+- [x] **Step 4: Run the full automated suite**
 
 Run:
 
@@ -778,7 +777,7 @@ Manual test on the Android prototype page:
 
 For each UM-01 through UM-13 row in `docs/superpowers/specs/2026-07-27-universe-morph-test-design.md`, set status to `DONE`, `PARTIAL`, or `BLOCKED` based on this evidence. Do not mark any item DONE solely because a syntax test passed.
 
-- [ ] **Step 6: Commit the complete test-screen feature**
+- [x] **Step 6: Commit the complete test-screen feature**
 
 ```sh
 git add prototypes/working-prototype/assets/universe-morph-test.js \

@@ -8,4 +8,8 @@
 .universe-morph-proxy { z-index: 4; position: absolute; width: 36px; height: 36px; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0; }
 .universe-morph-proxy[hidden] { display: none; }
 .universe-morph-debug { z-index: 5; position: absolute; top: 10px; right: 10px; max-width: 142px; padding: 8px; border: 1px solid rgba(216, 204, 255, .24); border-radius: 12px; color: #eeeaff; font: 700 8px/1.45 system-ui, sans-serif; background: rgba(9, 6, 23, .7); backdrop-filter: blur(8px); pointer-events: auto; }
+.universe-morph-debug output { display: block; color: #cfc2f1; }
+.universe-morph-debug-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-top: 7px; }
+.universe-morph-debug-actions button { min-height: 24px; border: 1px solid rgba(216, 204, 255, .2); border-radius: 7px; color: #f4efff; font: 700 7px system-ui, sans-serif; background: rgba(124, 77, 255, .25); }
+.universe-morph-debug-actions button:last-child { grid-column: 1 / -1; }
 @media (max-height: 730px) { .universe-morph-stage { min-height: 430px; } }

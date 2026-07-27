@@ -1,6 +1,6 @@
 import { initKnowledgeMap } from './knowledge-map.js?rev=137';
 import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=140';
-import { initUniverseMorphTest } from './universe-morph-test.js?rev=1';
+import { initUniverseMorphTest } from './universe-morph-test.js?rev=2';
 
 const routes = {
   home: 'screens/home.html',
