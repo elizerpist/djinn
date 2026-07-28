@@ -1,5 +1,5 @@
 import { initKnowledgeMap } from './knowledge-map.js?rev=137';
-import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=144';
+import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=143';
 import { initExploreDiscovery } from './explore-discovery.js?rev=2';
 import { initUniverseMorphTest } from './universe-morph-test.js?rev=2';
 
@@ -133,18 +133,20 @@ async function render(route) {
   destroyScreen = () => {};
   const galaxyRoot = document.querySelector('#explore-galaxy-orb-root');
   const appShell = document.querySelector('.app-shell');
-  if (galaxyRoot && appShell) {
-    // Az orb mindig az app-shell overlay rétegében marad. Az Explore oldalon
-    // csak a scrollfolyamban lévő, üres helyfoglaló slot adja a tartalom helyét.
-    if (galaxyRoot.parentElement !== appShell) appShell.append(galaxyRoot);
-    galaxyRoot.classList.toggle('is-inline', normalized === 'explore');
+  if (galaxyRoot && appShell && galaxyRoot.parentElement !== appShell) {
+    appShell.append(galaxyRoot);
+    galaxyRoot.classList.remove('is-inline');
   }
 
   try {
     const response = await fetch(routes[normalized], { cache: 'no-store' });
     if (!response.ok) throw new Error(`Nem tölthető be: ${normalized}`);
     root.innerHTML = await response.text();
-    if (normalized === 'explore' && galaxyRoot) galaxyRoot.classList.add('is-inline');
+    if (normalized === 'explore' && galaxyRoot) {
+      const galaxySlot = root.querySelector('.explore-galaxy-slot');
+      galaxySlot?.replaceChildren(galaxyRoot);
+      galaxyRoot.classList.add('is-inline');
+    }
     createFixedScreenLayout();
     addFullscreenToggle();
     if (normalized === 'explore') {

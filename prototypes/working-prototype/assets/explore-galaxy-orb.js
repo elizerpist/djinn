@@ -105,29 +105,24 @@ export function initExpandableGalaxyOrb({ root, nav }) {
 
   function measureBounds() {
     if (!root.classList.contains('is-inline')) return;
-    const inlineSlot = document.querySelector('.explore-galaxy-slot');
-    const appShell = root.closest('.app-shell');
-    if (!inlineSlot || !appShell) return;
+    const inlineSlot = root.parentElement;
+    if (!inlineSlot?.classList.contains('explore-galaxy-slot')) return;
 
-    const rootRect = appShell.getBoundingClientRect();
-    const slotRect = inlineSlot.getBoundingClientRect();
-    const scrollContainer = inlineSlot.closest('.screen-content');
-    const scrollTop = scrollContainer?.scrollTop || 0;
-    const slotTop = slotRect.top - rootRect.top + scrollTop;
-    const width = rootRect.width || slotRect.width;
+    const rootRect = root.getBoundingClientRect();
+    const width = rootRect.width || inlineSlot.getBoundingClientRect().width;
     const collapsedHeight = 230;
     const expandedHeight = collapsedHeight;
     const collapsedSize = clamp(Math.min(190, width - 48), 154, 190);
     const expandedInset = 12;
     const collapsed = {
       left: (width - collapsedSize) / 2,
-      top: slotTop + (collapsedHeight - collapsedSize) / 2,
+      top: (collapsedHeight - collapsedSize) / 2,
       width: collapsedSize,
       height: collapsedSize
     };
     const expanded = {
       left: expandedInset,
-      top: slotTop,
+      top: 0,
       width: Math.max(0, width - (expandedInset * 2)),
       height: expandedHeight
     };
@@ -140,7 +135,7 @@ export function initExpandableGalaxyOrb({ root, nav }) {
     progress = clamp(next, 0, 1);
     const a = bounds.collapsed;
     const b = bounds.expanded;
-    const inlineSlot = document.querySelector('.explore-galaxy-slot');
+    const inlineSlot = root.closest('.explore-galaxy-slot');
     if (inlineSlot) {
       inlineSlot.style.height = `${b.height}px`;
     }
