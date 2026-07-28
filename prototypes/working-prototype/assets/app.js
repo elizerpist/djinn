@@ -158,6 +158,10 @@ async function render(route) {
         onConceptFocus: (nodeId, trigger) => galaxyOrb?.focusConcept(nodeId, trigger)
       });
     }
+    if (normalized === 'query' && state.question) {
+      const queryInput = root.querySelector('[data-query-form] input');
+      if (queryInput) queryInput.value = state.question;
+    }
     if (normalized === 'workspace-topic-connections') {
       destroyScreen = initKnowledgeMap(root, { showToast, navigate });
     }
@@ -244,6 +248,14 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('submit', (event) => {
+  const djinnForm = event.target.closest('[data-djinn-form]');
+  if (djinnForm) {
+    event.preventDefault();
+    state.question = djinnForm.querySelector('input')?.value.trim() || 'Mi kapcsolódik ehhez a tudáshoz?';
+    navigate('query');
+    return;
+  }
+
   const form = event.target.closest('[data-query-form]');
   if (!form) return;
   event.preventDefault();

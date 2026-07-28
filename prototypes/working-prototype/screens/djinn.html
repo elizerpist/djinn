@@ -1,10 +1,13 @@
-<section class="screen" aria-label="Djinn">
-  <header class="top-bar"><div><span class="eyebrow">DJINN</span><h1>Kérdezz a tudásodból</h1></div><button class="icon-button" data-route="profile" aria-label="Beállítások">☷</button></header>
-  <p class="subtle" style="margin:0 20px">A Djinn nem chat: a kérdéshez releváns jegyzeteket és tudásútvonalat gyűjt.</p>
-  <div class="hero"><div class="orb" aria-hidden="true"></div></div>
-  <form class="composer" data-query-form><div class="composer-shell"><input aria-label="Djinn kérdés" placeholder="Írd be a kérdésed…" /><button class="send-button" type="submit" aria-label="Kérdés elküldése">➜</button></div></form>
-  <section class="section"><div class="section-title"><h2>Javasolt kérdések</h2></div>
-    <button class="note-card" data-route="query"><span class="card-icon">?</span><span><strong>Mi kapcsolódik a migrációs tervhez?</strong><small>Teljes tudástár</small></span><b class="chevron">›</b></button>
-    <button class="note-card" data-route="query"><span class="card-icon">?</span><span><strong>Mik a leggyakoribb kockázatok?</strong><small>Adatbázis migráció téma</small></span><b class="chevron">›</b></button>
+<section class="screen djinn-command-screen" aria-label="Djinn parancsközpont">
+  <header class="top-bar djinn-command-header"><div><span class="eyebrow">DJINN</span><h1>Miben segítsek itt?</h1></div><button class="icon-button" data-route="profile" aria-label="Djinn beállításai">☷</button></header>
+  <p class="djinn-command-subtitle">A Djinn az aktuális témához, jegyzethez vagy forráshoz ajánl műveleteket.</p>
+
+  <section class="djinn-context-card" aria-label="Aktuális kontextus"><div class="djinn-context-orb" aria-hidden="true">✦</div><div><span class="eyebrow">AKTUÁLIS KONTEXTUS</span><h2>Adatbázis-migráció</h2><p>3 új kapcsolat · 2 ellenőrizendő elem</p></div><button type="button" data-route="workspace-topic-connections" aria-label="Kontextus megnyitása">›</button></section>
+
+  <section class="djinn-command-sheet" aria-labelledby="djinn-command-title"><div class="djinn-command-heading"><div><span class="eyebrow">GYORS MŰVELETEK</span><h2 id="djinn-command-title">Mit szeretnél ezzel csinálni?</h2></div><span class="djinn-command-spark" aria-hidden="true">✦</span></div>
+    <div class="djinn-command-grid"><button class="djinn-command" type="button" data-route="query"><i>?</i><span><strong>Kérdezz erről</strong><small>Teljes válasz és források</small></span></button><button class="djinn-command" type="button" data-route="query-answer"><i>▤</i><span><strong>Foglald össze</strong><small>Rövid, strukturált kivonat</small></span></button><button class="djinn-command" type="button" data-route="explore"><i>⌘</i><span><strong>Kapcsolódó elemek</strong><small>Nyisd meg a tudásgráfot</small></span></button><button class="djinn-command" type="button" data-route="workspace-note-editor"><i>＋</i><span><strong>Készíts jegyzetet</strong><small>Új jegyzet ebből a témából</small></span></button><button class="djinn-command" type="button" data-route="workspace-library"><i>▧</i><span><strong>AI feldolgozás</strong><small>Chunkok és címkék</small></span></button><button class="djinn-command" type="button" data-route="workspace-library"><i>◌</i><span><strong>Mutasd a forrásokat</strong><small>Dokumentumok és jegyzetek</small></span></button><button class="djinn-command" type="button" data-route="workspace-topic-activity"><i>!</i><span><strong>Ellenőrizendő elemek</strong><small>2 nyitott döntési pont</small></span></button><button class="djinn-command" type="button" data-route="query"><i>↗</i><span><strong>Következő kérdés</strong><small>Folytasd a gondolkodást</small></span></button></div>
   </section>
+
+  <form class="djinn-inline-composer" data-djinn-form><div class="composer-shell"><input aria-label="Kérdés a Djinnhez" placeholder="Kérdezz erről…" autocomplete="off" /><button class="send-button" type="submit" aria-label="Megnyitás a Kérdezz menüben">➜</button></div></form>
+  <button class="djinn-open-query" type="button" data-route="query">Megnyitás Kérdezzben <span>›</span></button>
 </section>
