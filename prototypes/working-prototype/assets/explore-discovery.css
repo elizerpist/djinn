@@ -1,5 +1,5 @@
 .explore-discovery { display: grid; gap: 20px; padding: 4px var(--layout-x) 28px; }
-.explore-panel { display: grid; gap: 20px; }
+.explore-panel { display: grid; gap: 20px; }.explore-panel[hidden] { display: none !important; }
 .explore-spotlight { padding: 18px; overflow: hidden; border: 1px solid rgba(107,62,246,.16); border-radius: 22px; color: #f7f4ff; background: radial-gradient(circle at 84% 4%, rgba(176,148,255,.46), transparent 29%), linear-gradient(142deg, #28144f, #5430a6 62%, #3b1d77); box-shadow: 0 12px 28px rgba(67,34,145,.22); }
 .explore-spotlight h2, .explore-panel-intro h2 { margin: 7px 0 0; letter-spacing: -.04em; line-height: 1.08; }
 .explore-spotlight h2 { max-width: 240px; font-size: 20px; }.explore-spotlight p { max-width: 275px; margin: 9px 0 15px; color: #ddd4ff; font-size: 11px; line-height: 1.5; }

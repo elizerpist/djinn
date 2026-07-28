@@ -34,6 +34,7 @@ export function initExploreDiscovery(root) {
       panel.hidden = panel.dataset.explorePanel !== name;
     });
   };
+  activate('overview');
 
   const onClick = (event) => {
     const tab = event.target.closest('[data-explore-tab]');

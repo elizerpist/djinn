@@ -10,6 +10,7 @@ assert.match(discovery, /\['overview', 'Áttekintés'\]/);
 assert.match(discovery, /\['concepts', 'Fogalmak'\]/);
 assert.match(discovery, /\['connections', 'Kapcsolatok'\]/);
 assert.match(discovery, /tab\.dataset\.exploreTab = id/);
+assert.match(discovery, /activate\('overview'\)/);
 assert.doesNotMatch(discovery, /insertAdjacentHTML\('afterend', DISCOVERY_TEMPLATE\)/);
 assert.match(screen, /data-explore-discovery/);
 assert.match(screen, /data-explore-panel="overview"/);
@@ -39,7 +40,8 @@ assert.doesNotMatch(overview, /Érdekes kapcsolatok|Növekvő témák/);
 assert.match(overview, /id="explore-featured-path"/);
 assert.match(concepts, /id="explore-growing-topics"/);
 assert.match(connections, /id="explore-knowledge-paths"/);
-assert.match(index, /assets\/explore-discovery\.css\?rev=1/);
+assert.match(index, /assets\/explore-discovery\.css\?rev=2/);
+assert.match(index, /assets\/app\.js\?rev=138/);
 assert.match(app, /import \{ initExploreDiscovery \} from '\.\/explore-discovery\.js\?rev=2';/);
 assert.match(app, /normalized === 'explore'[\s\S]*initExploreDiscovery\(root\)/);
 
