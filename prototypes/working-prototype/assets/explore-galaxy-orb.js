@@ -113,6 +113,7 @@ export function initExpandableGalaxyOrb({ root, nav }) {
     const collapsedHeight = 230;
     const expandedHeight = collapsedHeight;
     const collapsedSize = clamp(Math.min(190, width - 48), 154, 190);
+    const expandedInset = 12;
     const collapsed = {
       left: (width - collapsedSize) / 2,
       top: (collapsedHeight - collapsedSize) / 2,
@@ -120,9 +121,9 @@ export function initExpandableGalaxyOrb({ root, nav }) {
       height: collapsedSize
     };
     const expanded = {
-      left: 0,
+      left: expandedInset,
       top: 0,
-      width,
+      width: Math.max(0, width - (expandedInset * 2)),
       height: expandedHeight
     };
     bounds = { collapsed, expanded, anchorRect: null };
