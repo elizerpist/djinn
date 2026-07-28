@@ -111,7 +111,7 @@ export function initExpandableGalaxyOrb({ root, nav }) {
     const rootRect = root.getBoundingClientRect();
     const width = rootRect.width || inlineSlot.getBoundingClientRect().width;
     const collapsedHeight = 230;
-    const expandedHeight = clamp(Math.round(width * .9), 280, 380);
+    const expandedHeight = collapsedHeight;
     const collapsedSize = clamp(Math.min(190, width - 48), 154, 190);
     const collapsed = {
       left: (width - collapsedSize) / 2,
@@ -136,7 +136,7 @@ export function initExpandableGalaxyOrb({ root, nav }) {
     const b = bounds.expanded;
     const inlineSlot = root.closest('.explore-galaxy-slot');
     if (inlineSlot) {
-      inlineSlot.style.height = `${lerp(230, b.height, progress)}px`;
+      inlineSlot.style.height = `${b.height}px`;
     }
     // A collapsed állapot a jóváhagyott látvány szerint lekerekített négyzetes
     // galaxisablak, nem kör alakú ikon. Innen morphol tovább a nagy panelbe.

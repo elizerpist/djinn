@@ -1,5 +1,5 @@
 import { initKnowledgeMap } from './knowledge-map.js?rev=137';
-import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=141';
+import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=142';
 import { initExploreDiscovery } from './explore-discovery.js?rev=2';
 import { initUniverseMorphTest } from './universe-morph-test.js?rev=2';
 
