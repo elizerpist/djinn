@@ -1,5 +1,6 @@
 import { initKnowledgeMap } from './knowledge-map.js?rev=137';
 import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=140';
+import { initExploreDiscovery } from './explore-discovery.js?rev=1';
 import { initUniverseMorphTest } from './universe-morph-test.js?rev=2';
 
 const routes = {
@@ -137,6 +138,9 @@ async function render(route) {
     root.innerHTML = await response.text();
     createFixedScreenLayout();
     addFullscreenToggle();
+    if (normalized === 'explore') {
+      destroyScreen = initExploreDiscovery(root);
+    }
     if (normalized === 'workspace-topic-connections') {
       destroyScreen = initKnowledgeMap(root, { showToast, navigate });
     }

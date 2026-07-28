@@ -51,8 +51,8 @@ A mostani prototípusban mindhárom tab mock, determinisztikus adatokkal működ
 
 | ID | Követelmény | Kódterület | Ellenőrzés | Állapot |
 | --- | --- | --- | --- | --- |
-| EXP-01 | A galaxisablak az Explore elsődleges vizuális belépési pontja marad | `screens/explore.html` | mobil screenshot | NOT DONE |
-| EXP-02 | Áttekintésen Mai felfedezés, Folytasd, Érdekes kapcsolatok, Tudásutak és Növekvő témák látszanak | Explore markup/CSS | screenshot + markup teszt | NOT DONE |
-| EXP-03 | Fogalmak és Kapcsolatok tabok route-váltás nélkül cserélik a helyi contentet | Explore JS | interakciós teszt | NOT DONE |
-| EXP-04 | A discovery kártyák a meglévő tudástérképre vezetnek | közös `data-route` | click teszt | NOT DONE |
-| EXP-05 | Nem változik a Workspace, dropdown, Universe teszt vagy Explore orb logikája | scoped diff | diff review | NOT DONE |
+| EXP-01 | A galaxisablak az Explore elsődleges vizuális belépési pontja marad | `screens/explore.html` | meglévő galaxisblokk változatlan; Android screenshot még szükséges | PARTIAL |
+| EXP-02 | Áttekintésen Mai felfedezés, Folytasd, Érdekes kapcsolatok, Tudásutak és Növekvő témák látszanak | Explore markup/CSS | static markup teszt sikeres; Android screenshot még szükséges | PARTIAL |
+| EXP-03 | Fogalmak és Kapcsolatok tabok route-váltás nélkül cserélik a helyi contentet | Explore JS | lokális tab-controller code review kész; kézi interakciós teszt még szükséges | PARTIAL |
+| EXP-04 | A discovery kártyák a meglévő tudástérképre vezetnek | közös `data-route` | static route-attribútum teszt sikeres; kézi click teszt még szükséges | PARTIAL |
+| EXP-05 | Nem változik a Workspace, dropdown, Universe teszt vagy Explore orb logikája | scoped diff | célzott diff review kész; manuális regressziós teszt még szükséges | PARTIAL |
