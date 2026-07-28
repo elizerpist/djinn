@@ -137,8 +137,8 @@ button { border: 0; cursor: pointer; }
 .galaxy-orb-handle { position: absolute; z-index: 5; top: 8px; left: 50%; width: 44px; height: 28px; padding: 0; border-radius: 10px; transform: translateX(-50%); opacity: 0; pointer-events: none; background: transparent; }
 .galaxy-orb-handle::after { position: absolute; top: 10px; left: 50%; width: 38px; height: 4px; border-radius: 4px; transform: translateX(-50%); background: rgba(236,231,255,.78); content: ''; }
 .expandable-galaxy-orb[data-state="expanded"] .galaxy-orb-handle, .expandable-galaxy-orb[data-state="dragging"] .galaxy-orb-handle { opacity: 1; pointer-events: auto; }
-.galaxy-orb-controls { position: absolute; z-index: 4; top: 13px; right: 13px; left: 13px; min-height: 34px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; opacity: 1; pointer-events: auto; }
-.galaxy-orb-title { flex: 1; color: #ece7ff; font-size: 11px; font-weight: 850; text-shadow: 0 1px 8px rgba(0,0,0,.5); }
+.galaxy-orb-controls { position: absolute; z-index: 4; top: 13px; right: 13px; left: 13px; min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 6px; opacity: 1; pointer-events: auto; }
+.galaxy-orb-title { display: inline-flex; align-items: center; min-height: 30px; padding: 0 10px; border: 1px solid rgba(236,231,255,.24); border-radius: 999px; color: rgba(236,231,255,.88); font-size: 10px; font-weight: 850; letter-spacing: .02em; text-shadow: 0 1px 8px rgba(0,0,0,.5); background: rgba(25,12,55,.48); box-shadow: 0 4px 14px rgba(13,5,32,.18); backdrop-filter: blur(8px); }
 .galaxy-orb-controls button { width: 36px; height: 36px; border: 1px solid rgba(236,231,255,.28); border-radius: 11px; color: #ece7ff; font-size: 17px; background: rgba(25,12,55,.72); }
 .galaxy-orb-fallback { position: absolute; top: 50%; left: 50%; color: #a883ff; font-size: 25px; transform: translate(-50%, -50%); }
 .expandable-galaxy-orb[data-state="expanded"] .galaxy-orb-trigger, .expandable-galaxy-orb[data-state="expanding"] .galaxy-orb-trigger { pointer-events: none; opacity: 0; }
