@@ -44,7 +44,7 @@ assert.match(concepts, /id="explore-growing-topics"/);
 assert.match(connections, /id="explore-knowledge-paths"/);
 assert.match(index, /assets\/explore-discovery\.css\?rev=2/);
 assert.match(index, /assets\/explore-galaxy-inline\.css\?rev=3/);
-assert.match(index, /assets\/app\.js\?rev=142/);
+assert.match(index, /assets\/app\.js\?rev=143/);
 assert.match(app, /initExpandableGalaxyOrb \} from '\.\/explore-galaxy-orb\.js\?rev=143';/);
 assert.match(app, /import \{ initExploreDiscovery \} from '\.\/explore-discovery\.js\?rev=2';/);
 assert.match(app, /normalized === 'explore'[\s\S]*initExploreDiscovery\(root\)/);
