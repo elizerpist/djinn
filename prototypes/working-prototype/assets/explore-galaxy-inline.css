@@ -9,6 +9,7 @@
 .explore-galaxy-slot {
   min-height: 0;
   height: 230px;
+  margin-bottom: 12px;
   overflow: visible;
 }
 
