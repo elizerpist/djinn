@@ -25,6 +25,20 @@ assert.match(screen, /Kapcsolatok, amelyek új kontextust nyitnak/);
 assert.match(screen, /Legerősebb/);
 assert.match(screen, /Közösségek között/);
 assert.match(screen, /data-route="workspace-topic-connections"/);
+
+const overview = screen.slice(
+  screen.indexOf('data-explore-panel="overview"'),
+  screen.indexOf('data-explore-panel="concepts"'),
+);
+const concepts = screen.slice(
+  screen.indexOf('data-explore-panel="concepts"'),
+  screen.indexOf('data-explore-panel="connections"'),
+);
+const connections = screen.slice(screen.indexOf('data-explore-panel="connections"'));
+assert.doesNotMatch(overview, /Érdekes kapcsolatok|Növekvő témák/);
+assert.match(overview, /id="explore-featured-path"/);
+assert.match(concepts, /id="explore-growing-topics"/);
+assert.match(connections, /id="explore-knowledge-paths"/);
 assert.match(index, /assets\/explore-discovery\.css\?rev=1/);
 assert.match(app, /import \{ initExploreDiscovery \} from '\.\/explore-discovery\.js\?rev=2';/);
 assert.match(app, /normalized === 'explore'[\s\S]*initExploreDiscovery\(root\)/);
