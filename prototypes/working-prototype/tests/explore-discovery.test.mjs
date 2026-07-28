@@ -6,6 +6,7 @@ const app = await readFile(new URL('../assets/app.js', import.meta.url), 'utf8')
 const discovery = await readFile(new URL('../assets/explore-discovery.js', import.meta.url), 'utf8');
 const screen = await readFile(new URL('../screens/explore.html', import.meta.url), 'utf8');
 const inlineCss = await readFile(new URL('../assets/explore-galaxy-inline.css', import.meta.url), 'utf8');
+const orb = await readFile(new URL('../assets/explore-galaxy-orb.js', import.meta.url), 'utf8');
 
 assert.match(discovery, /\['overview', 'Áttekintés'\]/);
 assert.match(discovery, /\['concepts', 'Fogalmak'\]/);
@@ -47,6 +48,7 @@ assert.match(concepts, /id="explore-growing-topics"/);
 assert.match(connections, /id="explore-knowledge-paths"/);
 assert.match(index, /assets\/explore-discovery\.css\?rev=3/);
 assert.match(index, /assets\/explore-galaxy-inline\.css\?rev=4/);
+assert.match(index, /assets\/styles\.css\?rev=134/);
 assert.match(index, /assets\/app\.js\?rev=143/);
 assert.match(app, /initExpandableGalaxyOrb \} from '\.\/explore-galaxy-orb\.js\?rev=144';/);
 assert.match(app, /import \{ initExploreDiscovery \} from '\.\/explore-discovery\.js\?rev=3';/);
@@ -54,5 +56,9 @@ assert.match(app, /onConceptFocus: \(nodeId, trigger\) => galaxyOrb\?\.focusConc
 assert.match(app, /normalized === 'explore'[\s\S]*initExploreDiscovery\(root,/);
 assert.match(app, /galaxySlot\?\.replaceChildren\(galaxyRoot\)/);
 assert.match(inlineCss, /#explore-galaxy-orb-root\.is-inline/);
+assert.match(inlineCss, /\.explore-galaxy-slot[\s\S]*height: 230px/);
+assert.match(orb, /layer\.dataset\.state = 'expanded'/);
+assert.doesNotMatch(orb, /data-galaxy-action="collapse"/);
+assert.doesNotMatch(orb, /galaxy-orb-trigger/);
 
 console.log('explore discovery dashboard OK');

@@ -1,4 +1,4 @@
-/* A single live Globe.gl scene shared by the collapsed orb and expanded panel. */
+/* A single live Globe.gl scene rendered inline in the Explore scroll content. */
 import { knowledgeNodes, knowledgeEdges } from './knowledge-map.js?rev=133';
 import * as THREE from './vendor/three.module.min.js?rev=92';
 
@@ -47,20 +47,16 @@ const typeColors = {
 const arcPalette = ['#8E6BFF', '#C084FC', '#60A5FA', '#F0ABFC', '#A78BFA', '#67E8F9', '#F9A8D4'];
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-const lerp = (a, b, t) => a + (b - a) * t;
 
 export function initExpandableGalaxyOrb({ root, nav }) {
   if (!root || !nav) return () => {};
   const layer = document.createElement('section');
   layer.className = 'expandable-galaxy-orb';
-  layer.dataset.state = 'collapsed';
+  layer.dataset.state = 'expanded';
   layer.innerHTML = `
-    <div class="galaxy-orb-morph" role="dialog" aria-label="Tudásgalaxis">
+    <div class="galaxy-orb-morph" role="region" aria-label="Universe tudásgalaxis">
       <div class="galaxy-orb-canvas" aria-hidden="true"></div>
-      <div class="galaxy-orb-background-swipe" aria-hidden="true"></div>
       <div class="galaxy-orb-glass" aria-hidden="true"></div>
-      <button class="galaxy-orb-trigger" type="button" aria-label="Tudásgalaxis megnyitása" aria-expanded="false">✦</button>
-      <button class="galaxy-orb-handle" type="button" aria-label="Tudásgalaxis összecsukása"></button>
       <article class="galaxy-node-morph-overlay" aria-hidden="true">
         <div class="galaxy-node-card-content">
           <div class="galaxy-node-card-meta"><span data-node-type></span><span data-node-degree></span></div>
@@ -73,33 +69,25 @@ export function initExpandableGalaxyOrb({ root, nav }) {
       <div class="galaxy-orb-controls" aria-hidden="true">
         <span class="galaxy-orb-title">Tudásgalaxis</span>
         <button type="button" data-galaxy-action="reset" aria-label="Galaxis középre állítása">⌖</button>
-        <button type="button" data-galaxy-action="collapse" aria-label="Galaxis összecsukása">⌄</button>
       </div>
     </div>`;
   root.append(layer);
 
   const morph = layer.querySelector('.galaxy-orb-morph');
   const canvas = layer.querySelector('.galaxy-orb-canvas');
-  const backgroundSwipe = layer.querySelector('.galaxy-orb-background-swipe');
-  const trigger = layer.querySelector('.galaxy-orb-trigger');
-  const handle = layer.querySelector('.galaxy-orb-handle');
   const morphOverlay = layer.querySelector('.galaxy-node-morph-overlay');
   const cardContent = layer.querySelector('.galaxy-node-card-content');
   const cardClose = layer.querySelector('[data-node-close]');
   const controlsPanel = layer.querySelector('.galaxy-orb-controls');
   let globe = null;
   let destroyed = false;
-  let state = 'collapsed';
-  let progress = 0;
-  let pointer = null;
+  let state = 'expanded';
   let bounds = null;
   let resizeObserver = null;
-  let raf = 0;
   let focusState = 'idle';
   let focusedNode = null;
   let focusedCameraState = null;
   let focusTimer = 0;
-  let queuedConceptFocus = null;
   const nodeObjects = new Map();
   const sphereGeometry = new THREE.SphereGeometry(1, 24, 18);
   const materialCache = new Map();
@@ -111,73 +99,33 @@ export function initExpandableGalaxyOrb({ root, nav }) {
 
     const rootRect = root.getBoundingClientRect();
     const width = rootRect.width || inlineSlot.getBoundingClientRect().width;
-    const collapsedHeight = 112;
     const expandedHeight = 230;
-    const collapsedSize = clamp(Math.min(190, width - 48), 154, 190);
     const expandedInset = 12;
-    const collapsed = {
-      left: (width - collapsedSize) / 2,
-      top: (collapsedHeight - collapsedSize) / 2,
-      width: collapsedSize,
-      height: collapsedSize
-    };
     const expanded = {
       left: expandedInset,
       top: 0,
       width: Math.max(0, width - (expandedInset * 2)),
       height: expandedHeight
     };
-    bounds = { collapsed, expanded, anchorRect: null };
-    applyProgress(progress);
+    bounds = { expanded, anchorRect: null };
+    applyProgress();
   }
 
-  function applyProgress(next) {
+  function applyProgress() {
     if (!bounds) return;
-    progress = clamp(next, 0, 1);
-    const a = bounds.collapsed;
     const b = bounds.expanded;
     const inlineSlot = root.closest('.explore-galaxy-slot');
-    // A slot maradjon kompakt helyfoglaló; a kibővített morph a saját
-    // overflow rétegében jelenik meg, ezért nem tolja el a fogalomlistát.
-    if (inlineSlot) inlineSlot.style.height = `${a.height}px`;
-    // A collapsed állapot a jóváhagyott látvány szerint lekerekített négyzetes
-    // galaxisablak, nem kör alakú ikon. Innen morphol tovább a nagy panelbe.
-    const radius = lerp(34, 24, progress);
-    morph.style.left = `${lerp(a.left, b.left, progress)}px`;
-    morph.style.top = `${lerp(a.top, b.top, progress)}px`;
-    morph.style.width = `${lerp(a.width, b.width, progress)}px`;
-    morph.style.height = `${lerp(a.height, b.height, progress)}px`;
-    morph.style.borderRadius = `${radius}px`;
-    layer.dataset.state = state;
-    trigger.setAttribute('aria-expanded', String(progress > .5));
-    trigger.tabIndex = progress < .5 ? 0 : -1;
-    handle.tabIndex = progress > .5 ? 0 : -1;
-    controlsPanel.setAttribute('aria-hidden', String(progress < .7));
-    controlsPanel.style.opacity = String(clamp((progress - .68) / .22, 0, 1));
-    morph.classList.toggle('is-expanded', progress > .5);
-    if (globe) applyGlobeProfile(progress > .5);
-  }
-
-  function animateTo(target, duration = 390, done) {
-    const from = progress;
-    const start = performance.now();
-    state = target > from ? 'expanding' : 'collapsing';
-    layer.dataset.state = state;
-    cancelAnimationFrame(raf);
-    const tick = (now) => {
-      const t = clamp((now - start) / duration, 0, 1);
-      const eased = 1 - Math.pow(1 - t, 3);
-      applyProgress(lerp(from, target, eased));
-      if (t < 1 && !destroyed) raf = requestAnimationFrame(tick);
-      else {
-        progress = target;
-        state = target > .5 ? 'expanded' : 'collapsed';
-        layer.dataset.state = state;
-        applyGlobeProfile(state === 'expanded');
-        done?.();
-      }
-    };
-    raf = requestAnimationFrame(tick);
+    if (inlineSlot) inlineSlot.style.height = `${b.height}px`;
+    morph.style.left = `${b.left}px`;
+    morph.style.top = `${b.top}px`;
+    morph.style.width = `${b.width}px`;
+    morph.style.height = `${b.height}px`;
+    morph.style.borderRadius = '24px';
+    layer.dataset.state = 'expanded';
+    controlsPanel.setAttribute('aria-hidden', 'false');
+    controlsPanel.style.opacity = '1';
+    morph.classList.add('is-expanded');
+    if (globe) applyGlobeProfile(true);
   }
 
   function nodeMaterial(node) {
@@ -366,32 +314,9 @@ export function initExpandableGalaxyOrb({ root, nav }) {
 
   function focusConcept(nodeId, sourceElement) {
     if (!nodeById.has(nodeId) || focusState !== 'idle') return;
-    queuedConceptFocus = { nodeId, sourceElement };
     sourceElement?.classList.add('is-focus-requested');
-
-    const startFocus = () => {
-      const request = queuedConceptFocus;
-      queuedConceptFocus = null;
-      request?.sourceElement?.classList.remove('is-focus-requested');
-      if (request) focusNode(request.nodeId);
-    };
-
-    if (state === 'collapsed') {
-      animateTo(1, 420, startFocus);
-      return;
-    }
-    if (state === 'expanded') {
-      startFocus();
-      return;
-    }
-    if (state === 'expanding') {
-      const waitForExpanded = () => {
-        if (destroyed || !queuedConceptFocus) return;
-        if (state === 'expanded') startFocus();
-        else window.requestAnimationFrame(waitForExpanded);
-      };
-      window.requestAnimationFrame(waitForExpanded);
-    }
+    focusNode(nodeId);
+    window.setTimeout(() => sourceElement?.classList.remove('is-focus-requested'), 220);
   }
 
   function closeNodeCard() {
@@ -427,7 +352,7 @@ export function initExpandableGalaxyOrb({ root, nav }) {
       controls.enableRotate = expanded && focusState === 'idle';
       controls.enableZoom = expanded && focusState === 'idle';
       controls.enablePan = false;
-      controls.autoRotate = !expanded && focusState === 'idle';
+      controls.autoRotate = false;
       controls.autoRotateSpeed = .28;
     }
     globe.arcStroke?.((edge) => edge.isFocused ? (expanded ? .24 : .20) : (edge.isRelated ? (expanded ? .18 : .15) : (expanded ? .14 : .12)));
@@ -480,7 +405,7 @@ export function initExpandableGalaxyOrb({ root, nav }) {
       };
       globe.controls().addEventListener('change', updateLight);
       updateLight();
-      applyGlobeProfile(false);
+      applyGlobeProfile(true);
       resizeObserver = new ResizeObserver(() => {
         const rect = canvas.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) globe.width(rect.width).height(rect.height);
@@ -496,65 +421,11 @@ export function initExpandableGalaxyOrb({ root, nav }) {
   function setRoute(route) {
     const visible = route === 'explore';
     layer.classList.toggle('is-route-visible', visible);
-    if (!visible && progress > 0) animateTo(0, 260);
     if (visible) { measureBounds(); createGlobe(); }
-  }
-
-  function onTrigger(event) {
-    event.preventDefault();
-    if (state === 'collapsed') animateTo(1);
-  }
-
-  function onPointerDown(event) {
-    if (state === 'expanding' || state === 'collapsing') return;
-    pointer = { id: event.pointerId, startY: event.clientY, startX: event.clientX, startProgress: progress, moved: false };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  }
-
-  function onPointerMove(event) {
-    if (!pointer || pointer.id !== event.pointerId) return;
-    const dy = pointer.startY - event.clientY;
-    if (Math.abs(dy) < 4) return;
-    pointer.moved = true;
-    state = 'dragging';
-    const range = Math.max(160, bounds.expanded.height - bounds.collapsed.height);
-    applyProgress(pointer.startProgress + dy / range);
-  }
-
-  function onPointerUp(event) {
-    if (!pointer || pointer.id !== event.pointerId) return;
-    const dy = pointer.startY - event.clientY;
-    const shouldExpand = pointer.startProgress < .5 && (progress > .35 || dy > 28);
-    const shouldCollapse = pointer.startProgress >= .5 && progress < .72;
-    const wasMoved = pointer.moved;
-    pointer = null;
-    if (shouldExpand) animateTo(1);
-    else if (shouldCollapse) animateTo(0);
-    else if (!wasMoved && state === 'collapsed') animateTo(1);
-    else { state = progress > .5 ? 'expanded' : 'collapsed'; layer.dataset.state = state; }
-  }
-
-  function onHandleDown(event) {
-    onPointerDown(event);
-  }
-
-  function onHandleMove(event) {
-    if (!pointer || pointer.id !== event.pointerId) return;
-    const dy = pointer.startY - event.clientY;
-    pointer.moved = true;
-    applyProgress(pointer.startProgress + dy / Math.max(160, bounds.expanded.height - bounds.collapsed.height));
-  }
-
-  function onHandleUp(event) {
-    if (!pointer || pointer.id !== event.pointerId) return;
-    const collapse = progress < .82;
-    pointer = null;
-    animateTo(collapse ? 0 : 1);
   }
 
   function onClick(event) {
     const action = event.target.closest('[data-galaxy-action]')?.dataset.galaxyAction;
-    if (action === 'collapse') animateTo(0);
     if (action === 'reset' && globe) globe.pointOfView({ lat: 12, lng: 28, altitude: 2.15 }, 500);
   }
 
@@ -567,14 +438,6 @@ export function initExpandableGalaxyOrb({ root, nav }) {
     if (event.key === 'Escape' && focusState === 'card-open') closeNodeCard();
   }
 
-  trigger.addEventListener('click', onTrigger);
-  backgroundSwipe.addEventListener('pointerdown', onPointerDown);
-  backgroundSwipe.addEventListener('pointermove', onPointerMove);
-  backgroundSwipe.addEventListener('pointerup', onPointerUp);
-  backgroundSwipe.addEventListener('pointercancel', onPointerUp);
-  handle.addEventListener('pointerdown', onHandleDown);
-  handle.addEventListener('pointermove', onHandleMove);
-  handle.addEventListener('pointerup', onHandleUp);
   layer.addEventListener('click', onClick);
   cardClose.addEventListener('click', onCardClose);
   window.addEventListener('keydown', onKeydown);
@@ -587,17 +450,8 @@ export function initExpandableGalaxyOrb({ root, nav }) {
     focusConcept,
     destroy() {
       destroyed = true;
-      cancelAnimationFrame(raf);
       resizeObserver?.disconnect();
       window.removeEventListener('resize', measureBounds);
-      trigger.removeEventListener('click', onTrigger);
-      backgroundSwipe.removeEventListener('pointerdown', onPointerDown);
-      backgroundSwipe.removeEventListener('pointermove', onPointerMove);
-      backgroundSwipe.removeEventListener('pointerup', onPointerUp);
-      backgroundSwipe.removeEventListener('pointercancel', onPointerUp);
-      handle.removeEventListener('pointerdown', onHandleDown);
-      handle.removeEventListener('pointermove', onHandleMove);
-      handle.removeEventListener('pointerup', onHandleUp);
       layer.removeEventListener('click', onClick);
       cardClose.removeEventListener('click', onCardClose);
       window.removeEventListener('keydown', onKeydown);
