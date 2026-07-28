@@ -1,8 +1,34 @@
-<section class="screen" aria-label="Query">
-  <header class="top-bar"><div><span class="eyebrow">QUERY</span><h1>Keresési kérdés</h1></div><button class="icon-button" data-route="djinn" aria-label="Djinn">✦</button></header>
-  <button class="info-card" data-route="workspace-topics"><span class="card-icon">▣</span><span><strong>Keresési tartomány</strong><small>Teljes tudástár · módosítás</small></span><b class="chevron">›</b></button>
-  <form class="composer" data-query-form><label class="eyebrow" style="margin:16px 0 6px">KÉRDÉS</label><div class="composer-shell"><input aria-label="Kérdés a tudásról" placeholder="Mire vagy kíváncsi?" /><button class="send-button" type="submit">➜</button></div></form>
-  <section class="section"><div class="section-title"><h2>Gyors műveletek</h2></div>
-    <div class="shortcut-grid"><button class="shortcut" data-route="query-answer"><i>▤</i>Összefoglalás</button><button class="shortcut" data-route="explore"><i>⌘</i>Kapcsolatok</button><button class="shortcut" data-route="workspace-library"><i>▧</i>Források</button></div>
+<section class="screen query-screen" data-query-screen aria-label="Kérdezz">
+  <header class="top-bar query-top-bar"><div><span class="eyebrow">KÉRDEZZ</span><h1>Kérdezz</h1></div><div class="top-bar-actions"><span class="query-mode-pill">● AI mód</span><button class="icon-button" data-route="profile" aria-label="Kérdezés beállításai">⌁</button></div></header>
+
+  <section class="query-welcome" aria-labelledby="query-welcome-title">
+    <div class="query-djinn-avatar" aria-hidden="true">✦</div>
+    <h2 id="query-welcome-title">Szia, Én a Djinn vagyok.</h2>
+    <p>Kérdezz bármit a jegyzeteidről,<br />dokumentumaidról és a tudásstruktúrádról.</p>
+  </section>
+
+  <section class="query-compose-area" aria-label="Új kérdés">
+    <div class="query-scope">
+      <button class="query-scope-trigger" type="button" data-query-scope-toggle aria-expanded="false" aria-controls="query-scope-menu">
+        <span><small>Keresési tartomány</small><strong data-query-scope-current>Minden tudás</strong></span><i aria-hidden="true">⌄</i>
+      </button>
+      <div class="query-scope-menu" id="query-scope-menu" data-query-scope-menu hidden>
+        <button type="button" data-query-scope-option="Minden tudás"><span>◉</span><span><strong>Minden tudás</strong><small>Teljes tudástár</small></span><b>✓</b></button>
+        <button type="button" data-query-scope-option="Adatbázis-migráció"><span>◌</span><span><strong>Egy téma</strong><small>Adatbázis-migráció</small></span><b></b></button>
+        <button type="button" data-query-scope-option="Kijelölt chunkok"><span>▤</span><span><strong>Kijelölt chunkok</strong><small>3 kijelölt részlet</small></span><b></b></button>
+        <button type="button" data-query-scope-option="Aktuális tartalom"><span>▧</span><span><strong>Aktuális tartalom</strong><small>Database Migration.pdf</small></span><b></b></button>
+      </div>
+    </div>
+    <form class="composer query-composer" data-query-form>
+      <div class="composer-shell"><input aria-label="Kérdés a tudásról" placeholder="Írj ide egy kérdést…" autocomplete="off" /><button class="query-voice-button" type="button" data-query-voice aria-label="Hangbevitel">♩</button><button class="send-button" type="submit" aria-label="Kérdés elküldése">➜</button></div>
+    </form>
+  </section>
+
+  <section class="section query-quick-section" aria-labelledby="query-quick-title"><div class="section-title"><h2 id="query-quick-title">Gyors műveletek</h2><button class="text-link" type="button" data-query-clear>Összes</button></div>
+    <div class="query-shortcut-grid"><button class="shortcut" type="button" data-query-fill="Foglald össze a kiválasztott tudást"><i>▤</i>Összefoglalás</button><button class="shortcut" type="button" data-route="explore"><i>⌘</i>Kapcsolódó elemek</button><button class="shortcut" type="button" data-query-fill="Milyen kockázatok kapcsolódnak ehhez?"><i>△</i>Elemző gondolkodás</button><button class="shortcut" type="button" data-route="workspace-library"><i>▧</i>Források</button></div>
+  </section>
+
+  <section class="section query-suggestions" aria-labelledby="query-suggestions-title"><div class="section-title"><h2 id="query-suggestions-title">Javasolt kérdések</h2></div>
+    <div class="query-suggestion-list"><button type="button" data-query-fill="Milyen lépésekből áll egy biztonságos sémaátállás?"><span>›</span><strong>Milyen lépésekből áll egy biztonságos sémaátállás?</strong></button><button type="button" data-query-fill="Mi kapcsolódik a migrációs tervhez?"><span>›</span><strong>Mi kapcsolódik a migrációs tervhez?</strong></button><button type="button" data-query-fill="Mik a leggyakoribb migrációs kockázatok?"><span>›</span><strong>Mik a leggyakoribb migrációs kockázatok?</strong></button></div>
   </section>
 </section>

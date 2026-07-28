@@ -9,6 +9,10 @@ const routes = {
   djinn: 'screens/djinn.html',
   query: 'screens/query.html',
   'query-answer': 'screens/query-answer.html',
+  'query-evidence': 'screens/query-evidence.html',
+  'query-related': 'screens/query-related.html',
+  'query-sources': 'screens/query-sources.html',
+  'query-process': 'screens/query-process.html',
   'workspace-topics': 'screens/workspace-topics.html',
   'workspace-topic-overview': 'screens/workspace-topic-overview.html',
   'workspace-topic-notes': 'screens/workspace-topic-notes.html',
@@ -180,6 +184,44 @@ function navigate(route) {
 }
 
 document.addEventListener('click', (event) => {
+  const scopeToggle = event.target.closest('[data-query-scope-toggle]');
+  if (scopeToggle) {
+    const menu = document.querySelector('[data-query-scope-menu]');
+    if (menu) {
+      const open = menu.hidden;
+      menu.hidden = !open;
+      scopeToggle.setAttribute('aria-expanded', String(open));
+    }
+    return;
+  }
+
+  const scopeOption = event.target.closest('[data-query-scope-option]');
+  if (scopeOption) {
+    const current = document.querySelector('[data-query-scope-current]');
+    const menu = document.querySelector('[data-query-scope-menu]');
+    const toggle = document.querySelector('[data-query-scope-toggle]');
+    if (current) current.textContent = scopeOption.dataset.queryScopeOption;
+    if (menu) menu.hidden = true;
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    return;
+  }
+
+  const queryFill = event.target.closest('[data-query-fill]');
+  if (queryFill) {
+    const input = document.querySelector('[data-query-form] input');
+    if (input) {
+      input.value = queryFill.dataset.queryFill;
+      input.focus();
+    }
+    return;
+  }
+
+  const queryVoice = event.target.closest('[data-query-voice]');
+  if (queryVoice) {
+    showToast('Hangbevitel – a mockupban szöveges kérdés indítható.');
+    return;
+  }
+
   const routeButton = event.target.closest('[data-route]');
   if (routeButton) {
     event.preventDefault();
