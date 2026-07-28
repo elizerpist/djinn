@@ -131,11 +131,21 @@ async function render(route) {
   root.setAttribute('aria-busy', 'true');
   destroyScreen();
   destroyScreen = () => {};
+  const galaxyRoot = document.querySelector('#explore-galaxy-orb-root');
+  const appShell = document.querySelector('.app-shell');
+  if (galaxyRoot && appShell && galaxyRoot.parentElement !== appShell) {
+    appShell.append(galaxyRoot);
+    galaxyRoot.classList.remove('is-inline');
+  }
 
   try {
     const response = await fetch(routes[normalized], { cache: 'no-store' });
     if (!response.ok) throw new Error(`Nem tölthető be: ${normalized}`);
     root.innerHTML = await response.text();
+    if (normalized === 'explore' && galaxyRoot) {
+      root.querySelector('.explore-galaxy-slot')?.append(galaxyRoot);
+      galaxyRoot.classList.add('is-inline');
+    }
     createFixedScreenLayout();
     addFullscreenToggle();
     if (normalized === 'explore') {

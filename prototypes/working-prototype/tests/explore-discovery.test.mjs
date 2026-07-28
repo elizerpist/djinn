@@ -5,6 +5,7 @@ const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const app = await readFile(new URL('../assets/app.js', import.meta.url), 'utf8');
 const discovery = await readFile(new URL('../assets/explore-discovery.js', import.meta.url), 'utf8');
 const screen = await readFile(new URL('../screens/explore.html', import.meta.url), 'utf8');
+const inlineCss = await readFile(new URL('../assets/explore-galaxy-inline.css', import.meta.url), 'utf8');
 
 assert.match(discovery, /\['overview', 'Áttekintés'\]/);
 assert.match(discovery, /\['concepts', 'Fogalmak'\]/);
@@ -13,6 +14,7 @@ assert.match(discovery, /tab\.dataset\.exploreTab = id/);
 assert.match(discovery, /activate\('overview'\)/);
 assert.doesNotMatch(discovery, /insertAdjacentHTML\('afterend', DISCOVERY_TEMPLATE\)/);
 assert.match(screen, /data-explore-discovery/);
+assert.doesNotMatch(screen, /data-galaxy-anchor/);
 assert.match(screen, /data-explore-panel="overview"/);
 assert.match(screen, /data-explore-panel="concepts"/);
 assert.match(screen, /data-explore-panel="connections"/);
@@ -41,8 +43,11 @@ assert.match(overview, /id="explore-featured-path"/);
 assert.match(concepts, /id="explore-growing-topics"/);
 assert.match(connections, /id="explore-knowledge-paths"/);
 assert.match(index, /assets\/explore-discovery\.css\?rev=2/);
+assert.match(index, /assets\/explore-galaxy-inline\.css\?rev=1/);
 assert.match(index, /assets\/app\.js\?rev=138/);
 assert.match(app, /import \{ initExploreDiscovery \} from '\.\/explore-discovery\.js\?rev=2';/);
 assert.match(app, /normalized === 'explore'[\s\S]*initExploreDiscovery\(root\)/);
+assert.match(app, /root\.querySelector\('\.explore-galaxy-slot'\)\?\.append\(galaxyRoot\)/);
+assert.match(inlineCss, /#explore-galaxy-orb-root\.is-inline/);
 
 console.log('explore discovery dashboard OK');
