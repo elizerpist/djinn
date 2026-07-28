@@ -1,5 +1,5 @@
 import { initKnowledgeMap } from './knowledge-map.js?rev=137';
-import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=143';
+import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=144';
 import { initExploreDiscovery } from './explore-discovery.js?rev=2';
 import { initUniverseMorphTest } from './universe-morph-test.js?rev=2';
 
@@ -54,10 +54,11 @@ function createFixedScreenLayout() {
   chrome.className = 'screen-chrome';
   const content = document.createElement('div');
   content.className = 'screen-content';
+  const universeSlots = [...screen.querySelectorAll(':scope > [data-screen-universe]')];
   const subheaders = [...screen.querySelectorAll(':scope > [data-screen-subheader]')];
 
   screen.prepend(chrome);
-  chrome.append(header, ...subheaders);
+  chrome.append(header, ...universeSlots, ...subheaders);
   [...screen.children].forEach((child) => {
     if (child !== chrome) content.append(child);
   });

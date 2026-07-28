@@ -71,7 +71,7 @@ export function initExpandableGalaxyOrb({ root, nav }) {
         </div>
       </article>
       <div class="galaxy-orb-controls" aria-hidden="true">
-        <span class="galaxy-orb-title">Tudásgalaxis</span>
+        <span class="galaxy-orb-title">Universe</span>
         <button type="button" data-galaxy-action="reset" aria-label="Galaxis középre állítása">⌖</button>
         <button type="button" data-galaxy-action="collapse" aria-label="Galaxis összecsukása">⌄</button>
       </div>
