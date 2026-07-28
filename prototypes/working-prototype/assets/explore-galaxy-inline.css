@@ -1,3 +1,7 @@
+#explore-galaxy-orb-root:not(.is-inline) {
+  display: none !important;
+}
+
 #explore-galaxy-orb-root.is-inline {
   display: block;
 }
