@@ -1,4 +1,14 @@
 #explore-galaxy-orb-root.is-inline {
+  display: block;
+}
+
+.explore-galaxy-slot {
+  min-height: 0;
+  height: 230px;
+  overflow: visible;
+}
+
+#explore-galaxy-orb-root.is-inline {
   position: relative;
   z-index: 2;
   inset: auto;
@@ -8,6 +18,7 @@
 }
 
 #explore-galaxy-orb-root.is-inline .expandable-galaxy-orb {
+  display: block;
   position: relative;
   inset: 0;
   width: 100%;

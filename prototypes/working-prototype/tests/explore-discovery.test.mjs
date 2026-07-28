@@ -43,11 +43,11 @@ assert.match(overview, /id="explore-featured-path"/);
 assert.match(concepts, /id="explore-growing-topics"/);
 assert.match(connections, /id="explore-knowledge-paths"/);
 assert.match(index, /assets\/explore-discovery\.css\?rev=2/);
-assert.match(index, /assets\/explore-galaxy-inline\.css\?rev=1/);
-assert.match(index, /assets\/app\.js\?rev=138/);
+assert.match(index, /assets\/explore-galaxy-inline\.css\?rev=2/);
+assert.match(index, /assets\/app\.js\?rev=139/);
 assert.match(app, /import \{ initExploreDiscovery \} from '\.\/explore-discovery\.js\?rev=2';/);
 assert.match(app, /normalized === 'explore'[\s\S]*initExploreDiscovery\(root\)/);
-assert.match(app, /root\.querySelector\('\.explore-galaxy-slot'\)\?\.append\(galaxyRoot\)/);
+assert.match(app, /galaxySlot\?\.replaceChildren\(galaxyRoot\)/);
 assert.match(inlineCss, /#explore-galaxy-orb-root\.is-inline/);
 
 console.log('explore discovery dashboard OK');

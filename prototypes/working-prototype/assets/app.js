@@ -143,7 +143,8 @@ async function render(route) {
     if (!response.ok) throw new Error(`Nem tölthető be: ${normalized}`);
     root.innerHTML = await response.text();
     if (normalized === 'explore' && galaxyRoot) {
-      root.querySelector('.explore-galaxy-slot')?.append(galaxyRoot);
+      const galaxySlot = root.querySelector('.explore-galaxy-slot');
+      galaxySlot?.replaceChildren(galaxyRoot);
       galaxyRoot.classList.add('is-inline');
     }
     createFixedScreenLayout();
