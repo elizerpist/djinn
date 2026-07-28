@@ -1,6 +1,6 @@
 import { initKnowledgeMap } from './knowledge-map.js?rev=137';
-import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=143';
-import { initExploreDiscovery } from './explore-discovery.js?rev=2';
+import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=144';
+import { initExploreDiscovery } from './explore-discovery.js?rev=3';
 import { initUniverseMorphTest } from './universe-morph-test.js?rev=2';
 
 const routes = {
@@ -150,7 +150,9 @@ async function render(route) {
     createFixedScreenLayout();
     addFullscreenToggle();
     if (normalized === 'explore') {
-      destroyScreen = initExploreDiscovery(root);
+      destroyScreen = initExploreDiscovery(root, {
+        onConceptFocus: (nodeId, trigger) => galaxyOrb?.focusConcept(nodeId, trigger)
+      });
     }
     if (normalized === 'workspace-topic-connections') {
       destroyScreen = initKnowledgeMap(root, { showToast, navigate });

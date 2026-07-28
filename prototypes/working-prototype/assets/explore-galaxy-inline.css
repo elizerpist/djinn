@@ -8,7 +8,7 @@
 
 .explore-galaxy-slot {
   min-height: 0;
-  height: 230px;
+  height: 112px;
   overflow: visible;
 }
 
@@ -17,7 +17,7 @@
   z-index: 2;
   inset: auto;
   width: 100%;
-  height: 230px;
+  height: 112px;
   pointer-events: none;
 }
 

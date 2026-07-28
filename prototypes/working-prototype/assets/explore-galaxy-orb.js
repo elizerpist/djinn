@@ -99,6 +99,7 @@ export function initExpandableGalaxyOrb({ root, nav }) {
   let focusedNode = null;
   let focusedCameraState = null;
   let focusTimer = 0;
+  let queuedConceptFocus = null;
   const nodeObjects = new Map();
   const sphereGeometry = new THREE.SphereGeometry(1, 24, 18);
   const materialCache = new Map();
@@ -110,8 +111,8 @@ export function initExpandableGalaxyOrb({ root, nav }) {
 
     const rootRect = root.getBoundingClientRect();
     const width = rootRect.width || inlineSlot.getBoundingClientRect().width;
-    const collapsedHeight = 230;
-    const expandedHeight = collapsedHeight;
+    const collapsedHeight = 112;
+    const expandedHeight = 230;
     const collapsedSize = clamp(Math.min(190, width - 48), 154, 190);
     const expandedInset = 12;
     const collapsed = {
@@ -136,9 +137,9 @@ export function initExpandableGalaxyOrb({ root, nav }) {
     const a = bounds.collapsed;
     const b = bounds.expanded;
     const inlineSlot = root.closest('.explore-galaxy-slot');
-    if (inlineSlot) {
-      inlineSlot.style.height = `${b.height}px`;
-    }
+    // A slot maradjon kompakt helyfoglaló; a kibővített morph a saját
+    // overflow rétegében jelenik meg, ezért nem tolja el a fogalomlistát.
+    if (inlineSlot) inlineSlot.style.height = `${a.height}px`;
     // A collapsed állapot a jóváhagyott látvány szerint lekerekített négyzetes
     // galaxisablak, nem kör alakú ikon. Innen morphol tovább a nagy panelbe.
     const radius = lerp(34, 24, progress);
@@ -157,7 +158,7 @@ export function initExpandableGalaxyOrb({ root, nav }) {
     if (globe) applyGlobeProfile(progress > .5);
   }
 
-  function animateTo(target, duration = 390) {
+  function animateTo(target, duration = 390, done) {
     const from = progress;
     const start = performance.now();
     state = target > from ? 'expanding' : 'collapsing';
@@ -173,6 +174,7 @@ export function initExpandableGalaxyOrb({ root, nav }) {
         state = target > .5 ? 'expanded' : 'collapsed';
         layer.dataset.state = state;
         applyGlobeProfile(state === 'expanded');
+        done?.();
       }
     };
     raf = requestAnimationFrame(tick);
@@ -336,7 +338,11 @@ export function initExpandableGalaxyOrb({ root, nav }) {
   }
 
   function focusNode(nodeId) {
-    if (!globe || focusState !== 'idle' || state !== 'expanded') return;
+    if (focusState !== 'idle' || state !== 'expanded') return;
+    if (!globe) {
+      if (!destroyed) window.setTimeout(() => focusNode(nodeId), 80);
+      return;
+    }
     const node = nodeById.get(nodeId);
     if (!node) return;
     focusedNode = node;
@@ -356,6 +362,36 @@ export function initExpandableGalaxyOrb({ root, nav }) {
       focusState = 'zooming';
       animateCameraToNode(node, 320, 1.32, () => morphToCard(node));
     });
+  }
+
+  function focusConcept(nodeId, sourceElement) {
+    if (!nodeById.has(nodeId) || focusState !== 'idle') return;
+    queuedConceptFocus = { nodeId, sourceElement };
+    sourceElement?.classList.add('is-focus-requested');
+
+    const startFocus = () => {
+      const request = queuedConceptFocus;
+      queuedConceptFocus = null;
+      request?.sourceElement?.classList.remove('is-focus-requested');
+      if (request) focusNode(request.nodeId);
+    };
+
+    if (state === 'collapsed') {
+      animateTo(1, 420, startFocus);
+      return;
+    }
+    if (state === 'expanded') {
+      startFocus();
+      return;
+    }
+    if (state === 'expanding') {
+      const waitForExpanded = () => {
+        if (destroyed || !queuedConceptFocus) return;
+        if (state === 'expanded') startFocus();
+        else window.requestAnimationFrame(waitForExpanded);
+      };
+      window.requestAnimationFrame(waitForExpanded);
+    }
   }
 
   function closeNodeCard() {
@@ -548,6 +584,7 @@ export function initExpandableGalaxyOrb({ root, nav }) {
 
   return {
     setRoute,
+    focusConcept,
     destroy() {
       destroyed = true;
       cancelAnimationFrame(raf);

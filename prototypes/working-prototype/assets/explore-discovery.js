@@ -4,7 +4,7 @@ const TABS = [
   ['connections', 'Kapcsolatok'],
 ];
 
-export function initExploreDiscovery(root) {
+export function initExploreDiscovery(root, { onConceptFocus } = {}) {
   const discovery = root.querySelector('[data-explore-discovery]');
   const tabList = root.querySelector('.screen-subheader .tabs');
   if (!discovery || !tabList) return () => {};
@@ -37,6 +37,13 @@ export function initExploreDiscovery(root) {
   activate('overview');
 
   const onClick = (event) => {
+    const focusCard = event.target.closest('[data-explore-focus]');
+    if (focusCard && discovery.contains(focusCard)) {
+      event.preventDefault();
+      event.stopPropagation();
+      onConceptFocus?.(focusCard.dataset.exploreFocus, focusCard);
+      return;
+    }
     const tab = event.target.closest('[data-explore-tab]');
     if (tab && tabList.contains(tab)) activate(tab.dataset.exploreTab);
   };
