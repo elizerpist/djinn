@@ -103,57 +103,29 @@ export function initExpandableGalaxyOrb({ root, nav }) {
   const sphereGeometry = new THREE.SphereGeometry(1, 24, 18);
   const materialCache = new Map();
 
-  function relativeRect(rect) {
-    const rootRect = root.getBoundingClientRect();
-    return { left: rect.left - rootRect.left, top: rect.top - rootRect.top, width: rect.width, height: rect.height };
-  }
-
   function measureBounds() {
-    const inlineSlot = root.closest('.explore-galaxy-slot');
-    if (inlineSlot) {
-      const rootRect = root.getBoundingClientRect();
-      const width = rootRect.width || inlineSlot.getBoundingClientRect().width;
-      const collapsedHeight = 230;
-      const expandedHeight = clamp(Math.round(width * .9), 280, 380);
-      const collapsedSize = clamp(Math.min(190, width - 48), 154, 190);
-      const collapsed = {
-        left: (width - collapsedSize) / 2,
-        top: (collapsedHeight - collapsedSize) / 2,
-        width: collapsedSize,
-        height: collapsedSize
-      };
-      const expanded = {
-        left: 0,
-        top: 0,
-        width,
-        height: expandedHeight
-      };
-      bounds = { collapsed, expanded, anchorRect: null };
-      applyProgress(progress);
-      return;
-    }
+    if (!root.classList.contains('is-inline')) return;
+    const inlineSlot = root.parentElement;
+    if (!inlineSlot?.classList.contains('explore-galaxy-slot')) return;
 
-    const navRect = relativeRect(nav.getBoundingClientRect());
-    const anchor = document.querySelector('[data-galaxy-anchor]') || nav.querySelector('[data-route="explore"]');
-    const anchorRect = relativeRect(anchor.getBoundingClientRect());
-    const tabWidth = navRect.width / Math.max(nav.children.length, 1);
-    const centerX = anchorRect.left + anchorRect.width / 2;
-    const collapsedSize = clamp(Math.min(96, Math.max(88, anchorRect.width * .27)), 88, 96);
+    const rootRect = root.getBoundingClientRect();
+    const width = rootRect.width || inlineSlot.getBoundingClientRect().width;
+    const collapsedHeight = 230;
+    const expandedHeight = clamp(Math.round(width * .9), 280, 380);
+    const collapsedSize = clamp(Math.min(190, width - 48), 154, 190);
     const collapsed = {
-      left: centerX - collapsedSize / 2,
-      top: anchorRect.top + anchorRect.height / 2 - collapsedSize / 2,
+      left: (width - collapsedSize) / 2,
+      top: (collapsedHeight - collapsedSize) / 2,
       width: collapsedSize,
       height: collapsedSize
     };
-    const rootRect = root.getBoundingClientRect();
-    const expandedTop = collapsed.top + collapsed.height - 8;
     const expanded = {
-      left: 12,
-      top: expandedTop,
-      width: Math.max(0, rootRect.width - 24),
-      height: Math.min(380, Math.max(240, rootRect.height - expandedTop - 12))
+      left: 0,
+      top: 0,
+      width,
+      height: expandedHeight
     };
-    bounds = { collapsed, expanded, anchorRect };
+    bounds = { collapsed, expanded, anchorRect: null };
     applyProgress(progress);
   }
 
