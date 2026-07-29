@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Djinn tudásnavigációs prototípus: Home, Explore, Query és Workspace képernyők."
+    />
+    <title>Djinn · Tudásnavigációs prototípus</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1d1b25;
+        --muted: #787487;
+        --line: #ece9f4;
+        --canvas: #f5f3f9;
+        --surface: #ffffff;
+        --soft: #faf9fe;
+        --purple: #7652f7;
+        --purple-strong: #6540e8;
+        --purple-soft: #eeeaff;
+        --purple-faint: #f8f6ff;
+        --green: #38bd88;
+        --orange: #ff9d45;
+        --red: #ff6767;
+        --shadow: 0 20px 60px rgba(49, 28, 98, 0.14);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 50% 10%, #fff 0, transparent 34rem),
+          linear-gradient(145deg, #eeebf7, #f8f7fb 60%, #eceaf4);
+      }
+
+      button, input { font: inherit; }
+      button { border: 0; cursor: pointer; }
+      button:focus-visible, input:focus-visible { outline: 3px solid rgba(118, 82, 247, .35); outline-offset: 2px; }
+
+      .prototype-label {
+        position: fixed; top: 18px; left: 20px; z-index: 20;
+        display: flex; align-items: center; gap: 8px;
+        color: #665f76; font-size: 12px; font-weight: 750;
+      }
+      .prototype-label::before {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: var(--purple); box-shadow: 0 0 0 4px rgba(118,82,247,.12); content: "";
+      }
+
+      .phone {
+        position: relative; width: 390px; height: 844px; overflow: hidden;
+        border: 1px solid rgba(36,25,74,.1); border-radius: 38px;
+        background: var(--surface); box-shadow: var(--shadow);
+      }
+      .phone::before {
+        position: absolute; z-index: 30; top: 7px; left: 50%;
+        width: 102px; height: 25px; border-radius: 16px;
+        transform: translateX(-50%); background: #1f1d25; content: "";
+      }
+      .status-bar {
+        position: relative; z-index: 31; height: 31px; padding: 13px 25px 0;
+        display: flex; align-items: center; justify-content: space-between;
+        color: #1e1d25; font-size: 11px; font-weight: 800;
+      }
+      .status-icons { display: flex; align-items: center; gap: 5px; }
+      .signal { display: inline-flex; align-items: flex-end; gap: 2px; height: 10px; }
+      .signal i { width: 2px; border-radius: 3px; background: #1e1d25; }
+      .signal i:nth-child(1) { height: 3px; } .signal i:nth-child(2) { height: 5px; }
+      .signal i:nth-child(3) { height: 7px; } .signal i:nth-child(4) { height: 9px; }
+      .wifi { width: 13px; height: 9px; border: 2px solid #1e1d25; border-right-color: transparent; border-bottom-color: transparent; border-radius: 14px 0 0; transform: rotate(45deg); }
+      .battery { position: relative; width: 19px; height: 9px; border: 1.5px solid #1e1d25; border-radius: 3px; }
+      .battery::after { position: absolute; top: 2px; right: -3px; width: 2px; height: 3px; border-radius: 0 2px 2px 0; background: #1e1d25; content: ""; }
+      .battery i { display: block; width: 13px; height: 5px; margin: 1px; border-radius: 1px; background: #1e1d25; }
+
+      .app {
+        position: relative; height: calc(100% - 31px);
+        background: radial-gradient(circle at 50% 18%, rgba(240,235,255,.9), transparent 180px), linear-gradient(#fdfcff, #fff 41%);
+      }
+      .view {
+        position: absolute; inset: 0 0 70px; display: none; overflow: auto;
+        padding-bottom: 22px; scrollbar-width: none; animation: appear .2s ease;
+      }
+      .view::-webkit-scrollbar { display: none; }
+      .view.is-active { display: block; }
+      @keyframes appear { from { opacity: .2; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+
+      .top-bar {
+        min-height: 58px; padding: 14px 18px 8px; display: flex;
+        align-items: center; justify-content: space-between; gap: 10px;
+      }
+      .top-bar.compact { min-height: 51px; padding-top: 13px; }
+      .eyebrow { display: flex; align-items: center; gap: 6px; color: var(--purple); font-size: 10px; font-weight: 850; letter-spacing: .025em; }
+      h1 { margin: 3px 0 0; font-size: 22px; line-height: 1.1; letter-spacing: -.047em; }
+      h2 { margin: 0; font-size: 14px; letter-spacing: -.018em; }
+      h3 { margin: 0; font-size: 12px; letter-spacing: -.012em; }
+      p { margin: 0; }
+      .icon-button, .back-button {
+        width: 36px; height: 36px; display: grid; flex: 0 0 auto; place-items: center;
+        border-radius: 12px; color: var(--purple-strong); background: #f4f1ff;
+      }
+      .back-button { color: #514c5c; background: transparent; font-size: 23px; }
+      .icon-button svg, .nav-icon svg, .mini-icon svg, .send-button svg, .close-button svg {
+        width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+      }
+      .mode-chip, .pill {
+        display: inline-flex; align-items: center; gap: 4px; min-height: 18px; padding: 3px 7px;
+        border-radius: 999px; color: #39885f; background: #eaf8ef; font-size: 8px; font-weight: 850;
+      }
+      .mode-chip::before { width: 5px; height: 5px; border-radius: 50%; background: var(--green); content: ""; }
+      .pill { color: var(--purple); background: var(--purple-soft); }
+
+      .section { margin-top: 18px; }
+      .section-title { padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
+      .text-link { color: var(--purple); font-size: 10px; font-weight: 800; background: transparent; }
+      .subtle { color: var(--muted); font-size: 10px; line-height: 1.35; }
+      .divider { height: 1px; margin: 14px 18px; background: var(--line); }
+
+      .scope-card {
+        width: calc(100% - 36px); min-height: 61px; margin: 3px 18px 0; padding: 10px 12px;
+        display: flex; align-items: center; gap: 10px; border: 1px solid rgba(119,82,247,.09);
+        border-radius: 16px; color: var(--ink); text-align: left; background: rgba(255,255,255,.9);
+        box-shadow: 0 7px 20px rgba(98,75,154,.06);
+      }
+      .scope-icon { width: 34px; height: 34px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 11px; color: var(--purple-strong); background: var(--purple-soft); }
+      .scope-copy { min-width: 0; flex: 1; }
+      .scope-label, .input-label, .tiny-label { display: block; color: var(--muted); font-size: 9px; font-weight: 700; }
+      .scope-value { display: block; margin-top: 2px; overflow: hidden; font-size: 13px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+      .scope-chevron { color: #656071; font-size: 19px; }
+
+      .hero { position: relative; min-height: 175px; padding: 19px 32px 0; display: grid; place-items: center; }
+      .hero-halo { position: absolute; top: 16px; width: 138px; height: 138px; border: 1px solid rgba(151,120,255,.13); border-radius: 50%; background: radial-gradient(circle, rgba(211,199,255,.2), rgba(255,255,255,0) 69%); }
+      .orb {
+        position: relative; z-index: 1; width: 108px; height: 108px; margin-top: 18px; border: 8px solid rgba(255,255,255,.74); border-radius: 50%;
+        background: radial-gradient(circle at 35% 28%, rgba(255,255,255,.98) 0 4%, transparent 18%), radial-gradient(circle at 65% 72%, rgba(109,66,245,.7), transparent 50%), linear-gradient(140deg, #f4efff 9%, #d9cbff 47%, #9f7cf8 100%);
+        box-shadow: inset -13px -15px 22px rgba(93,50,207,.25), inset 12px 14px 19px rgba(255,255,255,.64), 0 18px 35px rgba(128,91,235,.25);
+      }
+      .orb::before, .orb::after { position: absolute; border-radius: 50%; content: ""; }
+      .orb::before { inset: 17px; border: 1px solid rgba(255,255,255,.53); }
+      .orb::after { top: 13px; left: -18px; width: 20px; height: 20px; box-shadow: 128px 55px 0 -5px #cdbfff, 117px -12px 0 -7px #8c69fa; background: #e2d9ff; }
+      .thought-bubble { position: absolute; z-index: 2; top: 35px; right: 23px; width: 146px; padding: 10px 11px; border-radius: 14px 14px 4px 14px; color: #fff; font-size: 11px; font-weight: 750; line-height: 1.25; background: linear-gradient(135deg, #8d62f7, #6d43e9); box-shadow: 0 10px 20px rgba(99,59,216,.24); }
+      .thinking { position: absolute; z-index: 2; bottom: 8px; display: flex; align-items: center; gap: 5px; color: var(--purple); font-size: 10px; font-weight: 750; }
+      .dots { display: inline-flex; gap: 4px; }
+      .dots i { width: 5px; height: 5px; border-radius: 50%; background: #9b79ff; animation: pulse 1s infinite alternate; }
+      .dots i:nth-child(2) { animation-delay: .22s; } .dots i:nth-child(3) { animation-delay: .44s; }
+      @keyframes pulse { to { opacity: .25; transform: translateY(-2px); } }
+
+      .composer { margin: 2px 18px 0; }
+      .composer-shell { min-height: 53px; padding: 7px 7px 7px 13px; display: flex; align-items: center; gap: 7px; border: 1px solid #e5e0f1; border-radius: 17px; background: #fff; box-shadow: 0 8px 18px rgba(82,62,130,.08); }
+      .composer-shell input { min-width: 0; flex: 1; border: 0; color: var(--ink); font-size: 12px; outline: 0; }
+      .composer-shell input::placeholder { color: #a29bad; }
+      .mini-icon { width: 28px; height: 28px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 9px; color: #8e85a4; background: transparent; }
+      .send-button { width: 35px; height: 35px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 11px; color: #fff; background: linear-gradient(135deg, #8b64fa, #6540e8); box-shadow: 0 5px 12px rgba(105,68,232,.34); }
+      .query-status { min-height: 0; margin: 0 4px; color: var(--purple); font-size: 0; line-height: 1.25; }
+      .query-status.is-visible { min-height: 21px; padding: 6px 5px 0; font-size: 10px; font-weight: 700; }
+
+      .quick-actions { margin: 10px 18px 0; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 7px; }
+      .quick-action { min-height: 57px; padding: 7px 4px; display: flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid #f0edf8; border-radius: 13px; color: #625b72; font-size: 9px; font-weight: 750; line-height: 1.15; text-align: center; background: #fdfcff; }
+      .quick-action:hover, .quick-action.is-selected { border-color: #dcd2ff; color: var(--purple-strong); background: var(--purple-faint); }
+      .action-mark { width: 15px; height: 15px; display: grid; place-items: center; border-radius: 5px; color: var(--purple); font-size: 12px; background: #ede8ff; }
+      .suggestion-list { margin: 10px 18px 0; display: grid; gap: 7px; }
+      .suggestion { width: 100%; min-height: 39px; padding: 9px 10px 9px 12px; display: flex; align-items: center; gap: 10px; border-radius: 12px; color: #504a5e; font-size: 10px; font-weight: 650; text-align: left; background: #faf9fd; }
+      .suggestion span { flex: 1; } .suggestion b { color: var(--purple); font-size: 17px; font-weight: 500; }
+
+      .bottom-nav {
+        position: absolute; z-index: 12; right: 0; bottom: 0; left: 0; height: 70px; padding: 7px 10px 8px;
+        display: grid; grid-template-columns: repeat(6,1fr); align-items: end; border-top: 1px solid rgba(79,56,138,.06);
+        background: rgba(255,255,255,.96); backdrop-filter: blur(14px);
+      }
+      .nav-item { min-width: 0; height: 54px; display: grid; place-items: center; align-content: center; gap: 3px; color: #747082; font-size: 8px; font-weight: 650; background: transparent; }
+      .nav-icon { height: 18px; color: inherit; }
+      .nav-item.is-active { color: var(--purple); font-weight: 850; }
+      .nav-djinn { position: relative; align-self: start; padding-top: 0; }
+      .nav-djinn .genie-button { width: 49px; height: 49px; margin-top: -26px; display: grid; place-items: center; border: 4px solid #fdfcff; border-radius: 50%; color: #fff; font-size: 21px; background: radial-gradient(circle at 35% 30%, #d9ceff, #8b68fa 54%, #6d46e5 100%); box-shadow: 0 9px 18px rgba(102,63,231,.36); }
+      .nav-djinn small { margin-top: -4px; }
+
+      .tabs { margin: 1px 18px 0; display: flex; overflow: auto; gap: 2px; border-bottom: 1px solid var(--line); }
+      .tab { padding: 10px 8px 9px; color: #615d6c; font-size: 9px; white-space: nowrap; background: transparent; }
+      .tab.is-active { color: var(--purple); font-weight: 800; border-bottom: 2px solid var(--purple); }
+
+      .topic-grid { position: relative; height: 248px; margin: 14px 18px 0; overflow: hidden; border-radius: 22px; background: radial-gradient(circle at 50% 48%, rgba(195,177,255,.36), transparent 33%), #fbfaff; }
+      .topic-core { position: absolute; top: 90px; left: 50%; width: 98px; height: 98px; display: grid; place-items: center; border-radius: 50%; transform: translateX(-50%); color: #fff; font-size: 13px; font-weight: 850; text-align: center; background: radial-gradient(circle at 32% 25%, #cbbcff, #875cf0 65%, #6d45df); box-shadow: 0 13px 24px rgba(113,74,224,.28); }
+      .topic-core::before { position: absolute; inset: -31px; border: 1px solid #e1d8fb; border-radius: 50%; content: ""; }
+      .topic-node { position: absolute; display: grid; place-items: center; min-width: 62px; min-height: 42px; padding: 6px; border: 1px solid #e5e6f3; border-radius: 999px; color: #3e3a4c; font-size: 8px; font-weight: 750; text-align: center; background: #fff; box-shadow: 0 4px 10px rgba(63,49,104,.05); }
+      .topic-node.one { top: 16px; left: 50%; transform: translateX(-50%); background: #f1ebff; } .topic-node.two { top: 55px; left: 3px; background: #edfcf4; } .topic-node.three { top: 58px; right: 3px; background: #eff6ff; } .topic-node.four { bottom: 21px; left: 11px; background: #fff6e7; } .topic-node.five { right: 8px; bottom: 23px; background: #ecfbf5; }
+      .graph-line { position: absolute; z-index: 0; height: 1px; transform-origin: left; background: #bba8ff; }
+      .line-one { top: 104px; left: 50%; width: 72px; transform: rotate(-90deg); } .line-two { top: 112px; left: 59px; width: 89px; transform: rotate(31deg); } .line-three { top: 116px; right: 61px; width: 87px; transform: rotate(-30deg); } .line-four { bottom: 66px; left: 78px; width: 73px; transform: rotate(-34deg); } .line-five { bottom: 67px; right: 77px; width: 71px; transform: rotate(33deg); }
+
+      .overview-card, .list-card, .answer-card, .document-card { margin: 11px 18px 0; padding: 12px; border: 1px solid #eeebf5; border-radius: 15px; background: #fff; box-shadow: 0 4px 14px rgba(59,37,112,.04); }
+      .overview-card { display: flex; gap: 11px; align-items: center; }
+      .overview-icon, .doc-icon { width: 32px; height: 32px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 10px; color: var(--purple); background: var(--purple-soft); font-size: 16px; }
+      .overview-card strong, .document-card strong { display: block; font-size: 11px; }
+      .overview-card small, .document-card small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+      .progress { height: 4px; margin-top: 7px; overflow: hidden; border-radius: 99px; background: #ebe8f3; }
+      .progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #8b68fa, #7450ef); }
+
+      .answer-question { width: max-content; max-width: 188px; margin: 9px 18px 17px auto; padding: 12px; border-radius: 15px 15px 3px 15px; color: #fff; font-size: 11px; font-weight: 700; line-height: 1.35; background: linear-gradient(135deg, #9168f9, #7549e8); box-shadow: 0 8px 17px rgba(102,63,221,.2); }
+      .answer-intro { margin: 0 18px; display: flex; gap: 9px; align-items: flex-start; font-size: 10px; font-weight: 700; line-height: 1.42; }
+      .tiny-genie { width: 22px; height: 22px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 50%; color: #fff; font-size: 11px; background: radial-gradient(circle at 35% 30%, #d9ceff, #7c57ee 60%); }
+      .answer-steps { margin: 12px 18px 0; padding: 4px 0; border-radius: 15px; background: #fbfaff; }
+      .answer-step { display: flex; gap: 10px; padding: 9px 12px; font-size: 10px; line-height: 1.34; }
+      .answer-step b { width: 18px; height: 18px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 50%; color: var(--purple); font-size: 9px; background: var(--purple-soft); }
+      .answer-step strong { display: block; margin-bottom: 2px; font-size: 10px; }
+      .confidence { margin: 9px 18px 0; padding: 8px 11px; display: flex; justify-content: space-between; border-radius: 10px; color: #448866; font-size: 9px; font-weight: 800; background: #f0faf4; }
+      .answer-actions { margin: 13px 18px 0; display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; }
+      .answer-action { min-height: 50px; padding: 5px; display: grid; place-items: center; align-content: center; gap: 3px; border: 1px solid #f0edf8; border-radius: 11px; color: #625b72; font-size: 8px; text-align: center; background: #fdfcff; }
+      .answer-action i { font-size: 14px; font-style: normal; color: var(--purple); }
+
+      .scope-list { margin: 10px 18px 0; display: grid; gap: 7px; }
+      .scope-option { min-height: 54px; padding: 9px 11px; display: flex; align-items: center; gap: 10px; border: 1px solid #edeaf5; border-radius: 13px; color: #514b60; text-align: left; background: #fff; }
+      .scope-option.is-selected { border-color: #bdaaff; color: #5534ca; background: #f7f4ff; }
+      .radio { width: 17px; height: 17px; flex: 0 0 auto; border: 1.5px solid #bcb5cb; border-radius: 50%; }
+      .scope-option.is-selected .radio { border: 5px solid var(--purple); }
+      .scope-option strong, .scope-option small { display: block; } .scope-option strong { font-size: 12px; } .scope-option small { margin-top: 2px; color: #837d8e; font-size: 9px; }
+
+      .workspace-search { margin: 4px 18px 10px; }
+      .workspace-search .search-icon { color: #8e85a4; font-size: 18px; line-height: 1; }
+      .filter-row { margin: 7px 18px 0; display: flex; gap: 6px; overflow: auto; }
+      .filter { padding: 6px 9px; border-radius: 9px; color: #716b7e; font-size: 9px; white-space: nowrap; background: #f6f4f9; }
+      .filter.is-active { color: var(--purple); background: var(--purple-soft); font-weight: 800; }
+      .source-row, .relation-row { margin: 8px 18px 0; padding: 11px; display: flex; align-items: center; gap: 9px; border: 1px solid #eeebf5; border-radius: 13px; text-align: left; background: #fff; }
+      .source-row { width: calc(100% - 36px); }
+      .source-row > div, .relation-row > div { min-width: 0; flex: 1; }
+      .source-row strong, .relation-row strong { display: block; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+      .source-row small, .relation-row small { display: block; margin-top: 3px; color: var(--muted); font-size: 8px; }
+      .score { padding: 4px 6px; border-radius: 8px; color: var(--purple); font-size: 8px; font-weight: 850; background: var(--purple-soft); }
+
+      .relationship-map { position: relative; height: 248px; margin: 12px 18px; overflow: hidden; border-radius: 17px; background: #fbfaff; }
+      .relationship-map .topic-core { top: 76px; width: 92px; height: 92px; font-size: 11px; }
+      .relationship-map .topic-node { font-size: 8px; } .relationship-map .one { top: 15px; } .relationship-map .two { top: 50px; } .relationship-map .three { top: 51px; } .relationship-map .four { bottom: 17px; } .relationship-map .five { right: 5px; bottom: 18px; }
+      .relation-legend { margin: -3px 18px 0; display: flex; justify-content: center; gap: 10px; color: var(--muted); font-size: 8px; }
+      .relation-legend i { display: inline-block; width: 7px; height: 7px; margin-right: 3px; border-radius: 50%; background: #9877fa; }
+
+      .notice { margin: 9px 18px 0; padding: 11px; display: flex; align-items: flex-start; gap: 8px; border-radius: 12px; background: #fff8ee; }
+      .notice strong { display: block; font-size: 10px; } .notice small { display: block; margin-top: 3px; color: #7d705f; font-size: 9px; line-height: 1.3; }
+      .warning-icon { color: var(--orange); font-size: 17px; }
+      .compare-grid { margin: 12px 18px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .compare-card { padding: 11px; min-height: 90px; border: 1px solid #eeeaf5; border-radius: 13px; background: #fff; }
+      .compare-card strong { display: block; font-size: 10px; line-height: 1.3; } .compare-card small { display: block; margin-top: 5px; color: var(--muted); font-size: 8px; }
+      .compare-table { margin: 12px 18px; overflow: hidden; border: 1px solid #eeeaf5; border-radius: 13px; }
+      .compare-line { display: grid; grid-template-columns: 26% 37% 37%; gap: 6px; padding: 9px; border-bottom: 1px solid #f0edf6; font-size: 8px; line-height: 1.3; }
+      .compare-line:last-child { border-bottom: 0; } .compare-line strong { font-size: 8px; }
+
+      .flow-canvas { position: relative; min-height: 342px; margin: 11px 18px; padding: 20px 34px; border-radius: 17px; background: #fbfaff; }
+      .flow-node { position: relative; z-index: 2; min-height: 27px; margin: 0 auto 17px; padding: 7px; border: 1px solid #d7caff; border-radius: 7px; color: #5841b8; font-size: 8px; font-weight: 800; text-align: center; background: #f3efff; }
+      .flow-node.green { color: #39815c; border-color: #bce8d1; background: #eaf8ef; }
+      .flow-node.warning { color: #bd5a55; border-color: #ffd0cb; background: #fff0ee; }
+      .flow-arrow { position: relative; z-index: 1; width: 1px; height: 17px; margin: -17px auto 0; background: #916df4; }
+      .flow-arrow::after { position: absolute; bottom: -2px; left: -3px; border: 3px solid transparent; border-top-color: #916df4; content: ""; }
+
+      .home-hero { margin: 7px 18px 0; min-height: 168px; display: grid; place-items: center; border-radius: 22px; background: radial-gradient(circle at 50% 62%, #e2d6ff, transparent 44%); }
+      .home-hero .orb { width: 93px; height: 93px; margin: 25px 0 0; }
+      .greeting { margin: 5px 20px 0; } .greeting strong { display: block; font-size: 11px; } .greeting span { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; }
+      .home-composer { margin: -7px 18px 0; }
+      .shortcut-grid { margin: 13px 18px 0; display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+      .shortcut { min-height: 62px; padding: 8px; display: grid; place-items: center; align-content: center; gap: 5px; border-radius: 13px; color: #454050; font-size: 9px; font-weight: 750; background: #faf9fd; }
+      .shortcut i { color: var(--purple); font-size: 17px; font-style: normal; }
+
+      .workspace-hero { margin: 6px 18px 0; padding: 13px; border-radius: 15px; background: linear-gradient(135deg, #f4efff, #fbfaff); }
+      .workspace-hero strong { font-size: 12px; } .workspace-hero p { margin-top: 5px; color: var(--muted); font-size: 9px; line-height: 1.35; }
+      .workspace-menu { margin: 11px 18px; display: grid; gap: 8px; }
+      .workspace-row { padding: 12px; display: flex; align-items: center; gap: 10px; border: 1px solid #eeebf5; border-radius: 13px; text-align: left; background: #fff; }
+      .workspace-row strong { display: block; font-size: 11px; } .workspace-row small { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; }
+      .workspace-row b { color: var(--purple); font-weight: 500; }
+
+      .menu-layer { position: absolute; z-index: 50; inset: 0; visibility: hidden; pointer-events: none; }
+      .menu-layer.is-open { visibility: visible; pointer-events: auto; }
+      .backdrop { position: absolute; inset: 0; opacity: 0; background: rgba(30,22,53,.32); transition: opacity .18s ease; }
+      .menu-layer.is-open .backdrop { opacity: 1; }
+      .query-menu { position: absolute; right: 0; bottom: 0; left: 0; padding: 8px 18px calc(17px + env(safe-area-inset-bottom)); border-radius: 25px 25px 0 0; transform: translateY(103%); background: #fff; box-shadow: 0 -14px 42px rgba(34,24,65,.2); transition: transform .22s cubic-bezier(.2,.8,.2,1); }
+      .menu-layer.is-open .query-menu { transform: translateY(0); }
+      .grabber { width: 36px; height: 4px; margin: 0 auto 15px; border-radius: 999px; background: #d8d3e2; }
+      .menu-title-row { display: flex; align-items: center; justify-content: space-between; } .menu-title-row h2 { font-size: 18px; letter-spacing: -.035em; }
+      .close-button { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; color: #686174; background: #f6f4fa; }
+      .menu-section { margin-top: 16px; } .menu-label { margin: 0 0 8px; color: #716b7e; font-size: 11px; font-weight: 800; }
+      .answer-options { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+      .answer-option { min-height: 37px; padding: 6px; border-radius: 10px; color: #756f80; font-size: 10px; font-weight: 750; background: #f7f5fa; }
+      .answer-option.is-selected { color: #fff; background: var(--purple); box-shadow: 0 5px 10px rgba(118,82,247,.2); }
+      .toggle-row { min-height: 46px; padding: 0 2px; display: flex; align-items: center; justify-content: space-between; }
+      .toggle-copy strong, .toggle-copy small { display: block; } .toggle-copy strong { font-size: 12px; } .toggle-copy small { margin-top: 2px; color: #8b8594; font-size: 10px; }
+      .switch { position: relative; width: 39px; height: 23px; padding: 0; border-radius: 999px; background: #dcd8e5; transition: background .15s ease; }
+      .switch::after { position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .15s ease; content: ""; }
+      .switch[aria-pressed="true"] { background: var(--purple); } .switch[aria-pressed="true"]::after { transform: translateX(16px); }
+      .apply-button { width: 100%; height: 48px; margin-top: 11px; border-radius: 14px; color: #fff; font-size: 13px; font-weight: 850; background: linear-gradient(135deg,#8960fa,#6942e9); box-shadow: 0 10px 20px rgba(99,61,218,.27); }
+
+      .assistant-panel { position: absolute; z-index: 60; right: 14px; bottom: 60px; left: 14px; display: none; padding: 14px; border: 1px solid #e2d9ff; border-radius: 19px; background: #fff; box-shadow: 0 18px 42px rgba(57,34,119,.22); }
+      .assistant-panel.is-open { display: block; animation: appear .18s ease; }
+      .assistant-panel header { display: flex; align-items: center; gap: 8px; } .assistant-panel p { margin: 8px 0 11px; color: var(--muted); font-size: 10px; line-height: 1.35; }
+      .assistant-actions { display: flex; gap: 7px; } .assistant-actions button { flex: 1; min-height: 33px; border-radius: 9px; color: var(--purple); font-size: 9px; font-weight: 800; background: var(--purple-soft); }
+
+      @media (max-width: 480px) {
+        body { display: block; background: #fff; } .prototype-label { display: none; }
+        .phone { width: 100vw; height: 100dvh; border: 0; border-radius: 0; box-shadow: none; }
+      }
+      @media (max-height: 760px) and (min-width: 481px) { .phone { transform: scale(.86); } }
+    </style>
+  </head>
+  <body>
+    <p class="prototype-label">Djinn · tudásnavigációs prototípus · 390 × 844</p>
+
+    <main class="phone" aria-label="Djinn navigálható alkalmazásprototípus">
+      <div class="status-bar" aria-hidden="true">
+        <span>9:41</span>
+        <span class="status-icons"><span class="signal"><i></i><i></i><i></i><i></i></span><span class="wifi"></span><span class="battery"><i></i></span></span>
+      </div>
+
+      <div class="app">
+        <section class="view" data-screen="home" aria-label="Home">
+          <header class="top-bar"><div><h1>Djinn</h1></div><button class="back-button" data-open-panel="assistant" aria-label="Értesítések">♧</button></header>
+          <div class="greeting"><strong>Jó estét, Ádám! 👋</strong><span>Készen állsz valami új felfedezésére?</span></div>
+          <div class="home-hero"><div class="orb" aria-hidden="true"></div></div>
+          <form class="composer home-composer" data-query-form><div class="composer-shell"><input aria-label="Kérdés" placeholder="Mit szeretnél ma megtudni?" /><button class="mini-icon" type="button" aria-label="Hangbevitel">♩</button><button class="send-button" type="submit" aria-label="Kérdés elküldése">➜</button></div></form>
+          <div class="shortcut-grid">
+            <button class="shortcut" data-route="workspace-notes"><i>✎</i>Jegyzet</button>
+            <button class="shortcut" data-route="workspace"><i>▤</i>Tudástár</button>
+            <button class="shortcut" data-route="query-start"><i>◉</i>Kérdés</button>
+          </div>
+          <section class="section"><div class="section-title"><h2>Legutóbbi dokumentumok</h2><button class="text-link" data-route="workspace">Összes</button></div>
+            <button class="source-row" data-route="query-chunks"><span class="doc-icon" style="color:var(--orange)">▤</span><span><strong>Database Migration.pdf</strong><small>45 oldal · 2 órája</small></span></button>
+            <button class="source-row" data-route="query-chunks"><span class="doc-icon">▧</span><span><strong>Migrációs jegyzetek.md</strong><small>3 órája</small></span></button>
+          </section>
+          <section class="section"><div class="section-title"><h2>Ma felfedezve</h2></div>
+            <button class="overview-card" data-route="query-contradictions"><span class="overview-icon">△</span><span><strong>2 lehetséges ellentmondás</strong><small>Database Migration.pdf és Migrációs jegyzet között</small></span><b>›</b></button>
+            <button class="overview-card" data-route="query-related"><span class="overview-icon">⌘</span><span><strong>8 új kapcsolat</strong><small>A tudásgráfban</small></span><b>›</b></button>
+          </section>
+        </section>
+
+        <section class="view" data-screen="explore-overview" aria-label="Explore áttekintés">
+          <header class="top-bar"><div><span class="eyebrow">✦ EXPLORE</span><h1>Fedezd fel a tudásodat</h1></div><button class="icon-button" data-open-panel="settings" aria-label="Explore beállítások">☷</button></header>
+          <div class="tabs" aria-label="Explore navigáció"><button class="tab is-active">Áttekintés</button><button class="tab">Fogalmak</button><button class="tab">Kapcsolatok</button><button class="tab">Idővonal</button></div>
+          <section class="section"><div class="section-title"><h2>Tudásgráf áttekintés</h2></div>
+            <button class="topic-grid" data-route="query-related" aria-label="Adatbázis migráció kapcsolódó elemei">
+              <span class="graph-line line-one"></span><span class="graph-line line-two"></span><span class="graph-line line-three"></span><span class="graph-line line-four"></span><span class="graph-line line-five"></span>
+              <span class="topic-node one">Séma<br>átállítás</span><span class="topic-node two">Verziózás</span><span class="topic-node three">Rollback</span><span class="topic-node four">Indexek</span><span class="topic-node five">Tesztelés</span><span class="topic-core">Adatbázis<br>migráció</span>
+            </button>
+          </section>
+          <div class="overview-card"><span class="overview-icon">◔</span><span><strong>Tudásod állapota · 82%</strong><small>Jól szervezett; 8 új kapcsolat vár ellenőrzésre.</small><span class="progress"><i style="width:82%"></i></span></span></div>
+          <section class="section"><div class="section-title"><h2>Érdekes összefüggések</h2><button class="text-link" data-route="query-related">Megnézem</button></div></section>
+        </section>
+
+        <section class="view" data-screen="query-start" aria-label="Query indítóképernyő">
+          <header class="top-bar"><div><span class="eyebrow">✦ DJINN QUERY <span class="mode-chip">AI mód</span></span><h1>Kérdezz a tudásodból</h1></div><button class="icon-button" data-open-panel="settings" aria-label="Query beállítások"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9M13 4v6M7 14v6"/></svg></button></header>
+          <button class="scope-card" data-route="query-scope" aria-label="Keresési tartomány módosítása"><span class="scope-icon">▣</span><span class="scope-copy"><span class="scope-label">Keresési tartomány</span><strong class="scope-value" data-scope-label>Adatbázis migráció</strong></span><span class="scope-chevron">⌄</span></button>
+          <section class="hero" aria-label="Djinn kérdezési indítófelület"><div class="hero-halo"></div><div class="orb"></div><div class="thought-bubble">Milyen lépésekből áll egy biztonságos sémaátállítás?</div><div class="thinking">Djinn készen áll <span class="dots"><i></i><i></i><i></i></span></div></section>
+          <form class="composer" data-query-form><label class="input-label">Kérdés a kiválasztott tudásról</label><div class="composer-shell"><input data-query-input aria-label="Kérdés a kiválasztott tudásról" autocomplete="off" placeholder="Írd be a kérdésed…" /><button class="mini-icon" type="button" data-voice aria-label="Hangbevitel">♩</button><button class="send-button" type="submit" aria-label="Kérdés elküldése"><svg viewBox="0 0 24 24"><path d="m5 4 14 8-14 8 3-8z"/><path d="M8 12h11"/></svg></button></div><p class="query-status" data-query-status aria-live="polite"></p></form>
+          <section class="section"><div class="section-title"><h2>Gyors műveletek</h2><button class="text-link" data-open-panel="settings">Összes</button></div>
+            <div class="quick-actions"><button class="quick-action" data-route="query-answer"><span class="action-mark">▣</span>Összefoglalás</button><button class="quick-action" data-route="query-related"><span class="action-mark">⌘</span>Kapcsolódó elemek</button><button class="quick-action" data-route="query-contradictions"><span class="action-mark">△</span>Ellentmondások</button><button class="quick-action" data-route="query-compare"><span class="action-mark">▤</span>Források összevetése</button><button class="quick-action" data-route="query-flowchart"><span class="action-mark">⌘</span>Folyamat feltárása</button><button class="quick-action" data-route="query-chunks"><span class="action-mark">⌾</span>Kulcsfogalmak</button></div>
+          </section>
+          <section class="section"><div class="section-title"><h2>Javasolt kérdések</h2><button class="text-link" data-route="query-ready">Újak</button></div><div class="suggestion-list"><button class="suggestion" data-prompt="Milyen kockázatokkal kell számolni?"><span>Milyen kockázatokkal kell számolni?</span><b>›</b></button><button class="suggestion" data-prompt="Mik a leggyakoribb hibák migráció során?"><span>Mik a leggyakoribb hibák migráció során?</span><b>›</b></button><button class="suggestion" data-prompt="Hogyan teszteljem biztonságosan a migrációt?"><span>Hogyan teszteljem biztonságosan a migrációt?</span><b>›</b></button></div></section>
+        </section>
+
+        <section class="view" data-screen="query-scope" aria-label="Keresési tartomány kiválasztása">
+          <header class="top-bar compact"><button class="back-button" data-back aria-label="Vissza">‹</button><div><span class="eyebrow">QUERY</span><h2>Keresési tartomány</h2></div><span class="mode-chip">AI mód</span></header>
+          <p class="subtle" style="margin:8px 18px 0">Válaszd ki, mely tudáselemekből építse fel a Djinn a választ.</p>
+          <div class="scope-list">
+            <button class="scope-option is-selected" data-select-scope="Adatbázis migráció"><span class="radio"></span><span><strong>Adatbázis migráció</strong><small>Az aktuális Workspace</small></span></button>
+            <button class="scope-option" data-select-scope="Teljes tudástár"><span class="radio"></span><span><strong>Teljes tudástár</strong><small>Minden elérhető jegyzet és forrás</small></span></button>
+            <button class="scope-option" data-select-scope="Egy téma"><span class="radio"></span><span><strong>Egy téma</strong><small>Kapcsolódó tudáselemek</small></span></button>
+            <button class="scope-option" data-select-scope="Aktuális dokumentum"><span class="radio"></span><span><strong>Aktuális dokumentum</strong><small>Database Migration.pdf · 23. oldal</small></span></button>
+          </div>
+          <section class="section"><div class="section-title"><h2>Korábbi kérdések</h2><button class="text-link" data-route="query-ready">Összes</button></div><div class="suggestion-list"><button class="suggestion" data-prompt="Milyen lépésekből áll egy biztonságos sémaátállítás?"><span>Milyen lépésekből áll egy biztonságos sémaátállítás?</span><b>›</b></button><button class="suggestion" data-prompt="Mik a leggyakoribb hibák migráció során?"><span>Mik a leggyakoribb hibák migráció során?</span><b>›</b></button></div></section>
+        </section>
+
+        <section class="view" data-screen="query-ready" aria-label="Query kitöltött állapot">
+          <header class="top-bar"><div><span class="eyebrow">✦ DJINN QUERY <span class="mode-chip">AI mód</span></span><h1>Kérdezz</h1></div><button class="icon-button" data-open-panel="settings" aria-label="Query beállítások">☷</button></header>
+          <button class="scope-card" data-route="query-scope"><span class="scope-icon">▣</span><span class="scope-copy"><span class="scope-label">Keresési tartomány</span><strong class="scope-value" data-scope-label>Adatbázis migráció</strong></span><span class="scope-chevron">⌄</span></button>
+          <form class="composer" style="margin-top:15px" data-query-form><label class="input-label">Kérdés a kiválasztott tudásról</label><div class="composer-shell"><input data-query-input aria-label="Kérdés" value="Milyen lépésekből áll egy biztonságos sémaátállítás?" /><button class="mini-icon" type="button" data-voice aria-label="Hangbevitel">♩</button><button class="send-button" type="submit" aria-label="Kérdés elküldése">➜</button></div></form>
+          <section class="section"><div class="section-title"><h2>Gyors műveletek</h2><button class="text-link" data-route="query-start">Összes</button></div><div class="quick-actions"><button class="quick-action" data-route="query-answer"><span class="action-mark">▣</span>Összefoglalás</button><button class="quick-action" data-route="query-related"><span class="action-mark">⌘</span>Kapcsolódó elemek</button><button class="quick-action" data-route="query-contradictions"><span class="action-mark">△</span>Ellentmondások</button><button class="quick-action" data-route="query-compare"><span class="action-mark">▤</span>Források összevetése</button><button class="quick-action" data-route="query-flowchart"><span class="action-mark">⌘</span>Folyamat feltárása</button><button class="quick-action" data-route="query-chunks"><span class="action-mark">⌾</span>Kulcsfogalmak</button></div></section>
+          <section class="section"><div class="section-title"><h2>Javasolt kérdések</h2></div><div class="suggestion-list"><button class="suggestion" data-prompt="Milyen kockázatokkal kell számolni?"><span>Milyen kockázatokkal kell számolni?</span><b>›</b></button><button class="suggestion" data-prompt="Hogyan teszteljem biztonságosan a migrációt?"><span>Hogyan teszteljem biztonságosan a migrációt?</span><b>›</b></button></div></section>
+        </section>
+
+        <section class="view" data-screen="query-thinking" aria-label="Djinn gondolkodik">
+          <header class="top-bar"><div><span class="eyebrow">✦ DJINN QUERY <span class="mode-chip">AI mód</span></span><h1>Kérdezz</h1></div><button class="icon-button" data-open-panel="settings" aria-label="Query beállítások">☷</button></header>
+          <button class="scope-card" data-route="query-scope"><span class="scope-icon">▣</span><span class="scope-copy"><span class="scope-label">Keresési tartomány</span><strong class="scope-value" data-scope-label>Adatbázis migráció</strong></span><span class="scope-chevron">⌄</span></button>
+          <section class="hero" style="min-height:300px"><div class="hero-halo" style="width:190px;height:190px;top:35px"></div><div class="orb" style="width:136px;height:136px;margin-top:25px"></div><div class="thought-bubble" data-question-bubble>Milyen lépésekből áll egy biztonságos sémaátállítás?</div><div class="thinking" style="bottom:35px">Djinn gondolkodik <span class="dots"><i></i><i></i><i></i></span></div></section>
+          <div class="overview-card"><span class="overview-icon">⌘</span><span><strong>Tudásútvonal összeállítása</strong><small>Atom keresés → kapcsolatok → validált források</small><span class="progress"><i style="width:65%"></i></span></span></div>
+          <button class="apply-button" style="width:calc(100% - 36px);margin:16px 18px 0" data-route="query-answer">Válasz megnyitása</button>
+        </section>
+
+        <section class="view" data-screen="query-answer" aria-label="Query válasz">
+          <header class="top-bar compact"><button class="back-button" data-back aria-label="Vissza">‹</button><div><span class="eyebrow">QUERY VÁLASZ</span><h2>Biztonságos sémaátállítás</h2></div><button class="icon-button" data-open-panel="assistant" aria-label="Djinn asszisztens">✦</button></header>
+          <p class="answer-question" data-answer-question>Milyen lépésekből áll egy biztonságos sémaátállítás?</p>
+          <p class="answer-intro"><span class="tiny-genie">✦</span><span>Egy biztonságos sémaátállítás általában az alábbi lépésekből áll:</span></p>
+          <div class="answer-steps">
+            <div class="answer-step"><b>1</b><span><strong>Felmérés és tervezés</strong>A jelenlegi séma és függőségek feltérképezése.</span></div>
+            <div class="answer-step"><b>2</b><span><strong>Módosítások előkészítése</strong>Az új séma tervezése és tesztelése.</span></div>
+            <div class="answer-step"><b>3</b><span><strong>Migrációs szkript elkészítése</strong>Az adatok átalakításának megtervezése.</span></div>
+            <div class="answer-step"><b>4</b><span><strong>Teszt migráció</strong>Próbamigráció elvégzése egy másolat környezetben.</span></div>
+            <div class="answer-step"><b>5</b><span><strong>Éles migráció</strong>Végrehajtás éles környezetben.</span></div>
+            <div class="answer-step"><b>6</b><span><strong>Utóellenőrzés</strong>Adatintegritás és alkalmazás működésének ellenőrzése.</span></div>
+          </div>
+          <div class="confidence"><span>● Bizonyosság: 0.87</span><span>Validált források ● 5/6</span></div>
+          <section class="section"><div class="section-title"><h2>Felhasznált források</h2></div><button class="source-row" data-route="query-chunks"><span class="doc-icon">▧</span><span><strong>Database Migration.pdf</strong><small>23. oldal · 2 chunk</small></span><b class="score">0.92</b></button><button class="source-row" data-route="query-chunks"><span class="doc-icon" style="color:var(--orange)">▤</span><span><strong>Migrációs jegyzet</strong><small>Létrehozva: 2024.07.12.</small></span><b class="score">0.88</b></button></section>
+          <div class="answer-actions"><button class="answer-action" data-route="query-chunks"><i>▧</i>Jegyzetbe mentés</button><button class="answer-action" data-route="query-related"><i>⌘</i>Kapcsolatok</button><button class="answer-action" data-route="query-chunks"><i>▤</i>Források</button><button class="answer-action" data-route="query-compare"><i>⇧</i>Export</button></div>
+        </section>
+
+        <section class="view" data-screen="query-chunks" aria-label="Válasz részletei és felhasznált chunkok">
+          <header class="top-bar compact"><button class="back-button" data-back aria-label="Vissza">‹</button><div><span class="eyebrow">QUERY VÁLASZ</span><h2>Válasz részletei</h2></div><button class="icon-button" data-open-panel="assistant" aria-label="Djinn asszisztens">✦</button></header>
+          <div class="tabs"><button class="tab is-active">Felhasznált chunkok</button><button class="tab">Fogalmak (12)</button><button class="tab">Jegyzetek</button></div>
+          <button class="source-row" data-route="query-answer"><span class="doc-icon">▧</span><span><strong>Database Migration.pdf</strong><small>23. oldal · „A sémaátállítás folyamata több lépésből áll…”</small></span><b class="score">0.92</b></button>
+          <button class="source-row" data-route="query-answer"><span class="doc-icon" style="color:var(--orange)">▤</span><span><strong>Saját jegyzet – Migrációs útmutató</strong><small>Létrehozva: 2024.07.12. · Fontos figyelmeztetések</small></span><b class="score">0.88</b></button>
+          <button class="source-row" data-route="query-answer"><span class="doc-icon">▧</span><span><strong>Database Migration.pdf</strong><small>27. oldal · Teszt migrációs környezet</small></span><b class="score">0.83</b></button>
+          <button class="suggestion" style="margin:10px 18px;width:calc(100% - 36px)" data-route="query-related"><span>+ További 3 chunk megjelenítése</span><b>›</b></button>
+          <section class="section"><div class="section-title"><h2>Felhasznált fogalmak</h2></div><div class="filter-row"><span class="filter is-active">sémaátállítás</span><span class="filter">migráció</span><span class="filter">teszt migráció</span></div></section>
+        </section>
+
+        <section class="view" data-screen="query-related" aria-label="Kapcsolódó elemek">
+          <header class="top-bar compact"><button class="back-button" data-back aria-label="Vissza">‹</button><div><span class="eyebrow">QUERY VÁLASZ</span><h2>Kapcsolódó elemek</h2></div><button class="icon-button" data-open-panel="assistant" aria-label="Djinn asszisztens">✦</button></header>
+          <div class="tabs"><button class="tab is-active">Mind</button><button class="tab">Fogalmak (12)</button><button class="tab">Chunkok (8)</button><button class="tab">Jegyzetek</button></div>
+          <button class="relationship-map" data-route="explore-overview" aria-label="Kapcsolati gráf">
+            <span class="graph-line line-one"></span><span class="graph-line line-two"></span><span class="graph-line line-three"></span><span class="graph-line line-four"></span><span class="graph-line line-five"></span>
+            <span class="topic-node one">Adatintegritás</span><span class="topic-node two">Függőségek<br>feltérképezése</span><span class="topic-node three">Rollback<br>stratégia</span><span class="topic-node four">Módosítások<br>tervezése</span><span class="topic-node five">Teszt<br>migráció</span><span class="topic-core">Sémaátállítás<br>(Migráció)</span>
+          </button>
+          <div class="relation-legend"><span><i></i>Erős kapcsolat</span><span><i style="background:#ffbc61"></i>Közepes kapcsolat</span><span><i style="background:#72cfa2"></i>Gyenge kapcsolat</span></div>
+          <button class="apply-button" style="width:calc(100% - 36px);margin:16px 18px 0" data-route="explore-overview">Teljes térkép megnyitása</button>
+        </section>
+
+        <section class="view" data-screen="query-contradictions" aria-label="Ellentmondások">
+          <header class="top-bar compact"><button class="back-button" data-back aria-label="Vissza">‹</button><div><span class="eyebrow">QUERY VÁLASZ</span><h2>Ellentmondások</h2></div><button class="icon-button" data-open-panel="assistant" aria-label="Djinn asszisztens">✦</button></header>
+          <div class="tabs"><button class="tab is-active">Ellentmondások (2)</button><button class="tab">Javaslatok</button></div>
+          <div class="notice"><span class="warning-icon">△</span><span><strong>2 lehetséges ellentmondás található</strong><small>Ezeket érdemes ellenőrizned az eredeti forrásokban.</small></span></div>
+          <section class="section"><div class="section-title"><h2>Átmenetisítés a migráció előtt</h2><button class="text-link" data-route="query-chunks">⋮</button></div>
+            <button class="relation-row" data-route="query-chunks"><span class="doc-icon">▧</span><span><strong>Állítás A</strong><small>A migráció előtt minden éles lekérdezést le kell állítani.</small></span><b class="score">0.94</b></button>
+            <button class="relation-row" data-route="query-chunks"><span class="doc-icon" style="color:var(--orange)">▤</span><span><strong>Állítás B</strong><small>A migráció online is elvégezhető minimális leállással.</small></span><b class="score">0.76</b></button>
+          </section>
+          <section class="section"><div class="section-title"><h2>Indexek újraépítése szükséges</h2></div><div class="notice" style="background:#f8f6ff"><span class="warning-icon" style="color:var(--purple)">⌘</span><span><strong>Javasolt feloldás</strong><small>Az indexeket a migráció után automatikusan újraépíteni.</small></span></div></section>
+          <div class="answer-actions"><button class="answer-action" data-route="query-answer"><i>✓</i>Mind (2)</button><button class="answer-action"><i>✓</i>Megoldott (0)</button><button class="answer-action" data-route="query-chunks"><i>›</i>Következő (2)</button><span></span></div>
+        </section>
+
+        <section class="view" data-screen="query-compare" aria-label="Források összehasonlítása">
+          <header class="top-bar compact"><button class="back-button" data-back aria-label="Vissza">‹</button><div><span class="eyebrow">QUERY VÁLASZ</span><h2>Források összehasonlítása</h2></div><button class="icon-button" data-open-panel="assistant" aria-label="Djinn asszisztens">✦</button></header>
+          <p class="subtle" style="margin:8px 18px">2 forrás kiválasztva <button class="text-link" data-route="query-chunks">Módosítás</button></p>
+          <div class="compare-grid"><button class="compare-card" data-route="query-chunks"><span class="doc-icon" style="margin-bottom:7px">▧</span><strong>Database Migration.pdf</strong><small>23. oldal</small></button><button class="compare-card" data-route="query-chunks"><span class="doc-icon" style="margin-bottom:7px;color:var(--purple)">▤</span><strong>Saját jegyzet – Migrációs útmutató</strong><small>2024.07.12.</small></button></div>
+          <section class="section"><div class="section-title"><h2>Összehasonlítás</h2></div><div class="compare-table"><div class="compare-line"><strong>Fő állítás</strong><span>A migráció lépései szigorúan követendők.</span><span>A lépések rugalmasan környezethez igazíthatók.</span></div><div class="compare-line"><strong>Megközelítés</strong><span>Előkészítés, többszörös ellenőrzés.</span><span>Agilis tesztelés, iteratív végrehajtás.</span></div><div class="compare-line"><strong>Kockázatkezelés</strong><span>Teljes leállás javasolt migráció alatt.</span><span>Részleges leállás is elegendő lehet.</span></div><div class="compare-line"><strong>Utóellenőrzés</strong><span>Kötelező adatintegritási vizsgálat.</span><span>Mintavételes ellenőrzés elegendő.</span></div></div></section>
+          <button class="apply-button" style="width:calc(100% - 36px);margin:5px 18px 0" data-route="query-answer">Összefoglaló generálása</button>
+        </section>
+
+        <section class="view" data-screen="query-flowchart" aria-label="Folyamat feltárása">
+          <header class="top-bar compact"><button class="back-button" data-back aria-label="Vissza">‹</button><div><span class="eyebrow">QUERY VÁLASZ</span><h2>Folyamat feltárása</h2></div><button class="icon-button" data-open-panel="assistant" aria-label="Djinn asszisztens">✦</button></header>
+          <p class="subtle" style="margin:8px 18px">Sémaátállás folyamata · Database Migration.pdf · 24. oldal</p>
+          <div class="flow-canvas"><div class="flow-node">Felmérés és tervezés</div><div class="flow-arrow"></div><div class="flow-node">Módosítások előkészítése</div><div class="flow-arrow"></div><div class="flow-node warning">Teszt migráció sikeres?</div><div class="flow-arrow"></div><div class="flow-node">Éles migráció</div><div class="flow-arrow"></div><div class="flow-node">Utóellenőrzés</div><div class="flow-arrow"></div><div class="flow-node green">Befejezés</div></div>
+          <div class="answer-actions" style="grid-template-columns:1fr 1fr"><button class="answer-action" data-route="query-answer"><i>☷</i>Teljes nézet</button><button class="answer-action" data-route="query-related"><i>⌘</i>Csak ez a folyamat</button></div>
+        </section>
+
+        <section class="view" data-screen="workspace" aria-label="Workspace">
+          <header class="top-bar"><div><span class="eyebrow">WORKSPACE</span><h1>Minden tartalom</h1></div><button class="icon-button" data-open-panel="settings" aria-label="Szűrés">☷</button></header>
+          <div class="composer workspace-search" role="search"><div class="composer-shell"><span class="search-icon" aria-hidden="true">⌕</span><input aria-label="Keresés a Workspace-ben" placeholder="Keresés a Workspace-ben" /></div></div>
+          <div class="tabs"><button class="tab is-active" data-route="workspace">Témák</button><button class="tab" data-route="workspace-notes">Jegyzetek</button><button class="tab">Tudástár</button></div>
+          <section class="section"><div class="section-title"><h2>Témák</h2><button class="text-link" data-route="workspace">Összes (12)</button></div>
+            <button class="overview-card" data-route="workspace-topic-detail" data-topic="Adatbázis migráció"><span class="overview-icon">▣</span><span><strong>Adatbázis migráció</strong><small>127 jegyzet · 8 napja</small><span class="progress"><i style="width:82%"></i></span></span><b>›</b></button>
+            <button class="overview-card" data-route="workspace-topic-detail" data-topic="Flutter fejlesztés"><span class="overview-icon" style="color:var(--orange)">♧</span><span><strong>Flutter fejlesztés</strong><small>86 jegyzet · 3 napja</small><span class="progress"><i style="width:64%"></i></span></span><b>›</b></button>
+            <button class="overview-card" data-route="workspace-topic-detail" data-topic="DevOps"><span class="overview-icon" style="color:var(--red)">♡</span><span><strong>DevOps</strong><small>54 jegyzet · 10 napja</small><span class="progress"><i style="width:48%"></i></span></span><b>›</b></button>
+          </section>
+          <button class="shortcut" style="width:calc(100% - 36px);min-height:44px;margin:16px 18px 0" data-route="workspace"><i>＋</i>Új téma</button>
+        </section>
+
+        <section class="view" data-screen="workspace-topic-detail" aria-label="Téma részletei">
+          <header class="top-bar compact"><button class="back-button" data-back aria-label="Vissza">‹</button><div><span class="eyebrow">WORKSPACE · TÉMA</span><h2 data-topic-name>Adatbázis migráció</h2></div><button class="icon-button" aria-label="Téma műveletek">⋮</button></header>
+          <p class="subtle" style="margin:8px 18px 0">Ez a téma egy mappa: az ide küldött jegyzeteket gyűjti össze.</p>
+          <section class="section"><div class="section-title"><h2>Ebben a témában</h2><button class="text-link">Rendezés</button></div>
+            <button class="source-row" data-route="workspace-note-detail"><span class="doc-icon" style="color:var(--purple)">▤</span><span><strong>Sémaátállítás előkészítése</strong><small>Saját jegyzet · ma módosítva</small></span><b>›</b></button>
+            <button class="source-row" data-route="workspace-note-detail"><span class="doc-icon" style="color:var(--orange)">▧</span><span><strong>Visszaállítási terv</strong><small>Tudástár · Database Migration.pdf · 23. oldal</small></span><b>›</b></button>
+            <button class="source-row" data-route="workspace-note-detail"><span class="doc-icon" style="color:var(--red)">▤</span><span><strong>Teszt migráció</strong><small>Saját jegyzet · tegnap módosítva</small></span><b>›</b></button>
+          </section>
+          <button class="shortcut" style="width:calc(100% - 36px);min-height:44px;margin:16px 18px 0" data-route="workspace-note-detail"><i>＋</i>Új jegyzet ebbe a témába</button>
+        </section>
+
+        <section class="view" data-screen="workspace-notes" aria-label="Workspace jegyzetek">
+          <header class="top-bar"><div><span class="eyebrow">WORKSPACE</span><h1>Jegyzetek</h1></div><button class="icon-button" data-open-panel="settings" aria-label="Szűrés">☷</button></header>
+          <div class="composer workspace-search" role="search"><div class="composer-shell"><span class="search-icon" aria-hidden="true">⌕</span><input aria-label="Keresés a jegyzetekben" placeholder="Keresés a jegyzetekben" /></div></div>
+          <div class="tabs"><button class="tab" data-route="workspace">Témák</button><button class="tab is-active" data-route="workspace-notes">Jegyzetek</button><button class="tab">Tudástár</button></div>
+          <section class="section"><div class="section-title"><h2>Saját jegyzetek</h2><button class="text-link">Rendezés</button></div>
+            <button class="source-row" data-route="workspace-note-detail"><span class="doc-icon" style="color:var(--purple)">▤</span><span><strong>Migrációs útmutató</strong><small>Utolsó módosítás: ma · 7 tartalmi rész</small></span><b>›</b></button>
+            <button class="source-row" data-route="workspace-note-detail"><span class="doc-icon" style="color:var(--orange)">▤</span><span><strong>Flutter widget minták</strong><small>Utolsó módosítás: tegnap · 12 tartalmi rész</small></span><b>›</b></button>
+            <button class="source-row" data-route="workspace-note-detail"><span class="doc-icon" style="color:var(--red)">▤</span><span><strong>DevOps ellenőrzőpontok</strong><small>Utolsó módosítás: 3 napja · 5 tartalmi rész</small></span><b>›</b></button>
+          </section>
+          <button class="shortcut" style="width:calc(100% - 36px);min-height:44px;margin:16px 18px 0" data-route="workspace-note-detail"><i>＋</i>Új jegyzet</button>
+        </section>
+
+        <section class="view" data-screen="workspace-note-detail" aria-label="Jegyzet részletei">
+          <header class="top-bar compact"><button class="back-button" data-back aria-label="Vissza">‹</button><div><span class="eyebrow">WORKSPACE · JEGYZET</span><h2>Migrációs útmutató</h2></div><button class="icon-button" aria-label="További műveletek">⋮</button></header>
+          <section class="section"><div class="section-title"><h2>Jegyzet tartalma</h2></div><div class="notice" style="margin:10px 18px"><span class="doc-icon" style="color:var(--purple)">▤</span><span><strong>Placeholder jegyzet</strong><small>Itt nyílik meg a kiválasztott jegyzet szerkeszthető tartalma.</small></span></div></section>
+        </section>
+
+        <nav class="bottom-nav" aria-label="Elsődleges navigáció">
+          <button class="nav-item" data-route="home" data-nav="home"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="m4 10 8-6 8 6v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg></span><span>Home</span></button>
+          <button class="nav-item" data-route="explore-overview" data-nav="explore"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg></span><span>Explore</span></button>
+          <button class="nav-item nav-djinn" data-open-panel="assistant" aria-label="Djinn asszisztens"><span class="genie-button">✦</span><small>Djinn</small></button>
+          <button class="nav-item" data-route="query-start" data-nav="query"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg></span><span>Query</span></button>
+          <button class="nav-item" data-route="workspace" data-nav="workspace"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M8 9h8M8 13h6"/></svg></span><span>Workspace</span></button>
+          <button class="nav-item" data-open-panel="assistant" aria-label="Profil"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c.8-3.2 3.2-5 7-5s6.2 1.8 7 5"/></svg></span><span>Én</span></button>
+        </nav>
+
+        <div class="menu-layer" id="settingsPanel" aria-hidden="true">
+          <button class="backdrop" data-close-panel="settings" type="button" aria-label="Query menü bezárása"></button>
+          <aside class="query-menu" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="grabber"></div><div class="menu-title-row"><h2 id="settingsTitle">Query beállítások</h2><button class="close-button" data-close-panel="settings" type="button" aria-label="Bezárás"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
+            <section class="menu-section"><p class="menu-label">Válasz módja</p><div class="answer-options"><button class="answer-option is-selected" type="button">Magyarázat</button><button class="answer-option" type="button">Összefoglalás</button><button class="answer-option" type="button">Összevetés</button></div></section>
+            <section class="menu-section"><div class="toggle-row"><div class="toggle-copy"><strong>Csak validált források</strong><small>Megbízható elemeket használjon</small></div><button class="switch" type="button" aria-pressed="true" aria-label="Csak validált források"></button></div><div class="toggle-row"><div class="toggle-copy"><strong>Tudásútvonal megjelenítése</strong><small>A válasz alatt mutassa a bejárt utat</small></div><button class="switch" type="button" aria-pressed="true" aria-label="Tudásútvonal megjelenítése"></button></div></section>
+            <button class="apply-button" data-close-panel="settings">Beállítások alkalmazása</button>
+          </aside>
+        </div>
+
+        <aside class="assistant-panel" id="assistantPanel" aria-label="Djinn globális asszisztens">
+          <header><span class="tiny-genie">✦</span><div><h3>Djinn az aktuális kontextusban</h3><span class="subtle" data-assistant-context>Query · Adatbázis migráció</span></div><button class="close-button" style="margin-left:auto" data-close-panel="assistant" aria-label="Bezárás">×</button></header>
+          <p>Kérdezz rá az itt látható tartalomra, kérj összefoglalót, vagy keresd meg a kapcsolódó tudáselemeket.</p>
+          <div class="assistant-actions"><button data-route="query-answer">Magyarázd el</button><button data-route="query-related">Kapcsolódó elemek</button></div>
+        </aside>
+      </div>
+    </main>
+
+    <script>
+      const screens = new Map([...document.querySelectorAll('[data-screen]')].map((screen) => [screen.dataset.screen, screen]));
+      const state = {
+        route: 'query-start',
+        scope: 'Adatbázis migráció',
+        question: 'Milyen lépésekből áll egy biztonságos sémaátállítás?',
+        topic: 'Adatbázis migráció',
+      };
+
+      const validRoutes = new Set(screens.keys());
+      const activeNavForRoute = (route) => {
+        if (route === 'home') return 'home';
+        if (route === 'explore-overview') return 'explore';
+        if (route.startsWith('workspace')) return 'workspace';
+        return 'query';
+      };
+
+      function closePanels() {
+        document.querySelectorAll('.menu-layer.is-open').forEach((panel) => panel.classList.remove('is-open'));
+        document.querySelectorAll('.assistant-panel.is-open').forEach((panel) => panel.classList.remove('is-open'));
+        document.querySelectorAll('.menu-layer').forEach((panel) => panel.setAttribute('aria-hidden', 'true'));
+      }
+
+      function syncDynamicCopy() {
+        document.querySelectorAll('[data-scope-label]').forEach((element) => { element.textContent = state.scope; });
+        document.querySelectorAll('[data-question-bubble], [data-answer-question]').forEach((element) => { element.textContent = state.question; });
+        document.querySelectorAll('[data-topic-name]').forEach((element) => { element.textContent = state.topic; });
+        document.querySelectorAll('[data-assistant-context]').forEach((element) => { element.textContent = `${state.route.startsWith('query') ? 'Query' : state.route} · ${state.scope}`; });
+      }
+
+      function renderRoute() {
+        const hashRoute = window.location.hash.replace('#', '');
+        const route = validRoutes.has(hashRoute) ? hashRoute : state.route;
+        state.route = route;
+        screens.forEach((screen, name) => {
+          const active = name === route;
+          screen.classList.toggle('is-active', active);
+          screen.setAttribute('aria-hidden', String(!active));
+          if (active) screen.scrollTop = 0;
+        });
+        document.querySelectorAll('[data-nav]').forEach((button) => {
+          button.classList.toggle('is-active', button.dataset.nav === activeNavForRoute(route));
+        });
+        syncDynamicCopy();
+      }
+
+      function navigate(route, { replace = false } = {}) {
+        if (!validRoutes.has(route)) return;
+        closePanels();
+        state.route = route;
+        const nextHash = `#${route}`;
+        if (replace) {
+          history.replaceState({ route }, '', nextHash);
+        } else if (window.location.hash !== nextHash) {
+          history.pushState({ route }, '', nextHash);
+        }
+        renderRoute();
+      }
+
+      document.querySelectorAll('[data-route]').forEach((button) => {
+        button.addEventListener('click', () => {
+          if (button.dataset.topic) state.topic = button.dataset.topic;
+          navigate(button.dataset.route);
+        });
+      });
+
+      document.querySelectorAll('[data-back]').forEach((button) => {
+        button.addEventListener('click', () => {
+          if (history.length > 1) history.back();
+          else navigate('query-start', { replace: true });
+        });
+      });
+
+      document.querySelectorAll('[data-prompt]').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.question = button.dataset.prompt;
+          navigate('query-ready');
+        });
+      });
+
+      document.querySelectorAll('[data-select-scope]').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.scope = button.dataset.selectScope;
+          document.querySelectorAll('[data-select-scope]').forEach((option) => {
+            option.classList.toggle('is-selected', option === button);
+          });
+          navigate('query-ready');
+        });
+      });
+
+      document.querySelectorAll('[data-query-form]').forEach((form) => {
+        form.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const input = form.querySelector('input');
+          if (input?.value.trim()) state.question = input.value.trim();
+          navigate('query-thinking');
+        });
+      });
+
+      document.querySelectorAll('[data-voice]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const status = button.closest('.composer')?.querySelector('[data-query-status]');
+          if (status) {
+            status.textContent = 'A hangbevitel a Flutter alkalmazásban lesz elérhető.';
+            status.classList.add('is-visible');
+          }
+        });
+      });
+
+      document.querySelectorAll('[data-open-panel]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const panel = button.dataset.openPanel;
+          if (panel === 'settings') {
+            const element = document.querySelector('#settingsPanel');
+            element.classList.add('is-open');
+            element.setAttribute('aria-hidden', 'false');
+            element.querySelector('.close-button')?.focus();
+          }
+          if (panel === 'assistant') document.querySelector('#assistantPanel').classList.add('is-open');
+        });
+      });
+
+      document.querySelectorAll('[data-close-panel]').forEach((button) => {
+        button.addEventListener('click', closePanels);
+      });
+
+      document.querySelectorAll('.switch').forEach((button) => {
+        button.addEventListener('click', () => {
+          button.setAttribute('aria-pressed', String(button.getAttribute('aria-pressed') !== 'true'));
+        });
+      });
+
+      document.querySelectorAll('.answer-option').forEach((button) => {
+        button.addEventListener('click', () => {
+          button.parentElement.querySelectorAll('.answer-option').forEach((option) => option.classList.toggle('is-selected', option === button));
+        });
+      });
+
+      window.addEventListener('hashchange', renderRoute);
+      window.addEventListener('popstate', renderRoute);
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closePanels();
+      });
+
+      if (!validRoutes.has(window.location.hash.replace('#', ''))) {
+        navigate('query-start', { replace: true });
+      } else {
+        renderRoute();
+      }
+    </script>
+  </body>
+</html>

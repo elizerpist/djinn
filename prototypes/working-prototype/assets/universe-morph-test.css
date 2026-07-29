@@ -1,15 +1,72 @@
 .universe-morph-screen .screen-content { padding: 0; overflow: hidden; }
 .universe-morph-test { min-height: 100%; padding: 12px; background: #f7f6fa; }
 .universe-morph-stage { min-height: 520px; position: relative; overflow: hidden; border-radius: 26px; background: radial-gradient(circle at 58% 35%, #24144d 0%, #100a22 46%, #080710 100%); touch-action: none; box-shadow: inset 0 0 0 1px rgba(201, 196, 255, .13), 0 14px 28px rgba(44, 28, 81, .2); }
+.universe-morph-stage:fullscreen, .universe-morph-stage.is-universe-fullscreen-fallback { width: 100vw; height: 100vh; min-height: 100vh; border-radius: 0; box-shadow: none; }
+.universe-morph-stage.is-universe-fullscreen-fallback { position: fixed; z-index: 1000; inset: 0; }
 .universe-morph-galaxy, .universe-morph-map { position: absolute; inset: 0; overflow: hidden; }
 .universe-morph-galaxy canvas, .universe-morph-map canvas, .universe-morph-map svg { display: block; }
+.universe-morph-galaxy canvas { touch-action: none; }
+.universe-fullscreen-toggle { z-index: 7; position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid rgba(189, 234, 247, .36); border-radius: 50%; color: #e8fbff; background: rgba(4, 12, 30, .7); box-shadow: 0 5px 16px rgba(0, 0, 0, .28); backdrop-filter: blur(8px); font: 700 18px/1 system-ui, sans-serif; }
+.universe-fullscreen-toggle.is-active { color: #fff0ad; border-color: rgba(255, 218, 104, .75); background: rgba(101, 63, 21, .76); }
+.universe-city-context { z-index: 5; position: absolute; right: 12px; bottom: 54px; left: 12px; display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 7px 8px 7px 11px; border: 1px solid rgba(255, 212, 90, .46); border-radius: 14px; color: #fff8d5; background: rgba(43, 27, 9, .82); box-shadow: 0 9px 24px rgba(0, 0, 0, .25), 0 0 18px rgba(255, 182, 72, .14); backdrop-filter: blur(9px); }
+.universe-city-context[hidden] { display: none; }
+.universe-city-context span { display: grid; flex: 1 1 auto; min-width: 0; gap: 1px; }
+.universe-city-context strong { overflow: hidden; color: #fff8d5; font: 800 11px/14px system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.universe-city-context small { color: #f5d98d; font: 650 8px/11px system-ui, sans-serif; }
+.universe-city-context button { flex: 0 0 auto; min-height: 28px; padding: 0 9px; border: 1px solid rgba(255, 231, 131, .55); border-radius: 9px; color: #fff8d5; background: rgba(151, 94, 25, .55); font: 750 8px system-ui, sans-serif; }
+.universe-city-context button[data-universe-city-action="clear"] { width: 28px; padding: 0; border-radius: 50%; font-size: 17px; }
 .universe-morph-map { z-index: 2; opacity: 0; pointer-events: none; transition: opacity .18s ease; }
 .universe-morph-map.is-map-active { pointer-events: auto; }
+.universe-corridor { z-index: 3; position: absolute; inset: 0; color: #f4efff; opacity: 0; pointer-events: none; transition: opacity .42s ease; }
+.universe-corridor[hidden] { display: none; }
+.universe-corridor.is-opening, .universe-corridor.is-open { opacity: 1; }
+.universe-corridor-toolbar { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+.universe-corridor-toolbar span { display: grid; gap: 2px; padding: 7px 10px; border: 1px solid rgba(216, 204, 255, .18); border-radius: 10px; color: #efe8ff; background: rgba(12, 7, 30, .52); backdrop-filter: blur(8px); font: 800 9px system-ui, sans-serif; }
+.universe-corridor-toolbar small { color: #b4a5d5; font: 600 8px system-ui, sans-serif; }
+.universe-corridor-close { width: 30px; height: 30px; border: 1px solid rgba(235, 227, 255, .24); border-radius: 50%; color: #f5efff; background: rgba(12, 7, 30, .58); font: 500 21px/1 system-ui, sans-serif; pointer-events: auto; }
 .universe-morph-proxy { z-index: 4; position: absolute; width: 36px; height: 36px; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0; }
 .universe-morph-proxy[hidden] { display: none; }
-.universe-morph-debug { z-index: 5; position: absolute; top: 10px; right: 10px; max-width: 142px; padding: 8px; border: 1px solid rgba(216, 204, 255, .24); border-radius: 12px; color: #eeeaff; font: 700 8px/1.45 system-ui, sans-serif; background: rgba(9, 6, 23, .7); backdrop-filter: blur(8px); pointer-events: auto; }
-.universe-morph-debug output { display: block; color: #cfc2f1; }
-.universe-morph-debug-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-top: 7px; }
+.universe-morph-debug { z-index: 6; position: absolute; right: 10px; bottom: 10px; left: 10px; max-width: none; padding: 6px 9px; border: 1px solid rgba(216, 204, 255, .24); border-radius: 12px; color: #eeeaff; font: 700 8px/1.35 system-ui, sans-serif; background: rgba(9, 6, 23, .74); backdrop-filter: blur(8px); pointer-events: auto; }
+.universe-morph-debug-summary { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.universe-morph-debug-summary strong { flex: 0 0 auto; color: #fff; font-size: 8px; letter-spacing: .04em; }
+.universe-morph-debug-summary output { min-width: 0; overflow: hidden; color: #cfc2f1; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.universe-morph-debug-summary output:nth-child(2) { flex: 1 1 auto; }
+.universe-morph-debug-details { margin-top: 5px; border-top: 1px solid rgba(216, 204, 255, .15); }
+.universe-morph-debug-details summary { padding-top: 5px; color: #ddd4f4; cursor: pointer; font-size: 7px; list-style: none; }
+.universe-morph-debug-details summary::-webkit-details-marker { display: none; }
+.universe-morph-debug-details summary::after { margin-left: 4px; content: '⌄'; }
+.universe-morph-debug-details[open] summary::after { content: '⌃'; }
+.universe-morph-debug-details-body { display: grid; gap: 3px; padding-top: 5px; }
+.universe-morph-debug-details output { display: block; color: #cfc2f1; }
+.universe-morph-debug-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 4px; }
 .universe-morph-debug-actions button { min-height: 24px; border: 1px solid rgba(216, 204, 255, .2); border-radius: 7px; color: #f4efff; font: 700 7px system-ui, sans-serif; background: rgba(124, 77, 255, .25); }
-.universe-morph-debug-actions button:last-child { grid-column: 1 / -1; }
+.universe-child-nav { background: rgba(255, 255, 255, .96); }
+.universe-child-nav .tabs { justify-content: center; }
+.universe-child-nav .tab { min-width: 112px; }
+.universe-morph-v2-screen .universe-morph-test { background: #06163f; }
+.universe-morph-v2-screen .universe-morph-stage {
+  background:
+    radial-gradient(circle at 62% 28%, rgba(67, 231, 248, .16), transparent 30%),
+    radial-gradient(circle at 42% 34%, #102c6b 0%, #0b2254 46%, #06163f 100%);
+  box-shadow: inset 0 0 0 1px rgba(67, 231, 248, .2), 0 14px 28px rgba(6, 22, 63, .38);
+}
+.universe-morph-v2-screen .universe-corridor-toolbar span { border-color: rgba(67, 231, 248, .28); background: rgba(6, 22, 63, .72); }
+.universe-morph-v2-screen .universe-corridor-close { border-color: rgba(255, 231, 131, .42); background: rgba(6, 22, 63, .72); }
+.universe-morph-v2-screen .universe-morph-debug { border-color: rgba(67, 231, 248, .24); background: rgba(6, 22, 63, .76); }
+.universe-morph-v2-screen .universe-morph-debug-actions button { border-color: rgba(67, 231, 248, .24); background: rgba(20, 188, 230, .2); }
+.universe-morph-v3-screen .universe-morph-test { background: #071027; }
+.universe-morph-v3-screen .universe-morph-stage {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(71, 217, 255, .12), transparent 31%),
+    radial-gradient(circle at 65% 22%, rgba(139, 103, 255, .16), transparent 38%),
+    #050918;
+  box-shadow: inset 0 0 0 1px rgba(92, 226, 255, .21), 0 14px 30px rgba(5, 9, 24, .52);
+}
+.universe-morph-v3-screen .universe-morph-debug { border-color: rgba(100, 238, 255, .3); background: rgba(4, 12, 30, .78); }
+.universe-morph-v3-screen .universe-morph-debug output { color: #bdeaf7; }
+.universe-morph-v3-screen .universe-morph-debug-actions button { border-color: rgba(110, 239, 255, .32); background: rgba(45, 145, 222, .25); }
+.universe-morph-debug-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 7px; color: #bdeaf7; font: 650 7px/1.15 system-ui, sans-serif; }
+.universe-morph-debug-toggles label { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.universe-morph-debug-toggles input { width: 10px; height: 10px; accent-color: #6eefff; }
+@media (max-width: 360px) { .universe-morph-debug-summary strong { display: none; } }
 @media (max-height: 730px) { .universe-morph-stage { min-height: 430px; } }

@@ -24,7 +24,9 @@ assert.match(app, /state\.question = djinnForm\.querySelector\('input'\)/);
 assert.match(styles, /\.djinn-command-sheet/);
 assert.match(styles, /\.djinn-command-grid/);
 assert.match(styles, /\.djinn-context-card/);
-assert.match(index, /assets\/styles\.css\?rev=139/);
-assert.match(index, /assets\/app\.js\?rev=145/);
+// The production entry points are explicitly versioned so a device cannot
+// retain a stale Explore module after a renderer/state update.
+assert.match(index, /assets\/styles\.css\?rev=146/);
+assert.match(index, /assets\/app\.js\?rev=246/);
 
 console.log('djinn command menu OK');

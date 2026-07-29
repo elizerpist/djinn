@@ -1,0 +1,296 @@
+.universe4-screen .screen-content { padding: 0; overflow: hidden; }
+.universe4-main { min-height: 100%; padding: 12px; background: #071027; }
+.universe4-child-nav { background: rgba(255, 255, 255, .96); }
+.universe4-child-nav .tabs { justify-content: center; }
+.universe4-child-nav .tab { min-width: 86px; }
+
+.universe4-viewport {
+  position: relative;
+  min-height: 520px;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(71, 217, 255, .12), transparent 31%),
+    radial-gradient(circle at 65% 22%, rgba(139, 103, 255, .16), transparent 38%),
+    #050918;
+  box-shadow: inset 0 0 0 1px rgba(92, 226, 255, .21), 0 14px 30px rgba(5, 9, 24, .52);
+  touch-action: none;
+}
+.universe4-stage-shell:fullscreen,
+.universe4-stage-shell.is-universe4-fullscreen-fallback {
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #071027;
+}
+.universe4-stage-shell.is-universe4-fullscreen-fallback {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+}
+.universe4-stage-shell:fullscreen .universe4-viewport,
+.universe4-stage-shell.is-universe4-fullscreen-fallback .universe4-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border-radius: 0;
+  box-shadow: none;
+}
+.universe4-stage-shell:fullscreen .universe4-debug,
+.universe4-stage-shell.is-universe4-fullscreen-fallback .universe4-debug {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: none;
+  max-height: min(38dvh, 270px);
+  box-sizing: border-box;
+  margin: 0;
+  overflow-y: auto;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
+}
+
+.universe4-render-stage {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  background: transparent;
+  /* U4 drives the 240 ms match-cut from one requestAnimationFrame loop.
+     A CSS transition here would interpolate every intermediate write again,
+     producing the visible lag/double-ease reported on mobile. */
+  transition: none;
+}
+
+.universe4-render-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.universe4-u3-source-root,
+.universe4-v7-source-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+/* U4's entry renderer is the actual U3 controller. Its normal route adds
+   page padding and a second fullscreen button; U4 supplies the common stage
+   frame instead, without altering U3's ForceGraph implementation. */
+.universe4-u3-source-root .universe-morph-v3-screen,
+.universe4-u3-source-root .universe-morph-test,
+.universe4-u3-source-root .universe-morph-stage {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.universe4-u3-source-root .universe-morph-test { padding: 0; }
+.universe4-u3-source-root .universe-morph-stage { border-radius: inherit; }
+.universe4-u3-source-root .universe-morph-debug,
+.universe4-u3-source-root .universe-fullscreen-toggle { display: none; }
+/* The source controllers set explicit pointer-events:auto on their canvas,
+   controls and overlays. A hidden U4 stage must therefore lock the complete
+   descendant tree, otherwise it can steal taps from the visible stage. */
+.universe4-u3-source-root.is-u4-input-disabled,
+.universe4-u3-source-root.is-u4-input-disabled *,
+.universe4-v7-source-root.is-u4-input-disabled,
+.universe4-v7-source-root.is-u4-input-disabled * { pointer-events: none !important; }
+/* The destination owns the canonical Explore V7 renderer. U4 removes only
+   Explore navigation chrome; its real V7 light diagnostics and copyable
+   signal trace are portalled into the common U4 viewport below. */
+.universe4-v7-source-root,
+.universe4-v7-source-root .expandable-galaxy-orb,
+.universe4-v7-source-root .galaxy-orb-morph { width: 100%; height: 100%; }
+.universe4-v7-source-root .expandable-galaxy-orb { pointer-events: auto; }
+.universe4-v7-source-root .galaxy-orb-morph { border-radius: inherit; }
+.universe4-v7-source-root .is-embedded-bare-planet .galaxy-orb-controls,
+.universe4-v7-source-root .is-embedded-bare-planet .galaxy-orb-v3-tuning,
+.universe4-v7-source-root .is-embedded-bare-planet .galaxy-orb-v5-size-debug,
+.universe4-v7-source-root .is-embedded-bare-planet .galaxy-orb-v6-light-debug,
+.universe4-v7-source-root .is-embedded-bare-planet .galaxy-node-morph-overlay { display: none !important; }
+.universe4-v7-debug-portal {
+  position: absolute;
+  z-index: 7;
+  inset: 0;
+  pointer-events: none;
+}
+/* These are the actual V7 elements, not a U4 lookalike. They intentionally
+   stay visible while the Force stage is still on top, so renderer failures
+   can be copied directly from the affected screen. */
+.universe4-v7-debug-portal .galaxy-orb-v7-light-debug {
+  position: absolute;
+  right: 13px;
+  bottom: 128px;
+  left: 13px;
+  z-index: 1;
+  display: flex !important;
+  pointer-events: auto;
+}
+.universe4-v7-debug-portal .planet-signal-debug-panel {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  display: grid !important;
+  pointer-events: auto;
+}
+.universe4-v7-label-layer { position: absolute; z-index: 5; inset: 0; pointer-events: none; overflow: hidden; }
+.universe4-v7-label { position: absolute; display: block; box-sizing: border-box; padding: 6px 10px; overflow: hidden; border: 1px solid rgba(79, 220, 255, .64); border-radius: 999px; color: #dffaff; background: rgba(5, 25, 55, .82); box-shadow: 0 0 16px rgba(41, 203, 255, .18); font: 750 8px/1.1 system-ui, sans-serif; letter-spacing: .01em; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.universe4-v7-label.is-focus { border-color: rgba(255, 218, 90, .92); color: #fff4c6; background: rgba(104, 63, 18, .85); }
+.universe4-force-stage { opacity: 1; pointer-events: auto; }
+.universe4-globe-stage { z-index: 2; opacity: 0; pointer-events: none; }
+.universe4-globe-stage.is-interactive { pointer-events: auto; }
+.universe4-viewport[data-universe4-proof-view="globe-only"] .universe4-force-stage { opacity: 0; pointer-events: none; }
+.universe4-viewport[data-universe4-proof-view="globe-only"] .universe4-globe-stage { opacity: 1; pointer-events: auto; }
+.universe4-viewport[data-universe4-proof-view="force-only"] .universe4-force-stage { opacity: 1; pointer-events: auto; }
+.universe4-viewport[data-universe4-proof-view="force-only"] .universe4-globe-stage { opacity: 0; pointer-events: none; }
+.universe4-viewport[data-universe4-proof-view="overlay-difference"] .universe4-globe-stage { opacity: .5; }
+.universe4-viewport[data-universe4-proof-view="split-view"] .universe4-force-stage { clip-path: inset(0 50% 0 0); }
+.universe4-viewport[data-universe4-proof-view="split-view"] .universe4-globe-stage { opacity: 1; clip-path: inset(0 0 0 50%); pointer-events: none; }
+
+.universe4-fullscreen-toggle {
+  position: absolute;
+  z-index: 6;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(189, 234, 247, .36);
+  border-radius: 50%;
+  color: #e8fbff;
+  background: rgba(4, 12, 30, .7);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .28);
+  backdrop-filter: blur(8px);
+  font: 700 18px/1 system-ui, sans-serif;
+}
+.universe4-fullscreen-toggle.is-active { color: #fff0ad; border-color: rgba(255, 218, 104, .75); background: rgba(101, 63, 21, .76); }
+.universe4-reset-button {
+  position: absolute;
+  z-index: 6;
+  top: 12px;
+  right: 54px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(224, 196, 255, .52);
+  border-radius: 999px;
+  color: #f5eaff;
+  background: rgba(82, 46, 133, .76);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .28);
+  backdrop-filter: blur(8px);
+  font: 800 8px/1 system-ui, sans-serif;
+  letter-spacing: .04em;
+}
+.universe4-reset-button:focus-visible { outline: 2px solid #fff0ad; outline-offset: 2px; }
+.universe4-background-controls {
+  position: absolute;
+  z-index: 8;
+  top: 54px;
+  right: 12px;
+  display: grid;
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid rgba(189, 234, 247, .3);
+  border-radius: 10px;
+  color: #dff7ff;
+  background: rgba(4, 12, 30, .78);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .28);
+  backdrop-filter: blur(8px);
+  font: 750 7px/1 system-ui, sans-serif;
+  letter-spacing: .04em;
+}
+.universe4-background-controls label { display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 5px; }
+.universe4-background-controls select {
+  min-width: 132px;
+  max-width: 160px;
+  min-height: 24px;
+  border: 1px solid rgba(137, 224, 247, .36);
+  border-radius: 6px;
+  color: #e9fbff;
+  background: rgba(10, 27, 59, .88);
+  font: 700 7px/1 system-ui, sans-serif;
+}
+.universe4-background-controls select:focus-visible { outline: 2px solid #fff0ad; outline-offset: 2px; }
+
+.universe4-stage-status {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 6px 9px;
+  border: 1px solid rgba(126, 234, 255, .34);
+  border-radius: 999px;
+  color: #d7f7ff;
+  background: rgba(4, 12, 30, .74);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
+  backdrop-filter: blur(9px);
+  font: 750 8px/1 system-ui, sans-serif;
+  letter-spacing: .04em;
+}
+.universe4-stage-status-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: #5eeeff; box-shadow: 0 0 10px rgba(94, 238, 255, .8); }
+.universe4-stage-status output { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.universe4-debug {
+  position: static;
+  max-width: 540px;
+  margin: 10px auto 0;
+  padding: 9px;
+  border: 1px solid rgba(100, 238, 255, .32);
+  border-radius: 14px;
+  color: #eafaff;
+  background: rgba(4, 12, 30, .82);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, .32);
+  backdrop-filter: blur(10px);
+}
+/* Keep the successful U4 endpoint as the bare canonical V7 planet. When the
+   invisible match gate rejects a pose, surface the measured U4 diagnostics
+   below the viewport instead of exposing a malformed Globe frame. */
+.universe4-screen .universe4-debug,
+.universe4-screen .universe4-stage-status { display: none; }
+.universe4-stage-shell.is-u4-match-diagnostics .universe4-debug { display: block; }
+.universe4-debug-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.universe4-debug-heading > div { display: grid; gap: 2px; min-width: 0; }
+.universe4-debug-kicker { color: #8edce9; font: 750 7px/1 system-ui, sans-serif; letter-spacing: .11em; }
+.universe4-debug-heading strong { font: 800 10px/1.1 system-ui, sans-serif; }
+.universe4-debug-owner { padding: 4px 6px; border: 1px solid rgba(122, 232, 255, .34); border-radius: 999px; color: #c3fbff; background: rgba(33, 147, 188, .18); font: 800 7px/1 system-ui, sans-serif; letter-spacing: .08em; }
+
+.universe4-debug-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px 8px; margin: 8px 0 0; }
+.universe4-debug-metrics div { min-width: 0; }
+.universe4-debug-metrics dt { color: #83bfce; font: 650 7px/1.1 system-ui, sans-serif; }
+.universe4-debug-metrics dd { min-width: 0; margin: 2px 0 0; overflow: hidden; color: #e9fbff; font: 750 8px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+
+.universe4-debug-details { margin-top: 8px; border-top: 1px solid rgba(100, 238, 255, .16); }
+.universe4-debug-details summary { padding-top: 7px; color: #bdeaf7; cursor: pointer; font: 650 7px/1.1 system-ui, sans-serif; list-style: none; }
+.universe4-debug-details summary::-webkit-details-marker { display: none; }
+.universe4-debug-details summary::after { margin-left: 4px; content: '⌄'; }
+.universe4-debug-details[open] summary::after { content: '⌃'; }
+.universe4-debug-details-body { display: grid; gap: 3px; padding-top: 6px; }
+.universe4-debug-details output { overflow: hidden; color: #b9dfe9; font: 650 7px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.universe4-signal-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(100, 238, 255, .16); color: #bdeaf7; font: 700 7px/1 system-ui, sans-serif; }
+.universe4-signal-heading button { padding: 4px 6px; border: 1px solid rgba(110, 239, 255, .3); border-radius: 6px; color: #dffbff; background: rgba(45, 145, 222, .18); font: 700 7px/1 system-ui, sans-serif; }
+.universe4-signal-log { height: 96px; margin: 5px 0 0; padding: 6px; overflow: auto; border: 1px solid rgba(100, 238, 255, .17); border-radius: 7px; color: #aeeaf4; background: rgba(1, 7, 21, .7); font: 600 7px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+
+.universe4-proof-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+.universe4-proof-controls button { min-height: 27px; padding: 4px; border: 1px solid rgba(110, 239, 255, .28); border-radius: 7px; color: #e9fbff; background: rgba(45, 145, 222, .2); font: 750 7px/1.1 system-ui, sans-serif; }
+.universe4-proof-controls button:focus-visible { outline: 2px solid #fff0a3; outline-offset: 2px; }
+.universe4-proof-controls button.is-primary { border-color: rgba(255, 215, 101, .58); color: #fff4c7; background: rgba(175, 112, 30, .36); }
+.universe4-proof-controls button.is-return { border-color: rgba(220, 196, 255, .34); color: #eee2ff; background: rgba(110, 72, 174, .26); }
+
+@media (max-width: 390px) {
+  .universe4-main { padding: 9px; }
+  .universe4-viewport { min-height: 460px; border-radius: 20px; }
+  .universe4-child-nav .tab { min-width: 68px; padding-inline: 7px; }
+  .universe4-proof-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-height: 730px) { .universe4-viewport { min-height: 430px; } }

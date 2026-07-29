@@ -4,12 +4,32 @@ export const TAP_DURATION_THRESHOLD_MS = 300;
 
 export const UNIVERSE_LEVEL = Object.freeze({
   GALAXY: 'GALAXY',
+  CORRIDOR: 'CORRIDOR',
   GALAXY_TO_PLANET: 'GALAXY_TO_PLANET',
   PLANET: 'PLANET',
   PLANET_TO_MAP: 'PLANET_TO_MAP',
   MAP: 'MAP',
   MAP_TO_PLANET: 'MAP_TO_PLANET',
   PLANET_TO_GALAXY: 'PLANET_TO_GALAXY',
+});
+
+export const UNIVERSE_FOCUS_STATE = Object.freeze({
+  GALAXY_OVERVIEW: 'GALAXY_OVERVIEW',
+  PLANET_FOCUS_ENTER: 'PLANET_FOCUS_ENTER',
+  PLANET_FOCUS: 'PLANET_FOCUS',
+  PLANET_FOCUS_EXIT: 'PLANET_FOCUS_EXIT',
+});
+
+export const CORRIDOR_MOCK = Object.freeze({
+  source: Object.freeze({ id: 'corridor-source', label: 'Fizikai gázviselkedés', atomCount: 18 }),
+  target: Object.freeze({ id: 'corridor-target', label: 'Élettani oxigenizáció', atomCount: 24 }),
+  connectionCount: 18,
+  sourceCount: 7,
+  bridges: Object.freeze([
+    Object.freeze({ source: 'Parciális nyomás', target: 'PaO₂', evidence: '4 közös chunk · 2 forrás' }),
+    Object.freeze({ source: 'Diffúzió', target: 'Alveoláris gázcsere', evidence: '3 közös chunk · 2 forrás' }),
+    Object.freeze({ source: 'Oxigén', target: 'Hypoxaemia', evidence: '6 közös chunk · 4 forrás' }),
+  ]),
 });
 
 function mulberry32(seed) {
@@ -34,6 +54,9 @@ function createNodes(prefix, count, label, options = {}) {
       ? `Bolygó ${index + 1}`
       : `${label} ${index + 1}`,
     isPlanet: Boolean(options.planetCount && index < options.planetCount),
+    atomCount: options.planetCount && index < options.planetCount
+      ? 8 + index * 20
+      : null,
     importance: Number((.35 + (index % 11) / 20).toFixed(2)),
   }));
 }
@@ -130,6 +153,37 @@ export function focusCameraTarget(node, camera, previousTarget, distance) {
   };
 }
 
+export function focusDistanceForBoundingRadius(radius, fovDegrees, aspect = 1, viewportFill = .4) {
+  const safeRadius = Math.max(.001, Number(radius) || .001);
+  const safeAspect = Math.max(.1, Number(aspect) || 1);
+  const safeFill = Math.max(.05, Math.min(.9, Number(viewportFill) || .4));
+  const verticalFov = Math.max(.01, Number(fovDegrees) || 50) * Math.PI / 180;
+  const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * safeAspect);
+  const limitingFov = Math.min(verticalFov, horizontalFov);
+  return safeRadius / (Math.tan(limitingFov / 2) * safeFill);
+}
+
+export function clampOrbitDistance(position, target, minDistance, maxDistance) {
+  const dx = position.x - target.x;
+  const dy = position.y - target.y;
+  const dz = position.z - target.z;
+  const originalDistance = Math.hypot(dx, dy, dz);
+  const minimum = Math.max(.001, Number(minDistance) || .001);
+  const maximum = Math.max(minimum, Number(maxDistance) || minimum);
+  const distance = Math.max(minimum, Math.min(maximum, originalDistance || minimum));
+  const divisor = originalDistance || 1;
+  return {
+    x: target.x + dx / divisor * distance,
+    y: target.y + dy / divisor * distance,
+    z: target.z + dz / divisor * distance,
+    distance,
+  };
+}
+
+export function focusTargetDelta(target, anchor) {
+  return Math.hypot(target.x - anchor.x, target.y - anchor.y, target.z - anchor.z);
+}
+
 export function surfaceArcPoints(start, end, baseRadius, segments, lift) {
   const startLength = Math.hypot(start.x, start.y, start.z) || 1;
   const endLength = Math.hypot(end.x, end.y, end.z) || 1;
@@ -175,6 +229,8 @@ export function classifyPointerTap(start, end, endedAt = end.endedAt) {
 
 export function canTransition(level, targetLevel) {
   return new Set([
+    `${UNIVERSE_LEVEL.GALAXY}:${UNIVERSE_LEVEL.CORRIDOR}`,
+    `${UNIVERSE_LEVEL.CORRIDOR}:${UNIVERSE_LEVEL.GALAXY}`,
     `${UNIVERSE_LEVEL.GALAXY}:${UNIVERSE_LEVEL.GALAXY_TO_PLANET}`,
     `${UNIVERSE_LEVEL.GALAXY_TO_PLANET}:${UNIVERSE_LEVEL.PLANET}`,
     `${UNIVERSE_LEVEL.PLANET}:${UNIVERSE_LEVEL.PLANET_TO_MAP}`,
@@ -187,6 +243,7 @@ export function canTransition(level, targetLevel) {
 }
 
 export function reverseTransition(level) {
+  if (level === UNIVERSE_LEVEL.CORRIDOR) return UNIVERSE_LEVEL.GALAXY;
   if (level === UNIVERSE_LEVEL.MAP) return UNIVERSE_LEVEL.MAP_TO_PLANET;
   if (level === UNIVERSE_LEVEL.PLANET) return UNIVERSE_LEVEL.PLANET_TO_GALAXY;
   return null;
