@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { rebindPlanetObjects } from '../assets/explore/planet-object-rebind.js';
+import { rebindPlanetObjects } from '../assets/universe4/globe/planet-object-rebind.js';
 
 const calls = [];
 const points = [{ id: 'a' }, { id: 'b' }];

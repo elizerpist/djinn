@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const source = await readFile(new URL('../assets/explore-galaxy-orb.js', import.meta.url), 'utf8');
+const source = await readFile(new URL('../assets/universe4/universe4-globe-stage.js', import.meta.url), 'utf8');
 
 function section(start, end) {
   const startIndex = source.indexOf(start);
@@ -22,4 +22,4 @@ assert.doesNotMatch(v7FrameHook, /v7LensFlare\?\.updateFrame/, 'V7 frame updates
 assert.match(v6Cosmic, /getLensFlareController:\s*\(\)\s*=>\s*null/, 'V6 cosmic sun and stars must run without a flare controller');
 assert.match(v7Cosmic, /getLensFlareController:\s*\(\)\s*=>\s*null/, 'V7 cosmic sun and stars must run without a flare controller');
 
-console.log('Explore V6/V7 no-flare production wiring OK');
+console.log('Universe V6/V7 no-flare production wiring OK');

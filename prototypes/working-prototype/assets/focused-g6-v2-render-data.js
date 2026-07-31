@@ -1,4 +1,4 @@
-// Renderer-neutral Focused Map v2 data.  The Explore map and the embedded
+// Renderer-neutral Focused Map v2 data. The Universe map and its embedded
 // Universe 4 G6 stage call this same builder so card/edge geometry and the
 // deep-space palette cannot drift apart.
 const paletteFor = (dark) => (dark ? {

@@ -6,8 +6,8 @@
  * Navigation Graph edges without changing the interaction layer.
  */
 
-import * as THREE from './vendor/three.module.min.js?rev=92';
-import { buildFocusedG6V2RenderData } from './focused-g6-v2-render-data.js?rev=1';
+import * as THREE from '../vendor/three.module.min.js?rev=92';
+import { buildFocusedG6V2RenderData } from '../focused-g6-v2-render-data.js?rev=1';
 
 // three-globe böngészős UMD buildje a globális THREE példányt használja.
 // A projekt Three.js-je modulból érkezik, ezért előbb ugyanazt a példányt tesszük
@@ -20,7 +20,7 @@ if (typeof window !== 'undefined') {
   // használja, miközben a force-galaxis indulását nem blokkoljuk.
   if (!window.ThreeGlobe) {
     const threeGlobeScript = document.createElement('script');
-    threeGlobeScript.src = './vendor/three-globe.min.js?rev=3';
+    threeGlobeScript.src = '../vendor/three-globe.min.js?rev=3';
     threeGlobeScript.async = true;
     threeGlobeScript.onerror = (error) => console.warn('ThreeGlobe LOD réteg nem tölthető be:', error);
     document.head.appendChild(threeGlobeScript);

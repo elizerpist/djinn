@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createPlanetSignalTrace } from '../assets/explore/planet-signal-trace.js';
+import { createPlanetSignalTrace } from '../assets/universe4/globe/planet-signal-trace.js';
 
 const trace = createPlanetSignalTrace({ limit: 2, now: () => 10 });
 trace.record('pointer.tap', { variant: 'v5', cityId: 'pao2' });

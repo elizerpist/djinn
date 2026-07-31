@@ -1,7 +1,7 @@
 // Pure selection data for the V5/V6/V7 city-context renderer. This module
 // intentionally knows nothing about Globe.gl, Three.js, the camera or view
 // state: all variants receive the same deterministic connection payload.
-import { buildGreatCircleSurfacePath } from './explore/planet-surface-path.js?rev=1';
+import { buildGreatCircleSurfacePath } from './universe4/globe/planet-surface-path.js?rev=1';
 
 export const SURFACE_SELECTION_ARC_PROFILE = Object.freeze({
   // Nodes are centered at .012. A three-thousandth shell offset leaves the

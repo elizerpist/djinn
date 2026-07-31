@@ -6,7 +6,7 @@ import {
 } from '../virtual-galaxy-light-rig.js?rev=24';
 // Import the V5 visual snapshot, not its Globe.gl UI wrapper.  V3 places
 // this immutable node data inside the already-existing ForceGraph3D scene.
-import { getV5PlanetVisualSnapshot } from '../explore-galaxy-orb.js?rev=226';
+import { getV5PlanetVisualSnapshot } from './universe4-globe-stage.js?rev=1';
 import {
   TEST_SEED,
   UNIVERSE_FOCUS_STATE,
@@ -2142,7 +2142,7 @@ export function initUniverse4ForceController(root, helpers = {}) {
         hideFocusedOverviewVisual(view);
         state.focusMode = UNIVERSE_FOCUS_STATE.PLANET_FOCUS;
         // Universe 4 waits until this exact U3 inline morph is complete, then
-        // hands the same planet to the canonical Explore V7 Globe.gl
+        // hands the same planet to the canonical Universe V7 Globe.gl
         // controller. Keeping this narrow lifecycle seam here means U4 never
         // recreates or approximates the ForceGraph entry animation.
         const handoff = await helpers.onPlanetReady?.({

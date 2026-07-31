@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {
   clearPlanetSelectionArcs,
   commitPlanetSelectionArcs,
-} from '../assets/explore/planet-globe-arc-adapter.js';
+} from '../assets/universe4/globe/planet-globe-arc-adapter.js';
 
 const assigned = [];
 const assignedPaths = [];

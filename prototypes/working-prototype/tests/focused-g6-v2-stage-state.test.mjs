@@ -10,10 +10,10 @@ import {
   focusedG6V2Lod,
   knowledgeEdges,
   knowledgeNodes,
-} from '../assets/knowledge-map.js';
+} from '../assets/universe4/universe4-graph-data.js';
 
 assert.deepEqual(FOCUSED_G6_V2_STAGE_ZOOM, { min: .35, max: 2.6, step: .22 });
-assert.equal(focusedG6V2NextStageZoom(1, 'in'), 1.22, 'the embedded map exposes the same deliberate zoom-in step as Explore G6 V2');
+assert.equal(focusedG6V2NextStageZoom(1, 'in'), 1.22, 'the embedded Universe map exposes the same deliberate zoom-in step as G6 V2');
 assert.equal(focusedG6V2NextStageZoom(.4, 'out'), .35, 'zoom out clamps at the G6 lower bound');
 assert.equal(focusedG6V2NextStageZoom(2.55, 'in'), 2.6, 'zoom in clamps at the G6 upper bound');
 

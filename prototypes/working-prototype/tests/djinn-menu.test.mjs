@@ -12,7 +12,7 @@ assert.match(screen, /djinn-command-screen/);
 assert.match(screen, /Miben segítsek itt\?/);
 assert.match(screen, /AKTUÁLIS KONTEXTUS/);
 assert.match(screen, /data-route="query"/);
-assert.match(screen, /data-route="explore"/);
+assert.match(screen, /data-route="universe"/);
 assert.match(screen, /data-route="workspace-note-editor"/);
 assert.match(screen, /data-route="workspace-library"/);
 assert.match(screen, /data-djinn-form/);
@@ -25,8 +25,8 @@ assert.match(styles, /\.djinn-command-sheet/);
 assert.match(styles, /\.djinn-command-grid/);
 assert.match(styles, /\.djinn-context-card/);
 // The production entry points are explicitly versioned so a device cannot
-// retain a stale Explore module after a renderer/state update.
+// retain stale renderer/state modules after a Universe update.
 assert.match(index, /assets\/styles\.css\?rev=146/);
-assert.match(index, /assets\/app\.js\?rev=277/);
+assert.match(index, /assets\/app\.js\?rev=278/);
 
 console.log('djinn command menu OK');

@@ -6,7 +6,7 @@ import {
   focusedG6V2Positions,
   knowledgeEdges,
   knowledgeNodes,
-} from '../assets/knowledge-map.js';
+} from '../assets/universe4/universe4-graph-data.js';
 import { buildFocusedG6V2RenderData } from '../assets/focused-g6-v2-render-data.js';
 
 const renderData = buildFocusedG6V2RenderData({

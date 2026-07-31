@@ -1,15 +1,15 @@
-// Deterministic Explore planet data and geometry.  Browser lifecycle code
-// intentionally stays in explore-galaxy-orb.js; this module owns only data
+// Deterministic Universe planet data and geometry. Browser lifecycle code
+// intentionally stays in universe4-globe-stage.js; this module owns only data
 // construction and pure layout/selection mapping helpers.
-import { knowledgeEdges, knowledgeNodes } from '../knowledge-map.js?rev=143';
-import * as THREE from '../vendor/three.module.min.js?rev=92';
+import { knowledgeEdges, knowledgeNodes } from '../universe4-graph-data.js?rev=1';
+import * as THREE from '../../vendor/three.module.min.js?rev=92';
 import {
   SURFACE_SELECTION_ARC_PROFILE,
   clearCityConnections,
   isSurfaceSelectionArc,
   selectCityConnections,
-} from '../city-selection-arcs.js?rev=9';
-import { DJINN_ORB_V5 } from './planet-visuals.js?rev=1';
+} from '../../city-selection-arcs.js?rev=9';
+import { DJINN_ORB_V5 } from './planet-visuals.js?rev=5';
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const V3_ATOM_COUNT = 700;

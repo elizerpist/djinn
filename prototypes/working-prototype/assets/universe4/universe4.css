@@ -150,8 +150,7 @@
 .universe4-u3-source-root.is-u4-input-disabled *,
 .universe4-v7-source-root.is-u4-input-disabled,
 .universe4-v7-source-root.is-u4-input-disabled * { pointer-events: none !important; }
-/* The destination owns the canonical Explore V7 renderer. U4 removes only
-   Explore navigation chrome; its real V7 light diagnostics and copyable
+/* Universe owns the canonical V7 renderer. Its real V7 light diagnostics and copyable
    signal trace are portalled into the common U4 viewport below. */
 .universe4-v7-source-root,
 .universe4-v7-source-root .expandable-galaxy-orb,

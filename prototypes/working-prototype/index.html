@@ -6,17 +6,15 @@
     <title>Djinn · Working prototype</title>
     <link rel="stylesheet" href="assets/styles.css?rev=146" />
     <link rel="stylesheet" href="assets/universe4/universe4.css?rev=17" />
-    <link rel="stylesheet" href="assets/universe-bottom-nav.css?rev=1" />
-  <link rel="stylesheet" href="assets/explore-discovery.css?rev=5" />
-    <link rel="stylesheet" href="assets/explore-galaxy-inline.css?rev=4" />
+  <link rel="stylesheet" href="assets/universe-bottom-nav.css?rev=1" />
   <!-- AntV G6 v5.1.1, helyben tárolva: a tudástérkép offline is működik. -->
   <script defer src="assets/vendor/g6.min.js?rev=92"></script>
   <!-- Globe.GL v2.46.1, helyben tárolva: WebGL-es Arc Links nézet offline használathoz. -->
   <script defer src="assets/vendor/globe.gl.min.js?rev=92"></script>
   <!-- 3d-force-graph v1.80.0, helyben tárolva: a natív ThreeJS/WebGL force nézethez. -->
   <script defer src="assets/vendor/3d-force-graph.min.js?rev=92"></script>
-  <!-- A ThreeGlobe UMD buildet a knowledge-map modul tölti be a modulból importált Three példánnyal. -->
-  <script type="module" src="assets/app.js?rev=277"></script>
+  <!-- A ThreeGlobe UMD buildet a Universe gráfmoduljai töltik be. -->
+  <script type="module" src="assets/app.js?rev=278"></script>
   </head>
   <body>
     <p class="prototype-label">Djinn · working prototype · 390 × 844</p>
@@ -25,12 +23,10 @@
       <div class="status-bar" aria-hidden="true"><span>9:41</span><span>◒ ◔ ▰</span></div>
       <div class="app-shell">
         <main id="screen-root" class="screen-root" aria-live="polite"></main>
-        <div id="explore-galaxy-orb-root" aria-label="Explore galaxisablak"></div>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
         <nav class="bottom-nav" aria-label="Elsődleges navigáció">
           <button class="nav-item" data-route="home"><span class="nav-icon">⌂</span><span>Home</span></button>
-          <button class="nav-item" data-route="explore"><span class="nav-icon">◎</span><span>Explore</span></button>
           <button class="nav-item nav-djinn" data-route="djinn"><span class="genie-button">✦</span><small>Djinn</small></button>
           <button class="nav-item" data-route="query"><span class="nav-icon">⌕</span><span>Query</span></button>
           <button class="nav-item" data-route="workspace-topics" data-nav="workspace"><span class="nav-icon">▤</span><span>Workspace</span></button>

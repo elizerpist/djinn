@@ -1,11 +1,7 @@
-import { initKnowledgeMap } from './knowledge-map.js?rev=143';
-import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=239';
-import { initExploreDiscovery } from './explore-discovery.js?rev=3';
-import { initUniverse4 } from './universe4.js?rev=55';
+import { initUniverse4 } from './universe4.js?rev=56';
 
 const routes = {
   home: 'screens/home.html',
-  explore: 'screens/explore.html',
   djinn: 'screens/djinn.html',
   query: 'screens/query.html',
   'query-answer': 'screens/query-answer.html',
@@ -17,7 +13,6 @@ const routes = {
   'workspace-topic-overview': 'screens/workspace-topic-overview.html',
   'workspace-topic-notes': 'screens/workspace-topic-notes.html',
   'workspace-topic-files': 'screens/workspace-topic-files.html',
-  'workspace-topic-connections': 'screens/workspace-topic-connections.html',
   'workspace-topic-activity': 'screens/workspace-topic-activity.html',
   'workspace-notes': 'screens/workspace-notes.html',
   'workspace-note-detail': 'screens/workspace-note-detail.html',
@@ -33,11 +28,6 @@ const toast = document.querySelector('#toast');
 const state = { route: 'home', question: '' };
 let toastTimer;
 let destroyScreen = () => {};
-const galaxyOrb = initExpandableGalaxyOrb({
-  root: document.querySelector('#explore-galaxy-orb-root'),
-  nav: document.querySelector('.bottom-nav')
-});
-
 function activeNav(route) {
   return route.startsWith('workspace-') ? 'workspace' : route;
 }
@@ -135,35 +125,15 @@ async function render(route) {
   root.setAttribute('aria-busy', 'true');
   destroyScreen();
   destroyScreen = () => {};
-  const galaxyRoot = document.querySelector('#explore-galaxy-orb-root');
-  const appShell = document.querySelector('.app-shell');
-  if (galaxyRoot && appShell && galaxyRoot.parentElement !== appShell) {
-    appShell.append(galaxyRoot);
-    galaxyRoot.classList.remove('is-inline');
-  }
-
   try {
     const response = await fetch(routes[normalized], { cache: 'no-store' });
     if (!response.ok) throw new Error(`Nem tölthető be: ${normalized}`);
     root.innerHTML = await response.text();
-    if (normalized === 'explore' && galaxyRoot) {
-      const galaxySlot = root.querySelector('.explore-galaxy-slot');
-      galaxySlot?.replaceChildren(galaxyRoot);
-      galaxyRoot.classList.add('is-inline');
-    }
     createFixedScreenLayout();
     addFullscreenToggle();
-    if (normalized === 'explore') {
-      destroyScreen = initExploreDiscovery(root, {
-        onConceptFocus: (nodeId, trigger) => galaxyOrb?.focusConcept(nodeId, trigger)
-      });
-    }
     if (normalized === 'query' && state.question) {
       const queryInput = root.querySelector('[data-query-form] input');
       if (queryInput) queryInput.value = state.question;
-    }
-    if (normalized === 'workspace-topic-connections') {
-      destroyScreen = initKnowledgeMap(root, { showToast, navigate });
     }
     if (normalized === 'universe') {
       destroyScreen = initUniverse4(root, { showToast, navigate });
@@ -173,7 +143,6 @@ async function render(route) {
       const navKey = button.dataset.nav || button.dataset.route;
       button.classList.toggle('is-active', navKey === activeNav(normalized));
     });
-    galaxyOrb?.setRoute(normalized);
   } catch (error) {
     root.innerHTML = `<section class="screen"><header class="top-bar"><div><span class="eyebrow">HIBA</span><h1>Nem tölthető be a képernyő</h1></div></header><p class="empty">${error.message}</p></section>`;
   } finally {

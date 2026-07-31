@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
-import { createPlanetVariantController } from '../assets/explore/planet-variant-controller.js';
+import { createPlanetVariantController } from '../assets/universe4/globe/planet-variant-controller.js';
 import {
   V3_PHYSICS_EDGES,
   buildV3Layout,
   createV5NodePositionRegistry,
   syncV5NodePositionRegistry,
-} from '../assets/explore/planet-data.js';
+} from '../assets/universe4/globe/planet-data.js';
 
 const nodesById = new Map([
   ['pao2', { id: 'pao2', lat: 47.5, lng: 19.0 }],

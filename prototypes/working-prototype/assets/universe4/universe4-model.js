@@ -87,9 +87,9 @@ export function createUniverse4Snapshot(source = {}) {
   return cloneFrozen({ snapshotId, ...snapshot });
 }
 
-// The target snapshot is intentionally derived from Explore V7's immutable
+// The target snapshot is intentionally derived from Universe V7's immutable
 // layout. U4 must never regenerate its cities or choose a look-alike palette.
-export function createUniverse4V7Snapshot({ planetId = 'explore-v7-knowledge-planet', galaxy } = {}) {
+export function createUniverse4V7Snapshot({ planetId = 'universe-v7-knowledge-planet', galaxy } = {}) {
   const source = getV5PlanetVisualSnapshot();
   const landmarks = [source.atoms[8], source.atoms[47], source.atoms[103]]
     .filter(Boolean)
@@ -103,13 +103,13 @@ export function createUniverse4V7Snapshot({ planetId = 'explore-v7-knowledge-pla
     labels: source.atoms.map(({ id, label }) => ({ id, label })),
     globeMaterial: {
       color: DJINN_ORB_V7.planet,
-      source: 'explore-v7',
+      source: 'universe-v7',
     },
-    lighting: { source: 'explore-v7-universe-v3-reference' },
-    atmosphere: { source: 'explore-v7-no-native-atmosphere' },
-    cosmicEnvironment: { source: 'explore-v7-cosmic-production' },
+    lighting: { source: 'universe-v7-universe-v3-reference' },
+    atmosphere: { source: 'universe-v7-no-native-atmosphere' },
+    cosmicEnvironment: { source: 'universe-v7-cosmic-production' },
     landmarks,
   });
 }
-import { getV5PlanetVisualSnapshot } from '../explore/planet-data.js?rev=4';
-import { DJINN_ORB_V7 } from '../explore/planet-visuals.js?rev=1';
+import { getV5PlanetVisualSnapshot } from './globe/planet-data.js?rev=4';
+import { DJINN_ORB_V7 } from './globe/planet-visuals.js?rev=5';

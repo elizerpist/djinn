@@ -1,4 +1,4 @@
-// Immutable Explore palettes and interaction-display policies.  This module
+// Immutable Universe palettes and interaction-display policies. This module
 // deliberately owns no Globe, Three.js, DOM, selection controller or mutable
 // runtime state: V5, V6 and V7 can import their own stable profile data.
 

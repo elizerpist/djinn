@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { getPlanetLabelLod } from '../assets/explore/planet-label-lod.js';
+import { getPlanetLabelLod } from '../assets/universe4/globe/planet-label-lod.js';
 
 assert.deepEqual(
   getPlanetLabelLod({ distance: 3.39, focused: false }),

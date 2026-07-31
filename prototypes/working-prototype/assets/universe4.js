@@ -73,7 +73,7 @@ function fade(duration, onFrame) {
 const wait = (duration) => new Promise((resolve) => window.setTimeout(resolve, Math.max(0, duration)));
 
 // U4 is explicitly a renderer handoff prototype: its entry is the production
-// U3 ForceGraph controller and its destination is the production Explore V7
+// U3 ForceGraph controller and its destination is the production Universe V7
 // controller mounted in a second, overlapping stage. Neither endpoint is
 // recreated in this file.
 export function initUniverse4(root, helpers = {}) {
@@ -155,14 +155,14 @@ export function initUniverse4(root, helpers = {}) {
       updateDebug();
     },
     onReady: () => {
-      // `initExpandableGalaxyOrb` may invoke onGlobeReady synchronously while
+      // The Globe stage may invoke onGlobeReady synchronously while
       // createUniverse4V7SourceStage is still constructing the const below.
       // Deferring prevents updateDebug from reading v7Stage in its temporal
       // dead zone and, crucially, lets the canonical V7 factory finish its
       // ResizeObserver/edge setup without being caught as a globe error.
       queueMicrotask(() => {
         if (disposed) return;
-        debug.appendSignal('v7.source.ready', { source: 'initExpandableGalaxyOrb', variant: 'v7' });
+        debug.appendSignal('v7.source.ready', { source: 'initUniverse4GlobeStage', variant: 'v7' });
         updateDebug();
       });
     },
@@ -236,7 +236,7 @@ export function initUniverse4(root, helpers = {}) {
         : (machine.state === U4_STATE.GALAXY_IDLE ? 'Universe V3 owns camera' : 'awaiting U3 frame capture'),
       globePov: latestMatch?.pose?.pointOfView
         ? `${latestMatch.pose.pointOfView.lat.toFixed(2)}° / ${latestMatch.pose.pointOfView.lng.toFixed(2)}° / ${latestMatch.pose.pointOfView.altitude.toFixed(3)}`
-        : (v7Stage?.globe?.pointOfView ? 'Explore V7 prewarming' : 'Explore V7 unavailable'),
+        : (v7Stage?.globe?.pointOfView ? 'Universe V7 prewarming' : 'Universe V7 unavailable'),
     });
   }
 
@@ -635,7 +635,7 @@ export function initUniverse4(root, helpers = {}) {
       debug.appendSignal('u4.handoff.complete', {
         planetId: activePlanetId,
         source: 'Universe V3 ForceGraph',
-        target: 'Explore V7 Globe.gl',
+        target: 'Universe V7 Globe.gl',
       });
       updateDebug();
       return { claimed: true };
@@ -715,7 +715,7 @@ export function initUniverse4(root, helpers = {}) {
       if (!machine.advance(U4_STATE.GALAXY_IDLE, generation)) throw new Error('reset-galaxy-transition-rejected');
       debug.appendSignal('u4.reset.complete', {
         planetId: activePlanetId,
-        source: 'Explore V7 Globe.gl',
+        source: 'Universe V7 Globe.gl',
         target: 'Universe V3 ForceGraph galaxy baseline',
       });
       activePlanetId = null;

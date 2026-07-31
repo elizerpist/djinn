@@ -9,7 +9,7 @@ const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const matcher = await readFile(new URL('../assets/universe4/universe4-handoff-matcher.js', import.meta.url), 'utf8');
 const screen = await readFile(new URL('../screens/universe.html', import.meta.url), 'utf8');
 const u3Controller = await readFile(new URL('../assets/universe4/universe4-force-controller.js', import.meta.url), 'utf8');
-const exploreController = await readFile(new URL('../assets/explore-galaxy-orb.js', import.meta.url), 'utf8');
+const universeGlobeController = await readFile(new URL('../assets/universe4/universe4-globe-stage.js', import.meta.url), 'utf8');
 const depthController = await readFile(new URL('../assets/universe4/universe4-depth-controller.js', import.meta.url), 'utf8');
 const selectionPolicy = await readFile(new URL('../assets/universe4/universe4-globe-selection.js', import.meta.url), 'utf8');
 const focusedSnapshot = await readFile(new URL('../assets/universe4/universe4-focused-map-snapshot.js', import.meta.url), 'utf8');
@@ -107,9 +107,9 @@ assert.match(u3Controller, /dispose\.resumeAnimation = resumeUniverseRenderRunti
   'the U4 adapter seam must use the full U3 runtime resume');
 
 assert.match(v7SourceStage, /export function createUniverse4V7SourceStage/);
-assert.match(v7SourceStage, /initExpandableGalaxyOrb/);
+assert.match(v7SourceStage, /initUniverse4GlobeStage/);
 assert.match(v7SourceStage, /initialVariant:\s*'v7'/);
-assert.match(v7SourceStage, /setRoute\('explore'\)/);
+assert.match(v7SourceStage, /setRoute\('universe'\)/);
 assert.match(v7SourceStage, /setInputEnabled/);
 assert.match(v7SourceStage, /is-u4-input-disabled/);
 assert.match(v7SourceStage, /pauseAnimation\(\)/,
@@ -136,24 +136,24 @@ assert.match(v7SourceStage, /setEmbeddedHandoffLabelSnapshot/,
   'the hidden V7 stage must freeze the Force landmark label set before it can be revealed');
 assert.match(v7SourceStage, /setBackgroundColor/,
   'the canonical V7 source stage must expose only its own Globe background clear-color seam');
-assert.match(exploreController, /setEmbeddedHandoffLabelSnapshot/,
+assert.match(universeGlobeController, /setEmbeddedHandoffLabelSnapshot/,
   'the canonical V7 source must own the temporary frozen label set rather than rebuilding a U4-specific label renderer');
-assert.match(exploreController, /setEmbeddedBackgroundColor/,
+assert.match(universeGlobeController, /setEmbeddedBackgroundColor/,
   'the canonical V7 source must own embedded Globe background updates');
-assert.match(exploreController, /externalRole === 'root'\) v5DataColor = '#FFD45A'/,
+assert.match(universeGlobeController, /externalRole === 'root'\) v5DataColor = '#FFD45A'/,
   'the selected mother/root city must render gold in the embedded U4 Globe');
-assert.match(exploreController, /externalRole === 'context'\) v5DataColor = '#77E8FF'/,
+assert.match(universeGlobeController, /externalRole === 'context'\) v5DataColor = '#77E8FF'/,
   'the context child cities must render blue in the embedded U4 Globe');
-assert.match(exploreController, /function beginV5LabelTap\(event\)/,
+assert.match(universeGlobeController, /function beginV5LabelTap\(event\)/,
   'a canonical V7 label must start an explicit city gesture instead of relying on a canvas raycast behind the DOM chip');
-assert.match(exploreController, /function completeV5LabelTap\(event\)[\s\S]*?focusNode\(gesture\.cityId\)/,
+assert.match(universeGlobeController, /function completeV5LabelTap\(event\)[\s\S]*?focusNode\(gesture\.cityId\)/,
   'a completed V7 label gesture must enter the same city-focus/U4 tap-policy path as a sphere tap');
-assert.match(exploreController, /tapDistanceSquared:\s*embeddedViewport \? 576 : 81/,
+assert.match(universeGlobeController, /tapDistanceSquared:\s*embeddedViewport \? 576 : 81/,
   'the embedded mobile V7 endpoint must tolerate a 24px intentional city tap before classifying it as an orbit drag');
-assert.match(exploreController, /tapDurationMs:\s*embeddedViewport \? 620 : 360/,
-  'the embedded mobile V7 endpoint must tolerate a deliberate city tap without loosening the normal Explore gesture contract');
+assert.match(universeGlobeController, /tapDurationMs:\s*embeddedViewport \? 620 : 360/,
+  'the embedded mobile V7 endpoint must tolerate a deliberate city tap without loosening the normal Universe gesture contract');
 
-// Globe → G6 is a third U4 depth, not an Explore route or a second V7 clone.
+// Globe → G6 is a third U4 depth, not a second V7 clone.
 assert.match(depthController, /PLANET_TO_MAP_MORPH/);
 assert.match(depthController, /MAP_TO_PLANET_MORPH/);
 assert.match(selectionPolicy, /clear-context/);
@@ -188,19 +188,19 @@ assert.match(runtime, /data-universe4-g6-stage/);
 assert.match(screen, /data-universe4-g6-stage/);
 assert.match(screen, /data-universe4-morph-patch-stage/);
 assert.doesNotMatch(runtime, /navigate\([^)]*explore/i,
-  'the G6 depth must remain mounted inside Universe 4, never navigate to Explore');
+  'the G6 depth must remain mounted inside Universe 4, never navigate away');
 
 assert.match(runtime, /createUniverse4U3Stage/);
 assert.match(runtime, /createUniverse4V7SourceStage/);
 assert.match(runtime, /let v7Stage = null;/,
   'the synchronous canonical V7 ready callback must never close over a TDZ const binding');
-assert.match(app, /universe4\.js\?rev=55/,
+assert.match(app, /universe4\.js\?rev=56/,
   'the U4 module revision must change when its embedded full-map runtime changes');
 assert.match(runtime, /universe4-u3-stage\.js\?rev=20/,
   'the migrated V4 Force adapter must invalidate its owner module');
 assert.match(runtime, /universe4-v7-source-stage\.js\?rev=22/,
   'the U4 source-stage revision must change when its canonical Globe controls change');
-assert.match(index, /assets\/app\.js\?rev=277/,
+assert.match(index, /assets\/app\.js\?rev=278/,
   'the browser entrypoint must invalidate the app module which imports U4');
 assert.match(runtime, /HANDOFF_CROSSFADE/);
 assert.match(runtime, /GLOBE_STANDALONE/);

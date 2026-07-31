@@ -9,12 +9,12 @@ const {
   __v7FocusVisualTestModel,
   __surfaceSelectionArcTestModel,
   getV5PlanetVisualSnapshot,
-} = await import('../assets/explore-galaxy-orb.js?test-v3');
+} = await import('../assets/universe4/universe4-globe-stage.js?test-v3');
 const {
   V5_CITY_FOCUS,
   v5GlobeControlsEnabled,
   v5CityFocusPointOfView,
-} = await import('../assets/explore/planet-visuals.js?test-city-focus');
+} = await import('../assets/universe4/globe/planet-visuals.js?test-city-focus');
 
 assert.equal(__v3TestModel.atomCount, 700);
 assert.ok(__v3TestModel.physicsEdgeCount > 700);
@@ -158,13 +158,13 @@ assert.equal(isolatedViewSessions.v7.focusedNodeId, null, 'V7 must remain idle u
 // V6 must be a complete V5-family view with a separate, world-anchored
 // cinematic light rig. The source assertions deliberately reject the old
 // camera-quaternion headlight as the production V6 light path.
-const orbSource = await readFile(new URL('../assets/explore-galaxy-orb.js', import.meta.url), 'utf8');
-const planetDataSource = await readFile(new URL('../assets/explore/planet-data.js', import.meta.url), 'utf8');
-const planetVisualSource = await readFile(new URL('../assets/explore/planet-visuals.js', import.meta.url), 'utf8');
-const planetInputRouterSource = await readFile(new URL('../assets/explore/planet-input-router.js', import.meta.url), 'utf8');
-assert.match(orbSource, /from '\.\/explore\/planet-data\.js\?rev=4'/,
+const orbSource = await readFile(new URL('../assets/universe4/universe4-globe-stage.js', import.meta.url), 'utf8');
+const planetDataSource = await readFile(new URL('../assets/universe4/globe/planet-data.js', import.meta.url), 'utf8');
+const planetVisualSource = await readFile(new URL('../assets/universe4/globe/planet-visuals.js', import.meta.url), 'utf8');
+const planetInputRouterSource = await readFile(new URL('../assets/universe4/globe/planet-input-router.js', import.meta.url), 'utf8');
+assert.match(orbSource, /from '\.\/globe\/planet-data\.js\?rev=4'/,
   'the browser lifecycle module must import the static planet data model');
-assert.match(orbSource, /from '\.\/explore\/planet-visuals\.js\?rev=5'/,
+assert.match(orbSource, /from '\.\/globe\/planet-visuals\.js\?rev=5'/,
   'the browser lifecycle module must import the isolated V5/V6/V7 visual profiles');
 assert.match(planetDataSource, /export const V3_BASE_ATOMS/);
 assert.match(planetDataSource, /export function getV5PlanetVisualSnapshot/);
@@ -339,4 +339,4 @@ for (const variant of ['v5', 'v6', 'v7']) {
   assert.equal(__surfaceSelectionArcTestModel.clear().selectedCityArcData.length, 0);
 }
 
-console.log(`explore galaxy v3 model OK (${uniform.atoms.length} atoms, ${uniform.edges.length} visible edges)`);
+console.log(`Universe Globe stage model OK (${uniform.atoms.length} atoms, ${uniform.edges.length} visible edges)`);

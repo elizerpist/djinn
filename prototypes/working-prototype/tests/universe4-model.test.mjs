@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createUniverse4Snapshot, createUniverse4V7Snapshot } from '../assets/universe4/universe4-model.js';
-import { getV5PlanetVisualSnapshot } from '../assets/explore/planet-data.js';
+import { getV5PlanetVisualSnapshot } from '../assets/universe4/globe/planet-data.js';
 
 const source = {
   planetId: 'respiratory-planet',
@@ -56,7 +56,7 @@ const u4V7 = createUniverse4V7Snapshot({
 });
 assert.equal(u4V7.planet.atoms.length, canonicalV7.atoms.length, 'U4 target must keep the full concrete V7 city count');
 assert.deepEqual(u4V7.planet.atoms[0], canonicalV7.atoms[0], 'U4 target must preserve V7 geographic city coordinates and visual tokens');
-assert.equal(u4V7.planet.material.source, 'explore-v7');
-assert.equal(u4V7.planet.lighting.source, 'explore-v7-universe-v3-reference');
+assert.equal(u4V7.planet.material.source, 'universe-v7');
+assert.equal(u4V7.planet.lighting.source, 'universe-v7-universe-v3-reference');
 
 console.log('universe4 model OK');

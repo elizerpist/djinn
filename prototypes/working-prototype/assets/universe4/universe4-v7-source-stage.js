@@ -1,7 +1,7 @@
-// Universe 4 deliberately mounts the *same* Explore controller that owns V7.
+// Universe 4 mounts its canonical Globe.gl controller for the V7 stage.
 // It does not recreate the 700-city layout, lights, cosmic field, labels,
-// gold paths or gesture router.  This is a live embedded Explore V7 instance.
-import { initExpandableGalaxyOrb } from '../explore-galaxy-orb.js?rev=239';
+// gold paths or gesture router. This is the embedded Universe V7 instance.
+import { initUniverse4GlobeStage } from './universe4-globe-stage.js?rev=1';
 import {
   mapForceCameraSnapshotToGlobePov,
   solveAltitudeForCssRadius,
@@ -95,7 +95,7 @@ export function createUniverse4V7SourceStage({
 
   const host = document.createElement('div');
   host.className = 'universe4-v7-source-root';
-  host.setAttribute('aria-label', 'Explore V7 Globe.gl bolygó');
+  host.setAttribute('aria-label', 'Universe V7 Globe.gl bolygó');
   mount.replaceChildren(host);
 
   let disposed = false;
@@ -104,9 +104,9 @@ export function createUniverse4V7SourceStage({
   let prewarmPauseFrame = 0;
   let resolveReady;
   const readyPromise = new Promise((resolve) => { resolveReady = resolve; });
-  // `initExpandableGalaxyOrb` only requires a truthy nav host. U4 keeps its
-  // own route and never dispatches an Explore navigation event.
-  const controller = initExpandableGalaxyOrb({
+  // The canonical Globe stage only requires a truthy nav host. U4 keeps its
+  // own route and never dispatches a navigation event.
+  const controller = initUniverse4GlobeStage({
     root: host,
     nav: document.createElement('div'),
     initialVariant: 'v7',
@@ -132,7 +132,7 @@ export function createUniverse4V7SourceStage({
 
   // Make the canonical source controller visible *inside this stage*.  It is
   // not a route change: the U4 Globe canvas stays over the U4 Force canvas.
-  controller.setRoute('explore');
+  controller.setRoute('universe');
 
   function pauseAnimation() {
     if (disposed || animationPaused) return;
@@ -197,7 +197,7 @@ export function createUniverse4V7SourceStage({
   }
 
   function setInputEnabled(enabled) {
-    // `pointer-events` is inherited, but the canonical Explore controller
+    // `pointer-events` is inherited, but the canonical Universe controller
     // deliberately gives its canvas, labels and controls explicit `auto`
     // values. Toggling only the mount would therefore still let the hidden
     // V7 canvas consume taps intended for the U3 ForceGraph below it.

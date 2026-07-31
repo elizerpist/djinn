@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createPlanetInputRouter } from '../assets/explore/planet-input-router.js';
+import { createPlanetInputRouter } from '../assets/universe4/globe/planet-input-router.js';
 
 const trace = [];
 const activated = [];

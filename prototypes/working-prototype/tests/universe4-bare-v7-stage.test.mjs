@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const adapter = await readFile(new URL('../assets/universe4/universe4-v7-source-stage.js', import.meta.url), 'utf8');
-const canonical = await readFile(new URL('../assets/explore-galaxy-orb.js', import.meta.url), 'utf8');
+const canonical = await readFile(new URL('../assets/universe4/universe4-globe-stage.js', import.meta.url), 'utf8');
 const css = await readFile(new URL('../assets/universe4/universe4.css', import.meta.url), 'utf8');
 const runtime = await readFile(new URL('../assets/universe4.js', import.meta.url), 'utf8');
 
-// U4 needs the identical V7 renderer, but not the entire Explore page chrome.
+// U4 needs the canonical V7 renderer, but not any separate page chrome.
 // Its destination must give the canonical controller a real measured viewport
 // and request its bare-planet presentation mode.
 assert.match(adapter, /embeddedViewport:\s*mount/);
@@ -23,7 +23,7 @@ assert.match(canonical, /embeddedDebugPortal\.append\(v7LightTuning, planetSigna
 assert.match(canonical, /recordEmbeddedRenderDiagnostic\('u4\.globe\.prewarm'\)/, 'the V7 panel must be visible even when Globe construction fails before ready');
 assert.match(canonical, /recordEmbeddedRenderDiagnostic\('u4\.globe\.ready'\)/, 'the copied V7 trace must expose the embedded renderer state');
 assert.match(css, /is-embedded-bare-planet[\s\S]*galaxy-orb-controls/);
-// U4 hides Explore navigation chrome, but it must retain the exact V7
+// U4 hides navigation chrome, but it must retain the exact V7
 // bottom light/debug and copyable signal panels while the embedded Globe is
 // diagnosed on a real device.
 assert.match(css, /universe4-v7-debug-portal \.galaxy-orb-v7-light-debug[\s\S]*display: flex !important;/);

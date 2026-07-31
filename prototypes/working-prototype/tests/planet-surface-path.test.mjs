@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildGreatCircleSurfacePath } from '../assets/explore/planet-surface-path.js';
+import { buildGreatCircleSurfacePath } from '../assets/universe4/globe/planet-surface-path.js';
 
 const path = buildGreatCircleSurfacePath(
   { lat: 8, lng: 35 },

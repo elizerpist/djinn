@@ -1,25 +1,25 @@
-/* A single live Globe.gl scene rendered inline in the Explore scroll content. */
-import { knowledgeNodes, knowledgeEdges } from './knowledge-map.js?rev=143';
-import * as THREE from './vendor/three.module.min.js?rev=92';
-import { DjinnEdgeLayer } from './djinn-edge-layer.js?rev=6';
-import { V7_LIGHT_MODES, V7_PRODUCTION_CINEMATIC_BLEND, VirtualGalaxyLightingRig } from './virtual-galaxy-light-rig.js?rev=24';
-import { COSMIC_MODES, CosmicEnvironment } from './cosmic-environment.js?rev=6';
+/* The canonical Universe Globe.gl stage, shared by the V4 handoff. */
+import { knowledgeNodes, knowledgeEdges } from './universe4-graph-data.js?rev=1';
+import * as THREE from '../vendor/three.module.min.js?rev=92';
+import { DjinnEdgeLayer } from '../djinn-edge-layer.js?rev=6';
+import { V7_LIGHT_MODES, V7_PRODUCTION_CINEMATIC_BLEND, VirtualGalaxyLightingRig } from '../virtual-galaxy-light-rig.js?rev=24';
+import { COSMIC_MODES, CosmicEnvironment } from '../cosmic-environment.js?rev=6';
 import {
   SURFACE_SELECTION_ARC_PROFILE,
   clearCityConnections,
   isSurfaceSelectionArc,
   selectCityConnections,
-} from './city-selection-arcs.js?rev=9';
-import { createPlanetSignalTrace } from './explore/planet-signal-trace.js?rev=1';
-import { createPlanetVariantController } from './explore/planet-variant-controller.js?rev=4';
-import { createPlanetInputRouter } from './explore/planet-input-router.js?rev=4';
-import { rebindPlanetObjects } from './explore/planet-object-rebind.js?rev=1';
-import { getPlanetLabelLod } from './explore/planet-label-lod.js?rev=1';
+} from '../city-selection-arcs.js?rev=9';
+import { createPlanetSignalTrace } from './globe/planet-signal-trace.js?rev=1';
+import { createPlanetVariantController } from './globe/planet-variant-controller.js?rev=4';
+import { createPlanetInputRouter } from './globe/planet-input-router.js?rev=4';
+import { rebindPlanetObjects } from './globe/planet-object-rebind.js?rev=1';
+import { getPlanetLabelLod } from './globe/planet-label-lod.js?rev=1';
 import {
   clearPlanetSelectionArcs,
   commitPlanetSelectionArcs,
-} from './explore/planet-globe-arc-adapter.js?rev=4';
-import { mountPlanetSignalDebugPanel } from './explore/planet-debug-panel.js?rev=1';
+} from './globe/planet-globe-arc-adapter.js?rev=4';
+import { mountPlanetSignalDebugPanel } from './globe/planet-debug-panel.js?rev=1';
 
 import {
   ORB_POINTS, ORB_ARCS, nodeById, degreeById, nodeRadius, typeColors, arcPalette,
@@ -29,17 +29,17 @@ import {
   quantileRank, interpolate, v5ImportanceScale, v5TierForRank,
   getV5PlanetVisualSnapshot, syncV5NodePositionRegistry as syncPlanetNodePositionRegistry,
   surfaceSelectionArcProfile, surfaceSelectionEndpointAltitude,
-} from './explore/planet-data.js?rev=4';
+} from './globe/planet-data.js?rev=4';
 import {
   DJINN_ORB_V2, DJINN_ORB_V3, DJINN_ORB_V4, DJINN_ORB_V5, DJINN_ORB_V6, DJINN_ORB_V7,
   V4_FOCUS_ARC_ALTITUDE, V5_CITY_FOCUS, V5_FOCUS_NO_ZOOM, V5_VARIANT_CONTEXT_VISUALS,
   V5_VARIANT_INTERACTION_POLICIES, V6_HYBRID_LIGHT, V6_LIGHT_RIG_MODES,
   VARIANT_PROFILES, v5CityFocusPointOfView, v5GlobeControlsEnabled, v5VariantContextVisualState,
-} from './explore/planet-visuals.js?rev=5';
-export { __surfaceSelectionArcTestModel, __v3TestModel } from './explore/planet-data.js?rev=4';
+} from './globe/planet-visuals.js?rev=5';
+export { __surfaceSelectionArcTestModel, __v3TestModel } from './globe/planet-data.js?rev=4';
 export { getV5PlanetVisualSnapshot };
-export { __v5FamilyFocusVisualTestModel, __v5VariantInteractionTestModel, __v6DiffuseLightTestModel, __v7FocusVisualTestModel } from './explore/planet-visuals.js?rev=5';
-export function initExpandableGalaxyOrb({
+export { __v5FamilyFocusVisualTestModel, __v5VariantInteractionTestModel, __v6DiffuseLightTestModel, __v7FocusVisualTestModel } from './globe/planet-visuals.js?rev=5';
+export function initUniverse4GlobeStage({
   root,
   nav,
   // The embedded Universe 4 endpoint must use this controller verbatim. An
@@ -48,7 +48,7 @@ export function initExpandableGalaxyOrb({
   initialVariant = 'v1',
   onGlobeReady = null,
   // U4 reuses this exact renderer inside its own stage. In that case the
-  // Explore inline-slot geometry does not exist, so the caller supplies the
+  // Universe inline-slot geometry does not exist, so the caller supplies the
   // actual measured viewport instead.
   embeddedViewport = null,
   embeddedBarePlanet = false,
@@ -57,7 +57,7 @@ export function initExpandableGalaxyOrb({
   // stage is prewarmed at opacity zero beneath the U3 ForceGraph stage.
   embeddedDebugPortal = null,
   // Universe 4 can claim a V5/V6/V7 city tap before this canonical controller
-  // applies its normal select/replace logic. The normal Explore route leaves
+  // applies its normal select/replace logic. The normal Universe route leaves
   // both seams null, so its interaction contract is unchanged.
   onV5CityTap = null,
   onV5SelectionTransition = null,
@@ -291,7 +291,7 @@ export function initExpandableGalaxyOrb({
   let v5LabelProjectionFrame = 0;
   const v5LabelElements = new Map();
   // U4 supplies this only while the canonical V7 canvas is still hidden
-  // below the Force last-frame veil. Normal Explore never enters this path.
+  // below the Force last-frame veil. Normal Universe never enters this path.
   let embeddedHandoffLabelIds = null;
   let v3DiagnosticMode = 'all';
   let v3EdgeLayerEnabled = true;
@@ -341,7 +341,7 @@ export function initExpandableGalaxyOrb({
     activate: (cityId) => focusNode(cityId),
     onEmptyTap: () => clearV5CitySelectionFromEmptyTap(),
     trace: (event, payload) => recordPlanetSignal(event, payload),
-    // The native Explore screen keeps its existing strict orbit gesture
+    // The native Universe screen keeps its existing strict orbit gesture
     // threshold. U4 is an embedded mobile destination with DOM city chips
     // above a live globe, where a deliberate finger tap commonly shifts
     // 10–20 CSS pixels before pointerup.
@@ -689,7 +689,7 @@ export function initExpandableGalaxyOrb({
     }
     if (!root.classList.contains('is-inline')) return;
     const inlineSlot = root.parentElement;
-    if (!inlineSlot?.classList.contains('explore-galaxy-slot')) return;
+    if (!inlineSlot?.classList.contains('universe4-globe-slot')) return;
 
     const rootRect = root.getBoundingClientRect();
     const width = rootRect.width || inlineSlot.getBoundingClientRect().width;
@@ -722,7 +722,7 @@ export function initExpandableGalaxyOrb({
   function applyProgress() {
     if (!bounds) return;
     const b = bounds.expanded;
-    const inlineSlot = root.closest('.explore-galaxy-slot');
+    const inlineSlot = root.closest('.universe4-globe-slot');
     if (inlineSlot) inlineSlot.style.height = `${b.height}px`;
     morph.style.left = `${b.left}px`;
     morph.style.top = `${b.top}px`;
@@ -845,7 +845,7 @@ export function initExpandableGalaxyOrb({
         // V6 contains only the world-space star layers here. The lighting
         // direction remains virtual; it never creates a visible sun object.
         getLensFlareController: () => null,
-        planetId: 'explore-v6-knowledge-planet',
+        planetId: 'universe-v6-knowledge-planet',
       });
       v6CosmicEnvironment.initialize();
     }
@@ -1038,7 +1038,7 @@ export function initExpandableGalaxyOrb({
         getCamera: () => globe.camera(),
         getPlanetCenter: (target) => target.copy(globe.controls().target),
         getPlanetRadius: () => globe.getGlobeRadius?.() || 100,
-        planetId: 'explore-v7-knowledge-planet',
+        planetId: 'universe-v7-knowledge-planet',
       });
       v7LightRig.initialize();
       // This is deliberately Globe.gl's existing render frame, not a second
@@ -1094,7 +1094,7 @@ export function initExpandableGalaxyOrb({
         // V7 contains only the world-space star field. Its light direction
         // remains virtual, so there is no visible sun or flare overlay.
         getLensFlareController: () => null,
-        planetId: 'explore-v7-knowledge-planet',
+        planetId: 'universe-v7-knowledge-planet',
       });
       v7CosmicEnvironment.initialize();
     }
@@ -1156,7 +1156,7 @@ export function initExpandableGalaxyOrb({
     if (!rig || !globe) return;
     rig.setMode(v7LightMode);
     rig.setCinematicBlend(Number(v7LightBlendInput?.value ?? V7_PRODUCTION_CINEMATIC_BLEND));
-    rig.captureEntryFrame({ planetId: 'explore-v7-knowledge-planet' });
+    rig.captureEntryFrame({ planetId: 'universe-v7-knowledge-planet' });
     rig.resume();
     globe.lights(rig.getLights());
     updateV7LightMaterial();
@@ -1181,7 +1181,7 @@ export function initExpandableGalaxyOrb({
   }
 
   // Narrow embedded-renderer seam for Universe 4's hidden match-cut phase.
-  // It never changes the normal Explore route: the live V7 rig still owns
+  // It never changes the normal Universe route: the live V7 rig still owns
   // the material/lights, but takes the already-rendered U3 world sun vector
   // instead of creating a visually unrelated entry light.
   function applyEmbeddedHandoffLighting(lightSnapshot) {
@@ -1388,7 +1388,7 @@ export function initExpandableGalaxyOrb({
 
   // This narrow embedded seam retains the canonical V7 DOM label renderer,
   // but locks its candidate IDs to the labels captured from U3's final frame.
-  // It cannot affect the normal Explore route.
+  // It cannot affect the normal Universe route.
   function setEmbeddedHandoffLabelSnapshot(landmarks) {
     if (!embeddedViewport || !isV7Variant()) return false;
     const ids = [...new Set((Array.isArray(landmarks) ? landmarks : [])
@@ -1727,7 +1727,7 @@ export function initExpandableGalaxyOrb({
         back: '—',
         culled: 0,
       };
-      console.info('[Explore V3] Overkill renderer diagnostics', v3OverkillDiagnostics);
+      console.info('[Universe V3] Overkill renderer diagnostics', v3OverkillDiagnostics);
     } else {
       v3OverkillDiagnostics = null;
     }
@@ -2127,7 +2127,7 @@ export function initExpandableGalaxyOrb({
         ? '#48E5A9' // green = data-driven; no universal min/max clamp is active in production
         : (v5SizeRankDebug ? v5TierDebugColor(v5Info.tier) : (v5VariantContext?.color || (isFocused ? DJINN_ORB_V5.focus : (focusedNode && !isRelated ? DJINN_ORB_V5.atomDim : DJINN_ORB_V5.atom))));
       // U4 city semantics: the selected mother/root is gold; selectable
-      // child/context cities are blue-cyan. This seam is inactive in Explore.
+      // child/context cities are blue-cyan. This seam is inactive in Universe.
       if (!v5ClampDebug && !v5SizeRankDebug && externalRole === 'root') v5DataColor = '#FFD45A';
       if (!v5ClampDebug && !v5SizeRankDebug && externalRole === 'context') v5DataColor = '#77E8FF';
       const color = v5Mode
@@ -3135,7 +3135,7 @@ export function initExpandableGalaxyOrb({
   }
 
   function setRoute(route) {
-    const visible = route === 'explore';
+    const visible = route === 'universe';
     layer.classList.toggle('is-route-visible', visible);
     if (visible) {
       measureBounds();

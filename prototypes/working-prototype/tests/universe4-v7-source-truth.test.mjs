@@ -4,19 +4,19 @@ import { readFile } from 'node:fs/promises';
 const sourceStage = await readFile(new URL('../assets/universe4/universe4-v7-source-stage.js', import.meta.url), 'utf8');
 const u3Stage = await readFile(new URL('../assets/universe4/universe4-u3-stage.js', import.meta.url), 'utf8');
 const runtime = await readFile(new URL('../assets/universe4.js', import.meta.url), 'utf8');
-const exploreController = await readFile(new URL('../assets/explore-galaxy-orb.js', import.meta.url), 'utf8');
+const universeGlobeController = await readFile(new URL('../assets/universe4/universe4-globe-stage.js', import.meta.url), 'utf8');
 const u3Controller = await readFile(new URL('../assets/universe4/universe4-force-controller.js', import.meta.url), 'utf8');
 const lightRig = await readFile(new URL('../assets/virtual-galaxy-light-rig.js', import.meta.url), 'utf8');
 
 // U4 must mount the exact V7 controller, not a hand-copied approximation.
-assert.match(sourceStage, /initExpandableGalaxyOrb/);
+assert.match(sourceStage, /initUniverse4GlobeStage/);
 assert.match(sourceStage, /initialVariant:\s*'v7'/);
-assert.match(sourceStage, /setRoute\('explore'\)/);
+assert.match(sourceStage, /setRoute\('universe'\)/);
 assert.match(sourceStage, /export function createUniverse4V7SourceStage/);
-assert.match(exploreController, /onGlobeReady/,
-  'the canonical Explore controller must expose a lifecycle signal to U4');
-assert.match(exploreController, /initialVariant/,
-  'the canonical Explore controller must accept the V7 initial variant directly');
+assert.match(universeGlobeController, /onGlobeReady/,
+  'the canonical Universe Globe controller must expose a lifecycle signal to U4');
+assert.match(universeGlobeController, /initialVariant/,
+  'the canonical Universe Globe controller must accept the V7 initial variant directly');
 
 // U4 must run the existing U3 flow rather than another ForceGraph copy.
 assert.match(u3Stage, /initUniverse4ForceController/);
@@ -35,8 +35,8 @@ assert.doesNotMatch(runtime, /navigate\([^)]*explore/i);
 assert.match(lightRig, /export const UNIVERSE_V3_REFERENCE_LIGHTING/);
 assert.match(lightRig, /export function createUniverseV3ReferenceSunDirection/,
   'the shared V3-reference sun direction must live beside the shared lighting tokens');
-assert.match(exploreController, /let v7LightMode = 'universe-v3-reference'/);
-assert.match(exploreController, /v7LightMode = 'universe-v3-reference'/);
+assert.match(universeGlobeController, /let v7LightMode = 'universe-v3-reference'/);
+assert.match(universeGlobeController, /v7LightMode = 'universe-v3-reference'/);
 assert.match(u3Controller, /UNIVERSE_V3_REFERENCE_LIGHTING/);
 assert.match(u3Controller, /createUniverseV3ReferenceSunDirection/,
   'the Force inline stage must consume the exact V3-reference sun-direction helper used by V7');

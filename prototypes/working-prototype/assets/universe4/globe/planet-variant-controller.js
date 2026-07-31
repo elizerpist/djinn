@@ -1,7 +1,7 @@
 import {
   clearCityConnections,
   selectCityConnections,
-} from '../city-selection-arcs.js?rev=9';
+} from '../../city-selection-arcs.js?rev=9';
 
 const snapshot = (selection) => ({
   ...selection,

@@ -32,7 +32,7 @@ import {
   buildLayeredSphericalFocusLayout,
   destinationPointOnGlobe,
   buildGlobeFocusedCardLayout,
-} from '../assets/knowledge-map.js';
+} from '../assets/universe4/universe4-graph-data.js';
 
 const subgraph = buildFocusedG6Subgraph('resp_failure', knowledgeNodes, knowledgeEdges);
 
@@ -69,8 +69,8 @@ for (const focusId of ['resp_failure', 'niv', 'do2', 'ards']) {
   assert.deepEqual(collisions, [], `${focusId}: a lokális G6-kártyák között legalább 10 px biztonsági távolság maradjon`);
 }
 
-const mapSource = await readFile(new URL('../assets/knowledge-map.js', import.meta.url), 'utf8');
-const mapScreen = await readFile(new URL('../screens/workspace-topic-connections.html', import.meta.url), 'utf8');
+const mapSource = await readFile(new URL('../assets/universe4/universe4-graph-data.js', import.meta.url), 'utf8');
+const mapScreen = await readFile(new URL('../screens/universe.html', import.meta.url), 'utf8');
 assert.doesNotMatch(mapSource, /\{ id: 'force', label: 'Force'/, 'a régi Force 2D nézet ne szerepeljen a dropdownban');
 assert.doesNotMatch(mapSource, /\{ id: 'd3-force', label: 'D3 Force'/, 'a régi D3 Force 2D nézet ne szerepeljen a dropdownban');
 assert.doesNotMatch(mapSource, /Fa elrendezések|compact-box|dendrogram|fishbone|mindmap|indented/, 'a fa-elrendezések és a hozzájuk tartozó opciók ne maradjanak az appban');
@@ -79,8 +79,8 @@ assert.doesNotMatch(mapSource, /combo-combined|Combo Combined|Csoportosított/, 
 assert.doesNotMatch(mapSource, /id: '(?:circular|concentric|radial|grid|random|snake)'|group: 'Kör és tér'/, 'a Kör és tér csoport és összes nézete ne maradjon az appban');
 assert.doesNotMatch(mapSource, /id: '(?:force-atlas2|fruchterman|mds)'|group: 'Erő alapú hálók'/, 'az Erő alapú hálók csoport és összes nézete ne maradjon az appban');
 assert.doesNotMatch(mapSource, /cytoscape|Cytoscape|antv-dagre|dagre|Irányított gráfok/, 'a Cytoscape és az Irányított gráfok nézetei ne maradjanak az app kódjában');
-assert.doesNotMatch(mapScreen, /cytoscape|Cytoscape/, 'a Cytoscape konténere ne maradjon a tudástérkép képernyőjén');
-assert.match(mapScreen, /data-map-action="toggle-layout-menu"/, 'a tudástérkép megjelenítési dropdownja maradjon elérhető');
+assert.doesNotMatch(mapScreen, /data-map-|knowledge-map|cytoscape|Cytoscape/, 'a régi Workspace gráfkonténer ne maradjon az appban');
+assert.match(mapScreen, /data-universe4-g6-stage/, 'a G6 nézet a Universe képernyőn maradjon');
 assert.match(mapSource, /labelPlacement:\s*'center'/, 'a G6 címke a kártya belsejében, középen jelenjen meg');
 assert.match(mapSource, /localStorage\.removeItem\(STORAGE_KEY\)/, 'frissítéskor a korábbi navigációs és vizualizációs állapot törlődjön');
 assert.match(mapSource, /visualization: 'g6-focused-map'/, 'frissítés után biztonságos, lokális fókusznézet induljon');
