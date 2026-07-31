@@ -75,7 +75,7 @@ export function initUniverse4GlobeStage({
       <div class="galaxy-orb-morph" role="region" aria-label="Universe tudásgalaxis">
       <div class="galaxy-orb-canvas" aria-hidden="true"></div>
       <div class="galaxy-orb-label-layer" aria-hidden="true"></div>
-      <article class="galaxy-node-morph-overlay" aria-hidden="true">
+      <article class="card galaxy-node-morph-overlay" aria-hidden="true">
         <div class="galaxy-node-card-content">
           <div class="galaxy-node-card-meta"><span data-node-type></span><span data-node-degree></span></div>
           <h2 data-node-title></h2>

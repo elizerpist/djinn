@@ -29,7 +29,7 @@ assert.doesNotMatch(styles, /\.status-bar\s*\{/, 'status bar styles must be remo
 assert.match(styles, /\.app-shell\s*\{[^}]*height:\s*100%/, 'the app shell must reclaim the removed status-bar height');
 // The production entry points are explicitly versioned so a device cannot
 // retain stale renderer/state modules after a Universe update.
-assert.match(index, /assets\/styles\.css\?rev=147/);
+assert.match(index, /assets\/styles\.css\?rev=148/);
 assert.match(index, /assets\/app\.js\?rev=280/);
 
 console.log('djinn command menu OK');
