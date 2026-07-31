@@ -75,6 +75,7 @@ assert.doesNotMatch(mapSource, /\{ id: 'force', label: 'Force'/, 'a régi Force 
 assert.doesNotMatch(mapSource, /\{ id: 'd3-force', label: 'D3 Force'/, 'a régi D3 Force 2D nézet ne szerepeljen a dropdownban');
 assert.doesNotMatch(mapSource, /Fa elrendezések|compact-box|dendrogram|fishbone|mindmap|indented/, 'a fa-elrendezések és a hozzájuk tartozó opciók ne maradjanak az appban');
 assert.doesNotMatch(mapSource, /TREE_LAYOUTS|treeGraphData|buildSpanningTree/, 'a törölt fa-renderelési útvonal ne maradjon az appban');
+assert.doesNotMatch(mapSource, /combo-combined|Combo Combined|Csoportosított/, 'a Combo Combined és a csoportosított opció ne maradjon az appban');
 assert.match(mapScreen, /data-map-action="toggle-layout-menu"/, 'a tudástérkép megjelenítési dropdownja maradjon elérhető');
 assert.match(mapSource, /labelPlacement:\s*'center'/, 'a G6 címke a kártya belsejében, középen jelenjen meg');
 assert.match(mapSource, /localStorage\.removeItem\(STORAGE_KEY\)/, 'frissítéskor a korábbi navigációs és vizualizációs állapot törlődjön');

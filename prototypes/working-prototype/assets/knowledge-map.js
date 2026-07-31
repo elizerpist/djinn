@@ -477,7 +477,6 @@ const VISUALIZATIONS = [
   { id: 'snake', label: 'Snake', group: 'Kör és tér', icon: '〰' },
   { id: 'antv-dagre', label: 'AntV Dagre', group: 'Irányított gráfok', icon: '⇣' },
   { id: 'dagre', label: 'Dagre', group: 'Irányított gráfok', icon: '⇢' },
-  { id: 'combo-combined', label: 'Combo Combined', group: 'Csoportosított', icon: '◫' },
 ];
 const VISUALIZATION_BY_ID = new Map(VISUALIZATIONS.map((item) => [item.id, item]));
 const STORAGE_KEY = 'djinn-knowledge-map-state-v1';
@@ -1538,7 +1537,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     if (state.visualization === 'snake') return { ...base, direction: 'LR', nodeSpacing: 24 };
     if (state.visualization === 'antv-dagre') return { ...base, rankdir: 'TB', nodesep: 24, ranksep: 45, controlPoints: true };
     if (state.visualization === 'dagre') return { ...base, rankdir: 'LR', nodesep: 22, ranksep: 45, controlPoints: true };
-    if (state.visualization === 'combo-combined') return { ...base, spacing: 28 };
     return base;
   }
 
@@ -1821,7 +1819,7 @@ export function initKnowledgeMap(root, helpers = {}) {
     destroyCytoscape();
     destroyForceGraph3D();
     destroyForceGraphSphere3D();
-    // A layoutok eltérő adatot igényelnek (pl. fa vagy combo), ezért tisztán indulnak újra.
+    // A layoutok eltérő adatot igényelhetnek, ezért tisztán indulnak újra.
     window.requestAnimationFrame(createActiveRenderer);
     showToast(`${VISUALIZATION_BY_ID.get(visualization).label} nézet aktív.`);
   }
@@ -1864,7 +1862,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     const graphNode = {
       id: node.id,
       data: { ...node, z: threeD?.z || 0 },
-      combo: state.visualization === 'combo-combined' ? `type-${node.type}` : undefined,
       zIndex: threeD ? Math.round(threeD.z * 1000) : index,
     };
     // A pozíció nem vizuális felülírás: csak a G6 rajzvászon koordinátája a 3D vetítéshez.
@@ -1912,11 +1909,7 @@ export function initKnowledgeMap(root, helpers = {}) {
       .filter(({ source, target }) => nodeIds.has(source) && nodeIds.has(target))
       .sort((first, second) => second.weight - first.weight || first.source.localeCompare(second.source) || first.target.localeCompare(second.target));
     const edges = (isThreeD ? rawEdges.slice(0, D3_FORCE_3D_EDGE_LIMIT) : rawEdges).map((edge, index) => graphEdge(edge, index));
-    const result = { nodes, edges };
-    if (state.visualization === 'combo-combined') {
-      result.combos = [...new Set(matched.map((node) => node.type))].map((type) => ({ id: `type-${type}`, data: { label: TYPE_META[type].label } }));
-    }
-    return result;
+    return { nodes, edges };
   }
 
   function localGraphData() {
