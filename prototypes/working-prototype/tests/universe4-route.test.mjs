@@ -7,7 +7,7 @@ const screen = await readFile(new URL('../screens/universe.html', import.meta.ur
 const css = await readFile(new URL('../assets/universe4/universe4.css', import.meta.url), 'utf8');
 const runtime = await readFile(new URL('../assets/universe4.js', import.meta.url), 'utf8');
 assert.match(index, /assets\/universe4\/universe4\.css\?rev=17/);
-assert.match(index, /assets\/app\.js\?rev=279/);
+assert.match(index, /assets\/app\.js\?rev=280/);
 assert.match(app, /initUniverse4 \} from '\.\/universe4\.js\?rev=56';/);
 assert.match(app, /(?:'universe'|universe): 'screens\/universe\.html'/);
 assert.match(app, /normalized === 'universe'[\s\S]*initUniverse4\(root,/);
@@ -15,15 +15,15 @@ assert.doesNotMatch(app, /universe-morph-test(?:-v[234])?/);
 assert.doesNotMatch(index, /universe-morph-test/);
 assert.match(screen, /data-universe4-force-stage/);
 assert.match(screen, /data-universe4-globe-stage/);
-assert.match(screen, /data-universe4-v7-debug-portal/, 'U4 must surface the real V7 debug controls and renderer trace on its own screen');
+assert.match(screen, /include:partials\/universe-debug\.html/, 'U4 must surface its diagnostics through a dedicated screen fragment');
 assert.match(screen, /data-universe4-stage-shell/, 'fullscreen must include both the render viewport and its control panel');
 assert.match(screen, /data-universe4-fullscreen/, 'U4 needs the same stage-local fullscreen control as the other Universe screens');
 assert.match(screen, /data-universe4-reset/, 'U4 needs a stage-level Reset action while V7 owns the view');
 assert.match(screen, /data-universe4-force-background/, 'U4 needs an independent ForceGraph background selector');
 assert.match(screen, /data-universe4-globe-background/, 'U4 needs an independent Globe background selector');
 assert.ok(
-  screen.indexOf('data-universe4-debug') > screen.indexOf('</section>'),
-  'U4 diagnostic panel must live below the render viewport instead of covering it',
+  screen.indexOf('include:partials/universe-debug.html') > screen.indexOf('</section>'),
+  'U4 diagnostic panel include must live below the render viewport instead of covering it',
 );
 assert.match(css, /\.universe4-stage-shell:fullscreen[\s\S]*\.is-universe4-fullscreen-fallback/,
   'U4 fullscreen target needs native and Android-WebView fallback styling');

@@ -1,5 +1,6 @@
 import { initUniverse4 } from './universe4.js?rev=56';
 import { initExploreDiscovery } from './explore-discovery.js?rev=4';
+import { loadScreenMarkup, syncScreenTabs } from './screen-fragments.js?rev=1';
 
 const routes = {
   home: 'screens/home.html',
@@ -128,11 +129,10 @@ async function render(route) {
   destroyScreen();
   destroyScreen = () => {};
   try {
-    const response = await fetch(routes[normalized], { cache: 'no-store' });
-    if (!response.ok) throw new Error(`Nem tölthető be: ${normalized}`);
-    root.innerHTML = await response.text();
+    root.innerHTML = await loadScreenMarkup(routes[normalized]);
     createFixedScreenLayout();
     addFullscreenToggle();
+    syncScreenTabs(root, normalized);
     if (normalized === 'query' && state.question) {
       const queryInput = root.querySelector('[data-query-form] input');
       if (queryInput) queryInput.value = state.question;
