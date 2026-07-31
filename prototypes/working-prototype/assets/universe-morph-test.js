@@ -1,6 +1,9 @@
 import * as THREE from './vendor/three.module.min.js?rev=92';
 import { CosmicEnvironment } from './cosmic-environment.js?rev=6';
-import { UNIVERSE_V3_REFERENCE_LIGHTING } from './virtual-galaxy-light-rig.js?rev=23';
+import {
+  createUniverseV3ReferenceSunDirection,
+  UNIVERSE_V3_REFERENCE_LIGHTING,
+} from './virtual-galaxy-light-rig.js?rev=24';
 // Import the V5 visual snapshot, not its Globe.gl UI wrapper.  V3 places
 // this immutable node data inside the already-existing ForceGraph3D scene.
 import { getV5PlanetVisualSnapshot } from './explore-galaxy-orb.js?rev=226';
@@ -56,10 +59,15 @@ const POINTER_GESTURE = Object.freeze({
 const PLANET_TAP_MOVE_THRESHOLD_PX = 8;
 const PLANET_TAP_DURATION_THRESHOLD_MS = 320;
 const UNIVERSE_V5_LABEL_POOL_LIMIT = 15;
-// The U3 handoff should end a touch closer than the former .39 framing. Its
-// actual final camera frame is what U4 maps to Globe.gl, so this one value
-// changes both sides without introducing a second Globe-only zoom.
-const UNIVERSE_V3_ENTRY_VIEWPORT_FILL = .46;
+// The U3 handoff must end noticeably closer than the former .52 framing.
+// Its actual final camera frame is what U4 maps to Globe.gl, so this one
+// value enlarges both sides without introducing a second Globe-only zoom.
+const UNIVERSE_V3_ENTRY_VIEWPORT_FILL = .56;
+// ThreeGlobe's body reads optically smaller than the ForceGraph proxy at the
+// same mathematical radius (its city field has a tighter silhouette). Keep a
+// single static calibration across the whole inline phase instead of hiding
+// the discrepancy with an animated size correction.
+const UNIVERSE_V3_INLINE_GLOBE_VISUAL_RADIUS_MULTIPLIER = 1.18;
 let threeGlobePromise;
 
 function loadThreeGlobe() {
@@ -129,7 +137,11 @@ export function initUniverseMorphTest(root, helpers = {}) {
   const planetViews = new Map();
   const nodeViews = new Map();
   const ownedMaterials = new Set();
-  const sharedSphereGeometry = new THREE.SphereGeometry(1, 16, 12);
+  // All ForceGraph planet proxies share this geometry.  The former 16×12
+  // shell was visibly faceted while a focused planet filled the viewport;
+  // 32×24 retains a single shared allocation but gives the body a smooth
+  // silhouette close to the canonical Globe.gl sphere.
+  const sharedSphereGeometry = new THREE.SphereGeometry(1, 32, 24);
   const selectedRingMaterial = new THREE.MeshBasicMaterial({
     color: isBrandV2 ? DJINN_V2.focusGlow : 0xf1eaff,
     transparent: true,
@@ -198,8 +210,6 @@ export function initUniverseMorphTest(root, helpers = {}) {
   const v3PlanetNodeWorld = new THREE.Vector3();
   const v3CameraDirection = new THREE.Vector3();
   const universeCosmicSunDirection = new THREE.Vector3(.58, .31, .75).normalize();
-  const universeCosmicSide = new THREE.Vector3();
-  const universeCosmicUp = new THREE.Vector3(0, 1, 0);
   const universeV5LabelSprites = new Map();
   const universeV5LabelPool = [];
   const universeV5LabelTextureCache = new Map();
@@ -462,7 +472,12 @@ export function initUniverseMorphTest(root, helpers = {}) {
     detailMount.name = `planet-detail-mount:${node.id}`;
     detailMount.userData.nodeId = node.id;
     proxySphere.scale.setScalar(radius);
-    glow.scale.setScalar(radius * 1.23);
+    // The V3/U4 source proxy crossfades into an equal-radius ThreeGlobe.
+    // Keep only this focused planet's visible glow on the body radius; the
+    // old 1.23 shell made the Force source read as a larger sphere before
+    // the actual Globe body had appeared. Other universe node glows retain
+    // their wider overview character.
+    glow.scale.setScalar(radius * (isFocusV3 && node.isPlanet ? 1 : 1.23));
     hitSphere.scale.setScalar(radius * 1.32);
     ring.rotation.x = Math.PI / 2;
     ring.visible = false;
@@ -495,13 +510,96 @@ export function initUniverseMorphTest(root, helpers = {}) {
   }
 
   function setObjectOpacity(object, opacity) {
+    const globeMaterial = detailGlobe?.globeMaterial?.();
     object.traverse((child) => {
       if (child.userData?.isInvisibleHitTarget) return;
       const materials = Array.isArray(child.material) ? child.material : [child.material];
       materials.filter(Boolean).forEach((material) => {
+        // The transition needs alpha while it is revealing, but leaving the
+        // body transparent after opacity reaches one makes its render path
+        // differ from the canonical V7 solid Globe.gl body.  Keep atom/glow
+        // materials untouched; only the real ThreeGlobe surface returns to
+        // its opaque Phong state at the final inline frame.
+        if (material === globeMaterial && opacity >= .999) {
+          material.transparent = false;
+          material.opacity = 1;
+          return;
+        }
         material.transparent = true;
         material.opacity = opacity;
       });
+    });
+  }
+
+  function colorHex(color) {
+    return color?.getHexString?.() ? `#${color.getHexString()}` : null;
+  }
+
+  function numberOrNull(value) {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  // The U4 trace needs the properties that actually reach Three.js, not only
+  // the intended V3 token set.  In particular this exposes forgotten vendor
+  // lights nested below the ForceGraph scene and renderer colour transforms.
+  function captureRendererRenderProfile(renderer, material = null) {
+    const clearColor = material?.color?.clone?.() || new THREE.Color();
+    try {
+      renderer?.getClearColor?.(clearColor);
+    } catch {
+      // Diagnostic capture must never interrupt a valid handoff when a
+      // vendor renderer does not implement the optional getter.
+    }
+    let contextAttributes = null;
+    try {
+      contextAttributes = renderer?.getContext?.()?.getContextAttributes?.() || null;
+    } catch {
+      contextAttributes = null;
+    }
+    return Object.freeze({
+      type: renderer?.constructor?.name || null,
+      outputColorSpace: renderer?.outputColorSpace || null,
+      outputEncoding: renderer?.outputEncoding ?? null,
+      toneMapping: renderer?.toneMapping ?? null,
+      toneMappingExposure: numberOrNull(renderer?.toneMappingExposure),
+      physicallyCorrectLights: Boolean(renderer?.physicallyCorrectLights),
+      clearColor: colorHex(clearColor),
+      clearAlpha: numberOrNull(renderer?.getClearAlpha?.()),
+      premultipliedAlpha: contextAttributes?.premultipliedAlpha ?? null,
+      alpha: contextAttributes?.alpha ?? null,
+    });
+  }
+
+  function captureSceneLightProfile(scene) {
+    const lights = [];
+    scene?.traverse?.((object) => {
+      if (!object?.isLight) return;
+      lights.push({
+        name: object.name || null,
+        type: object.type || object.constructor?.name || null,
+        visible: object.visible !== false,
+        color: colorHex(object.color),
+        groundColor: colorHex(object.groundColor),
+        intensity: numberOrNull(object.intensity),
+        parent: object.parent?.name || object.parent?.type || null,
+      });
+    });
+    return Object.freeze(lights.sort((left, right) => `${left.type}:${left.name}`.localeCompare(`${right.type}:${right.name}`)));
+  }
+
+  function captureMaterialRenderProfile(material) {
+    if (!material) return null;
+    return Object.freeze({
+      type: material.type || material.constructor?.name || null,
+      transparent: Boolean(material.transparent),
+      opacity: numberOrNull(material.opacity),
+      depthTest: material.depthTest !== false,
+      depthWrite: material.depthWrite !== false,
+      color: colorHex(material.color),
+      specular: colorHex(material.specular),
+      shininess: numberOrNull(material.shininess),
+      emissive: colorHex(material.emissive),
+      emissiveIntensity: numberOrNull(material.emissiveIntensity),
     });
   }
 
@@ -530,22 +628,10 @@ export function initUniverseMorphTest(root, helpers = {}) {
   }
 
   function seedUniverseCosmicSunDirection() {
-    if (!graph) return;
-    const camera = graph.camera();
-    const center = getUniverseCosmicCenter(v3PlanetCenter);
-    const toCamera = v3CameraDirection.copy(camera.position).sub(center);
-    if (toCamera.lengthSq() < .00001) toCamera.set(0, 0, 1);
-    toCamera.normalize();
-    // Start the sun on the camera-facing hemisphere but deliberately off-axis:
-    // the first frame exposes a real celestial body rather than a headlight.
-    universeCosmicSide.crossVectors(universeCosmicUp, toCamera);
-    if (universeCosmicSide.lengthSq() < .00001) universeCosmicSide.set(1, 0, 0);
-    universeCosmicSide.normalize();
-    universeCosmicSunDirection
-      .copy(toCamera).multiplyScalar(.68)
-      .addScaledVector(universeCosmicSide, .56)
-      .addScaledVector(universeCosmicUp, .32)
-      .normalize();
+    // U3 is the Force-side half of the V3-reference handoff.  It must not
+    // derive a second, camera-biased key direction: that hid the dark
+    // hemisphere that the canonical V7 Globe.gl correctly shows.
+    universeCosmicSunDirection.copy(createUniverseV3ReferenceSunDirection(THREE));
   }
 
   function updateUniverseCosmicLightRig() {
@@ -564,9 +650,16 @@ export function initUniverseMorphTest(root, helpers = {}) {
   // Strip them before this U3 instance installs its explicit reference rig.
   function stripForceGraphDefaultLights(scene) {
     if (!scene) return;
-    scene.children
-      .filter((child) => child.isLight)
-      .forEach((light) => scene.remove(light));
+    // ForceGraph versions may mount their inherited rig inside a helper
+    // group. Removing only direct scene children leaves that hidden rig
+    // active and brightens the inline globe relative to the standalone V7
+    // renderer. Collect first, then detach: mutating during `traverse` can
+    // skip siblings on some Three.js versions.
+    const lights = [];
+    scene.traverse?.((object) => {
+      if (object?.isLight) lights.push(object);
+    });
+    lights.forEach((light) => light.removeFromParent());
   }
 
   function ensureUniverseCosmicEnvironment() {
@@ -977,8 +1070,10 @@ export function initUniverseMorphTest(root, helpers = {}) {
     detailGlobe.removeFromParent?.();
     view.detailMount.add(detailGlobe);
     detailGlobe.position.set(0, 0, 0);
-    const scale = view.radius / (detailGlobe.getGlobeRadius?.() || 100);
-    detailGlobe.scale.setScalar(scale * .92);
+    const scale = (view.radius / (detailGlobe.getGlobeRadius?.() || 100)) * UNIVERSE_V3_INLINE_GLOBE_VISUAL_RADIUS_MULTIPLIER;
+    // Start at the same calibrated visual radius used by every entry frame.
+    // There is no scale tween during the morph.
+    detailGlobe.scale.setScalar(scale);
     detailGlobe.visible = true;
     setObjectOpacity(detailGlobe, 0);
     configurePlanetContent();
@@ -1588,7 +1683,9 @@ export function initUniverseMorphTest(root, helpers = {}) {
     view.proxySphere.material.depthWrite = overviewOpacity > .04;
     view.glow.visible = overviewOpacity > .01;
     view.glow.material.opacity = .44 * overviewOpacity;
-    detailGlobe.scale.setScalar(detailScale * (.92 + eased * .08));
+    // Do not tween geometry scale here. The proxy and ThreeGlobe have the
+    // same measured world radius; opacity/content is the morph, not shrink.
+    detailGlobe.scale.setScalar(detailScale);
     setObjectOpacity(detailGlobe, eased);
     setPlanetContentOpacity(Math.max(0, (eased - .32) / .68));
     setV3BackgroundFocus(nodeId, eased);
@@ -2792,6 +2889,33 @@ export function initUniverseMorphTest(root, helpers = {}) {
     return true;
   }
 
+  function captureFocusedPlanetRenderProfile() {
+    if (destroyed || !isFocusV3 || state.level !== UNIVERSE_LEVEL.PLANET || !graph || !detailGlobe) return null;
+    const view = planetViews.get(state.selectedGalaxyNodeId);
+    if (!view || detailGlobe.parent !== view.detailMount) return null;
+    const scene = graph.scene();
+    scene?.updateMatrixWorld?.(true);
+    const material = detailGlobe.globeMaterial?.();
+    return Object.freeze({
+      material: captureMaterialRenderProfile(material),
+      renderer: captureRendererRenderProfile(graph.renderer?.(), material),
+      // `configuredLights` is the expected contract; `sceneLights` proves
+      // whether ForceGraph leaves any additive vendor lights behind.
+      configuredLights: Object.freeze(sceneLights
+        .filter((light) => light?.isLight)
+        .map((light) => ({
+          name: light.name || null,
+          type: light.type || light.constructor?.name || null,
+          visible: light.visible !== false,
+          color: colorHex(light.color),
+          groundColor: colorHex(light.groundColor),
+          intensity: numberOrNull(light.intensity),
+        }))
+        .sort((left, right) => `${left.type}:${left.name}`.localeCompare(`${right.type}:${right.name}`))),
+      sceneLights: captureSceneLightProfile(scene),
+    });
+  }
+
   // A renderer handoff must use the *drawn* V3 planet rather than the raw
   // ForceGraph node coordinates.  This generic capture seam is also useful to
   // diagnostics: it records the actual detail globe transform, camera and a
@@ -2856,7 +2980,6 @@ export function initUniverseMorphTest(root, helpers = {}) {
     const ambient = sceneLights.find((light) => light?.isAmbientLight);
     const fill = sceneLights.find((light) => light?.isHemisphereLight);
     const globeMaterial = detailGlobe.globeMaterial?.();
-    const colorHex = (color) => color?.getHexString?.() ? `#${color.getHexString()}` : null;
     const lightSnapshot = Object.freeze({
       // This is the actual world-fixed U3 light vector at the Force last
       // frame. V7 adopts it while invisible; it must not seed a second,
@@ -2903,6 +3026,7 @@ export function initUniverseMorphTest(root, helpers = {}) {
       radius,
       landmarks,
       lightSnapshot,
+      renderProfile: captureFocusedPlanetRenderProfile(),
     };
   }
 
@@ -2988,6 +3112,7 @@ export function initUniverseMorphTest(root, helpers = {}) {
   dispose.setUniverseBackgroundColor = setUniverseBackgroundColor;
   dispose.resumeAfterExternalHandoff = resumeAfterExternalHandoff;
   dispose.captureFocusedPlanetHandoffFrame = captureFocusedPlanetHandoffFrame;
+  dispose.captureFocusedPlanetRenderProfile = captureFocusedPlanetRenderProfile;
   dispose.applyFocusedPlanetHandoffCamera = applyFocusedPlanetHandoffCamera;
   return dispose;
 }

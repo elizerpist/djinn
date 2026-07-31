@@ -1,7 +1,7 @@
 // U4 starts from the production U3 controller.  Keeping it as a mounted
 // adapter prevents the Galaxy entry/morph from drifting into a second,
 // simplified ForceGraph implementation.
-import { initUniverseMorphTest } from '../universe-morph-test.js?rev=38';
+import { initUniverseMorphTest } from '../universe-morph-test.js?rev=46';
 
 function u3Markup() {
   return `
@@ -76,6 +76,11 @@ export function createUniverse4U3Stage({ mount, helpers = {}, onPlanetReady } = 
     return destroy.captureFocusedPlanetHandoffFrame?.(options) || null;
   }
 
+  function captureRenderProfile() {
+    if (disposed) return null;
+    return destroy.captureFocusedPlanetRenderProfile?.() || null;
+  }
+
   function applyHandoffCamera(snapshot) {
     if (disposed) return false;
     return Boolean(destroy.applyFocusedPlanetHandoffCamera?.(snapshot));
@@ -100,6 +105,7 @@ export function createUniverse4U3Stage({ mount, helpers = {}, onPlanetReady } = 
     setBackgroundColor,
     resumeInlineInteraction,
     captureHandoffFrame,
+    captureRenderProfile,
     applyHandoffCamera,
     dispose() {
       if (disposed) return;

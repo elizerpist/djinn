@@ -3,6 +3,38 @@
  * OrbitControls still sees drag/pinch events; only a short, single-pointer
  * gesture reaches the city picker. This intentionally owns no Globe state.
  */
+function describeTarget(target) {
+  if (!target) return null;
+  return {
+    tag: target.tagName || null,
+    id: target.id || null,
+    className: typeof target.className === 'string' ? target.className : null,
+    role: target.getAttribute?.('role') || null,
+    nodeId: target.dataset?.nodeId || null,
+  };
+}
+
+function eventDiagnostics(event, canvas) {
+  let style = null;
+  try {
+    style = canvas && typeof window !== 'undefined' ? window.getComputedStyle?.(canvas) : null;
+  } catch {
+    style = null;
+  }
+  return {
+    target: describeTarget(event?.target),
+    currentTarget: describeTarget(event?.currentTarget),
+    pointerType: event?.pointerType ?? null,
+    buttons: event?.buttons ?? null,
+    button: event?.button ?? null,
+    defaultPrevented: event?.defaultPrevented === true,
+    cancelable: event?.cancelable === true,
+    eventPhase: event?.eventPhase ?? null,
+    canvasPointerEvents: style?.pointerEvents ?? null,
+    canvasTouchAction: style?.touchAction ?? null,
+  };
+}
+
 export function createPlanetInputRouter({
   canvas,
   runtimeFor,
@@ -33,7 +65,12 @@ export function createPlanetInputRouter({
     runtime.gestures.forEach((activeGesture) => { activeGesture.multiPointer = true; });
     runtime.gestures.set(event.pointerId, gesture);
     canvas.setPointerCapture?.(event.pointerId);
-    trace('pointer.down', { pointerId: event.pointerId, x: event.clientX, y: event.clientY });
+    trace('pointer.down', {
+      ...eventDiagnostics(event, canvas),
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    });
   }
 
   function onPointerMove(event) {
@@ -45,7 +82,7 @@ export function createPlanetInputRouter({
     const distanceSquared = (dx * dx) + (dy * dy);
     if (distanceSquared > tapDistanceSquared && !gesture.moved) {
       gesture.moved = true;
-      trace('pointer.drag', { pointerId: event.pointerId, distanceSquared });
+      trace('pointer.drag', { ...eventDiagnostics(event, canvas), pointerId: event.pointerId, distanceSquared });
     }
   }
 
@@ -53,7 +90,7 @@ export function createPlanetInputRouter({
     const runtime = runtimeFor();
     runtime?.gestures.delete(event.pointerId);
     if (canvas.hasPointerCapture?.(event.pointerId)) canvas.releasePointerCapture?.(event.pointerId);
-    trace('pointer.cancel', { pointerId: event.pointerId });
+    trace('pointer.cancel', { ...eventDiagnostics(event, canvas), pointerId: event.pointerId });
   }
 
   function onPointerUp(event) {
@@ -66,6 +103,7 @@ export function createPlanetInputRouter({
     const duration = now() - gesture.startedAt;
     if (gesture.moved || hadMultiplePointers || duration > tapDurationMs) {
       trace('pointer.tap.reject', {
+        ...eventDiagnostics(event, canvas),
         pointerId: event.pointerId,
         moved: gesture.moved,
         hadMultiplePointers,
@@ -78,14 +116,14 @@ export function createPlanetInputRouter({
     // tap, so it must not accidentally clear an already focused city.
     const cityId = pick(event);
     if (cityId === undefined) {
-      trace('pointer.tap.defer', { pointerId: event.pointerId, duration: Math.round(duration) });
+      trace('pointer.tap.defer', { ...eventDiagnostics(event, canvas), pointerId: event.pointerId, duration: Math.round(duration) });
       return;
     }
     if (cityId) {
-      trace('pointer.tap', { pointerId: event.pointerId, cityId, duration: Math.round(duration) });
+      trace('pointer.tap', { ...eventDiagnostics(event, canvas), pointerId: event.pointerId, cityId, duration: Math.round(duration) });
       activate(cityId);
     } else {
-      trace('pointer.tap.no-city', { pointerId: event.pointerId, duration: Math.round(duration) });
+      trace('pointer.tap.no-city', { ...eventDiagnostics(event, canvas), pointerId: event.pointerId, duration: Math.round(duration) });
       onEmptyTap(event);
     }
   }

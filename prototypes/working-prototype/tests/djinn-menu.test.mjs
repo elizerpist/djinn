@@ -27,6 +27,6 @@ assert.match(styles, /\.djinn-context-card/);
 // The production entry points are explicitly versioned so a device cannot
 // retain a stale Explore module after a renderer/state update.
 assert.match(index, /assets\/styles\.css\?rev=146/);
-assert.match(index, /assets\/app\.js\?rev=246/);
+assert.match(index, /assets\/app\.js\?rev=271/);
 
 console.log('djinn command menu OK');

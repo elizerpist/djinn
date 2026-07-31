@@ -32,9 +32,13 @@ assert.doesNotMatch(runtime, /navigate\([^)]*explore/i);
 // The requested U3-reference visual profile is shared, not approximated
 // separately at the ForceGraph and Globe.gl sides of the U4 handoff.
 assert.match(lightRig, /export const UNIVERSE_V3_REFERENCE_LIGHTING/);
+assert.match(lightRig, /export function createUniverseV3ReferenceSunDirection/,
+  'the shared V3-reference sun direction must live beside the shared lighting tokens');
 assert.match(exploreController, /let v7LightMode = 'universe-v3-reference'/);
 assert.match(exploreController, /v7LightMode = 'universe-v3-reference'/);
 assert.match(u3Controller, /UNIVERSE_V3_REFERENCE_LIGHTING/);
+assert.match(u3Controller, /createUniverseV3ReferenceSunDirection/,
+  'the Force inline stage must consume the exact V3-reference sun-direction helper used by V7');
 assert.match(u3Controller, /new THREE\.AmbientLight\(UNIVERSE_V3_REFERENCE_LIGHTING\.ambientColor, UNIVERSE_V3_REFERENCE_LIGHTING\.ambientIntensity\)/);
 assert.match(u3Controller, /new THREE\.HemisphereLight\(\s*UNIVERSE_V3_REFERENCE_LIGHTING\.fillColor,\s*UNIVERSE_V3_REFERENCE_LIGHTING\.fillGroundColor,\s*UNIVERSE_V3_REFERENCE_LIGHTING\.fillIntensity/s);
 assert.match(u3Controller, /new THREE\.DirectionalLight\(UNIVERSE_V3_REFERENCE_LIGHTING\.keyColor, UNIVERSE_V3_REFERENCE_LIGHTING\.keyIntensity\)/);

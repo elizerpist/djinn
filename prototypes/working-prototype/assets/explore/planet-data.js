@@ -1,7 +1,7 @@
 // Deterministic Explore planet data and geometry.  Browser lifecycle code
 // intentionally stays in explore-galaxy-orb.js; this module owns only data
 // construction and pure layout/selection mapping helpers.
-import { knowledgeEdges, knowledgeNodes } from '../knowledge-map.js?rev=133';
+import { knowledgeEdges, knowledgeNodes } from '../knowledge-map.js?rev=138';
 import * as THREE from '../vendor/three.module.min.js?rev=92';
 import {
   SURFACE_SELECTION_ARC_PROFILE,

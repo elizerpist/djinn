@@ -60,6 +60,8 @@ export function mountUniverse4DebugPanel({ host, viewport, onProof }) {
       if (fields.details) {
         fields.details.replaceChildren(...[
           `Generation: ${metrics.generation ?? 0} · Globe ready: ${Boolean(metrics.globeReady)} · frames: ${metrics.globeFrames ?? 0}`,
+          `Universe depth: ${metrics.depthState || 'GALAXY'} · Map: ${metrics.mapSnapshot || 'inactive'} · G6 ${format(metrics.mapOpacity)} · Patch ${format(metrics.morphPatchOpacity)}`,
+          `G6 center: ${metrics.g6MapState?.focusCityId || '—'} · zoom ${format(metrics.g6MapState?.zoom)} · LOD ${metrics.g6MapState?.lodKey || '—'} · cards ${metrics.g6MapState?.visibleNodeCount ?? 0}`,
           `Force camera: ${metrics.forceCamera || 'awaiting capture'}`,
           `Globe POV: ${metrics.globePov || 'awaiting prewarm'}`,
           `Pixel match: ${match.valid ? 'READY' : (match.failures?.join(', ') || 'awaiting snapshot')} · RMS ${format(match.landmarkRmsDeltaPx)} px`,

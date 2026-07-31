@@ -103,11 +103,18 @@ assert.ok(!('rimIntensity' in soft.rig.getDebugSnapshot()), 'V7 debug output mus
 
 const universeV3 = createRig('planet-universe-v3-reference');
 universeV3.rig.setMode('universe-v3-reference');
+universeV3.rig.captureEntryFrame({ planetId: 'planet-universe-v3-reference' });
 universeV3.rig.updateTargetFromCamera();
 universeV3.rig.updateFrame(0);
 universeV3.rig.updateFrame(1200);
 const universeV3Material = universeV3.rig.getMaterialSettings();
 const universeV3Snapshot = universeV3.rig.getDebugSnapshot();
+const expectedUniverseV3Sun = new THREE.Vector3(-.62, .54, .57).normalize();
+const actualUniverseV3Sun = new THREE.Vector3(...universeV3Snapshot.worldSunDirection);
+assert.ok(
+  actualUniverseV3Sun.angleTo(expectedUniverseV3Sun) < 1e-7,
+  'Universe V3 reference must begin from the shared camera-independent sun direction so the Force inline globe and V7 shade the same hemisphere',
+);
 assert.equal(universeV3.rig.galaxyKeyLight.color.getHexString(), 'f5d8ff', 'Universe V3 reference key must show a clearly readable magenta-white tint without becoming solid magenta');
 assert.equal(universeV3.rig.galaxyFillLight.color.getHexString(), '40305e', 'Universe V3 reference upper fill must match the real V3 fill');
 assert.equal(universeV3.rig.galaxyFillLight.groundColor.getHexString(), '2a1a4d', 'Universe V3 reference must retain a deep-violet far-side floor instead of collapsing into transparent black');

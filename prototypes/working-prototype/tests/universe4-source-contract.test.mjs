@@ -4,10 +4,19 @@ import { readFile } from 'node:fs/promises';
 const u3Stage = await readFile(new URL('../assets/universe4/universe4-u3-stage.js', import.meta.url), 'utf8');
 const v7SourceStage = await readFile(new URL('../assets/universe4/universe4-v7-source-stage.js', import.meta.url), 'utf8');
 const runtime = await readFile(new URL('../assets/universe4.js', import.meta.url), 'utf8');
+const app = await readFile(new URL('../assets/app.js', import.meta.url), 'utf8');
+const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const matcher = await readFile(new URL('../assets/universe4/universe4-handoff-matcher.js', import.meta.url), 'utf8');
 const screen = await readFile(new URL('../screens/universe-morph-test-v4.html', import.meta.url), 'utf8');
 const u3Controller = await readFile(new URL('../assets/universe-morph-test.js', import.meta.url), 'utf8');
 const exploreController = await readFile(new URL('../assets/explore-galaxy-orb.js', import.meta.url), 'utf8');
+const depthController = await readFile(new URL('../assets/universe4/universe4-depth-controller.js', import.meta.url), 'utf8');
+const selectionPolicy = await readFile(new URL('../assets/universe4/universe4-globe-selection.js', import.meta.url), 'utf8');
+const focusedSnapshot = await readFile(new URL('../assets/universe4/universe4-focused-map-snapshot.js', import.meta.url), 'utf8');
+const tangentPlane = await readFile(new URL('../assets/universe4/universe4-tangent-plane.js', import.meta.url), 'utf8');
+const morphPatch = await readFile(new URL('../assets/universe4/universe4-morph-patch.js', import.meta.url), 'utf8');
+const g6Stage = await readFile(new URL('../assets/universe4/universe4-g6-focused-map-stage.js', import.meta.url), 'utf8');
+const sharedG6Stage = await readFile(new URL('../assets/focused-g6-v2-stage.js', import.meta.url), 'utf8');
 
 assert.match(u3Stage, /export function createUniverse4U3Stage/);
 assert.match(u3Stage, /initUniverseMorphTest/);
@@ -24,8 +33,14 @@ assert.match(u3Stage, /setBackgroundColor/,
   'the U3 adapter must expose only its own ForceGraph background clear-color seam');
 assert.match(u3Stage, /captureHandoffFrame/,
   'the U3 adapter must expose the real final Force camera/planet frame, not a node-coordinate estimate');
+assert.match(u3Stage, /captureRenderProfile/,
+  'the U3 adapter must expose the live Force material/light/renderer profile for handoff parity diagnostics');
 assert.match(u3Controller, /captureFocusedPlanetHandoffFrame/,
   'the production U3 controller must capture its selected detail globe world transform and landmark projections');
+assert.match(u3Controller, /function captureFocusedPlanetRenderProfile\(/,
+  'the production U3 controller must report its actual material, recursively discovered scene lights and renderer state');
+assert.match(u3Controller, /material === globeMaterial && opacity >= \.999[\s\S]*?material\.transparent = false/,
+  'the fully revealed inline globe body must return to the same opaque Phong state as V7 after its morph fade');
 assert.match(u3Controller, /lightSnapshot/,
   'the Force capture must include its actual V3-reference light state, not leave V7 to start from an unrelated sun direction');
 assert.match(u3Controller, /resetToGalaxyOverview/,
@@ -40,8 +55,21 @@ assert.match(u3Controller, /const focused = await tween\(isFocusV3 \? 920 : 560,
   'each V3 zoom frame must advance the already-prepared inline morph');
 assert.match(u3Controller, /if \(isFocusV3\) \{\s*const preparedDetailScale = await v3MorphSetup[\s\S]*?applyInlinePlanetEntryMorph\(view, detailScale, 1, nodeId\);/,
   'the handoff must wait for the same concurrent morph to reach its final state, without a second post-zoom tween');
-assert.match(u3Controller, /const UNIVERSE_V3_ENTRY_VIEWPORT_FILL = \.46;/,
-  'the U3/U4 focused entry must tighten once more from the prior .43 viewport fill');
+const inlineEntryMorph = u3Controller.match(/function applyInlinePlanetEntryMorph\(view, detailScale, eased, nodeId\) \{[\s\S]*?\n  \}/)?.[0] || '';
+assert.match(u3Controller, /const UNIVERSE_V3_INLINE_GLOBE_VISUAL_RADIUS_MULTIPLIER = 1\.18;/,
+  'the inline ThreeGlobe needs one explicit, static visual-size calibration instead of an animated shrink compensation');
+assert.match(inlineEntryMorph, /detailGlobe\.scale\.setScalar\(detailScale\);/,
+  'the calibrated inline ThreeGlobe scale must stay fixed throughout entry');
+assert.doesNotMatch(inlineEntryMorph, /\.92 \+ eased \* \.08/,
+  'entry must not hide a Force-proxy/ThreeGlobe size mismatch behind a shrink or grow tween');
+const inlineGlobeSetup = u3Controller.match(/function configureDetailGlobe\(ThreeGlobe, view\) \{[\s\S]*?\n  \}/)?.[0] || '';
+assert.match(inlineGlobeSetup, /const scale = \(view\.radius \/ \(detailGlobe\.getGlobeRadius\?\.\(\) \|\| 100\)\) \* UNIVERSE_V3_INLINE_GLOBE_VISUAL_RADIUS_MULTIPLIER;[\s\S]*?detailGlobe\.scale\.setScalar\(scale\);/,
+  'the prewarmed ThreeGlobe must start at its final calibrated visual radius before the first visible morph frame');
+const inlinePlanetFactory = u3Controller.match(/function createGalaxyNodeRoot\(node\) \{[\s\S]*?\n  \}/)?.[0] || '';
+assert.match(inlinePlanetFactory, /glow\.scale\.setScalar\(radius \* \(isFocusV3 && node\.isPlanet \? 1 : 1\.23\)\);/,
+  'the visible U3 planet proxy glow must share the body radius; its former 1.23 shell made the source globe visibly larger than the inline ThreeGlobe');
+assert.match(u3Controller, /const UNIVERSE_V3_ENTRY_VIEWPORT_FILL = \.56;/,
+  'the U3/U4 focused entry must end at the closer requested shared Force/Globe framing');
 assert.match(u3Controller, /focusDistanceForBoundingRadius\(radius, camera\.fov \|\| 50, camera\.aspect \|\| 1, UNIVERSE_V3_ENTRY_VIEWPORT_FILL\)/,
   'the Force camera endpoint must derive from the tighter V3 entry framing so the captured handoff also starts Globe.gl closer');
 assert.match(u3Stage, /suppressInlineCityLabels:\s*true/,
@@ -55,8 +83,15 @@ assert.match(inlineDetailGlobe, /new THREE\.MeshPhongMaterial\(/,
   'the inline U3 globe body must use V7\'s Phong response instead of a visually different Standard material');
 assert.match(u3Controller, /function stripForceGraphDefaultLights\(scene\)/,
   'the U3 reference stage must explicitly remove ForceGraph\'s inherited lights before installing the authoritative V3 rig');
+const defaultLightStripper = u3Controller.match(/function stripForceGraphDefaultLights\(scene\) \{[\s\S]*?\n  \}/)?.[0] || '';
+assert.match(defaultLightStripper, /scene\.traverse\?\.\(/,
+  'the Force-side light cleanup must inspect nested vendor groups, not only direct scene children');
+assert.match(defaultLightStripper, /lights\.forEach\(\(light\) => light\.removeFromParent\(\)\)/,
+  'every inherited ForceGraph light must be removed before the V3-reference rig is installed');
 assert.match(u3Controller, /stripForceGraphDefaultLights\(scene\);[\s\S]*?new THREE\.AmbientLight\(UNIVERSE_V3_REFERENCE_LIGHTING\.ambientColor, UNIVERSE_V3_REFERENCE_LIGHTING\.ambientIntensity\)[\s\S]*?new THREE\.HemisphereLight\([\s\S]*?UNIVERSE_V3_REFERENCE_LIGHTING\.fillColor[\s\S]*?UNIVERSE_V3_REFERENCE_LIGHTING\.fillGroundColor[\s\S]*?UNIVERSE_V3_REFERENCE_LIGHTING\.fillIntensity[\s\S]*?new THREE\.DirectionalLight\(UNIVERSE_V3_REFERENCE_LIGHTING\.keyColor, UNIVERSE_V3_REFERENCE_LIGHTING\.keyIntensity\)/,
   'the only active inline focus rig must be the V3-reference ambient, hemisphere and directional-light contract used by V7');
+assert.match(u3Controller, /const sharedSphereGeometry = new THREE\.SphereGeometry\(1, 32, 24\);/,
+  'ForceGraph planet proxies must use a sufficiently dense shared sphere geometry instead of visibly faceted 16×12 shells');
 assert.match(u3Controller, /function pauseUniverseRenderRuntime\(\)/,
   'pausing the hidden U3 stage must stop its own HUD/cosmic RAF, not only the vendor ForceGraph loop');
 assert.match(u3Controller, /window\.cancelAnimationFrame\(hudFrame\)/,
@@ -86,6 +121,12 @@ assert.match(v7SourceStage, /applyHandoffPose/,
   'the canonical V7 source stage must accept a real mapped Force pose while hidden');
 assert.match(v7SourceStage, /captureHandoffFrame/,
   'the canonical V7 source stage must measure its own CSS center, radius and landmark projections');
+assert.match(v7SourceStage, /captureRenderProfile/,
+  'the canonical V7 adapter must expose its live material/light/renderer profile for parity diagnostics');
+assert.match(v7SourceStage, /getInputDiagnostics/,
+  'the canonical V7 adapter must expose effective DOM and OrbitControls input state');
+assert.match(v7SourceStage, /onInputDiagnostic/,
+  'the canonical V7 adapter must forward input-boundary diagnostics to the U4 trace');
 assert.match(v7SourceStage, /applyEmbeddedHandoffLighting/,
   'the hidden V7 stage must adopt the captured U3 V3-reference light direction before it is eligible for reveal');
 assert.match(v7SourceStage, /lightSnapshot/,
@@ -98,9 +139,66 @@ assert.match(exploreController, /setEmbeddedHandoffLabelSnapshot/,
   'the canonical V7 source must own the temporary frozen label set rather than rebuilding a U4-specific label renderer');
 assert.match(exploreController, /setEmbeddedBackgroundColor/,
   'the canonical V7 source must own embedded Globe background updates');
+assert.match(exploreController, /externalRole === 'root'\) v5DataColor = '#FFD45A'/,
+  'the selected mother/root city must render gold in the embedded U4 Globe');
+assert.match(exploreController, /externalRole === 'context'\) v5DataColor = '#77E8FF'/,
+  'the context child cities must render blue in the embedded U4 Globe');
+assert.match(exploreController, /function beginV5LabelTap\(event\)/,
+  'a canonical V7 label must start an explicit city gesture instead of relying on a canvas raycast behind the DOM chip');
+assert.match(exploreController, /function completeV5LabelTap\(event\)[\s\S]*?focusNode\(gesture\.cityId\)/,
+  'a completed V7 label gesture must enter the same city-focus/U4 tap-policy path as a sphere tap');
+assert.match(exploreController, /tapDistanceSquared:\s*embeddedViewport \? 576 : 81/,
+  'the embedded mobile V7 endpoint must tolerate a 24px intentional city tap before classifying it as an orbit drag');
+assert.match(exploreController, /tapDurationMs:\s*embeddedViewport \? 620 : 360/,
+  'the embedded mobile V7 endpoint must tolerate a deliberate city tap without loosening the normal Explore gesture contract');
+
+// Globe → G6 is a third U4 depth, not an Explore route or a second V7 clone.
+assert.match(depthController, /PLANET_TO_MAP_MORPH/);
+assert.match(depthController, /MAP_TO_PLANET_MORPH/);
+assert.match(selectionPolicy, /clear-context/);
+assert.match(selectionPolicy, /enter-map/);
+assert.match(selectionPolicy, /consume: true/,
+  'a foreign-city tap must be consumed after clearing the prior context');
+assert.match(focusedSnapshot, /immutable domain bridge/);
+assert.match(tangentPlane, /stable local East\/North\/Normal frame/);
+assert.match(morphPatch, /never changes Globe geometry/);
+assert.match(g6Stage, /createFocusedG6V2Stage/,
+  'Universe owns a narrow adapter around the existing G6 v2 stage rather than a duplicated map renderer');
+assert.match(sharedG6Stage, /buildFocusedG6V2Subgraph/);
+assert.match(sharedG6Stage, /focusedG6V2Positions/);
+assert.match(sharedG6Stage, /knowledgeNodes/,
+  'the embedded stage must use the canonical full G6 V2 domain after the Globe entry handoff');
+assert.match(sharedG6Stage, /focusedG6V2ShouldRefreshLod/,
+  'pinch/wheel zoom must only rebuild cards after a real V2 LOD boundary');
+assert.match(sharedG6Stage, /setActiveFocus/,
+  'a G6 node tap must replace the dynamic center card instead of remaining a static map');
+assert.match(sharedG6Stage, /createFocusedG6V2StageControls/,
+  'the embedded full map must expose explicit zoom in, zoom out and recenter controls');
+assert.match(runtime, /createUniverse4G6FocusedMapStage/);
+assert.match(runtime, /let g6Stage = null;/,
+  'the G6 ready callback can be synchronous, so it must not close over a TDZ const binding');
+assert.match(runtime, /g6Stage = createUniverse4G6FocusedMapStage\(/,
+  'the nullable G6 reference must be assigned only after its safe binding exists');
+assert.match(runtime, /createUniverse4MorphPatch/);
+assert.match(runtime, /resolveV7CityTap/);
+assert.match(runtime, /enterFocusedMap/);
+assert.match(runtime, /returnFocusedMapToPlanet/);
+assert.match(runtime, /data-universe4-g6-stage/);
+assert.match(screen, /data-universe4-g6-stage/);
+assert.match(screen, /data-universe4-morph-patch-stage/);
+assert.doesNotMatch(runtime, /navigate\([^)]*explore/i,
+  'the G6 depth must remain mounted inside Universe 4, never navigate to Explore');
 
 assert.match(runtime, /createUniverse4U3Stage/);
 assert.match(runtime, /createUniverse4V7SourceStage/);
+assert.match(runtime, /let v7Stage = null;/,
+  'the synchronous canonical V7 ready callback must never close over a TDZ const binding');
+assert.match(app, /universe4\.js\?rev=54/,
+  'the U4 module revision must change when its embedded full-map runtime changes');
+assert.match(runtime, /universe4-v7-source-stage\.js\?rev=22/,
+  'the U4 source-stage revision must change when its canonical Globe controls change');
+assert.match(index, /assets\/app\.js\?rev=271/,
+  'the browser entrypoint must invalidate the app module which imports U4');
 assert.match(runtime, /HANDOFF_CROSSFADE/);
 assert.match(runtime, /GLOBE_STANDALONE/);
 assert.match(runtime, /whenReady\(\)/, 'handoff must wait for the embedded canonical V7 controller');
@@ -116,6 +214,8 @@ assert.match(runtime, /u4\.u3\.inline\.complete/);
 assert.match(runtime, /u4\.handoff\.complete/);
 assert.match(runtime, /u4\.handoff\.light\.transfer/,
   'the on-screen U4 trace must identify the exact transferred U3 light direction');
+assert.match(runtime, /u4\.handoff\.render\.profile/,
+  'the on-screen U4 trace must emit both rendered material/light/renderer profiles before reveal');
 assert.match(runtime, /v7Stage\.resumeAnimation\(\);\s*const forceFrame = u3Stage\.captureHandoffFrame\(\);/,
   'U4 must capture the final U3 world transform before the hidden V7 pose solve');
 assert.match(runtime, /if \(!latestMatch\.valid\)/,

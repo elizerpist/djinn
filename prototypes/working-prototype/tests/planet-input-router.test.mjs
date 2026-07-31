@@ -29,6 +29,10 @@ router.onPointerUp({ pointerId: 1, clientX: 4, clientY: 6 });
 assert.deepEqual(activated, ['pao2']);
 assert.equal(gestures.size, 0);
 assert.ok(trace.some((entry) => entry.event === 'pointer.tap'));
+assert.equal(trace.find((entry) => entry.event === 'pointer.down')?.pointerType, null,
+  'the router trace must expose pointer metadata even when a platform event omits pointerType');
+assert.ok(Object.hasOwn(trace.find((entry) => entry.event === 'pointer.down'), 'target'),
+  'the router trace must identify the event target so DOM overlays can be distinguished from the canvas');
 
 router.onPointerDown({ pointerId: 11, clientX: 4, clientY: 6, button: 0 });
 now = 150;

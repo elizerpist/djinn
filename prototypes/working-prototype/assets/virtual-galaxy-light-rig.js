@@ -60,6 +60,18 @@ export const UNIVERSE_V3_REFERENCE_LIGHTING = Object.freeze({
   emissiveIntensity: .14,
 });
 
+// This is a visual contract, not a camera-relative preference.  Both the
+// inline U3 ForceGraph planet and the canonical V7 Globe.gl planet must begin
+// with this exact world-space key direction; otherwise they can share colours
+// and intensities but still light opposite hemispheres.
+export const UNIVERSE_V3_REFERENCE_SUN_DIRECTION = Object.freeze([-.62, .54, .57]);
+
+export function createUniverseV3ReferenceSunDirection(THREE, target = new THREE.Vector3()) {
+  return target
+    .set(...UNIVERSE_V3_REFERENCE_SUN_DIRECTION)
+    .normalize();
+}
+
 // Production Hybrid keeps its own magenta/violet light rig, but uses the
 // solid V3-reference body so the primary V7 view cannot fall back to a dark,
 // glassy-looking globe after a mode switch.
@@ -162,10 +174,12 @@ export class VirtualGalaxyLightingRig {
     const pitch = ((((seed >>> 16) & 0xffff) / 0xffff) - .5) * .2;
     const sunDirection = entryLightDirection
       ? this._tmp.copy(entryLightDirection).normalize()
-      : new this.THREE.Vector3(-.62, .54, .57)
-        .applyAxisAngle(this._tmpUp, yaw)
-        .applyAxisAngle(this._lastStableSide, pitch)
-        .normalize();
+      : this.mode === 'universe-v3-reference'
+        ? createUniverseV3ReferenceSunDirection(this.THREE, this._tmp)
+        : new this.THREE.Vector3(-.62, .54, .57)
+          .applyAxisAngle(this._tmpUp, yaw)
+          .applyAxisAngle(this._lastStableSide, pitch)
+          .normalize();
     this.frameState = {
       planetCenter: this._center.clone(),
       entryCameraPosition: camera.position.clone(),

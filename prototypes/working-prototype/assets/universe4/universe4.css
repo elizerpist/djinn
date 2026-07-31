@@ -111,6 +111,11 @@
 .universe4-v7-source-root .is-embedded-bare-planet .galaxy-orb-v5-size-debug,
 .universe4-v7-source-root .is-embedded-bare-planet .galaxy-orb-v6-light-debug,
 .universe4-v7-source-root .is-embedded-bare-planet .galaxy-node-morph-overlay { display: none !important; }
+/* U4 uses the canonical V7 label DOM as a city hit target. The capture-phase
+   V7 pointer router still resolves the associated sphere exactly once, so a
+   chip can never also leak into a Globe background tap. */
+.universe4-v7-source-root .galaxy-orb-label-layer { pointer-events: none; }
+.universe4-v7-source-root .galaxy-orb-label { pointer-events: auto; }
 .universe4-v7-debug-portal {
   position: absolute;
   z-index: 7;
@@ -144,6 +149,38 @@
 .universe4-force-stage { opacity: 1; pointer-events: auto; }
 .universe4-globe-stage { z-index: 2; opacity: 0; pointer-events: none; }
 .universe4-globe-stage.is-interactive { pointer-events: auto; }
+.universe4-morph-patch-stage { z-index: 3; opacity: 0; pointer-events: none; }
+.universe4-morph-patch-canvas { display: block; width: 100%; height: 100%; pointer-events: none; }
+.universe4-g6-stage { z-index: 4; opacity: 0; pointer-events: none; background: #0B0A17; }
+.universe4-g6-stage.is-interactive { pointer-events: auto; }
+.focused-g6-v2-stage-root { position: relative; width: 100%; height: 100%; background: #0B0A17; touch-action: none; }
+.focused-g6-v2-stage-root canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.focused-g6-v2-stage-controls {
+  position: absolute;
+  z-index: 4;
+  right: 13px;
+  bottom: 14px;
+  display: grid;
+  gap: 6px;
+  pointer-events: auto;
+}
+.focused-g6-v2-stage-controls button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(201, 196, 255, .58);
+  border-radius: 11px;
+  color: #f2edff;
+  background: rgba(21, 13, 47, .84);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .32), inset 0 0 16px rgba(126, 91, 246, .12);
+  backdrop-filter: blur(8px);
+  font: 800 19px/1 system-ui, sans-serif;
+}
+.focused-g6-v2-stage-controls button:last-child { color: #ffe6a3; border-color: rgba(255, 212, 90, .7); font-size: 17px; }
+.focused-g6-v2-stage-controls button:active { transform: scale(.94); }
+.focused-g6-v2-stage-controls button:focus-visible { outline: 2px solid #fff0a3; outline-offset: 2px; }
 .universe4-viewport[data-universe4-proof-view="globe-only"] .universe4-force-stage { opacity: 0; pointer-events: none; }
 .universe4-viewport[data-universe4-proof-view="globe-only"] .universe4-globe-stage { opacity: 1; pointer-events: auto; }
 .universe4-viewport[data-universe4-proof-view="force-only"] .universe4-force-stage { opacity: 1; pointer-events: auto; }

@@ -57,6 +57,41 @@ export const DJINN_ORB_V6 = Object.freeze({ ...DJINN_ORB_V5 });
 export const DJINN_ORB_V7 = Object.freeze({ ...DJINN_ORB_V5 });
 export const V5_FOCUS_NO_ZOOM = true;
 
+// The V5-family city POV is an automatic camera move, not a modal lock. Keep
+// native Globe.gl orbit and zoom available while that tween (or any later
+// focus state) is active. Legacy V1–V4 card morphs retain their camera lock.
+export function v5GlobeControlsEnabled({ expanded = false, variant = '', focusState = 'idle' } = {}) {
+  const v5Family = variant === 'v5' || variant === 'v6' || variant === 'v7';
+  return Boolean(expanded && (v5Family || focusState === 'idle'));
+}
+
+// V5–V7 city selection is a Globe-only context interaction. Keep the
+// dedicated Globe camera centered on the planet and move the selected
+// latitude/longitude in front of it; do not reuse the older V1–V4 card-morph
+// camera path, which changes OrbitControls' target to the selected node.
+export const V5_CITY_FOCUS = Object.freeze({
+  zoomFactor: .75,
+  minimumAltitude: .5,
+  maximumAltitude: 3.4,
+  durationMs: 680,
+});
+
+export function v5CityFocusPointOfView(currentPointOfView, city, lockedAltitude = null) {
+  if (!Number.isFinite(city?.lat) || !Number.isFinite(city?.lng)) return null;
+  const currentAltitude = Number.isFinite(currentPointOfView?.altitude)
+    ? currentPointOfView.altitude
+    : V5_CITY_FOCUS.maximumAltitude;
+  const requestedAltitude = Number.isFinite(lockedAltitude)
+    ? lockedAltitude
+    : currentAltitude * V5_CITY_FOCUS.zoomFactor;
+  const boundedAltitude = Math.max(
+    V5_CITY_FOCUS.minimumAltitude,
+    Math.min(V5_CITY_FOCUS.maximumAltitude, requestedAltitude),
+  );
+  const altitude = Number(boundedAltitude.toFixed(4));
+  return Object.freeze({ lat: city.lat, lng: city.lng, altitude });
+}
+
 export const V6_HYBRID_LIGHT = Object.freeze({
   keyIntensity: 1.95,
   fillIntensity: .68,

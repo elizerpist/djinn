@@ -1,8 +1,8 @@
-import { initKnowledgeMap } from './knowledge-map.js?rev=137';
-import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=226';
+import { initKnowledgeMap } from './knowledge-map.js?rev=138';
+import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=239';
 import { initExploreDiscovery } from './explore-discovery.js?rev=3';
-import { initUniverseMorphTest } from './universe-morph-test.js?rev=38';
-import { initUniverse4 } from './universe4.js?rev=35';
+import { initUniverseMorphTest } from './universe-morph-test.js?rev=46';
+import { initUniverse4 } from './universe4.js?rev=54';
 
 const routes = {
   home: 'screens/home.html',

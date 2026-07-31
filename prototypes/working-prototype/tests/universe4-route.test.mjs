@@ -12,9 +12,9 @@ const universeChildScreens = await Promise.all([
   'universe-morph-test-v3.html',
 ].map((file) => readFile(new URL(`../screens/${file}`, import.meta.url), 'utf8')));
 
-assert.match(index, /assets\/universe4\/universe4\.css\?rev=13/);
-assert.match(index, /assets\/app\.js\?rev=246/);
-assert.match(app, /initUniverse4 \} from '\.\/universe4\.js\?rev=35';/);
+assert.match(index, /assets\/universe4\/universe4\.css\?rev=16/);
+assert.match(index, /assets\/app\.js\?rev=271/);
+assert.match(app, /initUniverse4 \} from '\.\/universe4\.js\?rev=54';/);
 assert.match(app, /'universe-morph-test-v4': 'screens\/universe-morph-test-v4\.html'/);
 assert.match(app, /normalized === 'universe-morph-test-v4'[\s\S]*initUniverse4\(root,/);
 assert.match(screen, /data-universe4-force-stage/);
@@ -35,6 +35,10 @@ assert.match(css, /\.universe4-debug\s*\{[^}]*position:\s*static/s,
   'U4 diagnostic panel must use normal document flow');
 assert.match(css, /is-u4-match-diagnostics[\s\S]*\.universe4-debug/,
   'a failed hidden match must surface measured diagnostics without polluting the successful bare-V7 endpoint');
+assert.match(css, /\.universe4-v7-source-root \.galaxy-orb-label-layer\s*\{[^}]*pointer-events:\s*none/,
+  'the transparent V7 label layer must pass background gestures through to Globe.gl');
+assert.match(css, /\.universe4-v7-source-root \.galaxy-orb-label\s*\{[^}]*pointer-events:\s*auto/,
+  'individual V7 city labels must remain tappable above the Globe canvas');
 assert.match(runtime, /data-universe4-fullscreen/);
 assert.match(runtime, /data-universe4-stage-shell/);
 assert.match(runtime, /requestFullscreen/);

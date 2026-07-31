@@ -1,7 +1,7 @@
 // Universe 4 deliberately mounts the *same* Explore controller that owns V7.
 // It does not recreate the 700-city layout, lights, cosmic field, labels,
 // gold paths or gesture router.  This is a live embedded Explore V7 instance.
-import { initExpandableGalaxyOrb } from '../explore-galaxy-orb.js?rev=226';
+import { initExpandableGalaxyOrb } from '../explore-galaxy-orb.js?rev=239';
 import {
   mapForceCameraSnapshotToGlobePov,
   solveAltitudeForCssRadius,
@@ -9,6 +9,69 @@ import {
 
 const finite = (value) => Number.isFinite(value);
 const vectorRecord = (vector) => ({ x: vector.x, y: vector.y, z: vector.z });
+const numberOrNull = (value) => Number.isFinite(value) ? value : null;
+const colorHex = (color) => color?.getHexString?.() ? `#${color.getHexString()}` : null;
+
+function captureMaterialRenderProfile(material) {
+  if (!material) return null;
+  return Object.freeze({
+    type: material.type || material.constructor?.name || null,
+    transparent: Boolean(material.transparent),
+    opacity: numberOrNull(material.opacity),
+    depthTest: material.depthTest !== false,
+    depthWrite: material.depthWrite !== false,
+    color: colorHex(material.color),
+    specular: colorHex(material.specular),
+    shininess: numberOrNull(material.shininess),
+    emissive: colorHex(material.emissive),
+    emissiveIntensity: numberOrNull(material.emissiveIntensity),
+  });
+}
+
+function captureSceneLightProfile(scene) {
+  const lights = [];
+  scene?.traverse?.((object) => {
+    if (!object?.isLight) return;
+    lights.push({
+      name: object.name || null,
+      type: object.type || object.constructor?.name || null,
+      visible: object.visible !== false,
+      color: colorHex(object.color),
+      groundColor: colorHex(object.groundColor),
+      intensity: numberOrNull(object.intensity),
+      parent: object.parent?.name || object.parent?.type || null,
+    });
+  });
+  return Object.freeze(lights.sort((left, right) => `${left.type}:${left.name}`.localeCompare(`${right.type}:${right.name}`)));
+}
+
+function captureRendererRenderProfile(renderer, material) {
+  const clearColor = material?.color?.clone?.() || null;
+  try {
+    if (clearColor) renderer?.getClearColor?.(clearColor);
+  } catch {
+    // Renderer diagnostics are optional and must never make the V7 source
+    // stage ineligible for the real handoff.
+  }
+  let contextAttributes = null;
+  try {
+    contextAttributes = renderer?.getContext?.()?.getContextAttributes?.() || null;
+  } catch {
+    contextAttributes = null;
+  }
+  return Object.freeze({
+    type: renderer?.constructor?.name || null,
+    outputColorSpace: renderer?.outputColorSpace || null,
+    outputEncoding: renderer?.outputEncoding ?? null,
+    toneMapping: renderer?.toneMapping ?? null,
+    toneMappingExposure: numberOrNull(renderer?.toneMappingExposure),
+    physicallyCorrectLights: Boolean(renderer?.physicallyCorrectLights),
+    clearColor: colorHex(clearColor),
+    clearAlpha: numberOrNull(renderer?.getClearAlpha?.()),
+    premultipliedAlpha: contextAttributes?.premultipliedAlpha ?? null,
+    alpha: contextAttributes?.alpha ?? null,
+  });
+}
 
 function projectWorldToCss(point, camera, viewport) {
   const projected = point.clone().project(camera);
@@ -19,7 +82,15 @@ function projectWorldToCss(point, camera, viewport) {
   };
 }
 
-export function createUniverse4V7SourceStage({ mount, debugPortal = null, onReady } = {}) {
+export function createUniverse4V7SourceStage({
+  mount,
+  debugPortal = null,
+  onReady,
+  onCityTap = null,
+  onSelectionTransition = null,
+  onCityVisualRole = null,
+  onInputDiagnostic = null,
+} = {}) {
   if (!mount) throw new Error('Universe 4 V7 source stage mount kötelező.');
 
   const host = document.createElement('div');
@@ -42,10 +113,19 @@ export function createUniverse4V7SourceStage({ mount, debugPortal = null, onRead
     embeddedViewport: mount,
     embeddedBarePlanet: true,
     embeddedDebugPortal: debugPortal,
+    onV5CityTap: onCityTap,
+    onV5SelectionTransition: onSelectionTransition,
+    onV5CityVisualRole: onCityVisualRole,
     onGlobeReady: (payload) => {
       if (disposed || ready) return;
       ready = true;
       resolveReady(payload);
+      // The canonical factory can invoke this callback before its own factory
+      // returns the controller object. Defer diagnostics until that nullable
+      // binding is initialized, just like the U4 onReady seam does.
+      queueMicrotask(() => {
+        if (!disposed) emitInputDiagnostic('u4.controls.source-ready', { reason: 'canonical-v7-ready' });
+      });
       onReady?.(payload);
     },
   });
@@ -93,6 +173,29 @@ export function createUniverse4V7SourceStage({ mount, debugPortal = null, onRead
     mount.style.opacity = String(Math.max(0, Math.min(1, Number(opacity) || 0)));
   }
 
+  function getInputDiagnostics() {
+    const controllerDiagnostics = controller.getGlobeControlsDiagnostics?.() || null;
+    return {
+      source: 'universe4-v7-source-stage',
+      inputEnabled: mount.style.pointerEvents !== 'none',
+      mountPointerEvents: mount.style.pointerEvents || null,
+      mountAriaHidden: mount.getAttribute('aria-hidden'),
+      hostClasses: host.className,
+      hostPointerEvents: host.style.pointerEvents || null,
+      controller: controllerDiagnostics,
+    };
+  }
+
+  function emitInputDiagnostic(event, extra = {}) {
+    const diagnostics = { ...getInputDiagnostics(), ...extra };
+    controller.recordEmbeddedSignal?.(event, diagnostics);
+    onInputDiagnostic?.(event, diagnostics);
+  }
+
+  function recordEmbeddedSignal(event, payload = {}) {
+    controller.recordEmbeddedSignal?.(event, payload);
+  }
+
   function setInputEnabled(enabled) {
     // `pointer-events` is inherited, but the canonical Explore controller
     // deliberately gives its canvas, labels and controls explicit `auto`
@@ -101,11 +204,46 @@ export function createUniverse4V7SourceStage({ mount, debugPortal = null, onRead
     host.classList.toggle('is-u4-input-disabled', !enabled);
     mount.style.pointerEvents = enabled ? 'auto' : 'none';
     mount.setAttribute('aria-hidden', String(!enabled));
+    emitInputDiagnostic('u4.input.owner', {
+      requestedEnabled: Boolean(enabled),
+      reason: 'set-input-enabled',
+    });
   }
 
   function setBackgroundColor(color) {
     if (disposed) return false;
     return controller.setEmbeddedBackgroundColor?.(color) === true;
+  }
+
+  function focusCityForMap(cityId, { durationMs = 520, zoomFactor = .58 } = {}) {
+    const globe = controller.getGlobe?.();
+    const city = controller.getV5City?.(cityId);
+    if (disposed || !globe?.pointOfView || !city || !Number.isFinite(city.lat) || !Number.isFinite(city.lng)) return null;
+    const current = globe.pointOfView?.() || {};
+    const altitude = Math.max(.38, Math.min(2.9, (Number(current.altitude) || 1.2) * zoomFactor));
+    const pointOfView = { lat: city.lat, lng: city.lng, altitude };
+    globe.pointOfView(pointOfView, durationMs);
+    return pointOfView;
+  }
+
+  function setPointOfView(pointOfView, durationMs = 0) {
+    const globe = controller.getGlobe?.();
+    if (disposed || !globe?.pointOfView || !pointOfView) return false;
+    globe.pointOfView(pointOfView, durationMs);
+    return true;
+  }
+
+  function captureRenderProfile() {
+    const globe = controller.getGlobe?.();
+    if (disposed || !globe?.scene || !globe?.renderer) return null;
+    const scene = globe.scene();
+    scene?.updateMatrixWorld?.(true);
+    const material = globe.globeMaterial?.();
+    return Object.freeze({
+      material: captureMaterialRenderProfile(material),
+      renderer: captureRendererRenderProfile(globe.renderer?.(), material),
+      sceneLights: captureSceneLightProfile(scene),
+    });
   }
 
   function captureHandoffFrame({ landmarks = [] } = {}) {
@@ -243,10 +381,18 @@ export function createUniverse4V7SourceStage({ mount, debugPortal = null, onRead
     setOpacity,
     setInputEnabled,
     setBackgroundColor,
+    focusCityForMap,
+    setPointOfView,
+    getInputDiagnostics,
+    recordEmbeddedSignal,
+    getCity: (cityId) => controller.getV5City?.(cityId) || null,
+    getCityAnchor: (cityId) => controller.getV5CityAnchor?.(cityId) || null,
+    getSelection: () => controller.getV5SelectionState?.() || null,
     pauseAnimation,
     resumeAnimation,
     waitForRenderedFrames,
     captureHandoffFrame,
+    captureRenderProfile,
     applyHandoffPose,
     releaseHandoffLabels() {
       return controller.clearEmbeddedHandoffLabelSnapshot?.() === true;

@@ -1,8 +1,8 @@
 /* A single live Globe.gl scene rendered inline in the Explore scroll content. */
-import { knowledgeNodes, knowledgeEdges } from './knowledge-map.js?rev=133';
+import { knowledgeNodes, knowledgeEdges } from './knowledge-map.js?rev=138';
 import * as THREE from './vendor/three.module.min.js?rev=92';
 import { DjinnEdgeLayer } from './djinn-edge-layer.js?rev=6';
-import { V7_LIGHT_MODES, V7_PRODUCTION_CINEMATIC_BLEND, VirtualGalaxyLightingRig } from './virtual-galaxy-light-rig.js?rev=23';
+import { V7_LIGHT_MODES, V7_PRODUCTION_CINEMATIC_BLEND, VirtualGalaxyLightingRig } from './virtual-galaxy-light-rig.js?rev=24';
 import { COSMIC_MODES, CosmicEnvironment } from './cosmic-environment.js?rev=6';
 import {
   SURFACE_SELECTION_ARC_PROFILE,
@@ -12,7 +12,7 @@ import {
 } from './city-selection-arcs.js?rev=9';
 import { createPlanetSignalTrace } from './explore/planet-signal-trace.js?rev=1';
 import { createPlanetVariantController } from './explore/planet-variant-controller.js?rev=4';
-import { createPlanetInputRouter } from './explore/planet-input-router.js?rev=3';
+import { createPlanetInputRouter } from './explore/planet-input-router.js?rev=4';
 import { rebindPlanetObjects } from './explore/planet-object-rebind.js?rev=1';
 import { getPlanetLabelLod } from './explore/planet-label-lod.js?rev=1';
 import {
@@ -32,13 +32,13 @@ import {
 } from './explore/planet-data.js?rev=4';
 import {
   DJINN_ORB_V2, DJINN_ORB_V3, DJINN_ORB_V4, DJINN_ORB_V5, DJINN_ORB_V6, DJINN_ORB_V7,
-  V4_FOCUS_ARC_ALTITUDE, V5_FOCUS_NO_ZOOM, V5_VARIANT_CONTEXT_VISUALS,
+  V4_FOCUS_ARC_ALTITUDE, V5_CITY_FOCUS, V5_FOCUS_NO_ZOOM, V5_VARIANT_CONTEXT_VISUALS,
   V5_VARIANT_INTERACTION_POLICIES, V6_HYBRID_LIGHT, V6_LIGHT_RIG_MODES,
-  VARIANT_PROFILES, v5VariantContextVisualState,
-} from './explore/planet-visuals.js?rev=1';
+  VARIANT_PROFILES, v5CityFocusPointOfView, v5GlobeControlsEnabled, v5VariantContextVisualState,
+} from './explore/planet-visuals.js?rev=5';
 export { __surfaceSelectionArcTestModel, __v3TestModel } from './explore/planet-data.js?rev=4';
 export { getV5PlanetVisualSnapshot };
-export { __v5FamilyFocusVisualTestModel, __v5VariantInteractionTestModel, __v6DiffuseLightTestModel, __v7FocusVisualTestModel } from './explore/planet-visuals.js?rev=1';
+export { __v5FamilyFocusVisualTestModel, __v5VariantInteractionTestModel, __v6DiffuseLightTestModel, __v7FocusVisualTestModel } from './explore/planet-visuals.js?rev=5';
 export function initExpandableGalaxyOrb({
   root,
   nav,
@@ -56,6 +56,12 @@ export function initExpandableGalaxyOrb({
   // existing V7 light controls and copyable signal trace even while its Globe
   // stage is prewarmed at opacity zero beneath the U3 ForceGraph stage.
   embeddedDebugPortal = null,
+  // Universe 4 can claim a V5/V6/V7 city tap before this canonical controller
+  // applies its normal select/replace logic. The normal Explore route leaves
+  // both seams null, so its interaction contract is unchanged.
+  onV5CityTap = null,
+  onV5SelectionTransition = null,
+  onV5CityVisualRole = null,
 } = {}) {
   if (!root || !nav) return () => {};
   const requestedInitialVariant = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7'].includes(initialVariant)
@@ -228,12 +234,14 @@ export function initExpandableGalaxyOrb({
   let embeddedBackgroundColor = null;
   let djinnEdgeLayer = null;
   let destroyed = false;
+  let planetSignalRenderTimer = 0;
   let state = 'expanded';
   let bounds = null;
   let resizeObserver = null;
   let focusState = 'idle';
   let focusedNode = null;
   let focusedCameraState = null;
+  let v5CityFocusAltitude = null;
   let galaxyFullscreen = false;
   let focusTimer = 0;
   let orbVariant = requestedInitialVariant;
@@ -265,6 +273,10 @@ export function initExpandableGalaxyOrb({
   let v7SceneBeforeRender = null;
   let v7SceneBeforeRenderHook = null;
   let v7ControlsListener = null;
+  let v7ControlStartListener = null;
+  let v7ControlEndListener = null;
+  let v7LastControlChangeAt = -Infinity;
+  let globePointerInteractionEnabled = null;
   let v3LayoutMode = 'spherical-force';
   let v3Atoms = [];
   let v3VisibleEdges = [];
@@ -317,6 +329,10 @@ export function initExpandableGalaxyOrb({
     raycaster: new THREE.Raycaster(),
     ndc: new THREE.Vector2(),
   }]));
+  // Labels are real DOM above the Globe canvas, so their deliberate mobile
+  // taps need their own short gesture gate. They deliberately finish through
+  // focusNode(), the exact same selection/U4 handoff seam as a hit sphere.
+  const v5LabelGestures = new Map();
   const v5PointerRouter = createPlanetInputRouter({
     canvas,
     runtimeFor: (variant = orbVariant) => v5VariantPointerRuntime.get(variant) || null,
@@ -325,6 +341,12 @@ export function initExpandableGalaxyOrb({
     activate: (cityId) => focusNode(cityId),
     onEmptyTap: () => clearV5CitySelectionFromEmptyTap(),
     trace: (event, payload) => recordPlanetSignal(event, payload),
+    // The native Explore screen keeps its existing strict orbit gesture
+    // threshold. U4 is an embedded mobile destination with DOM city chips
+    // above a live globe, where a deliberate finger tap commonly shifts
+    // 10–20 CSS pixels before pointerup.
+    tapDistanceSquared: embeddedViewport ? 576 : 81,
+    tapDurationMs: embeddedViewport ? 620 : 360,
   });
   const variantProfileState = new Map(Object.entries(VARIANT_PROFILES)
     .map(([variant, profile]) => [variant, { ...profile }]));
@@ -396,12 +418,26 @@ export function initExpandableGalaxyOrb({
     virtualSunObjectRegistry.focusedKnowledgePlanet = null;
   }
 
+  function schedulePlanetSignalDebugRender(immediate = false) {
+    if (immediate) {
+      if (planetSignalRenderTimer) window.clearTimeout(planetSignalRenderTimer);
+      planetSignalRenderTimer = 0;
+      planetSignalDebugPanel.render();
+      return;
+    }
+    if (planetSignalDebugHost.hidden || planetSignalRenderTimer) return;
+    planetSignalRenderTimer = window.setTimeout(() => {
+      planetSignalRenderTimer = 0;
+      if (!destroyed && !planetSignalDebugHost.hidden) planetSignalDebugPanel.render();
+    }, 280);
+  }
+
   function recordPlanetSignal(event, payload = {}) {
     planetSignalTrace.record(event, {
       variant: payload.variant || orbVariant,
       ...payload,
     });
-    planetSignalDebugPanel.render();
+    schedulePlanetSignalDebugRender();
   }
 
   // This is deliberately a low-frequency construction/error trace, not a
@@ -431,11 +467,114 @@ export function initExpandableGalaxyOrb({
     });
   }
 
+  function describeDomTarget(target) {
+    if (!target) return null;
+    return {
+      tag: target.tagName || null,
+      id: target.id || null,
+      className: typeof target.className === 'string' ? target.className : null,
+      role: target.getAttribute?.('role') || null,
+      nodeId: target.dataset?.nodeId || null,
+    };
+  }
+
+  function domStyleSnapshot(element) {
+    if (!element) return null;
+    let style = null;
+    try {
+      style = window.getComputedStyle?.(element) || null;
+    } catch {
+      style = null;
+    }
+    return {
+      pointerEvents: style?.pointerEvents || element.style?.pointerEvents || null,
+      touchAction: style?.touchAction || element.style?.touchAction || null,
+      display: style?.display || null,
+      visibility: style?.visibility || null,
+      opacity: style?.opacity || element.style?.opacity || null,
+      zIndex: style?.zIndex || null,
+    };
+  }
+
+  function rectSnapshot(element) {
+    const rect = element?.getBoundingClientRect?.();
+    if (!rect) return null;
+    return {
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    };
+  }
+
+  function getGlobeControlsDiagnostics({ includeDom = true } = {}) {
+    const controls = globe?.controls?.() || null;
+    const diagnostics = {
+      variant: orbVariant,
+      controllerState: state,
+      focusState,
+      pointerInteractionEnabled: globePointerInteractionEnabled,
+      controls: controls ? {
+        enabled: controls.enabled ?? null,
+        enableRotate: controls.enableRotate ?? null,
+        enableZoom: controls.enableZoom ?? null,
+        enablePan: controls.enablePan ?? null,
+        autoRotate: controls.autoRotate ?? null,
+        damping: controls.enableDamping ?? null,
+        target: controls.target ? {
+          x: Number(controls.target.x?.toFixed?.(3) ?? controls.target.x),
+          y: Number(controls.target.y?.toFixed?.(3) ?? controls.target.y),
+          z: Number(controls.target.z?.toFixed?.(3) ?? controls.target.z),
+        } : null,
+      } : null,
+    };
+    if (!includeDom) return diagnostics;
+
+    const rendererCanvas = globe?.renderer?.()?.domElement || canvas.querySelector?.('canvas') || null;
+    const viewportRect = embeddedViewport?.getBoundingClientRect?.() || canvas.getBoundingClientRect?.();
+    let centerTarget = null;
+    if (viewportRect?.width > 0 && viewportRect?.height > 0) {
+      try {
+        centerTarget = document.elementFromPoint(
+          viewportRect.left + viewportRect.width / 2,
+          viewportRect.top + viewportRect.height / 2,
+        );
+      } catch {
+        centerTarget = null;
+      }
+    }
+    return {
+      ...diagnostics,
+      canvas: {
+        rect: rectSnapshot(canvas),
+        style: domStyleSnapshot(canvas),
+      },
+      rendererCanvas: {
+        rect: rectSnapshot(rendererCanvas),
+        style: domStyleSnapshot(rendererCanvas),
+      },
+      embeddedMount: {
+        rect: rectSnapshot(embeddedViewport),
+        style: domStyleSnapshot(embeddedViewport),
+      },
+      hitTestCenter: describeDomTarget(centerTarget),
+    };
+  }
+
+  function recordGlobeControlsDiagnostic(event, extra = {}, options = {}) {
+    if (!embeddedViewport) return;
+    recordPlanetSignal(event, {
+      source: 'globe-orbit-controls',
+      ...getGlobeControlsDiagnostics(options),
+      ...extra,
+    });
+  }
+
   function syncPlanetSignalDebugVisibility() {
     const visible = isV5Variant();
     planetSignalDebugHost.hidden = !visible;
     morph.classList.toggle('has-planet-signal-debug', visible);
-    if (visible) planetSignalDebugPanel.render();
+    if (visible) schedulePlanetSignalDebugRender(true);
   }
 
   function v5VariantControllerFor(variant = orbVariant) {
@@ -444,6 +583,23 @@ export function initExpandableGalaxyOrb({
 
   function activeV5CitySelection() {
     return v5VariantControllerFor()?.state() || clearCityConnections();
+  }
+
+  function externalV5CityVisualRole(nodeId) {
+    if (typeof onV5CityVisualRole !== 'function' || !isV5Variant()) return null;
+    try {
+      return onV5CityVisualRole({
+        variant: orbVariant,
+        cityId: nodeId,
+        selection: activeV5CitySelection(),
+      }) || null;
+    } catch (error) {
+      recordPlanetSignal('u4.visual-role.seam.error', {
+        cityId: nodeId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
   }
 
   function renderV3Stats() {
@@ -903,8 +1059,21 @@ export function initExpandableGalaxyOrb({
       scene.onBeforeRender = v7SceneBeforeRenderHook;
       v7ControlsListener = () => {
         if (isV7Variant()) v7LightRig?.updateTargetFromCamera();
+        if (!embeddedViewport || !isV7Variant()) return;
+        const now = performance.now();
+        if (now - v7LastControlChangeAt < 320) return;
+        v7LastControlChangeAt = now;
+        recordGlobeControlsDiagnostic(
+          'u4.controls.change',
+          { reason: 'orbit-controls-change' },
+          { includeDom: false },
+        );
       };
+      v7ControlStartListener = () => recordGlobeControlsDiagnostic('u4.controls.start', { reason: 'orbit-controls-start' });
+      v7ControlEndListener = () => recordGlobeControlsDiagnostic('u4.controls.end', { reason: 'orbit-controls-end' });
       globe.controls().addEventListener('change', v7ControlsListener);
+      globe.controls().addEventListener('start', v7ControlStartListener);
+      globe.controls().addEventListener('end', v7ControlEndListener);
     }
     return v7LightRig;
   }
@@ -1200,13 +1369,16 @@ export function initExpandableGalaxyOrb({
         element = document.createElement('span');
         element.className = 'galaxy-orb-label';
         element.dataset.nodeId = node.id;
+        element.textContent = text;
+        element.style.width = `${labelWidth}px`;
         v5LabelElements.set(node.id, element);
+      } else if (element.textContent !== text) {
+        element.textContent = text;
+        element.style.width = `${labelWidth}px`;
       }
-      element.textContent = text;
       element.classList.toggle('is-focus', isFocused);
-      element.style.width = `${labelWidth}px`;
       element.style.transform = `translate3d(${left}px, ${top}px, 0)`;
-      labelLayer.append(element);
+      if (element.parentElement !== labelLayer) labelLayer.append(element);
       return false;
     });
     v5LabelElements.forEach((element, nodeId) => {
@@ -1300,6 +1472,7 @@ export function initExpandableGalaxyOrb({
     clearAllV5CitySelections('variant-switch');
     focusedNode = null;
     focusedCameraState = null;
+    v5CityFocusAltitude = null;
     focusState = 'idle';
     v4FocusedNeighborId = null;
     morphOverlay?.classList.remove('is-visible');
@@ -1317,7 +1490,7 @@ export function initExpandableGalaxyOrb({
       }
       globe.pointOfView({ lat: 12, lng: 28, altitude: 2.15 }, 0);
       clearPlanetSelectionArcs({ globe, trace: planetSignalTrace, reason: 'variant-switch' });
-      planetSignalDebugPanel.render();
+      schedulePlanetSignalDebugRender(true);
     }
   }
 
@@ -1398,10 +1571,63 @@ export function initExpandableGalaxyOrb({
     refreshNodeVisuals();
     refreshEdges();
     renderV3Stats();
+    notifyV5SelectionTransition({
+      source: 'background',
+      cityId: null,
+      previousSelection: previous,
+      selection: transition.selection,
+      action: transition.action,
+      reason: 'blank-globe-tap',
+    });
+  }
+
+  function notifyV5SelectionTransition(payload) {
+    if (typeof onV5SelectionTransition !== 'function') return;
+    try {
+      onV5SelectionTransition({
+        variant: orbVariant,
+        pointOfView: globe?.pointOfView?.() || null,
+        ...payload,
+      });
+    } catch (error) {
+      recordPlanetSignal('u4.selection.seam.error', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   function clearAllV5CitySelections(reason = 'variant-reset') {
     v5VariantControllers.forEach((controller) => controller.clear(reason));
+  }
+
+  function focusV5CityCamera(node, action) {
+    if (!globe?.pointOfView || !node) return null;
+    // A city focus is an automatic POV tween only. It must never turn the
+    // Globe.gl orbit/zoom controls into a fixed view, including during the
+    // tween itself.
+    applyGlobeControlsProfile(true);
+    const currentPointOfView = globe.pointOfView();
+    const target = v5CityFocusPointOfView(currentPointOfView, node, v5CityFocusAltitude);
+    if (!target) {
+      recordPlanetSignal('camera.city-focus.skip', {
+        cityId: node.id,
+        action,
+        reason: 'invalid-city-coordinates',
+      });
+      return null;
+    }
+    v5CityFocusAltitude = target.altitude;
+    globe.pointOfView(target, V5_CITY_FOCUS.durationMs);
+    recordPlanetSignal('camera.city-focus', {
+      cityId: node.id,
+      action,
+      lat: target.lat,
+      lng: target.lng,
+      startAltitude: Number.isFinite(currentPointOfView?.altitude) ? currentPointOfView.altitude : null,
+      targetAltitude: target.altitude,
+      durationMs: V5_CITY_FOCUS.durationMs,
+    });
+    return target;
   }
 
   function syncV5SelectionArcLayer(reason) {
@@ -1445,7 +1671,7 @@ export function initExpandableGalaxyOrb({
       });
       return null;
     } finally {
-      planetSignalDebugPanel.render();
+      schedulePlanetSignalDebugRender(true);
     }
   }
 
@@ -1839,13 +2065,27 @@ export function initExpandableGalaxyOrb({
 
   function refreshNodeVisuals() {
     const related = focusedNode ? connectedTo(focusedNode.id) : null;
+    const v5Mode = isV5Variant();
+    const externalSelection = v5Mode ? activeV5CitySelection() : null;
+    const externalRootId = externalSelection?.selectedCityId || null;
+    const externalContextIds = new Set();
+    if (v5Mode && externalRootId) {
+      (externalSelection?.selectedCityArcData || []).forEach((arc) => {
+        const otherId = arc?.sourceCityId === externalRootId
+          ? arc?.targetCityId
+          : (arc?.targetCityId === externalRootId ? arc?.sourceCityId : null);
+        if (typeof otherId === 'string' && otherId !== externalRootId) externalContextIds.add(otherId);
+      });
+    }
     nodeObjects.forEach((object, nodeId) => {
       const data = object.userData;
       const node = resolveActiveNode(nodeId);
       if (!node) return;
       const isFocused = focusedNode?.id === nodeId;
       const isRelated = related?.has(nodeId);
-      const v5Mode = isV5Variant();
+      const externalRole = v5Mode && (nodeId === externalRootId || externalContextIds.has(nodeId))
+        ? externalV5CityVisualRole(nodeId)
+        : null;
       const v5VariantContext = v5Mode
         ? v5VariantContextVisualState(orbVariant, { hasFocus: Boolean(focusedNode), isFocused, isRelated: Boolean(isRelated) })
         : null;
@@ -1869,6 +2109,7 @@ export function initExpandableGalaxyOrb({
         ? v5Info.baseRadius * v5Info.baseImportanceScale * perspectiveScale * interactionScale
         : data.baseRadius * interactionScale;
       data.v5Size = v5Info;
+      data.externalRole = externalRole;
       data.baseImportanceScale = v5Info?.baseImportanceScale || 1;
       data.perspectiveScale = perspectiveScale;
       data.interactionScale = interactionScale;
@@ -1882,9 +2123,13 @@ export function initExpandableGalaxyOrb({
         : (isV3Family() ? clamp((facing + .12) / .3, 0, 1) : 1);
       const opacity = baseOpacity * hemisphereOpacity;
       data.baseOpacity = baseOpacity;
-      const v5DataColor = v5ClampDebug
+      let v5DataColor = v5ClampDebug
         ? '#48E5A9' // green = data-driven; no universal min/max clamp is active in production
         : (v5SizeRankDebug ? v5TierDebugColor(v5Info.tier) : (v5VariantContext?.color || (isFocused ? DJINN_ORB_V5.focus : (focusedNode && !isRelated ? DJINN_ORB_V5.atomDim : DJINN_ORB_V5.atom))));
+      // U4 city semantics: the selected mother/root is gold; selectable
+      // child/context cities are blue-cyan. This seam is inactive in Explore.
+      if (!v5ClampDebug && !v5SizeRankDebug && externalRole === 'root') v5DataColor = '#FFD45A';
+      if (!v5ClampDebug && !v5SizeRankDebug && externalRole === 'context') v5DataColor = '#77E8FF';
       const color = v5Mode
         ? v5DataColor
         : v4Mode
@@ -1907,12 +2152,18 @@ export function initExpandableGalaxyOrb({
       data.sphere.material.depthTest = !v5Mode;
       data.sphere.material.depthWrite = !v5Mode;
       data.sphere.renderOrder = v5Mode ? 3 : 0;
-      data.sphere.material.emissive = new THREE.Color(v5Mode
+      data.sphere.material.emissive = new THREE.Color(externalRole === 'root'
+        ? '#FFD45A'
+        : externalRole === 'context'
+          ? '#5EEFFF'
+          : v5Mode
         ? (isFocused ? DJINN_ORB_V5.focusGlow : DJINN_ORB_V5.atomGlow)
         : (isFocused
           ? (v4Mode ? DJINN_ORB_V4.focusGlow : (orbVariant === 'v3' ? DJINN_ORB_V3.focusGlow : (orbVariant === 'v2' ? DJINN_ORB_V2.focusGlow : '#9B7BFF')))
           : (v4Mode ? DJINN_ORB_V4.atomGlow : '#000000')));
-      data.sphere.material.emissiveIntensity = v5VariantContext
+      data.sphere.material.emissiveIntensity = externalRole === 'root' || externalRole === 'context'
+        ? .9
+        : v5VariantContext
         ? v5VariantContext.emissiveIntensity
         : isFocused
         ? (v5Mode ? .98 : (v4Mode ? .95 : (orbVariant === 'v3' ? .6 : .42)))
@@ -1922,10 +2173,16 @@ export function initExpandableGalaxyOrb({
       data.sphere.scale.setScalar(visualRadius);
       if (data.glow) {
         data.glow.visible = v4Mode || v5Mode;
-        data.glow.material.color.set(isFocused
+        data.glow.material.color.set(externalRole === 'root'
+          ? '#FFD45A'
+          : externalRole === 'context'
+            ? '#5EEFFF'
+            : isFocused
           ? (v5Mode ? DJINN_ORB_V5.focusGlow : DJINN_ORB_V4.focusGlow)
           : (v5Mode ? DJINN_ORB_V5.atomGlow : (v4PrimaryNeighbor ? DJINN_ORB_V4.remoteGlow : DJINN_ORB_V4.atomGlow)));
-        data.glow.material.opacity = v5Mode
+        data.glow.material.opacity = externalRole === 'root' || externalRole === 'context'
+          ? clamp(v5Profile.glowOpacity * 2.2, 0, .48)
+          : v5Mode
           ? clamp(v5Profile.glowOpacity * (v5VariantContext?.glowMultiplier ?? (isFocused ? 2.8 : (isRelated ? 1.5 : .25))), 0, .48)
           : (v4Mode
             ? clamp((isFocused ? .36 : (v4PrimaryNeighbor ? .26 : (isRelated ? .18 : .11))) * hemisphereOpacity, 0, .48)
@@ -1936,6 +2193,8 @@ export function initExpandableGalaxyOrb({
       }
       if (data.bridgeRing) {
         data.bridgeRing.visible = v5Mode;
+        if (externalRole === 'root') data.bridgeRing.material.color.set('#FFD45A');
+        else if (externalRole === 'context') data.bridgeRing.material.color.set('#5EEFFF');
         data.bridgeRing.material.opacity = v5Mode ? (v5VariantContext?.bridgeOpacity ?? (isFocused ? .74 : (isRelated ? .5 : .34))) : 0;
         data.bridgeRing.scale.setScalar(visualRadius * 1.18);
       }
@@ -1945,6 +2204,39 @@ export function initExpandableGalaxyOrb({
         && (!isV3Family() || isV5Variant() || facing > -.12);
     });
     refreshV5Labels();
+  }
+
+  function refreshV5CameraVisuals() {
+    if (!isV5Variant() || !globe) return;
+    const camera = globe.camera();
+    const controls = globe.controls();
+    const cameraDirection = camera.position.clone().sub(controls.target).normalize();
+    const scratchPosition = new THREE.Vector3();
+    const related = focusedNode ? new Set([focusedNode.id]) : null;
+    if (related) {
+      const selection = activeV5CitySelection();
+      (selection?.selectedCityArcData || []).forEach((arc) => {
+        if (arc?.sourceCityId === focusedNode.id) related.add(arc.targetCityId);
+        if (arc?.targetCityId === focusedNode.id) related.add(arc.sourceCityId);
+      });
+    }
+    nodeObjects.forEach((object, nodeId) => {
+      const data = object.userData;
+      object.getWorldPosition?.(scratchPosition);
+      const facing = scratchPosition.normalize().dot(cameraDirection);
+      const profile = v5NodeHemisphereProfile(facing);
+      const isFocused = focusedNode?.id === nodeId;
+      const isRelated = related?.has(nodeId);
+      const glowMultiplier = isFocused ? 2.8 : (isRelated ? 1.5 : .25);
+      data.sphere.material.opacity = (data.baseOpacity ?? 1) * profile.opacity;
+      if (data.glow) {
+        data.glow.material.opacity = data.externalRole === 'root' || data.externalRole === 'context'
+          ? clamp(profile.glowOpacity * 2.2, 0, .48)
+          : clamp(profile.glowOpacity * glowMultiplier, 0, .48);
+        data.glow.scale.setScalar(data.visualRadius * v5SizeSettings.halo * profile.glowScale);
+      }
+      object.visible = focusState !== 'morphing-to-card' || !isFocused;
+    });
   }
 
   function refreshEdges() {
@@ -2150,7 +2442,12 @@ export function initExpandableGalaxyOrb({
     if (!globe) return;
     // V5/V6/V7 use their own raycaster and gesture state. Globe.gl pointer
     // interaction must not consume the second tap before dehighlight runs.
-    globe.enablePointerInteraction?.(!isV5Variant());
+    globePointerInteractionEnabled = !isV5Variant();
+    globe.enablePointerInteraction?.(globePointerInteractionEnabled);
+    recordGlobeControlsDiagnostic('u4.pointer-interaction.profile', {
+      enabled: globePointerInteractionEnabled,
+      reason: 'orb-variant',
+    });
     // The planet is part of every explicit view profile.  Only its nodes and
     // edge layers change; a mode switch must never hide or fade the Globe.gl
     // surface itself.
@@ -2222,15 +2519,16 @@ export function initExpandableGalaxyOrb({
         refreshEdges();
         updateOverkillFacingDiagnostics();
       }
-      renderV3Stats();
-      djinnEdgeLayer?.updateCamera(globe.camera());
       if (isV5Variant()) {
-        // V5's camera listener may change only the shared perspective scale
-        // and hit target. It delegates to the same base-size path used at
-        // creation, rather than applying a common far-LOD clamp.
-        refreshNodeVisuals();
+        // Camera motion only changes hemisphere opacity and halo falloff.
+        // Keep the 700-node data/material rebuild for selection or variant
+        // transitions; doing it on every orbit event makes mobile dragging
+        // allocate and resolve the entire graph repeatedly.
+        refreshV5CameraVisuals();
         return;
       }
+      renderV3Stats();
+      djinnEdgeLayer?.updateCamera(globe.camera());
       const related = focusedNode ? connectedTo(focusedNode.id) : null;
       nodeObjects.forEach((object, nodeId) => {
         const node = resolveActiveNode(nodeId);
@@ -2318,6 +2616,7 @@ export function initExpandableGalaxyOrb({
   }
 
   function clearV5PointerGestures(variant = null) {
+    v5LabelGestures.clear();
     if (variant) {
       v5PointerRouter.clear(variant);
       return;
@@ -2403,22 +2702,120 @@ export function initExpandableGalaxyOrb({
     ].join(','));
   }
 
+  function beginV5LabelTap(event) {
+    if (!isV5Variant() || state !== 'expanded' || (event.button != null && event.button !== 0)) return false;
+    const label = event.target?.closest?.('.galaxy-orb-label[data-node-id]');
+    const cityId = label?.dataset?.nodeId || null;
+    if (!cityId || !resolveActiveNode(cityId)) return false;
+    const runtime = v5PointerRuntimeFor();
+    const gesture = {
+      cityId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startedAt: performance.now(),
+      moved: false,
+      multiPointer: Boolean(runtime?.gestures?.size || v5LabelGestures.size),
+    };
+    runtime?.gestures?.forEach((activeGesture) => { activeGesture.multiPointer = true; });
+    v5LabelGestures.forEach((activeGesture) => { activeGesture.multiPointer = true; });
+    v5LabelGestures.set(event.pointerId, gesture);
+    label.setPointerCapture?.(event.pointerId);
+    recordPlanetSignal('pointer.label.down', {
+      pointerId: event.pointerId,
+      cityId,
+      target: describeDomTarget(event.target),
+      defaultPrevented: event.defaultPrevented === true,
+    });
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    return true;
+  }
+
+  function moveV5LabelTap(event) {
+    const gesture = v5LabelGestures.get(event.pointerId);
+    if (!gesture) return false;
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    const distanceSquared = (dx * dx) + (dy * dy);
+    const tapDistanceSquared = embeddedViewport ? 576 : 81;
+    if (distanceSquared > tapDistanceSquared && !gesture.moved) {
+      gesture.moved = true;
+      recordPlanetSignal('pointer.label.drag', {
+        pointerId: event.pointerId,
+        cityId: gesture.cityId,
+        distanceSquared,
+        target: describeDomTarget(event.target),
+        defaultPrevented: event.defaultPrevented === true,
+      });
+    }
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    return true;
+  }
+
+  function completeV5LabelTap(event) {
+    const gesture = v5LabelGestures.get(event.pointerId);
+    if (!gesture) return false;
+    v5LabelGestures.delete(event.pointerId);
+    const label = event.target?.closest?.('.galaxy-orb-label[data-node-id]');
+    if (label?.hasPointerCapture?.(event.pointerId)) label.releasePointerCapture?.(event.pointerId);
+    const duration = performance.now() - gesture.startedAt;
+    const tapDurationMs = embeddedViewport ? 620 : 360;
+    if (gesture.moved || gesture.multiPointer || duration > tapDurationMs) {
+      recordPlanetSignal('pointer.label.reject', {
+        pointerId: event.pointerId,
+        cityId: gesture.cityId,
+        moved: gesture.moved,
+        hadMultiplePointers: gesture.multiPointer,
+        duration: Math.round(duration),
+        target: describeDomTarget(event.target),
+        defaultPrevented: event.defaultPrevented === true,
+      });
+    } else {
+      recordPlanetSignal('pointer.label.tap', {
+        pointerId: event.pointerId,
+        cityId: gesture.cityId,
+        duration: Math.round(duration),
+        target: describeDomTarget(event.target),
+        defaultPrevented: event.defaultPrevented === true,
+      });
+      focusNode(gesture.cityId);
+    }
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    return true;
+  }
+
+  function cancelV5LabelTap(event) {
+    const gesture = v5LabelGestures.get(event.pointerId);
+    if (!gesture) return false;
+    v5LabelGestures.delete(event.pointerId);
+    recordPlanetSignal('pointer.label.cancel', { pointerId: event.pointerId, cityId: gesture.cityId });
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    return true;
+  }
+
   function onPlanetPointerDown(event) {
+    if (beginV5LabelTap(event)) return;
     if (!isPlanetPointerEvent(event)) return;
     v5PointerRouter.onPointerDown(event);
   }
 
   function onPlanetPointerMove(event) {
+    if (moveV5LabelTap(event)) return;
     if (!isPlanetPointerEvent(event)) return;
     v5PointerRouter.onPointerMove(event);
   }
 
   function onPlanetPointerUp(event) {
+    if (completeV5LabelTap(event)) return;
     if (!isPlanetPointerEvent(event)) return;
     v5PointerRouter.onPointerUp(event);
   }
 
   function onPlanetPointerCancel(event) {
+    if (cancelV5LabelTap(event)) return;
     if (!isPlanetPointerEvent(event)) return;
     v5PointerRouter.onPointerCancel(event);
   }
@@ -2472,6 +2869,59 @@ export function initExpandableGalaxyOrb({
     }
     const controls = globe.controls();
     if (isV5Variant() && V5_FOCUS_NO_ZOOM) {
+      const previousSelection = activeV5CitySelection();
+      let handoff = null;
+      if (typeof onV5CityTap === 'function') {
+        try {
+          handoff = onV5CityTap({
+            variant: orbVariant,
+            cityId: node.id,
+            city: node,
+            selection: previousSelection,
+            pointOfView: globe.pointOfView?.() || null,
+            cityAnchor: projectedNodeRect(node),
+          });
+        } catch (error) {
+          recordPlanetSignal('u4.tap.seam.error', {
+            cityId: node.id,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      if (handoff?.handled) {
+        if (handoff.action === 'clear-context') {
+          const transition = clearCitySelection(handoff.reason || 'universe4-context-clear');
+          focusedNode = null;
+          focusedCameraState = null;
+          focusState = 'idle';
+          v4FocusedNeighborId = null;
+          recordPlanetSignal('focus.transition', {
+            cityId: node.id,
+            action: transition.action,
+            selectedCityId: null,
+            selectedArcCount: 0,
+            reason: handoff.reason || 'universe4-context-clear',
+          });
+          refreshNodeVisuals();
+          refreshEdges();
+          renderV3Stats();
+          notifyV5SelectionTransition({
+            source: 'city',
+            cityId: node.id,
+            previousSelection,
+            selection: transition.selection,
+            action: transition.action,
+            reason: handoff.reason || 'universe4-context-clear',
+          });
+        } else {
+          recordPlanetSignal('u4.tap.claimed', {
+            cityId: node.id,
+            action: handoff.action || 'claimed',
+            selectedCityId: previousSelection.selectedCityId || null,
+          });
+        }
+        return;
+      }
       const transition = applyCitySelection(node.id);
       const selection = transition.selection;
       focusedNode = selection.selectedCityId ? resolveActiveNode(selection.selectedCityId) : null;
@@ -2481,6 +2931,9 @@ export function initExpandableGalaxyOrb({
         selectedCityId: selection.selectedCityId,
         selectedArcCount: selection.selectedCityArcData.length,
       });
+      if (selection.selectedCityId && transition.action !== 'dehighlight') {
+        focusV5CityCamera(focusedNode, transition.action);
+      }
       focusedCameraState = null;
       controls.enableRotate = true;
       controls.enableZoom = true;
@@ -2490,6 +2943,13 @@ export function initExpandableGalaxyOrb({
       refreshNodeVisuals();
       refreshEdges();
       renderV3Stats();
+      notifyV5SelectionTransition({
+        source: 'city',
+        cityId: node.id,
+        previousSelection,
+        selection,
+        action: transition.action,
+      });
       return;
     }
     focusedNode = node;
@@ -2549,16 +3009,29 @@ export function initExpandableGalaxyOrb({
 
   function applyGlobeProfile(expanded) {
     if (!globe) return;
-    const controls = globe.controls?.();
-    if (controls) {
-      controls.enableRotate = expanded && focusState === 'idle';
-      controls.enableZoom = expanded && focusState === 'idle';
-      controls.enablePan = false;
-      controls.autoRotate = false;
-      controls.autoRotateSpeed = .28;
-    }
+    applyGlobeControlsProfile(expanded);
     applyArcProfile();
     refreshNodeVisuals();
+  }
+
+  function applyGlobeControlsProfile(expanded) {
+    const controls = globe?.controls?.();
+    if (!controls) return;
+    const enabled = v5GlobeControlsEnabled({
+      expanded,
+      variant: orbVariant,
+      focusState,
+    });
+    controls.enableRotate = enabled;
+    controls.enableZoom = enabled;
+    controls.enablePan = false;
+    controls.autoRotate = false;
+    controls.autoRotateSpeed = .28;
+    recordGlobeControlsDiagnostic('u4.controls.profile', {
+      expanded: Boolean(expanded),
+      policyEnabled: enabled,
+      reason: 'profile-apply',
+    });
   }
 
   function createGlobe(attempt = 0) {
@@ -2636,6 +3109,7 @@ export function initExpandableGalaxyOrb({
       applyOrbVariant();
       syncEmbeddedViewportSize();
       recordEmbeddedRenderDiagnostic('u4.globe.ready');
+      recordGlobeControlsDiagnostic('u4.controls.ready', { reason: 'globe-ready' });
       // This callback is intentionally emitted only after `applyOrbVariant`:
       // consumers such as Universe 4 receive the exact selected V7 city,
       // material, lighting, cosmic and input controller—not an unstyled Globe
@@ -2888,13 +3362,25 @@ export function initExpandableGalaxyOrb({
       switchOrbVariant(normalized);
     },
     getGlobe: () => globe,
+    getGlobeControlsDiagnostics,
+    recordEmbeddedSignal(event, payload = {}) {
+      if (embeddedViewport) recordPlanetSignal(event, payload);
+    },
     applyEmbeddedHandoffLighting,
     setEmbeddedBackgroundColor,
     setEmbeddedHandoffLabelSnapshot,
     clearEmbeddedHandoffLabelSnapshot,
+    getV5SelectionState: () => activeV5CitySelection(),
+    getV5City: (cityId) => resolveActiveNode(cityId),
+    getV5CityAnchor: (cityId) => {
+      const node = resolveActiveNode(cityId);
+      return node && globe ? projectedNodeRect(node) : null;
+    },
     focusConcept,
     destroy() {
       destroyed = true;
+      if (planetSignalRenderTimer) window.clearTimeout(planetSignalRenderTimer);
+      planetSignalRenderTimer = 0;
       resizeObserver?.disconnect();
       window.removeEventListener('resize', measureBounds);
       layer.removeEventListener('click', onClick);
@@ -2928,6 +3414,8 @@ export function initExpandableGalaxyOrb({
       if (v5LabelProjectionListener) globe?.controls?.().removeEventListener('change', v5LabelProjectionListener);
       if (lightRigListener) globe?.controls?.().removeEventListener('change', lightRigListener);
       if (v7ControlsListener) globe?.controls?.().removeEventListener('change', v7ControlsListener);
+      if (v7ControlStartListener) globe?.controls?.().removeEventListener('start', v7ControlStartListener);
+      if (v7ControlEndListener) globe?.controls?.().removeEventListener('end', v7ControlEndListener);
       if (globe?.scene?.()?.onBeforeRender === v7SceneBeforeRenderHook) globe.scene().onBeforeRender = v7SceneBeforeRender;
       v6CosmicEnvironment?.dispose();
       v6CosmicEnvironment = null;

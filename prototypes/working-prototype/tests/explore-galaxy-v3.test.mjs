@@ -10,6 +10,11 @@ const {
   __surfaceSelectionArcTestModel,
   getV5PlanetVisualSnapshot,
 } = await import('../assets/explore-galaxy-orb.js?test-v3');
+const {
+  V5_CITY_FOCUS,
+  v5GlobeControlsEnabled,
+  v5CityFocusPointOfView,
+} = await import('../assets/explore/planet-visuals.js?test-city-focus');
 
 assert.equal(__v3TestModel.atomCount, 700);
 assert.ok(__v3TestModel.physicsEdgeCount > 700);
@@ -104,6 +109,42 @@ for (const variant of ['v5', 'v6', 'v7']) {
 }
 assert.equal(v5VariantPointerRouters.size, 3, 'V5, V6 and V7 must not share a mutable pointer-routing policy');
 
+// A Globe.gl city focus must be an actual geographic camera target, not the
+// legacy card-morph camera that changes OrbitControls to a surface target.
+// The first city tap moves gently inward once; city changes keep that exact
+// distance and a dehighlight must not request another camera pose.
+const cityFocusPov = v5CityFocusPointOfView(
+  { lat: 12, lng: 28, altitude: 2.15 },
+  { id: 'pao2', lat: -18.25, lng: 41.75 },
+);
+assert.deepEqual(cityFocusPov, {
+  lat: -18.25,
+  lng: 41.75,
+  altitude: 1.6125,
+});
+const replacedCityFocusPov = v5CityFocusPointOfView(
+  { lat: 55, lng: -4, altitude: .9 },
+  { id: 'peep', lat: 22.5, lng: -73.5 },
+  cityFocusPov.altitude,
+);
+assert.deepEqual(replacedCityFocusPov, {
+  lat: 22.5,
+  lng: -73.5,
+  altitude: cityFocusPov.altitude,
+}, 'replacing a selected city must retain the one-time focus zoom instead of compounding it');
+assert.equal(v5CityFocusPointOfView({ altitude: 2.15 }, { id: 'bad', lat: NaN, lng: 5 }), null,
+  'invalid city coordinates must not move the Globe camera');
+assert.equal(V5_CITY_FOCUS.durationMs, 680,
+  'city focus must be a visible, gradual camera move rather than a jump');
+
+// V5/V6/V7 keep native Globe.gl navigation available while their automatic
+// city POV tween runs. Only the legacy card-morph family locks controls while
+// it owns the camera transition.
+assert.equal(v5GlobeControlsEnabled({ expanded: true, variant: 'v7', focusState: 'orienting' }), true);
+assert.equal(v5GlobeControlsEnabled({ expanded: true, variant: 'v7', focusState: 'zooming' }), true);
+assert.equal(v5GlobeControlsEnabled({ expanded: true, variant: 'v4', focusState: 'orienting' }), false);
+assert.equal(v5GlobeControlsEnabled({ expanded: false, variant: 'v7', focusState: 'idle' }), false);
+
 const isolatedViewSessions = __v5VariantInteractionTestModel.createSessions();
 const v5SessionFocus = __v5VariantInteractionTestModel.transitionSession(isolatedViewSessions, 'v5', 'pao2');
 assert.equal(v5SessionFocus.focusedNodeId, 'pao2');
@@ -123,11 +164,25 @@ const planetVisualSource = await readFile(new URL('../assets/explore/planet-visu
 const planetInputRouterSource = await readFile(new URL('../assets/explore/planet-input-router.js', import.meta.url), 'utf8');
 assert.match(orbSource, /from '\.\/explore\/planet-data\.js\?rev=4'/,
   'the browser lifecycle module must import the static planet data model');
-assert.match(orbSource, /from '\.\/explore\/planet-visuals\.js\?rev=1'/,
+assert.match(orbSource, /from '\.\/explore\/planet-visuals\.js\?rev=5'/,
   'the browser lifecycle module must import the isolated V5/V6/V7 visual profiles');
 assert.match(planetDataSource, /export const V3_BASE_ATOMS/);
 assert.match(planetDataSource, /export function getV5PlanetVisualSnapshot/);
 assert.match(planetVisualSource, /export const V5_VARIANT_CONTEXT_VISUALS/);
+assert.match(planetVisualSource, /export const V5_CITY_FOCUS/,
+  'V5–V7 city taps need an explicit bounded Globe point-of-view focus profile');
+assert.match(planetVisualSource, /export function v5CityFocusPointOfView/,
+  'the city-focus POV calculation must be pure and regression-testable outside the Globe runtime');
+assert.match(planetVisualSource, /export function v5GlobeControlsEnabled/,
+  'the V5-family camera policy must keep native Globe.gl navigation available during focus');
+assert.match(orbSource, /function focusV5CityCamera\(node, action\)/,
+  'the Globe lifecycle must own a dedicated city camera handoff, not silently use the card morph');
+assert.match(orbSource, /globe\.pointOfView\(target, V5_CITY_FOCUS\.durationMs\)/,
+  'the selected city POV must be applied through the native Globe.gl camera API');
+assert.match(orbSource, /applyGlobeControlsProfile\(true\);[\s\S]*globe\.pointOfView\(target, V5_CITY_FOCUS\.durationMs\)/,
+  'automatic city zoom must not disable free Globe.gl rotation or zoom');
+assert.match(orbSource, /selection\.selectedCityId && transition\.action !== 'dehighlight'/,
+  'repeat tapping the selected city must keep the existing dehighlight-only contract without extra zoom');
 assert.match(planetVisualSource, /v6:\s*Object\.freeze\(\{\s*layout:\s*'community-overkill'/);
 assert.match(planetVisualSource, /v7:\s*Object\.freeze\(\{\s*layout:\s*'community-overkill'/);
 assert.match(orbSource, /const v5NodePositionRegistry = new Map\(\)/,
@@ -216,8 +271,12 @@ assert.match(orbSource, /createPlanetVariantController/);
 assert.match(orbSource, /commitPlanetSelectionArcs/);
 assert.match(orbSource, /mountPlanetSignalDebugPanel/);
 assert.match(orbSource, /nodesById: v5NodePositionRegistry/);
-assert.match(orbSource, /globe\.enablePointerInteraction\?\.\(!isV5Variant\(\)\)/,
+assert.match(orbSource, /globePointerInteractionEnabled = !isV5Variant\(\);[\s\S]*?globe\.enablePointerInteraction\?\.\(globePointerInteractionEnabled\)/,
   'V5/V6/V7 must hand all selection ownership to their dedicated pointer router');
+assert.match(orbSource, /getGlobeControlsDiagnostics/,
+  'the embedded V7 controller must expose effective OrbitControls and pointer-surface state');
+assert.match(orbSource, /u4\.controls\.start/,
+  'the embedded V7 controller must trace native OrbitControls gesture starts');
 assert.match(planetInputRouterSource, /pointer\.tap\.no-city/,
   'the on-screen trace must distinguish a raycast miss from a missing tap');
 assert.match(orbSource, /arc\.rebind\.clear/,
