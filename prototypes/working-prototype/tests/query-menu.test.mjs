@@ -29,7 +29,7 @@ assert.match(app, /'query-sources': 'screens\/query-sources\.html'/);
 assert.match(app, /'query-process': 'screens\/query-process\.html'/);
 assert.match(app, /data-query-scope-option/);
 assert.match(app, /data-query-fill/);
-assert.match(index, /assets\/styles\.css\?rev=146/);
+assert.match(index, /assets\/styles\.css\?rev=147/);
 assert.match(index, /assets\/app\.js\?rev=280/);
 assert.match(styles, /\.query-scope-menu/);
 assert.match(styles, /\.query-answer-actions/);
