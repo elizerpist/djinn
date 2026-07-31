@@ -1,5 +1,5 @@
 /* A single live Globe.gl scene rendered inline in the Explore scroll content. */
-import { knowledgeNodes, knowledgeEdges } from './knowledge-map.js?rev=140';
+import { knowledgeNodes, knowledgeEdges } from './knowledge-map.js?rev=141';
 import * as THREE from './vendor/three.module.min.js?rev=92';
 import { DjinnEdgeLayer } from './djinn-edge-layer.js?rev=6';
 import { V7_LIGHT_MODES, V7_PRODUCTION_CINEMATIC_BLEND, VirtualGalaxyLightingRig } from './virtual-galaxy-light-rig.js?rev=24';

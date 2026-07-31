@@ -469,12 +469,6 @@ const VISUALIZATIONS = [
   { id: 'force-atlas2', label: 'ForceAtlas2', group: 'Erő alapú hálók', icon: '✺' },
   { id: 'fruchterman', label: 'Fruchterman', group: 'Erő alapú hálók', icon: '✳' },
   { id: 'mds', label: 'MDS', group: 'Erő alapú hálók', icon: '⌁' },
-  { id: 'circular', label: 'Circular', group: 'Kör és tér', icon: '○' },
-  { id: 'concentric', label: 'Concentric', group: 'Kör és tér', icon: '◎' },
-  { id: 'radial', label: 'Radial', group: 'Kör és tér', icon: '◉' },
-  { id: 'grid', label: 'Grid', group: 'Kör és tér', icon: '▦' },
-  { id: 'random', label: 'Random', group: 'Kör és tér', icon: '⌘' },
-  { id: 'snake', label: 'Snake', group: 'Kör és tér', icon: '〰' },
   { id: 'antv-dagre', label: 'AntV Dagre', group: 'Irányított gráfok', icon: '⇣' },
   { id: 'dagre', label: 'Dagre', group: 'Irányított gráfok', icon: '⇢' },
 ];
@@ -1529,12 +1523,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     if (state.visualization === 'force-atlas2') return { ...base, kr: 12, kg: 8, preventOverlap: true, maxIteration: 220 };
     if (state.visualization === 'fruchterman') return { ...base, gravity: 8, speed: 4, maxIteration: 220, preventOverlap: true };
     if (state.visualization === 'mds') return { ...base, linkDistance: 82 };
-    if (state.visualization === 'circular') return { ...base, radius: Math.min(width, height) * .35, ordering: 'degree', divisions: 3, startRadius: 24 };
-    if (state.visualization === 'concentric') return { ...base, minNodeSpacing: 18, equidistant: true, preventOverlap: true };
-    if (state.visualization === 'radial') return { ...base, unitRadius: 72, preventOverlap: true, maxIteration: 180 };
-    if (state.visualization === 'grid') return { ...base, begin: [22, 22], preventOverlap: true, nodeSize: 26 };
-    if (state.visualization === 'random') return { ...base, padding: 28 };
-    if (state.visualization === 'snake') return { ...base, direction: 'LR', nodeSpacing: 24 };
     if (state.visualization === 'antv-dagre') return { ...base, rankdir: 'TB', nodesep: 24, ranksep: 45, controlPoints: true };
     if (state.visualization === 'dagre') return { ...base, rankdir: 'LR', nodesep: 22, ranksep: 45, controlPoints: true };
     return base;
