@@ -466,9 +466,6 @@ const VISUALIZATIONS = [
   { id: 'globe-rolling-cards', label: 'Globe · Fókuszált kártyák v2', group: 'Térbeli', icon: '◒', rollingCardGlobe: true },
   { id: 'globe-static-atoms', label: 'Globe · Árnyék nélküli forgás', group: 'Térbeli', icon: '◌', staticAtomGlobe: true },
   { id: 'cytoscape-cose', label: 'Cytoscape · COSE', group: 'Cytoscape', icon: '⌘', cytoscape: true },
-  { id: 'force-atlas2', label: 'ForceAtlas2', group: 'Erő alapú hálók', icon: '✺' },
-  { id: 'fruchterman', label: 'Fruchterman', group: 'Erő alapú hálók', icon: '✳' },
-  { id: 'mds', label: 'MDS', group: 'Erő alapú hálók', icon: '⌁' },
   { id: 'antv-dagre', label: 'AntV Dagre', group: 'Irányított gráfok', icon: '⇣' },
   { id: 'dagre', label: 'Dagre', group: 'Irányított gráfok', icon: '⇢' },
 ];
@@ -1520,9 +1517,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     const height = Math.max(mapContainer.clientHeight || 0, 420);
     const center = [width / 2, height / 2];
     const base = { type: state.visualization, width, height, center };
-    if (state.visualization === 'force-atlas2') return { ...base, kr: 12, kg: 8, preventOverlap: true, maxIteration: 220 };
-    if (state.visualization === 'fruchterman') return { ...base, gravity: 8, speed: 4, maxIteration: 220, preventOverlap: true };
-    if (state.visualization === 'mds') return { ...base, linkDistance: 82 };
     if (state.visualization === 'antv-dagre') return { ...base, rankdir: 'TB', nodesep: 24, ranksep: 45, controlPoints: true };
     if (state.visualization === 'dagre') return { ...base, rankdir: 'LR', nodesep: 22, ranksep: 45, controlPoints: true };
     return base;
