@@ -1,7 +1,9 @@
 import { initUniverse4 } from './universe4.js?rev=56';
+import { initExploreDiscovery } from './explore-discovery.js?rev=4';
 
 const routes = {
   home: 'screens/home.html',
+  explore: 'screens/explore.html',
   djinn: 'screens/djinn.html',
   query: 'screens/query.html',
   'query-answer': 'screens/query-answer.html',
@@ -134,6 +136,9 @@ async function render(route) {
     if (normalized === 'query' && state.question) {
       const queryInput = root.querySelector('[data-query-form] input');
       if (queryInput) queryInput.value = state.question;
+    }
+    if (normalized === 'explore') {
+      destroyScreen = initExploreDiscovery(root);
     }
     if (normalized === 'universe') {
       destroyScreen = initUniverse4(root, { showToast, navigate });

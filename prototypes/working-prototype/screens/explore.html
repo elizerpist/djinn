@@ -1,0 +1,57 @@
+<section class="screen" aria-label="Explore">
+  <header class="top-bar"><div><span class="eyebrow">EXPLORE</span><h1>Fedezd fel a tudásodat</h1></div><button class="icon-button" aria-label="Explore beállítások">☷</button></header>
+  <div class="screen-subheader" data-screen-subheader><div class="tabs"><button class="tab is-active">Áttekintés</button><button class="tab">Fogalmak</button><button class="tab">Kapcsolatok</button></div></div>
+  <main class="explore-discovery" data-explore-discovery>
+    <section class="explore-panel" data-explore-panel="overview">
+      <div class="explore-galaxy-stats" aria-label="Tudásgalaxis statisztikái"><span><strong>128</strong> atom</span><span><strong>42</strong> kapcsolat</span><span><strong>6</strong> ellenőrizendő</span></div>
+      <section class="explore-spotlight" aria-label="Mai felfedezés">
+        <div class="explore-spotlight-copy"><span class="eyebrow">MAI FELFEDEZÉS</span><h2>Új híd: PEEP ↔ Oxigenizáció</h2><p>7 jegyzet · 3 közös chunk</p></div>
+        <button class="explore-spotlight-action" type="button" data-route="universe" aria-label="Kapcsolat megnyitása a Universe-ben"><span>Megnyitás</span><b>›</b></button>
+      </section>
+
+      <section class="explore-feed-section" aria-labelledby="explore-continue-title">
+        <div class="explore-section-heading"><div><span class="eyebrow">ELŐZMÉNY</span><h2 id="explore-continue-title">Folytasd, ahol abbahagytad</h2></div><button class="text-link" type="button" data-route="universe">Összes</button></div>
+        <div class="explore-route-list">
+          <button class="explore-route-card" type="button" data-route="universe"><span class="explore-route-mark">01</span><span><strong>Hipoxémia és gázcsere</strong><small>8 Atom · tegnap felfedezve</small></span><b>›</b></button>
+          <button class="explore-route-card" type="button" data-route="universe"><span class="explore-route-mark">02</span><span><strong>ARDS ventilációs útvonal</strong><small>5 Atom · 3 új kapcsolat</small></span><b>›</b></button>
+        </div>
+      </section>
+
+      <section class="explore-feed-section" aria-labelledby="explore-paths-title">
+        <div class="explore-section-heading"><div><span class="eyebrow">VEZETETT FÓKUSZ</span><h2 id="explore-paths-title">Tudásutak</h2></div></div>
+        <button class="explore-path" id="explore-featured-path" type="button" data-route="universe"><span>Oxigén</span><b>→</b><span>Gázcsere</span><b>→</b><span>PaO₂</span><b>→</b><span>Hipoxémia</span></button>
+      </section>
+    </section>
+
+    <section class="explore-panel" data-explore-panel="concepts" hidden>
+      <section class="explore-panel-intro"><span class="eyebrow">ATOMOK</span><h2>Fogalmak, amelyek most összeérnek</h2><p>Koppints egy fogalomkártyára, és nézd meg, hogyan zoomol rá a tudásgalaxis.</p></section>
+      <div class="explore-filter-row" aria-label="Fogalomrendezés"><button class="is-active" type="button">Legerősebb</button><button type="button">Legfrissebb</button><button type="button">Közösségek</button></div>
+      <div class="explore-concept-list">
+        <button type="button" data-route="universe" data-explore-focus="oxygen_delivery"><span class="concept-orb high"></span><span><strong>Oxigén</strong><small>24 kapcsolat · 4 új bizonyíték</small></span><b>›</b></button>
+        <button type="button" data-route="universe" data-explore-focus="pao2"><span class="concept-orb"></span><span><strong>PaO₂</strong><small>18 kapcsolat · erős híd</small></span><b>›</b></button>
+        <button type="button" data-route="universe" data-explore-focus="peep"><span class="concept-orb warm"></span><span><strong>PEEP</strong><small>14 kapcsolat · növekvő téma</small></span><b>›</b></button>
+        <button type="button" data-route="universe" data-explore-focus="shunt"><span class="concept-orb"></span><span><strong>Shunt</strong><small>11 kapcsolat · 2 új útvonal</small></span><b>›</b></button>
+      </div>
+      <section class="explore-feed-section" aria-labelledby="explore-topics-title">
+        <div class="explore-section-heading"><div><span class="eyebrow">MOZGÁSBAN</span><h2 id="explore-topics-title">Növekvő témák</h2></div></div>
+        <div class="explore-topic-chips" id="explore-growing-topics"><button type="button" data-route="universe">Légzési elégtelenség <b>+12</b></button><button type="button" data-route="universe">Hemodinamika <b>+7</b></button><button type="button" data-route="universe">Intenzív terápia <b>+5</b></button><button type="button" data-route="universe">Gázcsere <b>+4</b></button></div>
+      </section>
+    </section>
+
+    <section class="explore-panel" data-explore-panel="connections" hidden>
+      <section class="explore-panel-intro"><span class="eyebrow">HIDAK</span><h2>Kapcsolatok, amelyek új kontextust nyitnak</h2><p>A weight strukturális bizonyíték, nem szemantikai fontosság.</p></section>
+      <div class="explore-section-heading"><div><span class="eyebrow">STRUKTURÁLIS JELZÉSEK</span><h2>Érdekes kapcsolatok</h2></div></div>
+      <div class="explore-filter-row" aria-label="Kapcsolat szűrés"><button class="is-active" type="button">Kiemelt</button><button type="button">Új</button><button type="button">Közösségek között</button></div>
+      <div class="explore-connection-list">
+        <button type="button" data-route="universe"><strong>ARDS <i>↔</i> Perctérfogat</strong><span>Eltérő közösség · 0.71 bizonyíték</span><b>Felfedezés ›</b></button>
+        <button type="button" data-route="universe"><strong>Diffúzió <i>↔</i> Tüdőödéma</strong><span>3 közös jegyzet · 0.68 bizonyíték</span><b>Felfedezés ›</b></button>
+        <button type="button" data-route="universe"><strong>Hypercapnia <i>↔</i> Intubáció</strong><span>2 közös chunk · 0.62 bizonyíték</span><b>Felfedezés ›</b></button>
+      </div>
+      <section class="explore-feed-section" aria-labelledby="explore-full-paths-title">
+        <div class="explore-section-heading"><div><span class="eyebrow">VEZETETT FÓKUSZ</span><h2 id="explore-full-paths-title">Tudásutak</h2></div></div>
+        <button class="explore-path" id="explore-knowledge-paths" type="button" data-route="universe"><span>Oxigén</span><b>→</b><span>Gázcsere</span><b>→</b><span>PaO₂</span><b>→</b><span>Hipoxémia</span></button>
+        <button class="explore-path" type="button" data-route="universe"><span>Pneumonia</span><b>→</b><span>Shunt</span><b>→</b><span>PEEP</span></button>
+      </section>
+    </section>
+  </main>
+</section>

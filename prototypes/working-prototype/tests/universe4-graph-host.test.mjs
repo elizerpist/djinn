@@ -9,8 +9,12 @@ const sourceStage = await readFile(new URL('../assets/universe4/universe4-v7-sou
 const forceStage = await readFile(new URL('../assets/universe4/universe4-force-controller.js', import.meta.url), 'utf8');
 const runtime = await readFile(new URL('../assets/universe4.js', import.meta.url), 'utf8');
 
-assert.doesNotMatch(index, /Explore|explore-discovery|explore-galaxy|screens\/explore/);
-assert.doesNotMatch(app, /Explore|explore-discovery|explore-galaxy|screens\/explore|initKnowledgeMap/);
+assert.match(index, /data-route="explore"/);
+assert.match(index, /assets\/explore-discovery\.css\?rev=5/);
+assert.match(app, /explore: 'screens\/explore\.html'/);
+assert.match(app, /initExploreDiscovery/);
+assert.doesNotMatch(index, /explore-galaxy-orb-root|explore-galaxy-inline/);
+assert.doesNotMatch(app, /initExpandableGalaxyOrb|galaxyOrb|initKnowledgeMap/);
 assert.doesNotMatch(universe, /Explore|explore/);
 assert.match(index, /assets\/vendor\/g6\.min\.js\?rev=92/);
 assert.match(index, /assets\/vendor\/globe\.gl\.min\.js\?rev=92/);

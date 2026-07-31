@@ -27,6 +27,6 @@ assert.match(styles, /\.djinn-context-card/);
 // The production entry points are explicitly versioned so a device cannot
 // retain stale renderer/state modules after a Universe update.
 assert.match(index, /assets\/styles\.css\?rev=146/);
-assert.match(index, /assets\/app\.js\?rev=278/);
+assert.match(index, /assets\/app\.js\?rev=279/);
 
 console.log('djinn command menu OK');
