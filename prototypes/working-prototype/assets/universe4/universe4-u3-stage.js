@@ -1,20 +1,19 @@
-// U4 starts from the production U3 controller.  Keeping it as a mounted
-// adapter prevents the Galaxy entry/morph from drifting into a second,
-// simplified ForceGraph implementation.
-import { initUniverseMorphTest } from '../universe-morph-test.js?rev=46';
+// U4 owns the ForceGraph source controller. Keeping it as a mounted adapter
+// prevents the Galaxy entry/morph from drifting into a second implementation.
+import { initUniverse4ForceController } from './universe4-force-controller.js?rev=2';
 
 function u3Markup() {
   return `
-    <section class="universe-morph-v3-screen universe4-u3-screen">
-      <main class="universe-morph-test" data-universe-morph-test>
-        <div class="universe-morph-stage" data-universe-stage>
-          <div class="universe-morph-galaxy" data-universe-galaxy aria-label="Universe V3 Force Graph"></div>
-          <div class="universe-morph-map" data-universe-map hidden></div>
-          <div class="universe-morph-proxy" data-universe-proxy hidden></div>
+    <section class="universe4-u3-screen">
+      <main class="universe4-u3-root" data-universe4-u3-root>
+        <div class="universe4-u3-stage" data-universe-stage>
+          <div class="universe4-u3-galaxy" data-universe-galaxy aria-label="Universe V4 Force Graph"></div>
+          <div class="universe4-u3-map" data-universe-map hidden></div>
+          <div class="universe4-u3-proxy" data-universe-proxy hidden></div>
           <button type="button" class="universe-fullscreen-toggle" data-universe-fullscreen aria-pressed="false" aria-label="Universe teljes képernyőre kapcsolása">⛶</button>
-          <aside class="universe-city-context" data-universe-city-context hidden aria-live="polite"></aside>
-          <section class="universe-corridor" data-universe-corridor hidden></section>
-          <aside class="universe-morph-debug" data-universe-debug aria-label="Universe V3 debug"></aside>
+          <aside class="universe4-u3-city-context" data-universe-city-context hidden aria-live="polite"></aside>
+          <section class="universe4-u3-corridor" data-universe-corridor hidden></section>
+          <aside class="universe4-u3-debug" data-universe-debug aria-label="Universe V4 Force debug"></aside>
         </div>
       </main>
     </section>`;
@@ -29,7 +28,7 @@ export function createUniverse4U3Stage({ mount, helpers = {}, onPlanetReady } = 
 
   let disposed = false;
   let animationPaused = false;
-  const destroy = initUniverseMorphTest(host, {
+  const destroy = initUniverse4ForceController(host, {
     ...helpers,
     // U4's inline ForceGraph planet is transition-only. The canonical V7
     // Globe stage owns the first visible city-label layout after handoff.

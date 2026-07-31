@@ -249,7 +249,7 @@ assert.match(orbSource, /v7CosmicEnvironment\?\.updateFrame/);
 assert.doesNotMatch(orbSource, /V5_FAMILY_CONTEXT_VISUALS/);
 assert.match(orbSource, /V5_VARIANT_CONTEXT_VISUALS/);
 
-const universeSource = await readFile(new URL('../assets/universe-morph-test.js', import.meta.url), 'utf8');
+const universeSource = await readFile(new URL('../assets/universe4/universe4-force-controller.js', import.meta.url), 'utf8');
 assert.match(universeSource, /UNIVERSE_V3_REFERENCE_LIGHTING/, 'ForceGraph V3 and Globe V7 must read the same V3-reference colour/light tokens');
 assert.match(universeSource, /new THREE\.AmbientLight\(UNIVERSE_V3_REFERENCE_LIGHTING\.ambientColor, UNIVERSE_V3_REFERENCE_LIGHTING\.ambientIntensity\)/);
 assert.match(universeSource, /new THREE\.HemisphereLight\(\s*UNIVERSE_V3_REFERENCE_LIGHTING\.fillColor,\s*UNIVERSE_V3_REFERENCE_LIGHTING\.fillGroundColor,\s*UNIVERSE_V3_REFERENCE_LIGHTING\.fillIntensity/s);

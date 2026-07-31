@@ -7,8 +7,8 @@ const runtime = await readFile(new URL('../assets/universe4.js', import.meta.url
 const app = await readFile(new URL('../assets/app.js', import.meta.url), 'utf8');
 const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const matcher = await readFile(new URL('../assets/universe4/universe4-handoff-matcher.js', import.meta.url), 'utf8');
-const screen = await readFile(new URL('../screens/universe-morph-test-v4.html', import.meta.url), 'utf8');
-const u3Controller = await readFile(new URL('../assets/universe-morph-test.js', import.meta.url), 'utf8');
+const screen = await readFile(new URL('../screens/universe.html', import.meta.url), 'utf8');
+const u3Controller = await readFile(new URL('../assets/universe4/universe4-force-controller.js', import.meta.url), 'utf8');
 const exploreController = await readFile(new URL('../assets/explore-galaxy-orb.js', import.meta.url), 'utf8');
 const depthController = await readFile(new URL('../assets/universe4/universe4-depth-controller.js', import.meta.url), 'utf8');
 const selectionPolicy = await readFile(new URL('../assets/universe4/universe4-globe-selection.js', import.meta.url), 'utf8');
@@ -19,8 +19,9 @@ const g6Stage = await readFile(new URL('../assets/universe4/universe4-g6-focused
 const sharedG6Stage = await readFile(new URL('../assets/focused-g6-v2-stage.js', import.meta.url), 'utf8');
 
 assert.match(u3Stage, /export function createUniverse4U3Stage/);
-assert.match(u3Stage, /initUniverseMorphTest/);
-assert.match(u3Stage, /universe-morph-v3-screen/);
+assert.match(u3Stage, /initUniverse4ForceController/);
+assert.doesNotMatch(u3Stage, /initUniverseMorphTest/);
+assert.match(u3Stage, /universe4-u3-screen/);
 assert.match(u3Stage, /onPlanetReady/);
 assert.match(u3Stage, /is-u4-input-disabled/);
 assert.match(u3Stage, /pauseAnimation\(\)/,
@@ -193,11 +194,13 @@ assert.match(runtime, /createUniverse4U3Stage/);
 assert.match(runtime, /createUniverse4V7SourceStage/);
 assert.match(runtime, /let v7Stage = null;/,
   'the synchronous canonical V7 ready callback must never close over a TDZ const binding');
-assert.match(app, /universe4\.js\?rev=54/,
+assert.match(app, /universe4\.js\?rev=55/,
   'the U4 module revision must change when its embedded full-map runtime changes');
+assert.match(runtime, /universe4-u3-stage\.js\?rev=20/,
+  'the migrated V4 Force adapter must invalidate its owner module');
 assert.match(runtime, /universe4-v7-source-stage\.js\?rev=22/,
   'the U4 source-stage revision must change when its canonical Globe controls change');
-assert.match(index, /assets\/app\.js\?rev=271/,
+assert.match(index, /assets\/app\.js\?rev=272/,
   'the browser entrypoint must invalidate the app module which imports U4');
 assert.match(runtime, /HANDOFF_CROSSFADE/);
 assert.match(runtime, /GLOBE_STANDALONE/);

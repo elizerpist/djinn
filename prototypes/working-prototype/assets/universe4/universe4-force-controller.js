@@ -1,12 +1,12 @@
-import * as THREE from './vendor/three.module.min.js?rev=92';
-import { CosmicEnvironment } from './cosmic-environment.js?rev=6';
+import * as THREE from '../vendor/three.module.min.js?rev=92';
+import { CosmicEnvironment } from '../cosmic-environment.js?rev=6';
 import {
   createUniverseV3ReferenceSunDirection,
   UNIVERSE_V3_REFERENCE_LIGHTING,
-} from './virtual-galaxy-light-rig.js?rev=24';
+} from '../virtual-galaxy-light-rig.js?rev=24';
 // Import the V5 visual snapshot, not its Globe.gl UI wrapper.  V3 places
 // this immutable node data inside the already-existing ForceGraph3D scene.
-import { getV5PlanetVisualSnapshot } from './explore-galaxy-orb.js?rev=226';
+import { getV5PlanetVisualSnapshot } from '../explore-galaxy-orb.js?rev=226';
 import {
   TEST_SEED,
   UNIVERSE_FOCUS_STATE,
@@ -23,7 +23,7 @@ import {
   projectPointToScreen,
   reverseTransition,
   surfaceArcPoints,
-} from './universe-morph-model.js?rev=5';
+} from './universe4-force-model.js?rev=1';
 
 const PLANET_COLORS = [0x6b3ef6, 0x8a63e8, 0x7c4dff, 0x9b7bff];
 const DJINN_V2 = Object.freeze({
@@ -76,7 +76,7 @@ function loadThreeGlobe() {
   threeGlobePromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.async = true;
-    script.src = new URL('./vendor/three-globe.min.js?rev=3', import.meta.url).href;
+    script.src = new URL('../vendor/three-globe.min.js?rev=3', import.meta.url).href;
     script.addEventListener('load', () => window.ThreeGlobe ? resolve(window.ThreeGlobe) : reject(new Error('ThreeGlobe globális export hiányzik.')), { once: true });
     script.addEventListener('error', () => reject(new Error('A ThreeGlobe vendor nem tölthető be.')), { once: true });
     document.head.append(script);
@@ -112,9 +112,9 @@ function waitForForceGraph(onReady, onError) {
   return () => window.cancelAnimationFrame(frame);
 }
 
-export function initUniverseMorphTest(root, helpers = {}) {
-  const isBrandV2 = Boolean(root.querySelector('.universe-morph-v2-screen'));
-  const isFocusV3 = Boolean(root.querySelector('.universe-morph-v3-screen'));
+export function initUniverse4ForceController(root, helpers = {}) {
+  const isBrandV2 = Boolean(root.querySelector('.universe4-u3-brand-v2'));
+  const isFocusV3 = Boolean(root.querySelector('.universe4-u3-screen'));
   const suppressInlineCityLabels = Boolean(helpers.suppressInlineCityLabels);
   const stage = root.querySelector('[data-universe-stage]');
   const galaxyMount = root.querySelector('[data-universe-galaxy]');
@@ -293,7 +293,7 @@ export function initUniverseMorphTest(root, helpers = {}) {
       </div>` : '';
     debug.innerHTML = `
       <div class="universe-morph-debug-summary">
-        <strong>${isFocusV3 ? 'Universe v3' : 'Universe test'}</strong>
+        <strong>Universe</strong>
         <output data-universe-level>${state.level.replaceAll('_', ' ')}</output>
         <output data-universe-camera>${distance}u · ${fps} FPS</output>
       </div>
@@ -1053,7 +1053,7 @@ export function initUniverseMorphTest(root, helpers = {}) {
           depthWrite: true,
         })
         : new THREE.MeshStandardMaterial({
-        // Universe v3 reuses V5's deep-violet, glass-like planet body.  The
+        // The V4 inline Force stage reuses V5's deep-violet, glass-like planet body.  The
         // cyan atoms are separate child meshes and remain the visual focus.
         color: isBrandV2 ? 0x3a237c : 0x6337d5,
         roughness: .72,

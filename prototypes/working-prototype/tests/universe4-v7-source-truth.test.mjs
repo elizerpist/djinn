@@ -5,7 +5,7 @@ const sourceStage = await readFile(new URL('../assets/universe4/universe4-v7-sou
 const u3Stage = await readFile(new URL('../assets/universe4/universe4-u3-stage.js', import.meta.url), 'utf8');
 const runtime = await readFile(new URL('../assets/universe4.js', import.meta.url), 'utf8');
 const exploreController = await readFile(new URL('../assets/explore-galaxy-orb.js', import.meta.url), 'utf8');
-const u3Controller = await readFile(new URL('../assets/universe-morph-test.js', import.meta.url), 'utf8');
+const u3Controller = await readFile(new URL('../assets/universe4/universe4-force-controller.js', import.meta.url), 'utf8');
 const lightRig = await readFile(new URL('../assets/virtual-galaxy-light-rig.js', import.meta.url), 'utf8');
 
 // U4 must mount the exact V7 controller, not a hand-copied approximation.
@@ -19,7 +19,8 @@ assert.match(exploreController, /initialVariant/,
   'the canonical Explore controller must accept the V7 initial variant directly');
 
 // U4 must run the existing U3 flow rather than another ForceGraph copy.
-assert.match(u3Stage, /initUniverseMorphTest/);
+assert.match(u3Stage, /initUniverse4ForceController/);
+assert.doesNotMatch(u3Stage, /initUniverseMorphTest/);
 assert.match(u3Stage, /onPlanetReady/);
 assert.match(u3Controller, /helpers\.onPlanetReady/,
   'the real U3 controller must provide the handoff boundary after its own morph');

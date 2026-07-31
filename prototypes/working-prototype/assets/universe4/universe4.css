@@ -77,19 +77,71 @@
   inset: 0;
   overflow: hidden;
 }
-/* U4's entry renderer is the actual U3 controller. Its normal route adds
-   page padding and a second fullscreen button; U4 supplies the common stage
-   frame instead, without altering U3's ForceGraph implementation. */
-.universe4-u3-source-root .universe-morph-v3-screen,
-.universe4-u3-source-root .universe-morph-test,
-.universe4-u3-source-root .universe-morph-stage {
+/* U4's entry renderer owns the migrated Force controller. Its standalone
+   route chrome is intentionally omitted; U4 supplies the common stage frame. */
+.universe4-u3-source-root .universe4-u3-screen,
+.universe4-u3-source-root .universe4-u3-root,
+.universe4-u3-source-root .universe4-u3-stage {
   width: 100%;
   height: 100%;
   min-height: 0;
 }
-.universe4-u3-source-root .universe-morph-test { padding: 0; }
-.universe4-u3-source-root .universe-morph-stage { border-radius: inherit; }
-.universe4-u3-source-root .universe-morph-debug,
+.universe4-u3-source-root .universe4-u3-root { padding: 0; }
+.universe4-u3-source-root .universe4-u3-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(71, 217, 255, .12), transparent 31%),
+    radial-gradient(circle at 65% 22%, rgba(139, 103, 255, .16), transparent 38%),
+    #050918;
+}
+.universe4-u3-source-root .universe4-u3-galaxy,
+.universe4-u3-source-root .universe4-u3-map {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.universe4-u3-source-root .universe4-u3-galaxy canvas,
+.universe4-u3-source-root .universe4-u3-map canvas,
+.universe4-u3-source-root .universe4-u3-map svg { display: block; }
+.universe4-u3-source-root .universe4-u3-galaxy canvas { touch-action: none; }
+.universe4-u3-source-root .universe4-u3-map { z-index: 2; opacity: 0; pointer-events: none; transition: opacity .18s ease; }
+.universe4-u3-source-root .universe4-u3-map.is-map-active { pointer-events: auto; }
+.universe4-u3-source-root .universe4-u3-city-context { z-index: 5; position: absolute; right: 12px; bottom: 54px; left: 12px; display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 7px 8px 7px 11px; border: 1px solid rgba(255, 212, 90, .46); border-radius: 14px; color: #fff8d5; background: rgba(43, 27, 9, .82); box-shadow: 0 9px 24px rgba(0, 0, 0, .25), 0 0 18px rgba(255, 182, 72, .14); backdrop-filter: blur(9px); }
+.universe4-u3-source-root .universe4-u3-city-context[hidden] { display: none; }
+.universe4-u3-source-root .universe4-u3-city-context span { display: grid; flex: 1 1 auto; min-width: 0; gap: 1px; }
+.universe4-u3-source-root .universe4-u3-city-context strong { overflow: hidden; color: #fff8d5; font: 800 11px/14px system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.universe4-u3-source-root .universe4-u3-city-context small { color: #f5d98d; font: 650 8px/11px system-ui, sans-serif; }
+.universe4-u3-source-root .universe4-u3-city-context button { flex: 0 0 auto; min-height: 28px; padding: 0 9px; border: 1px solid rgba(255, 231, 131, .55); border-radius: 9px; color: #fff8d5; background: rgba(151, 94, 25, .55); font: 750 8px system-ui, sans-serif; }
+.universe4-u3-source-root .universe4-u3-city-context button[data-universe-city-action="clear"] { width: 28px; padding: 0; border-radius: 50%; font-size: 17px; }
+.universe4-u3-source-root .universe4-u3-corridor { z-index: 3; position: absolute; inset: 0; color: #f4efff; opacity: 0; pointer-events: none; transition: opacity .42s ease; }
+.universe4-u3-source-root .universe4-u3-corridor[hidden] { display: none; }
+.universe4-u3-source-root .universe4-u3-corridor.is-opening,
+.universe4-u3-source-root .universe4-u3-corridor.is-open { opacity: 1; }
+.universe4-u3-source-root .universe-corridor-toolbar { position: absolute; top: 12px; right: 12px; left: 12px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+.universe4-u3-source-root .universe-corridor-toolbar span { display: grid; gap: 2px; padding: 7px 10px; border: 1px solid rgba(216, 204, 255, .18); border-radius: 10px; color: #efe8ff; background: rgba(12, 7, 30, .52); backdrop-filter: blur(8px); font: 800 9px system-ui, sans-serif; }
+.universe4-u3-source-root .universe-corridor-toolbar small { color: #b4a5d5; font: 600 8px system-ui, sans-serif; }
+.universe4-u3-source-root .universe-corridor-close { width: 30px; height: 30px; border: 1px solid rgba(235, 227, 255, .24); border-radius: 50%; color: #f5efff; background: rgba(12, 7, 30, .58); font: 500 21px/1 system-ui, sans-serif; pointer-events: auto; }
+.universe4-u3-source-root .universe4-u3-proxy { z-index: 4; position: absolute; width: 36px; height: 36px; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0; }
+.universe4-u3-source-root .universe4-u3-proxy[hidden] { display: none; }
+.universe4-u3-source-root .universe-morph-debug { z-index: 6; position: absolute; right: 10px; bottom: 10px; left: 10px; max-width: none; padding: 6px 9px; border: 1px solid rgba(100, 238, 255, .3); border-radius: 12px; color: #eeeaff; font: 700 8px/1.35 system-ui, sans-serif; background: rgba(4, 12, 30, .78); backdrop-filter: blur(8px); pointer-events: auto; }
+.universe4-u3-source-root .universe-morph-debug-summary { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.universe4-u3-source-root .universe-morph-debug-summary strong { flex: 0 0 auto; color: #fff; font-size: 8px; letter-spacing: .04em; }
+.universe4-u3-source-root .universe-morph-debug-summary output { min-width: 0; overflow: hidden; color: #bdeaf7; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.universe4-u3-source-root .universe-morph-debug-summary output:nth-child(2) { flex: 1 1 auto; }
+.universe4-u3-source-root .universe-morph-debug-details { margin-top: 5px; border-top: 1px solid rgba(100, 238, 255, .15); }
+.universe4-u3-source-root .universe-morph-debug-details summary { padding-top: 5px; color: #ddd4f4; cursor: pointer; font-size: 7px; list-style: none; }
+.universe4-u3-source-root .universe-morph-debug-details summary::-webkit-details-marker { display: none; }
+.universe4-u3-source-root .universe-morph-debug-details summary::after { margin-left: 4px; content: '⌄'; }
+.universe4-u3-source-root .universe-morph-debug-details[open] summary::after { content: '⌃'; }
+.universe4-u3-source-root .universe-morph-debug-details-body { display: grid; gap: 3px; padding-top: 5px; }
+.universe4-u3-source-root .universe-morph-debug-details output { display: block; color: #cfc2f1; }
+.universe4-u3-source-root .universe-morph-debug-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 4px; }
+.universe4-u3-source-root .universe-morph-debug-actions button { min-height: 24px; border: 1px solid rgba(110, 239, 255, .32); border-radius: 7px; color: #f4efff; font: 700 7px system-ui, sans-serif; background: rgba(45, 145, 222, .25); }
+.universe4-u3-source-root .universe-morph-debug-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 7px; color: #bdeaf7; font: 650 7px/1.15 system-ui, sans-serif; }
+.universe4-u3-source-root .universe-morph-debug-toggles label { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.universe4-u3-source-root .universe-morph-debug-toggles input { width: 10px; height: 10px; accent-color: #6eefff; }
 .universe4-u3-source-root .universe-fullscreen-toggle { display: none; }
 /* The source controllers set explicit pointer-events:auto on their canvas,
    controls and overlays. A hidden U4 stage must therefore lock the complete

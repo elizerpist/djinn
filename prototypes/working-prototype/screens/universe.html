@@ -1,0 +1,87 @@
+<section class="screen universe4-screen" aria-label="Universe V4 renderer handoff">
+  <header class="top-bar compact">
+    <button class="back-button" type="button" data-route="explore" aria-label="Vissza az Explore nézethez">‹</button>
+    <div><span class="eyebrow">DJINN UNIVERSE</span><h2>Universe</h2></div>
+  </header>
+
+  <main class="universe4-main" data-universe4-screen>
+    <div class="universe4-stage-shell" data-universe4-stage-shell>
+      <section class="universe4-viewport" data-universe4-viewport aria-label="Universe V4 render viewport" aria-busy="false">
+        <div class="universe4-render-stage universe4-force-stage" data-universe4-force-stage aria-label="Inline 3D Force Graph render stage"></div>
+        <div class="universe4-render-stage universe4-globe-stage" data-universe4-globe-stage aria-label="Standalone Globe render stage" aria-hidden="true"></div>
+        <div class="universe4-render-stage universe4-morph-patch-stage" data-universe4-morph-patch-stage aria-hidden="true"></div>
+        <div class="universe4-render-stage universe4-g6-stage" data-universe4-g6-stage aria-label="G6 Fókuszált térkép v2 render stage" aria-hidden="true"></div>
+        <div class="universe4-v7-debug-portal" data-universe4-v7-debug-portal aria-label="Explore V7 Globe.gl diagnosztika"></div>
+        <button type="button" class="universe4-fullscreen-toggle" data-universe4-fullscreen aria-pressed="false" aria-label="Universe teljes képernyőre kapcsolása" title="Teljes képernyő">⛶</button>
+        <button type="button" class="universe4-reset-button" data-universe4-reset aria-label="Universe Force Graph alapállapotba állítása">↺ Reset</button>
+        <div class="universe4-background-controls" role="group" aria-label="Renderer háttérszín teszt">
+          <label>Force
+            <select data-universe4-force-background aria-label="Force Graph háttérszíne">
+              <option value="force" selected>ForceGraph · világosabb</option>
+              <option value="globe">Globe.gl · sötétebb</option>
+            </select>
+          </label>
+          <label>Globe
+            <select data-universe4-globe-background aria-label="Globe.gl háttérszíne">
+              <option value="force">ForceGraph · világosabb</option>
+              <option value="globe" selected>Globe.gl · sötétebb</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="universe4-stage-status" data-universe4-stage-status aria-live="polite">
+          <span class="universe4-stage-status-dot" aria-hidden="true"></span>
+          <output data-universe4-state>GALAXY_IDLE</output>
+        </div>
+      </section>
+
+      <aside class="universe4-debug" data-universe4-debug aria-label="Universe V4 handoff debug panel">
+        <div class="universe4-debug-heading">
+          <div>
+            <span class="universe4-debug-kicker">RENDERER HANDOFF</span>
+            <strong>Universe diagnostics</strong>
+          </div>
+          <output class="universe4-debug-owner" data-universe4-pointer-owner>FORCE</output>
+        </div>
+
+        <dl class="universe4-debug-metrics">
+          <div><dt>State</dt><dd><output data-universe4-debug-state>GALAXY_IDLE</output></dd></div>
+          <div><dt>Planet</dt><dd><output data-universe4-debug-planet>—</output></dd></div>
+          <div><dt>Center Δ</dt><dd><output data-universe4-debug-center-delta>— px</output></dd></div>
+          <div><dt>Radius Δ</dt><dd><output data-universe4-debug-radius-delta>— %</output></dd></div>
+          <div><dt>Landmark RMS</dt><dd><output data-universe4-debug-landmark-rms>— px</output></dd></div>
+          <div><dt>Landmark Δ</dt><dd><output data-universe4-debug-landmark-delta>— px</output></dd></div>
+          <div><dt>Globe offset</dt><dd><output data-universe4-debug-globe-offset>—</output></dd></div>
+          <div><dt>Stages</dt><dd><output data-universe4-debug-stages>Force 1.00 · Globe 0.00</output></dd></div>
+        </dl>
+
+        <details class="universe4-debug-details">
+          <summary>Camera, lifecycle and pixel-match metrics</summary>
+          <div class="universe4-debug-details-body" data-universe4-debug-details>
+            <output>Force camera: awaiting capture</output>
+            <output>Globe POV: awaiting prewarm</output>
+            <output>Pixel match: awaiting snapshot</output>
+          </div>
+        </details>
+
+        <div class="universe4-signal-heading">
+          <strong>V7 signal trace</strong>
+          <button type="button" data-universe4-copy-signal>Mind másolása</button>
+        </div>
+        <pre class="universe4-signal-log" data-universe4-signal-log aria-label="Universe V4 V7 eseménynapló">V7 Globe eseményekre vár…</pre>
+
+        <div class="universe4-proof-controls" role="group" aria-label="Universe V4 proof controls">
+          <button type="button" data-universe4-proof="force-only">Force Only</button>
+          <button type="button" data-universe4-proof="globe-only">Globe Only</button>
+          <button type="button" data-universe4-proof="split-view">Split View</button>
+          <button type="button" data-universe4-proof="overlay-difference">Overlay Difference</button>
+          <button type="button" data-universe4-proof="landmark-proof">Landmark Proof</button>
+          <button type="button" data-universe4-proof="camera-mapping">Camera Mapping</button>
+          <button type="button" data-universe4-proof="slow-crossfade">Slow Crossfade</button>
+          <button type="button" class="is-primary" data-universe4-proof="automatic-handoff">Automatic Handoff</button>
+          <button type="button" class="is-return" data-universe4-proof="reset">Reset</button>
+        </div>
+      </aside>
+    </div>
+  </main>
+</section>

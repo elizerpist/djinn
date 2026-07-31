@@ -69,14 +69,14 @@ when that improves ownership without changing its public behaviour.
 
 | ID | Source | Code area | Acceptance condition | Verification | Status |
 |---|---|---|---|---|---|
-| U4-01 | User: one Universe, V4 final | `assets/app.js`, navigation | Only one public Universe route exists and it opens V4 | Route contract test + manual hash navigation | NOT DONE |
-| U4-02 | User: remove the others | `screens/`, `assets/app.js` | V1/V2/V3 screens, tabs and aliases are absent | `rg` dependency scan + route tests | NOT DONE |
-| U4-03 | User: move referenced code into V4 | `assets/universe4/` | V4 has its own ForceGraph/model/controller modules and imports no legacy public controller | Static import contract test | NOT DONE |
-| U4-04 | Existing V4 behaviour | `universe4.js` and stage adapters | Galaxy → focused planet → Globe handoff still completes | Universe4 transition/route tests | NOT DONE |
-| U4-05 | Existing V4 behaviour | Globe selection + G6 stage | Repeated root/context city tap enters the focused map and back/reset returns | Globe selection + focused map tests | NOT DONE |
-| U4-06 | Existing performance fix | Globe stage and diagnostics | Orbit interaction keeps throttled diagnostics and camera-only visual updates | Performance-focused code inspection + interaction trace | NOT DONE |
-| U4-07 | Architecture gate | `assets/universe4/` | No second copy of gesture, transition, or ownership mechanisms is introduced | Architecture review + targeted unit tests | NOT DONE |
-| U4-08 | Regression safety | `tests/` | Full JavaScript suite passes and no stale cache-buster imports remain | Full test loop + HTTP import-chain check | NOT DONE |
+| U4-01 | User: one Universe, V4 final | `assets/app.js`, navigation | Only one public Universe route exists and it opens V4 | Route contract test + served entrypoint check | DONE |
+| U4-02 | User: remove the others | `screens/`, `assets/app.js` | V1/V2/V3 screens, tabs and aliases are absent | `rg` dependency scan + route tests | DONE |
+| U4-03 | User: move referenced code into V4 | `assets/universe4/` | V4 has its own ForceGraph/model/controller modules and imports no legacy public controller | Static import/ownership contract test | DONE |
+| U4-04 | Existing V4 behaviour | `universe4.js` and stage adapters | Galaxy → focused planet → Globe handoff still completes | Universe4 transition/route tests | DONE |
+| U4-05 | Existing V4 behaviour | Globe selection + G6 stage | Repeated root/context city tap enters the focused map and back/reset returns | Globe selection + focused map tests | DONE |
+| U4-06 | Existing performance fix | Globe stage and diagnostics | Orbit interaction keeps throttled diagnostics and camera-only visual updates | Performance contract tests + source inspection | DONE |
+| U4-07 | Architecture gate | `assets/universe4/` | No second copy of gesture, transition, or ownership mechanisms is introduced | Ownership review + targeted unit tests | DONE |
+| U4-08 | Regression safety | `tests/` | Full JavaScript suite passes and no stale cache-buster imports remain | Full test loop + HTTP import-chain check | DONE |
 
 ## Verification evidence required before completion
 
@@ -86,3 +86,22 @@ when that improves ownership without changing its public behaviour.
 - manual or automated interaction trace for handoff, repeated city tap, map,
   back and reset;
 - `git diff --check` and staged diff review.
+
+## Implementation evidence (2026-07-31)
+
+- U4-01/U4-02: `universe4-route.test.mjs`, `universe4-single-route.test.mjs`,
+  and the public-surface scan prove a single `universe` route and no legacy
+  public screens/tabs.
+- U4-03/U4-07: `universe4-force-stage.test.mjs`,
+  `universe4-force-model.test.mjs`, and `universe4-source-contract.test.mjs`
+  prove V4-owned Force/model/controller seams and no runtime legacy imports.
+- U4-04/U4-05: transition, Globe selection, focused-map, and source-contract
+  tests cover galaxy handoff, repeated city taps, map entry, and reset/back
+  seams.
+- U4-06: performance/debug contracts retain throttled diagnostics, camera-only
+  refresh, paused hidden renderer behavior, and the existing ownership seams.
+- U4-08: the complete prototype loop passed 42/42 Node contract tests; the
+  served entrypoint and V4 module chain returned HTTP 200; `git diff --check`
+  was clean.
+- The runtime interaction path is covered by automated contracts in this
+  Termux session; no separate manual browser screenshot trace was available.

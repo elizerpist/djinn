@@ -1,8 +1,7 @@
 import { initKnowledgeMap } from './knowledge-map.js?rev=138';
 import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=239';
 import { initExploreDiscovery } from './explore-discovery.js?rev=3';
-import { initUniverseMorphTest } from './universe-morph-test.js?rev=46';
-import { initUniverse4 } from './universe4.js?rev=54';
+import { initUniverse4 } from './universe4.js?rev=55';
 
 const routes = {
   home: 'screens/home.html',
@@ -25,10 +24,7 @@ const routes = {
   'workspace-note-editor': 'screens/workspace-note-editor.html',
   'workspace-library': 'screens/workspace-library.html',
   'workspace-source-detail': 'screens/workspace-source-detail.html',
-  'universe-morph-test': 'screens/universe-morph-test.html',
-  'universe-morph-test-v2': 'screens/universe-morph-test-v2.html',
-  'universe-morph-test-v3': 'screens/universe-morph-test-v3.html',
-  'universe-morph-test-v4': 'screens/universe-morph-test-v4.html',
+  universe: 'screens/universe.html',
   profile: 'screens/profile.html',
 };
 
@@ -43,7 +39,6 @@ const galaxyOrb = initExpandableGalaxyOrb({
 });
 
 function activeNav(route) {
-  if (route === 'universe-morph-test-v2' || route === 'universe-morph-test-v3' || route === 'universe-morph-test-v4') return 'universe-morph-test';
   return route.startsWith('workspace-') ? 'workspace' : route;
 }
 
@@ -170,10 +165,7 @@ async function render(route) {
     if (normalized === 'workspace-topic-connections') {
       destroyScreen = initKnowledgeMap(root, { showToast, navigate });
     }
-    if (normalized === 'universe-morph-test' || normalized === 'universe-morph-test-v2' || normalized === 'universe-morph-test-v3') {
-      destroyScreen = initUniverseMorphTest(root, { showToast, navigate });
-    }
-    if (normalized === 'universe-morph-test-v4') {
+    if (normalized === 'universe') {
       destroyScreen = initUniverse4(root, { showToast, navigate });
     }
     root.querySelector('.screen-content')?.scrollTo(0, 0);

@@ -35,7 +35,7 @@ assert.equal(universeEnvironment.sunRoot, null, 'Universe production must not re
 assert.ok(Object.values(universeEnvironment.starLayers).every((layer) => layer.material.isPointsMaterial), 'Universe stars need the reliable native PointsMaterial path');
 universeEnvironment.dispose();
 
-const universeSource = await readFile(new URL('../assets/universe-morph-test.js', import.meta.url), 'utf8');
+const universeSource = await readFile(new URL('../assets/universe4/universe4-force-controller.js', import.meta.url), 'utf8');
 assert.match(universeSource, /import\s+\{\s*CosmicEnvironment\s*\}/, 'the real Universe renderer must import the shared cosmic environment');
 assert.match(universeSource, /let\s+universeCosmicEnvironment\b/, 'the real Universe renderer needs one owned cosmic environment instance');
 assert.match(universeSource, /ensureUniverseCosmicEnvironment/, 'Universe must construct the environment in its ForceGraph scene');
