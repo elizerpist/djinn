@@ -30,11 +30,21 @@ const screenFiles = [
 const markup = (await Promise.all(screenFiles.map((path) => readFile(new URL(path, root), 'utf8')))).join('\n');
 const classesFor = (className) => [...markup.matchAll(/class="([^"]*)"/g)].map((match) => match[1]).filter((classAttribute) => classAttribute.split(/\s+/).includes(className));
 
-assert.match(styles, /\.card\s*\{[^}]*padding:\s*var\(--card-padding\)/s);
+assert.match(styles, /\.card\s*\{[^}]*padding:\s*var\(--card-block-padding\)\s+var\(--card-padding\)/s);
 assert.match(styles, /\.card\s*\{[^}]*border-radius:\s*var\(--card-radius\)/s);
 assert.match(styles, /\.card\s*\{[^}]*gap:\s*var\(--card-gap\)/s);
 assert.match(styles, /--card-padding:\s*12px/);
 assert.match(styles, /--card-radius:\s*15px/);
+assert.match(styles, /--card-height-scale:\s*1\.1/);
+assert.match(styles, /--card-block-padding:\s*calc\(var\(--card-padding\) \* var\(--card-height-scale\)\)/);
+assert.match(styles, /\.shortcut\s*\{[^}]*min-height:\s*calc\(61px \* var\(--card-height-scale\)\)/s);
+assert.match(styles, /\.topic-quick-actions button\s*\{[^}]*min-height:\s*calc\(62px \* var\(--card-height-scale\)\)/s);
+assert.match(styles, /\.query-shortcut-grid \.shortcut\s*\{[^}]*min-height:\s*calc\(66px \* var\(--card-height-scale\)\)/s);
+assert.match(styles, /\.query-suggestion-list button\s*\{[^}]*min-height:\s*calc\(40px \* var\(--card-height-scale\)\)/s);
+assert.match(styles, /\.query-answer-actions button\s*\{[^}]*min-height:\s*calc\(54px \* var\(--card-height-scale\)\)/s);
+assert.match(styles, /\.query-source-compare article\s*\{[^}]*min-height:\s*calc\(153px \* var\(--card-height-scale\)\)/s);
+assert.match(styles, /\.djinn-command\s*\{[^}]*min-height:\s*calc\(59px \* var\(--card-height-scale\)\)/s);
+assert.match(exploreStyles, /\.explore-route-card, \.explore-concept-list > button\s*\{[^}]*min-height:\s*calc\(59px \* var\(--card-height-scale\)\)/s);
 assert.match(exploreStyles, /explore-spotlight/);
 assert.doesNotMatch(markup.match(/class="[^"]*explore-spotlight[^"]*"/)?.[0] ?? '', /\bcard\b/);
 assert.match(universeGraphData, /class="card map-world-card/);
