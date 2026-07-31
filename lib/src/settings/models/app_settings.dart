@@ -1,3 +1,26 @@
+enum VoiceMode {
+  whisperConversation('whisper_conversation'),
+  nativeAndroidPtt('native_android_ptt');
+
+  const VoiceMode(this.wireValue);
+
+  final String wireValue;
+
+  static VoiceMode fromStoredValue(String value) {
+    switch (value.trim()) {
+      case 'whisper_conversation':
+      case 'conversation':
+      case 'hands_free':
+        return VoiceMode.whisperConversation;
+      case 'native_android_ptt':
+      case 'push_to_talk':
+        return VoiceMode.nativeAndroidPtt;
+      default:
+        return VoiceMode.whisperConversation;
+    }
+  }
+}
+
 class AppSettings {
   const AppSettings({
     required this.runtimeMode,
@@ -13,7 +36,7 @@ class AppSettings {
 
   factory AppSettings.defaults() {
     return const AppSettings(
-      runtimeMode: 'local_objectbox',
+      runtimeMode: 'whisper_conversation',
       answerModel: 'gpt-5.5',
       extractionModel: 'gpt-5.5',
       groundednessModel: 'gpt-5.5',
@@ -35,8 +58,11 @@ class AppSettings {
   final int retrievalLimit;
   final double minimumSimilarity;
 
+  VoiceMode get voiceMode => VoiceMode.fromStoredValue(runtimeMode);
+
   AppSettings copyWith({
     String? runtimeMode,
+    VoiceMode? voiceMode,
     String? answerModel,
     String? extractionModel,
     String? groundednessModel,
@@ -46,8 +72,10 @@ class AppSettings {
     int? retrievalLimit,
     double? minimumSimilarity,
   }) {
+    final effectiveRuntimeMode =
+        runtimeMode ?? voiceMode?.wireValue ?? this.runtimeMode;
     return AppSettings(
-      runtimeMode: runtimeMode ?? this.runtimeMode,
+      runtimeMode: effectiveRuntimeMode,
       answerModel: answerModel ?? this.answerModel,
       extractionModel: extractionModel ?? this.extractionModel,
       groundednessModel: groundednessModel ?? this.groundednessModel,

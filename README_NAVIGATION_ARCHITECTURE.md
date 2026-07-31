@@ -1,6 +1,6 @@
 # Djinn – Tudásnavigációs architektúra
 
-> Ez a dokumentum a Djinn továbbfejlesztett, célállapotbeli architektúráját írja le. A meglévő [README.md](README.md) megmarad; ez a leírás a tudásnavigációs modell kanonikus jövőképét rögzíti.
+> Ez a dokumentum a Djinn továbbfejlesztett, célállapotbeli architektúráját írja le. A korábbi [README_OLD.md](README_OLD.md) történeti háttérként megmarad; ez a leírás a tudásnavigációs modell kanonikus jövőképét rögzíti.
 
 ## Áttekintés
 
@@ -275,10 +275,10 @@ AtomEdge
 --------
 sourceAtomId
 targetAtomId
-weight?                 ← opcionális, későbbi strukturális súly
+weight                  ← normalizált, strukturális bizonyíték-súly
 ```
 
-Az Edge nem rendelkezik relációtípussal. Nem léteznek például `causes`, `defines`, `treats` vagy `depends_on` típusok. A gráf Atomokból és relációtípus nélküli kapcsolatokból áll; a strukturális `weight` később, szükség esetén vezethető be.
+Az Edge nem rendelkezik relációtípussal. Nem léteznek például `causes`, `defines`, `treats` vagy `depends_on` típusok. A gráf Atomokból és relációtípus nélküli kapcsolatokból áll; a végleges clusteringben a `weight` normalizált strukturális bizonyítéksúly.
 
 ### Weight
 
@@ -288,16 +288,9 @@ A `weight` kizárólag a tudásbázis szerkezetéből számolódik. Nem befolyá
 
 #### A weight forrásai
 
-A kapcsolat erősségét kizárólag dokumentumstruktúrából származó bizonyítékok határozzák meg. Ilyen bizonyíték lehet például, ha az Atomok:
+A kapcsolat erősségét kizárólag forrás- és dokumentumstruktúrából származó bizonyítékok határozzák meg: azonos mondat vagy táblázatsor, azonos bekezdés vagy blokk, azonos Chunk, szomszédos Chunkok közös Szekció alatt, illetve közös dokumentum- vagy Szekciócím-kontextus. Pusztán azonos Jegyzet vagy Téma nem elegendő él létrehozásához.
 
-- ugyanabban a mondatban szerepelnek;
-- ugyanabban a bekezdésben szerepelnek;
-- ugyanabban a Chunkban szerepelnek;
-- ugyanabban a Jegyzetben szerepelnek;
-- ugyanabban a Témában szerepelnek;
-- több különböző helyen ismét együtt fordulnak elő.
-
-A rendszer nem próbál szakmai vagy szemantikai fontosságot meghatározni.
+A rendszer nem próbál szakmai vagy szemantikai fontosságot meghatározni. Több külön Chunk vagy független forrás azonos kapcsolatot bizonyítva növelheti a súlyt.
 
 #### Mire használható?
 
@@ -310,50 +303,13 @@ A `weight` a gráf fontos bemeneti adata lehet. Felhasználható:
 
 Így a gráf teljes viselkedése a felhasználó saját dokumentumszerkezetéből épül fel, nem egy előre definiált tudásmodellből.
 
-#### Determinisztikus, opcionális számítás
+#### Determinisztikus számítás
 
-Ha a valós használati adatok alapján szükség van súlyozásra, a `weight` determinisztikusan számolható. Két Atom, `A` és `B` esetén:
-
-```text
-S = közös mondatok száma
-P = közös bekezdések száma
-C = közös Chunkok száma
-N = közös Jegyzetek száma
-T = közös Témák száma
-```
-
-A nyers strukturális pontszám:
-
-```text
-score = 8S + 4P + 2C + N + 0.25T
-```
-
-A 0–1 közé eső normalizált súly például:
-
-```text
-weight = 1 - e^(-score / k)
-k = 10
-```
-
-Példák:
-
-```text
-Oxigén ↔ PaO₂
-S = 2, P = 2, C = 1, N = 1, T = 1
-score = 8×2 + 4×2 + 2×1 + 1 + 0.25 = 27.25
-weight ≈ 0.93
-
-Oxigén ↔ Oxigénterápia
-S = 0, P = 1, C = 1, N = 1, T = 1
-score = 0 + 4 + 2 + 1 + 0.25 = 7.25
-weight ≈ 0.52
-```
-
-Ez a képlet nem szemantikai ítéletet ad, csak az együtt-előfordulás dokumentumszerkezeti erősségét normalizálja.
+A nyers kontextuspontokat össze kell adni, a több Chunkból és független forrásból származó bizonyítékot korlátozottan összegezni, majd gyakorisági korrekcióval és rögzített normalizálással 0–1 közé képezni. A pontos képlet, küszöbök és algoritmusverzió a clusterverzió része; nem tartalmazhat runtime random értéket.
 
 #### Bevezetési stratégia
 
-Az első verzióban a gráf lehet súly nélküli:
+Diagnosztikai vagy nagyon korai prototípusban a gráf átmenetileg lehet súly nélküli:
 
 ```text
 AtomEdge
@@ -362,9 +318,9 @@ sourceAtomId
 targetAtomId
 ```
 
-Az AtomEdge létezése már önmagában azt jelenti, hogy van strukturális kapcsolat. A gráfelméleti algoritmusok, például a Louvain community detection, súly nélküli gráfon is használhatók.
+A súly nélküli AtomEdge létezése már önmagában strukturális kapcsolatot jelez, de ez nem elegendő a végleges Surface Cap képzéséhez. A production clustering súlyozott gráfot és determinisztikus Leiden-futtatást használ.
 
-A `weight` csak akkor kerüljön bevezetésre, amikor nagyobb, valós tudásbázison mérhető, hogy a strukturális súlyozás tényleg javítja a klaszterezést vagy a navigációt. Ez megelőzi, hogy egy elegáns, de zajt termelő képlet túl korán az adatmodell kötelező részévé váljon.
+A végleges Surface Cap képzésben a normalizált `weight` kötelező bemenet. Súly nélküli gráf csak diagnosztikai vagy korai prototípus-fallback lehet; a production community-tagság nem épülhet kizárólag az AtomEdge létezésére.
 
 ### Alapelvek
 
@@ -374,6 +330,183 @@ A `weight` csak akkor kerüljön bevezetésre, amikor nagyobb, valós tudásbáz
 - A kapcsolatok nem rendelkeznek relációtípussal.
 - Ha használunk `weight` mezőt, azt kizárólag a dokumentumstruktúrából származó bizonyíték határozza meg.
 - A vizualizáció és a megjelenítés nem része az adatmodellnek.
+
+### Kompakt elemszám-megjelenítés
+
+Az elemszámok a tárolt adatmodellben mindig pontos egész számok maradnak. A felületen azonban ugyanazt a determinisztikus, kerekített formázót kell használni mindenhol, mert az Explore és a tudásgráf akár több millió atomot vagy kapcsolatot is tartalmazhat.
+
+| Pontos érték | Megjelenítés |
+| ---: | --- |
+| `0–999` | `999` |
+| `1 000–99 999` | `1,2 ezer`, `12 ezer` |
+| `100 000–999 999` | `123 ezer` |
+| `1 000 000–999 999 999` | `1,2 M`, `123 M` |
+| `1 000 000 000` fölött | `1,2 Md`, `123 Md` |
+
+A rövid forma legfeljebb három jelentős számjegyet használ, és mindig kerekít:
+
+```text
+123456      → 123 ezer
+1234567     → 1,2 M
+123456789   → 123 M
+1234567890  → 1,2 Md
+```
+
+Kerekítés után a következő egységre kell lépni: `999 500` már `1 M`, nem `1000 ezer`. Ugyanazt a formázót kell használni a galaxis- és bolygóstatisztikákban, kártyákon, listákban, tooltipben és akadálymentes feliratokban. A rövid érték koppintással, hoverrel vagy részletező nézetben mindig egészítse ki a pontos, ezres csoportosítású értékkel, például `1 234 567 atom`.
+
+## Két külön clustering-szint
+
+A végleges tudáshierarchia:
+
+```text
+Galaxis → Bolygó → Atom → Street View
+```
+
+A **bolygó** valódi, tartós szemantikai cluster. Egy Atom egy adott clusterverzióban pontosan egy bolygóhoz tartozik. A bolygón belüli **Community Cap** ezzel szemben nem új tudáshierarchiai szint: csak lokális, újraszámítható renderelési segédstruktúra, amely a felszíni elrendezést olvashatóvá teszi.
+
+### 1. Szemantikai cluster: ebből lesz a bolygó
+
+A bolygót nem a bolygón elfoglalt hely, nem a Jegyzet címe és nem az Atom embeddingje határozza meg közvetlenül. A teljes, körülbelül 700 Atomot tartalmazó normalizált és súlyozott kapcsolati gráf alapján azok az Atomok kerülnek egy bolygóra, amelyek egymás között összességében erősebben kapcsolódnak, mint a bolygón kívüli Atomokhoz.
+
+#### Globális normalizált Atom és előfordulás
+
+Egy fogalom csak egyszer létezik globális Atomként. Ha az „oxigén” több fizikai, kémiai és egészségügyi Jegyzetben szerepel, ezek az előfordulások ugyanarra az Oxigén Atomra hivatkoznak; a Jegyzet, a Szekció és a belső Chunk bizonyítékot ad, nem birtokolja és nem duplikálja az Atomot.
+
+A normalizálás determinisztikus előkészítő lépése lehet a kis- és nagybetűk, Unicode- és ékezetek, alsó indexek (`PaO₂` és `PaO2`), rövidítések és felhasználó által jóváhagyott aliasok egységesítése. Bizonytalan egyezést a rendszer nem vonhat össze automatikusan.
+
+#### Forrásalapú élsúly
+
+Az Atom-párok nyers együttállási pontjai:
+
+| Közös kontextus | Nyers pont |
+| --- | ---: |
+| Azonos mondat vagy táblázatsor | `1,0` |
+| Azonos bekezdés vagy blokk | `0,7` |
+| Azonos Chunk | `0,4` |
+| Szomszédos Chunkok, azonos Szekció alatt | `0,2` |
+| Közös dokumentum- vagy Szekciócím kontextusa | `0,1` |
+
+Csak az, hogy két Atom ugyanabban a dokumentumban szerepel, önmagában nem hoz létre élt. A cím vagy a Szekció kontextushorgony lehet, de nem kapcsolhatja össze automatikusan a dokumentum minden fogalmát. Több külön Chunk vagy független forrás azonos kapcsolatot bizonyítva növeli a súlyt.
+
+#### Gyakorisági korrekció
+
+A „beteg”, „kezelés”, „oxigén” és „vizsgálat” típusú általános Atomok nyers előfordulásszám alapján minden clusterbe behúznák magukat. PPMI-, IDF- vagy más rögzített gyakorisági normalizálás csökkentse ezt a torzítást: az „oxigén”–„beteg” gyakori együttállása kevésbé informatív, mint a ritkább „PaO₂”–„hypoxaemia” kapcsolat.
+
+Az embedding csak jelöltkeresésre használható. Önmagában nem hoz létre AtomEdge-et, nem mondja meg a bolygótagságot és nem határozza meg a `weight` értékét.
+
+#### Gyenge élek szűrése és Leiden
+
+A teljes gráf gyenge éleit a bolygó-clusterezés előtt szűrni kell. Kiinduló szabály lehet Atomonként a legerősebb 8–20 él megtartása, a fontos összefüggő részek, backbone-kapcsolatok és hídkapcsolatok megőrzésével. Ez a **clusterező gráf** szűrése, nem a későbbi vizuális edge-LOD.
+
+Ezután a szűrt, normalizált és súlyozott gráfon determinisztikus Leiden fusson. A cél a nagy belső és a kisebb kifelé vezető összesített súly. Az első, teljes gráfos futás használjon alacsonyabb `resolution` értéket, hogy stabil, nagyobb bolygó-clusterek jöjjenek létre.
+
+Induló megjelenítési célként egy bolygó körülbelül 8–40 Atomot tartalmazhat. Öt Atom alatt a csoport a legerősebb szomszédjához összevonható; 60 Atom fölött magasabb `resolution` értékkel újrafelosztás mérlegelhető. Ezek olvashatósági célok, nem a szemantikai tagság önkényes felülírásai.
+
+Például egy bolygó lehet a `PaO₂`, `SpO₂`, `hypoxaemia`, `oxigenizáció`, `vérgáz` és `oxigénterápia` együttese, ha ezt a forrásolt kapcsolati sűrűség indokolja.
+
+#### Tartós tagság és hídatom
+
+A bolygótagság menthető az ObjectBoxba, stabil bolygóazonosítóval és clusterverzióval. Egy Atom egyszerre csak egy ilyen bolygóhoz tartozhat.
+
+Ha az Oxigén fizikához, kémiához és élettanhoz is kapcsolódik, ahhoz a bolygóhoz kerül, amelyhez a legerősebb normalizált belső affinitása tartozik. A többi bolygó felé vezető élei megmaradnak; az Oxigén hídatomként a saját bolygója peremén jelölhető, de nem duplikálható.
+
+### 2. Community Cap: bolygón belüli vizuális rendezés
+
+Miután a bolygó Atomjai már kiválasztásra kerültek, ugyanazon bolygó belső gráfján második, finomabb felosztás futtatható. Ez hozza létre a Surface Capeket, például mérési fogalmak, állapotok, kezelések vagy légzéstámogatási fogalmak vizuális körzeteit.
+
+A cap:
+
+- nem új bolygó;
+- nem új adatmodell-entitás;
+- nem új navigációs szint;
+- nem tartós szemantikai tagság;
+- nem jelenik meg külön képernyőként.
+
+A cap-tagság újraszámítható és a renderelési seed része. Ugyanaz a Leiden algoritmus használható eltérő paraméterrel: a bolygó létrehozásakor alacsonyabb resolution és nagyobb, stabil csoportok; egy bolygón belül magasabb resolution és kisebb, vizuális csoportok.
+
+Egy körülbelül 50 Atomot tartalmazó bolygón 2–4 cap alakulhat ki, vagy a capek egyáltalán nem jelennek meg, ha nincs értelmes vizuális felosztás. A 700 Atomot tartalmazó stresszteszt-bolygón több cap segít a felszín olvashatóságában; a végleges tudástérben azonban a 700 Atom várhatóan több valódi bolygóra oszlik.
+
+### 3. A layout sorrendje
+
+1. A teljes Atom-gráf eldönti, mely Atom melyik valódi bolygóhoz tartozik.
+2. A bolygók az aggregált bolygógráfból galaxissá szerveződnek.
+3. Egy kiválasztott bolygó belső gráfján opcionális Surface Capek készülnek.
+4. A community cap-középpontok és cap-területek csak ezután kerülnek a gömbfelszínre.
+5. Az Atomok a saját capjükön belül kapnak stabil vizuális pozíciót.
+
+A gömbön elfoglalt hely nem módosíthatja visszamenőleg a szemantikai bolygótagságot.
+
+### 4. Galaxis-cluster és bolygóközi stabilitás
+
+A bolygók létrejötte után külön aggregált bolygógráf készül:
+
+- egy node egy valódi bolygó;
+- egy él két bolygó atomjai közötti keresztkapcsolatok összesített súlya;
+- az aggregáció számolja a különböző atompárokat, a független forrásokat és a kapcsolat sokféleségét;
+- egyetlen gyakori hídatom nem dominálhatja a bolygóközi súlyt.
+
+Ezen a bolygógráfon is determinisztikus Leiden fusson. A galaxis egy olyan tartósabb csoport, amelyben a bolygók között sok, változatos és forrásolt keresztkapcsolat van. Induló megjelenítési célként egy galaxis körülbelül 3–10 bolygót tartalmazhat; ez megjelenítési cél, nem merev adatmodell-korlát.
+
+A térkép stabilitása érdekében:
+
+- ne fusson teljes újraclusterezés minden új mondat után;
+- új Atom először a legerősebb affinitású meglévő bolygóhoz kerüljön;
+- teljes újraszámítás jelentős, például körülbelül 5%-os gráfbővüléskor vagy explicit kérésre fusson;
+- a régi és új bolygókat tagsági átfedéssel kell párosítani, hogy a stabil azonosító, név és vizuális seed megmaradjon;
+- Atom csak akkor kerüljön át másik bolygóba, ha az új affinitása érdemben, például legalább 20%-kal meghaladja a jelenlegi kötődését.
+
+Ez a hiszterézis megakadályozza, hogy egy kisebb új forrás minden alkalommal átrendezze az Explore térképét.
+
+### 5. Explore-bejárás és kapcsolati folyosó
+
+Az **Univerzum** az Explore-ban éppen vizsgált teljes gráf vagy szűrt részhalmazának konténere; nem új, tartós clusterezési szint. A felhasználói bejárás: `Galaxis → Bolygó → Atom → Street View`.
+
+- **Galaxisnézet:** valódi bolygógömbök és az erős, aggregált bolygóközi kapcsolatok látszanak.
+- **Bolygónézet:** a kiválasztott valódi bolygó nagyítva jelenik meg az atomjaival, belső éleivel és a fontos külső kapcsolatok hídatom-jelöléseivel. A külső élek nem változnak véletlen, lebegő célpontokká.
+- **Atom Street View:** az Atomhoz tartozó releváns előfordulások, pontos mondat- vagy táblázatrészlet, befoglaló Szekció, forrás és oldalszám jelenik meg.
+- **Él Street View:** csak azok a bizonyítékok jelennek meg, amelyek a két Atomot közös kontextusban támasztják alá.
+
+A bolygó–bolygó kapcsolat nem statikus információs kártya és nem új hierarchiaszint, hanem ugyanannak a galaxisnak egy kiterjesztett perspektívája. A bolygónézetből induló, tapelhető külső szál mindig a súlyozott gráf tényleges szomszédos bolygójának valódi rootjához csatlakozik. Tap után ugyanabban a Three.js-térben a kamera animáltan csúszik úgy, hogy az eredeti és a valódi szomszédos bolygó együtt látszódjon; a nem releváns atomok és gyenge háttérkapcsolatok elhalványulnak. Nem hozható létre virtuális bolygó vagy lebegő corridor-card.
+
+A külső kapcsolattal rendelkező hídatom finom külső gyűrűt vagy „más bolygóhoz is kapcsolódik” jelölést kaphat. Ennek aktiválása először a célbolygókat és a legerősebb célatomokat mutatja, nem a teljes külső gráfot.
+
+A hídatomról a felhasználó kaszkádban haladhat tovább:
+
+```text
+galaxis → bolygó → atom → kapcsolódó bolygó → célatom → Street View-bizonyíték
+```
+
+Így távolról az derül ki, mely bolygók tartoznak össze, a kiterjesztett bolygónézetben az, mely atomok kötik össze őket, Street View-ban pedig az, mely forrásrészletek bizonyítják ezt.
+
+Az interakció jelentése külön marad: Atomra koppintva az adott fogalom bizonyítékai nyílnak meg („mit írnak erről?”), élre koppintva pedig a két fogalom közös bizonyítékai („hol találkozik ez a két fogalom?”).
+
+### 6. Végleges terminológia
+
+| Réteg | Felhasználói modell | Belső renderer/adatmodell |
+| --- | --- | --- |
+| 1 | Galaxis | Galaxy cluster |
+| 2 | Bolygó | Planet cluster |
+| 3 | Atom | Atom node |
+— | Street View | forrásbizonyíték-nézet |
+— | nincs külön cap-nézet | Surface cap, csak lokális layout-segédstruktúra |
+
+A „community” szót ezért elsősorban algoritmikus és renderer-belső értelemben használjuk. A felhasználó mentális modellje csak a Galaxis → Bolygó → Atom → Street View útvonalat látja.
+
+Google Maps-analógiával: a galaxis országcsoport vagy nagy régió, a bolygó ország, a Community Cap város vagy körzet az országon belül, az Atom konkrét hely, a Street View pedig az adott helyhez tartozó konkrét forrásrészlet.
+
+### 7. Determinisztikus clustering- és layoutstabilitás
+
+Azonos gráfból azonos bolygó- és cap-tagságokhoz szükséges:
+
+- stabil Atom-azonosító szerinti input-sorrend;
+- fix Leiden-seed és algoritmusverzió;
+- szinten belül rögzített `resolution`;
+- fix minimum edge-weight küszöb;
+- fix súlyszámítás és gyakorisági korrekció;
+- egyértelmű döntetlenfeloldás;
+- cache-elt, verziózott bolygó-, cap- és layout-eredmény.
+
+A bolygó megnyitása önmagában nem indíthat új clusterezést. Teljes bolygó-clusterezés jelentős gráfbővüléskor vagy explicit kérésre fusson; a cap-layout újraszámítható, ha a bolygó belső gráfja vagy a renderelési policy megváltozik.
 
 ## Embedding
 
