@@ -1,4 +1,4 @@
-import { initKnowledgeMap } from './knowledge-map.js?rev=138';
+import { initKnowledgeMap } from './knowledge-map.js?rev=139';
 import { initExpandableGalaxyOrb } from './explore-galaxy-orb.js?rev=239';
 import { initExploreDiscovery } from './explore-discovery.js?rev=3';
 import { initUniverse4 } from './universe4.js?rev=55';

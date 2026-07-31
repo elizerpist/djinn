@@ -5,7 +5,7 @@ import {
   focusedG6V2Positions,
   knowledgeEdges,
   knowledgeNodes,
-} from './knowledge-map.js?rev=138';
+} from './knowledge-map.js?rev=139';
 import { buildFocusedG6V2RenderData } from './focused-g6-v2-render-data.js?rev=1';
 import { createFocusedG6V2StageControls } from './focused-g6-v2-stage-controls.js?rev=1';
 import {

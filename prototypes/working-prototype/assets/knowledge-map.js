@@ -478,14 +478,8 @@ const VISUALIZATIONS = [
   { id: 'antv-dagre', label: 'AntV Dagre', group: 'Irányított gráfok', icon: '⇣' },
   { id: 'dagre', label: 'Dagre', group: 'Irányított gráfok', icon: '⇢' },
   { id: 'combo-combined', label: 'Combo Combined', group: 'Csoportosított', icon: '◫' },
-  { id: 'compact-box', label: 'Compact Box', group: 'Fa elrendezések', icon: '┬', tree: true },
-  { id: 'dendrogram', label: 'Dendrogram', group: 'Fa elrendezések', icon: '┤', tree: true },
-  { id: 'fishbone', label: 'Fishbone', group: 'Fa elrendezések', icon: '≋', tree: true },
-  { id: 'mindmap', label: 'Mindmap', group: 'Fa elrendezések', icon: '☍', tree: true },
-  { id: 'indented', label: 'Indented', group: 'Fa elrendezések', icon: '≡', tree: true },
 ];
 const VISUALIZATION_BY_ID = new Map(VISUALIZATIONS.map((item) => [item.id, item]));
-const TREE_LAYOUTS = new Set(VISUALIZATIONS.filter((item) => item.tree).map((item) => item.id));
 const STORAGE_KEY = 'djinn-knowledge-map-state-v1';
 const FAVORITES_KEY = 'djinn-knowledge-map-node-favorites-v1';
 const THEME_FAVORITE_KEY = 'djinn-knowledge-map-theme-favorite-v1';
@@ -1545,11 +1539,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     if (state.visualization === 'antv-dagre') return { ...base, rankdir: 'TB', nodesep: 24, ranksep: 45, controlPoints: true };
     if (state.visualization === 'dagre') return { ...base, rankdir: 'LR', nodesep: 22, ranksep: 45, controlPoints: true };
     if (state.visualization === 'combo-combined') return { ...base, spacing: 28 };
-    if (state.visualization === 'compact-box') return { ...base, direction: 'TB', getId: (datum) => datum.id };
-    if (state.visualization === 'dendrogram') return { ...base, direction: 'LR', getId: (datum) => datum.id };
-    if (state.visualization === 'fishbone') return { ...base, direction: 'LR', getId: (datum) => datum.id };
-    if (state.visualization === 'mindmap') return { ...base, direction: 'H', getId: (datum) => datum.id };
-    if (state.visualization === 'indented') return { ...base, direction: 'LR', indent: 30, getId: (datum) => datum.id };
     return base;
   }
 
@@ -1871,10 +1860,10 @@ export function initKnowledgeMap(root, helpers = {}) {
     return positions;
   }
 
-  function graphNode(node, index, total, treeDepth = 0, threeD = undefined) {
+  function graphNode(node, index, total, threeD = undefined) {
     const graphNode = {
       id: node.id,
-      data: { ...node, treeDepth, z: threeD?.z || 0 },
+      data: { ...node, z: threeD?.z || 0 },
       combo: state.visualization === 'combo-combined' ? `type-${node.type}` : undefined,
       zIndex: threeD ? Math.round(threeD.z * 1000) : index,
     };
@@ -1885,37 +1874,6 @@ export function initKnowledgeMap(root, helpers = {}) {
 
   function graphEdge(edge, index) {
     return { id: edge.id || `${edge.source}-${edge.target}-${index}`, source: edge.source, target: edge.target, data: edge.data || edge };
-  }
-
-  function buildSpanningTree(allowedIds) {
-    const rootId = allowedIds.has(state.centerId) ? state.centerId : [...allowedIds][0];
-    if (!rootId) return null;
-    const children = new Map([...allowedIds].map((id) => [id, []]));
-    const visited = new Set([rootId]);
-    const queue = [rootId];
-    while (queue.length) {
-      const current = queue.shift();
-      (neighborsById.get(current) || []).forEach(({ id }) => {
-        if (!allowedIds.has(id) || visited.has(id)) return;
-        visited.add(id); children.get(current).push(id); queue.push(id);
-      });
-    }
-    [...allowedIds].forEach((id) => { if (!visited.has(id)) { visited.add(id); children.get(rootId).push(id); } });
-    const toTree = (id) => ({ id, data: { ...nodeById.get(id) }, children: children.get(id).map(toTree) });
-    return toTree(rootId);
-  }
-
-  function treeGraphData(matched) {
-    const tree = buildSpanningTree(new Set(matched.map((node) => node.id)));
-    if (!tree) return { nodes: [], edges: [] };
-    const raw = window.G6?.treeToGraphData ? window.G6.treeToGraphData(tree) : { nodes: [tree], edges: [] };
-    // A children mező G6 számára is megőrzi a parent–child struktúrát: erre a
-    // Compact Box / Mindmap / Indented mellett a Fishbone is támaszkodik.
-    const nodes = raw.nodes.map((item, index) => ({
-      ...graphNode(nodeById.get(item.id), index, raw.nodes.length, item.depth || 0),
-      children: item.children || [],
-    }));
-    return { nodes, edges: raw.edges.map((edge, index) => graphEdge(edge, index, true)) };
   }
 
   // A G6 D3 Force 3D csak vizuális preview. Hétszáz kártya és ezer él egy
@@ -1948,7 +1906,7 @@ export function initKnowledgeMap(root, helpers = {}) {
     const renderNodes = isThreeD ? compactD3Force3DNodes(matched) : matched;
     const projection = isThreeD ? threeDPositions(renderNodes) : undefined;
     const ordered = isThreeD ? [...renderNodes].sort((a, b) => projection.get(a.id).z - projection.get(b.id).z) : renderNodes;
-    const nodes = ordered.map((node, index) => graphNode(node, index, ordered.length, 0, projection?.get(node.id)));
+    const nodes = ordered.map((node, index) => graphNode(node, index, ordered.length, projection?.get(node.id)));
     const nodeIds = new Set(renderNodes.map((node) => node.id));
     const rawEdges = knowledgeEdges
       .filter(({ source, target }) => nodeIds.has(source) && nodeIds.has(target))
@@ -1969,7 +1927,7 @@ export function initKnowledgeMap(root, helpers = {}) {
     visibleNodeIds = matched.map((node) => node.id);
     keyboardIndex = Math.max(0, visibleNodeIds.indexOf(state.selectedId));
     renderBreadcrumb();
-    return TREE_LAYOUTS.has(state.visualization) ? treeGraphData(matched) : fullGraphData(matched);
+    return fullGraphData(matched);
   }
 
   // A G6-síkban megjelenő kártyák grafikus primitívek, nem HTML-overlayek. Így
