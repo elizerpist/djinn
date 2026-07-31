@@ -200,7 +200,7 @@ assert.match(runtime, /universe4-u3-stage\.js\?rev=20/,
   'the migrated V4 Force adapter must invalidate its owner module');
 assert.match(runtime, /universe4-v7-source-stage\.js\?rev=22/,
   'the U4 source-stage revision must change when its canonical Globe controls change');
-assert.match(index, /assets\/app\.js\?rev=276/,
+assert.match(index, /assets\/app\.js\?rev=277/,
   'the browser entrypoint must invalidate the app module which imports U4');
 assert.match(runtime, /HANDOFF_CROSSFADE/);
 assert.match(runtime, /GLOBE_STANDALONE/);

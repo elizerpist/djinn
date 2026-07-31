@@ -78,6 +78,8 @@ assert.doesNotMatch(mapSource, /TREE_LAYOUTS|treeGraphData|buildSpanningTree/, '
 assert.doesNotMatch(mapSource, /combo-combined|Combo Combined|Csoportosított/, 'a Combo Combined és a csoportosított opció ne maradjon az appban');
 assert.doesNotMatch(mapSource, /id: '(?:circular|concentric|radial|grid|random|snake)'|group: 'Kör és tér'/, 'a Kör és tér csoport és összes nézete ne maradjon az appban');
 assert.doesNotMatch(mapSource, /id: '(?:force-atlas2|fruchterman|mds)'|group: 'Erő alapú hálók'/, 'az Erő alapú hálók csoport és összes nézete ne maradjon az appban');
+assert.doesNotMatch(mapSource, /cytoscape|Cytoscape|antv-dagre|dagre|Irányított gráfok/, 'a Cytoscape és az Irányított gráfok nézetei ne maradjanak az app kódjában');
+assert.doesNotMatch(mapScreen, /cytoscape|Cytoscape/, 'a Cytoscape konténere ne maradjon a tudástérkép képernyőjén');
 assert.match(mapScreen, /data-map-action="toggle-layout-menu"/, 'a tudástérkép megjelenítési dropdownja maradjon elérhető');
 assert.match(mapSource, /labelPlacement:\s*'center'/, 'a G6 címke a kártya belsejében, középen jelenjen meg');
 assert.match(mapSource, /localStorage\.removeItem\(STORAGE_KEY\)/, 'frissítéskor a korábbi navigációs és vizualizációs állapot törlődjön');

@@ -7,7 +7,7 @@ const screen = await readFile(new URL('../screens/universe.html', import.meta.ur
 const css = await readFile(new URL('../assets/universe4/universe4.css', import.meta.url), 'utf8');
 const runtime = await readFile(new URL('../assets/universe4.js', import.meta.url), 'utf8');
 assert.match(index, /assets\/universe4\/universe4\.css\?rev=17/);
-assert.match(index, /assets\/app\.js\?rev=276/);
+assert.match(index, /assets\/app\.js\?rev=277/);
 assert.match(app, /initUniverse4 \} from '\.\/universe4\.js\?rev=55';/);
 assert.match(app, /(?:'universe'|universe): 'screens\/universe\.html'/);
 assert.match(app, /normalized === 'universe'[\s\S]*initUniverse4\(root,/);

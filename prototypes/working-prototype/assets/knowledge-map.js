@@ -465,9 +465,6 @@ const VISUALIZATIONS = [
   { id: 'globe-focused-mixed', label: 'Globe · Mixed', group: 'Térbeli', icon: '⌘', mixedFocusedGlobe: true },
   { id: 'globe-rolling-cards', label: 'Globe · Fókuszált kártyák v2', group: 'Térbeli', icon: '◒', rollingCardGlobe: true },
   { id: 'globe-static-atoms', label: 'Globe · Árnyék nélküli forgás', group: 'Térbeli', icon: '◌', staticAtomGlobe: true },
-  { id: 'cytoscape-cose', label: 'Cytoscape · COSE', group: 'Cytoscape', icon: '⌘', cytoscape: true },
-  { id: 'antv-dagre', label: 'AntV Dagre', group: 'Irányított gráfok', icon: '⇣' },
-  { id: 'dagre', label: 'Dagre', group: 'Irányított gráfok', icon: '⇢' },
 ];
 const VISUALIZATION_BY_ID = new Map(VISUALIZATIONS.map((item) => [item.id, item]));
 const STORAGE_KEY = 'djinn-knowledge-map-state-v1';
@@ -1205,7 +1202,6 @@ export function initKnowledgeMap(root, helpers = {}) {
   let focusedGlobeContainer = screen.querySelector('[data-map-globe-focused-cards]');
   let rollingGlobeContainer = screen.querySelector('[data-map-globe-rolling-cards]');
   const staticAtomGlobeContainer = screen.querySelector('[data-map-globe-static]');
-  const cytoscapeContainer = screen.querySelector('[data-map-cytoscape]');
   const mapCanvas = screen.querySelector('.map-canvas-wrap');
   const layer = screen.querySelector('[data-map-layer]');
   const empty = screen.querySelector('[data-map-empty]');
@@ -1411,8 +1407,6 @@ export function initKnowledgeMap(root, helpers = {}) {
   let rollingFocusAnimationUntil = 0;
   let rollingFocusInteractionLocked = false;
   let staticAtomGlobe;
-  let cytoscapeGraph;
-  let cytoscapeResizeObserver;
   let graphReady = false;
   let visibleNodeIds = [];
   let suppressGraphClick = false;
@@ -1466,8 +1460,6 @@ export function initKnowledgeMap(root, helpers = {}) {
 
   function isStaticAtomGlobeView() { return state.visualization === 'globe-static-atoms'; }
 
-  function isCytoscapeView() { return state.visualization === 'cytoscape-cose'; }
-
   function isAnyGlobeView() { return isGlobeView() || isCardGlobeView() || isFocusedCardGlobeView() || isMixedFocusedGlobeView() || isRollingCardGlobeView() || isStaticAtomGlobeView(); }
 
   function isForce3DView() { return state.visualization === '3d-force-graph'; }
@@ -1517,8 +1509,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     const height = Math.max(mapContainer.clientHeight || 0, 420);
     const center = [width / 2, height / 2];
     const base = { type: state.visualization, width, height, center };
-    if (state.visualization === 'antv-dagre') return { ...base, rankdir: 'TB', nodesep: 24, ranksep: 45, controlPoints: true };
-    if (state.visualization === 'dagre') return { ...base, rankdir: 'LR', nodesep: 22, ranksep: 45, controlPoints: true };
     return base;
   }
 
@@ -1612,15 +1602,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     rollingFocusInteractionLocked = false;
     rollingGlobeContainer?.replaceChildren();
     if (rollingGlobeContainer) rollingGlobeContainer.hidden = true;
-  }
-
-  function destroyCytoscape() {
-    cytoscapeResizeObserver?.disconnect();
-    cytoscapeResizeObserver = undefined;
-    try { cytoscapeGraph?.destroy?.(); } catch { /* A többi nézet ettől függetlenül váltható. */ }
-    cytoscapeGraph = undefined;
-    cytoscapeContainer?.replaceChildren();
-    if (cytoscapeContainer) cytoscapeContainer.hidden = true;
   }
 
   function destroyStaticAtomGlobe() {
@@ -1775,7 +1756,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     if (isMixedFocusedGlobeView()) { createFocusedCardGlobe(); return; }
     if (isRollingCardGlobeView()) { createRollingCardGlobe(); return; }
     if (isStaticAtomGlobeView()) { createStaticAtomGlobe(); return; }
-    if (isCytoscapeView()) { createCytoscape(); return; }
     if (isForceSphereView()) { createForceGraphSphere3D(); return; }
     if (isForceGraphMorphView()) { createForceGraphPlanet3D(); return; }
     if (isForce3DView() || isForceUniverseDemoView()) { createForceGraph3D(); return; }
@@ -1798,7 +1778,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     destroyFocusedCardGlobe();
     destroyRollingCardGlobe();
     destroyStaticAtomGlobe();
-    destroyCytoscape();
     destroyForceGraph3D();
     destroyForceGraphSphere3D();
     // A layoutok eltérő adatot igényelhetnek, ezért tisztán indulnak újra.
@@ -3331,89 +3310,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     });
     staticAtomGlobeResizeObserver.observe(staticAtomGlobeContainer);
     renderStaticAtomGlobe();
-  }
-
-  // Cytoscape.js saját COSE elrendezése. Ez szándékosan külön motor és külön
-  // DOM-vászon: a Navigation Graph azonos adatait használja, de a renderer
-  // interakcióit, pan- és zoom-viselkedését teljesen Cytoscape kezeli.
-  function cytoscapeData() {
-    const matched = knowledgeNodes.filter(matchesFilters);
-    empty.hidden = matched.length > 0;
-    mapContainer.hidden = true;
-    if (globeContainer) globeContainer.hidden = true;
-    if (cardGlobeContainer) cardGlobeContainer.hidden = true;
-    if (staticAtomGlobeContainer) staticAtomGlobeContainer.hidden = true;
-    if (force3dContainer) force3dContainer.hidden = true;
-    if (force3dSphereContainer) force3dSphereContainer.hidden = true;
-    if (cytoscapeContainer) cytoscapeContainer.hidden = !empty.hidden;
-    if (!empty.hidden) { visibleNodeIds = []; renderBreadcrumb(); return null; }
-    visibleNodeIds = matched.map((node) => node.id);
-    keyboardIndex = Math.max(0, visibleNodeIds.indexOf(state.selectedId));
-    renderBreadcrumb();
-    const matchedIds = new Set(visibleNodeIds);
-    return {
-      nodes: matched.map((node) => ({ data: { id: node.id, label: node.title, type: node.type, importance: node.importance }, classes: node.id === state.selectedId ? 'is-selected' : '' })),
-      edges: knowledgeEdges
-        .filter(({ source, target }) => matchedIds.has(source) && matchedIds.has(target))
-        .map((edge, index) => ({ data: { id: `cy-${edge.source}-${edge.target}-${index}`, source: edge.source, target: edge.target, weight: edge.weight } })),
-    };
-  }
-
-  function renderCytoscape(animated = false) {
-    const data = cytoscapeData();
-    if (!cytoscapeGraph) return;
-    cytoscapeGraph.elements().remove();
-    if (!data) return;
-    cytoscapeGraph.add([...data.nodes, ...data.edges]);
-    cytoscapeGraph.layout({
-      name: 'cose',
-      animate: animated ? 'end' : false,
-      animationDuration: 300,
-      fit: true,
-      padding: 36,
-      nodeRepulsion: () => 4500,
-      idealEdgeLength: () => 74,
-      gravity: .28,
-      numIter: 600,
-    }).run();
-  }
-
-  function createCytoscape(attempt = 0) {
-    const cytoscape = window.cytoscape;
-    if (!cytoscape || !cytoscapeContainer) {
-      if (attempt < 60) { window.requestAnimationFrame(() => createCytoscape(attempt + 1)); return; }
-      empty.hidden = false;
-      mapContainer.hidden = true;
-      cytoscapeContainer?.setAttribute('hidden', '');
-      showToast('A Cytoscape.js nézet nem tölthető be.');
-      return;
-    }
-    mapContainer.hidden = true;
-    if (globeContainer) globeContainer.hidden = true;
-    if (cardGlobeContainer) cardGlobeContainer.hidden = true;
-    if (staticAtomGlobeContainer) staticAtomGlobeContainer.hidden = true;
-    if (force3dContainer) force3dContainer.hidden = true;
-    if (force3dSphereContainer) force3dSphereContainer.hidden = true;
-    cytoscapeContainer.hidden = false;
-    cytoscapeGraph = cytoscape({
-      container: cytoscapeContainer,
-      elements: [],
-      wheelSensitivity: .2,
-      minZoom: MIN_ZOOM,
-      maxZoom: MAX_ZOOM,
-      style: [
-        { selector: 'node', style: { label: 'data(label)', width: 15, height: 15, 'background-color': '#7654e6', color: '#4b4455', 'font-size': 8, 'font-weight': 700, 'text-valign': 'bottom', 'text-margin-y': 5, 'text-wrap': 'wrap', 'text-max-width': 72 } },
-        { selector: 'node.is-selected', style: { width: 22, height: 22, 'background-color': '#4f28bd', 'border-width': 3, 'border-color': '#c4a9ff', color: '#39236f', 'font-size': 9 } },
-        { selector: 'edge', style: { width: 1.6, 'line-color': '#b6a4e9', opacity: .62, 'curve-style': 'bezier' } },
-      ],
-    });
-    cytoscapeGraph.on('tap', 'node', (event) => navigateTo(event.target.id()));
-    cytoscapeResizeObserver = new ResizeObserver(() => {
-      cytoscapeGraph?.resize();
-      cytoscapeGraph?.fit(cytoscapeGraph.elements(), 36);
-    });
-    cytoscapeResizeObserver.observe(cytoscapeContainer);
-    renderCytoscape();
   }
 
   // A vasturiano/3d-force-graph saját, gyári ThreeJS/WebGL rajzolója.
@@ -5689,7 +5585,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     if (isMixedFocusedGlobeView()) { renderFocusedMixedGlobe(animated); return; }
     if (isRollingCardGlobeView()) { renderRollingCardGlobe(animated); return; }
     if (isStaticAtomGlobeView()) { renderStaticAtomGlobe(animated); return; }
-    if (isCytoscapeView()) { renderCytoscape(animated); return; }
     if (isForceSphereView()) { renderForceGraphSphere3D(animated); return; }
     if (isForceGraphMorphView()) { renderForceGraphPlanet3D(animated); return; }
     if (isForce3DView() || isForceUniverseDemoView()) { renderForceGraph3D(animated); return; }
@@ -5909,8 +5804,6 @@ export function initKnowledgeMap(root, helpers = {}) {
       const pov = staticAtomGlobe.pointOfView();
       const multiplier = next > previous ? .82 : 1.2;
       staticAtomGlobe.pointOfView({ ...pov, altitude: clamp((pov.altitude || 2.1) * multiplier, 1.05, 4.8) }, 180);
-    } else if (isCytoscapeView() && cytoscapeGraph) {
-      cytoscapeGraph.zoom({ level: next, renderedPosition: { x: cytoscapeContainer.clientWidth / 2, y: cytoscapeContainer.clientHeight / 2 } });
     } else if (isForceSphereView() && forceGraphSphere3D) {
       const camera = forceGraphSphere3D.cameraPosition();
       const multiplier = next > previous ? .82 : 1.2;
@@ -5952,8 +5845,6 @@ export function initKnowledgeMap(root, helpers = {}) {
       renderRollingCardGlobe();
     } else if (isStaticAtomGlobeView() && staticAtomGlobe) {
       staticAtomGlobe.pointOfView({ lat: 18, lng: 28, altitude: 2.1 }, 260);
-    } else if (isCytoscapeView() && cytoscapeGraph) {
-      cytoscapeGraph.fit(cytoscapeGraph.elements(), 36);
     } else if (isForceSphereMorphView() && forceGraphSphere3D) {
       if (forceSphereMorphState === MORPH_CLUSTER_STATES.FOCUSED) exitMorphCluster();
       else forceGraphSphere3D.cameraPosition({ x: 0, y: 0, z: FORCE_SPHERE_BASE_CAMERA_DISTANCE }, { x: 0, y: 0, z: 0 }, 260);
@@ -6099,7 +5990,6 @@ export function initKnowledgeMap(root, helpers = {}) {
     destroyFocusedCardGlobe();
     destroyRollingCardGlobe();
     destroyStaticAtomGlobe();
-    destroyCytoscape();
     destroyForceGraph3D();
     destroyForceGraphSphere3D();
   };
